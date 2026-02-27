@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TsAnalyzer Pro - BROADCAST NOC v3.4 (SRT-PRO)</title>
+    <style>
+        :root {
+            --bg-color: #020617;
+            --panel-bg: #0F172A;
+            --border-color: #334155;
+            --text-main: #F8FAFC;
+            --text-dim: #64748B;
+            --ok-green: #1C8C5E;
+            --warn-amber: #F5A623;
+            --alarm-red: #C0392B;
+            --link-cyan: #06B6D4;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: var(--bg-color); color: var(--text-main); 
+            font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; 
+            overflow: hidden; display: flex;
+        }
+
+        /* Side Fleet (18%) */
+        .fleet-wall { width: 18%; height: 100vh; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 10px; flex-shrink: 0; }
+        .wall-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; overflow-y: auto; flex-grow: 1; }
+        .fleet-tile { background: #1E293B; padding: 4px; display: flex; align-items: center; gap: 4px; font-size: 0.6rem; border-radius: 2px; }
+        .fleet-tile.selected { border: 1px solid var(--link-cyan); background: #0F172A; }
+
+        /* Main Content (82%) */
+        .main-stack { width: 82%; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        section { border-bottom: 1px solid var(--border-color); padding: 8px 15px; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .section-h { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
+
+        /* Tier 1 (12%): Survival Row */
+        .t1 { height: 12vh; flex-direction: row; align-items: center; justify-content: space-between; }
+        .led-big { width: 60px; height: 60px; border-radius: 2px; background: var(--ok-green); border: 2px solid rgba(255,255,255,0.1); }
+        .score-huge { font-size: 4rem; font-weight: 900; color: var(--ok-green); line-height: 1; }
+
+        /* Tier 2 (18%): Hybrid SRT/TS Matrix */
+        .t2 { height: 18vh; }
+        .matrix-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 6px; flex-grow: 1; }
+        .diag-cell { background: var(--ok-green); display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 2px; font-weight: 800; font-size: 1rem; position: relative; }
+        .diag-tag { position: absolute; top: 2px; left: 4px; font-size: 0.5rem; opacity: 0.6; font-weight: normal; }
+        .matrix-label { font-size: 0.65rem; color: var(--text-dim); text-align: center; margin-top: 2px; }
+
+        /* Tier 3 (20%): Time-Lock Stability */
+        .t3 { height: 20vh; }
+        .timeline-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; flex-grow: 1; }
+        .chart-box { background: #000; border: 1px solid var(--border-color); position: relative; overflow: hidden; }
+        .inst-val { position: absolute; top: 4px; right: 8px; font-weight: bold; font-size: 0.8rem; color: #FFF; z-index: 5; }
+
+        /* Tier 4 (32%): Predictive & PID Multi-Series */
+        .t4 { height: 32vh; }
+        .t4-grid { display: grid; grid-template-columns: 140px 280px 1fr; gap: 15px; height: calc(100% - 15px); }
+        .inv-wrapper { overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; height: 100%; background: rgba(0,0,0,0.2); }
+        .inv-table { width: 100%; font-family: monospace; font-size: 0.65rem; border-collapse: collapse; }
+        .inv-table td { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        /* Tier 5 (18%): Audit */
+        .t5 { height: 18vh; background: #000; font-family: monospace; font-size: 0.75rem; overflow-y: auto; padding: 10px; border-bottom: none; }
+        .log-line { border-bottom: 1px solid #111; padding: 1px 0; display: flex; gap: 10px; }
+
+        canvas { width: 100% !important; height: 100% !important; display: block; }
+        .blink { animation: soft-blink 0.5s infinite alternate; }
+        @keyframes soft-blink { from { opacity: 1; } to { opacity: 0.6; } }
+    </style>
+</head>
+<body>
+
+<div class="fleet-wall">
+    <div class="section-h">FLEET CONTROL</div>
+    <div class="wall-grid" id="fleet-grid"></div>
+</div>
+
+<div class="main-stack">
+    <!-- TIER 1: LINK SURVIVAL -->
+    <section class="t1">
+        <div style="display:flex; align-items:center; gap:15px">
+            <div id="lock-led" class="led-big"></div>
+            <div>
+                <div id="lock-status" style="font-size:1.8rem; font-weight:900">LOCKED</div>
+                <div style="color:var(--link-cyan); font-weight:bold; font-size:0.7rem">PROTOCOL: SRT (LISTENER)</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:40px">
+            <div style="display:flex; flex-direction:column"><span class="section-h">RTT</span><span id="v-rtt" class="srt-val">32</span></div>
+            <div style="display:flex; flex-direction:column"><span class="section-h">RETR %</span><span id="v-retr" class="srt-val">1.1</span></div>
+            <div style="display:flex; flex-direction:column"><span class="section-h">UNREC LOSS</span><span id="v-unr" class="srt-val" style="color:var(--ok-green)">0</span></div>
+        </div>
+        <div id="v-score" class="score-huge">92</div>
+    </section>
+
+    <!-- TIER 2: HYBRID ANALYTICS MATRIX -->
+    <section class="t2">
+        <div class="matrix-grid">
+            <!-- SRT Deep Metrics -->
+            <div class="diag-cell"><span class="diag-tag">SRT</span>BW: 142M</div>
+            <div class="diag-cell"><span class="diag-tag">SRT</span>RTT: 32ms</div>
+            <div class="diag-cell"><span class="diag-tag">SRT</span>NAK CNT: 0</div>
+            <div class="diag-cell"><span class="diag-tag">SRT</span>BUF: 242ms</div>
+            <!-- TS Compliance -->
+            <div class="diag-cell"><span class="diag-tag">TS P1</span>SYNC OK</div>
+            <div class="diag-cell"><span class="diag-tag">TS P1</span>PAT OK</div>
+            <div class="diag-cell"><span class="diag-tag">TS P1</span>PMT OK</div>
+            <div class="diag-cell" id="m-cc"><span class="diag-tag">TS P1</span>CC OK</div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; margin-top:4px">
+            <div class="matrix-label">SRT TRANSPORT LAYER</div>
+            <div class="matrix-label">MPEG-TS COMPLIANCE LAYER</div>
+        </div>
+    </section>
+
+    <!-- TIER 3: ES VITALS & DUAL BITRATE -->
+    <section class="t3">
+        <div class="section-h">LOCKED TIMELINE (60S)</div>
+        <div class="timeline-row">
+            <div class="chart-box"><span class="diag-tag">FPS</span><span id="v-fps" class="inst-val">25.00</span><canvas id="c-fps"></canvas></div>
+            <div class="chart-box"><span class="diag-tag">GOP (MS)</span><span id="v-gop" class="inst-val">500</span><canvas id="c-gop"></canvas></div>
+            <div class="chart-box"><span class="diag-tag">AV SYNC</span><span id="v-av" class="inst-val">+12ms</span><canvas id="c-av"></canvas></div>
+            <div class="chart-box"><span class="diag-tag">BR: PHYS vs PCR</span><span id="v-br" class="inst-val">8.2M / 8.1M</span><canvas id="c-br-comp"></canvas></div>
+        </div>
+    </section>
+
+    <!-- TIER 4: PREDICTIVE & PID SERIES -->
+    <section class="t4">
+        <div class="t4-grid">
+            <div class="rst-area">
+                <div class="section-h">RST PREDICTION</div>
+                <div style="font-size:1.1rem; display:flex; justify-content:space-between">NET: <b id="v-rst-n">18s</b></div>
+                <div style="font-size:1.1rem; display:flex; justify-content:space-between; margin-bottom:5px">ENC: <b id="v-rst-e">42s</b></div>
+                <div class="section-h">MDI-DF TREND</div>
+                <div class="chart-box" style="height:55px"><canvas id="c-mdi"></canvas></div>
+            </div>
+            <div class="inv-wrapper">
+                <div class="section-h">PID INVENTORY</div>
+                <table class="inv-table"><tbody id="inv-list"></tbody></table>
+            </div>
+            <div class="chart-box">
+                <div class="section-h" style="position:absolute;left:10px;top:5px">PID TIME-SERIES (60S) <span style="color:var(--ok-green)">VID</span> <span style="color:var(--warn-amber)">AUD</span></div>
+                <canvas id="c-pid-series"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- TIER 5: AUDIT -->
+    <section class="t5" id="audit-trail">
+        <div class="log-line"><span class="ts">[13:10:01]</span> [INFO] TsAnalyzer Pro v3.4 SRT-Deep-Dive Mode Ready.</div>
+    </section>
+</div>
+
+<script>
+    const COLORS = { OK: '#1C8C5E', WARN: '#F5A623', ALARM: '#C0392B', CYAN: '#06B6D4' };
+    const history = { fps:[], gop:[], av:[], br_phys:[], br_pcr:[], mdi:[], vid:[], aud:[] };
+    const MAX_DATA = 60;
+    let selectedID = 1;
+
+    const grid = document.getElementById('fleet-grid');
+    for(let i=1; i<=120; i++) {
+        const div = document.createElement('div');
+        div.className = 'fleet-tile'; div.id = `tile-${i}`;
+        div.onclick = () => { selectedID = i; Object.values(history).forEach(a=>a.length=0); document.querySelectorAll('.fleet-tile').forEach(t=>t.classList.remove('selected')); div.classList.add('selected'); };
+        div.innerHTML = `<div class="led-small" style="background:${i===8?COLORS.ALARM:COLORS.OK}"></div>#${i.toString().padStart(3,'0')}`;
+        grid.appendChild(div);
+    }
+    document.getElementById('tile-1').classList.add('selected');
+
+    function drawSeries(id, datasets, range, isCenter=false) {
+        const c = document.getElementById(id);
+        const ctx = c.getContext('2d');
+        const w = c.width = c.offsetWidth * 2; const h = c.height = c.offsetHeight * 2;
+        ctx.scale(2,2); const dW = w/2; const dH = h/2;
+        ctx.clearRect(0,0,dW,dH);
+        ctx.strokeStyle = '#222'; ctx.beginPath();
+        const bY = isCenter ? dH/2 : dH * 0.9;
+        ctx.moveTo(0, bY); ctx.lineTo(dW, bY); ctx.stroke();
+        datasets.forEach(ds => {
+            if(ds.data.length < 2) return;
+            ctx.strokeStyle = ds.color; ctx.lineWidth = 2;
+            if(ds.dashed) ctx.setLineDash([4, 4]); else ctx.setLineDash([]);
+            ctx.beginPath();
+            const step = dW / (MAX_DATA - 1);
+            ds.data.forEach((v, i) => {
+                let y = isCenter ? (dH/2 - (v / range * (dH/2))) : (dH - (v / ds.range * dH));
+                if(i===0) ctx.moveTo(i*step, y); else ctx.lineTo(i*step, y);
+            });
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+    }
+
+    function update() {
+        let lock=true, loss=0, rtt=32, retr=1.1, score=92, fps=25.0, gop=500, av=12, br_phys=8.2, br_pcr=8.1, rstn=18, rste=42, mdi=30;
+        if(selectedID === 8) { loss=45; score=42; lock=false; fps=12.5; rstn=2; mdi=260; }
+        
+        document.getElementById('lock-led').style.background = lock ? COLORS.OK : COLORS.ALARM;
+        document.getElementById('v-score').innerText = score;
+        document.getElementById('v-rtt').innerText = rtt;
+        document.getElementById('v-retr').innerText = retr;
+        document.getElementById('v-unr').innerText = loss;
+        document.getElementById('v-unr').style.color = loss > 0 ? COLORS.ALARM : COLORS.OK;
+        document.getElementById('v-fps').innerText = fps.toFixed(2);
+        document.getElementById('v-br').innerText = `${br_phys.toFixed(1)}M / ${br_pcr.toFixed(1)}M`;
+
+        history.fps.push(fps); history.gop.push(gop); history.av.push(av); history.br_phys.push(br_phys); history.br_pcr.push(br_pcr); history.mdi.push(mdi);
+        history.vid.push(br_phys * 0.88); history.aud.push(br_phys * 0.02);
+        Object.values(history).forEach(a => { if(a.length > MAX_DATA) a.shift(); });
+
+        drawSeries('c-fps', [{data:history.fps, color:COLORS.OK, range:30}], 30);
+        drawSeries('c-gop', [{data:history.gop, color:COLORS.WARN, range:1000}], 1000);
+        drawSeries('c-av', [{data:history.av, color:COLORS.CYAN, range:200}], 200, true);
+        drawSeries('c-br-comp', [{data:history.br_phys, color:COLORS.CYAN, range:12}, {data:history.br_pcr, color:'#FFF', range:12, dashed:true}], 12);
+        drawSeries('c-mdi', [{data:history.mdi, color:COLORS.ALARM, range:300}], 300);
+        drawSeries('c-pid-series', [{data:history.vid, color:COLORS.OK, range:10}, {data:history.aud, color:COLORS.WARN, range:10}], 10);
+
+        const invList = document.getElementById('inv-list');
+        invList.innerHTML = `<tr><td>0x0100</td><td style="color:${COLORS.OK}">VID</td><td>${(br_phys*880).toFixed(0)}</td><td>88%</td></tr><tr><td>0x0101</td><td style="color:${COLORS.WARN}">AUD</td><td>${(br_phys*20).toFixed(0)}</td><td>2%</td></tr>`;
+    }
+
+    setInterval(update, 1000);
+</script>
+</body>
+</html>

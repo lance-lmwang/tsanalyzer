@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TsAnalyzer Pro - BROADCAST NOC v3.5 (LIVE)</title>
+    <style>
+        :root {
+            --bg-color: #020617;
+            --panel-bg: #0F172A;
+            --border-color: #334155;
+            --text-main: #F8FAFC;
+            --text-dim: #64748B;
+            --ok-green: #1C8C5E;
+            --warn-amber: #F5A623;
+            --alarm-red: #C0392B;
+            --link-cyan: #06B6D4;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: var(--bg-color); color: var(--text-main); 
+            font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; 
+            overflow: hidden; display: flex;
+        }
+
+        /* Side Fleet (18%) */
+        .fleet-wall { width: 18%; height: 100vh; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 10px; flex-shrink: 0; }
+        .wall-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; overflow-y: auto; flex-grow: 1; }
+        .fleet-tile { background: #1E293B; padding: 4px; display: flex; align-items: center; gap: 4px; font-size: 0.6rem; border-radius: 2px; }
+        .fleet-tile.selected { border: 1px solid var(--link-cyan); background: #0F172A; }
+        .led-small { width: 10px; height: 10px; border-radius: 2px; }
+
+        /* Main Content (82%) */
+        .main-stack { width: 82%; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        section { border-bottom: 1px solid var(--border-color); padding: 8px 15px; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .section-h { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
+
+        /* Tier 1 (12%) */
+        .t1 { height: 12vh; flex-direction: row; align-items: center; justify-content: space-between; }
+        .led-big { width: 60px; height: 60px; border-radius: 2px; background: var(--ok-green); border: 2px solid rgba(255,255,255,0.1); }
+        .score-huge { font-size: 4rem; font-weight: 900; color: var(--ok-green); line-height: 1; }
+
+        /* Tier 2 (18%) */
+        .t2 { height: 18vh; }
+        .matrix-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 6px; flex-grow: 1; }
+        .diag-cell { background: var(--ok-green); display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 2px; font-weight: 800; font-size: 1rem; position: relative; }
+        .diag-tag { position: absolute; top: 2px; left: 4px; font-size: 0.5rem; opacity: 0.6; font-weight: normal; }
+
+        /* Tier 3 (20%) */
+        .t3 { height: 20vh; }
+        .timeline-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; flex-grow: 1; }
+        .chart-box { background: #000; border: 1px solid var(--border-color); position: relative; overflow: hidden; }
+        .inst-val { position: absolute; top: 4px; right: 8px; font-weight: bold; font-size: 0.8rem; color: #FFF; z-index: 5; }
+
+        /* Tier 4 (32%) */
+        .t4 { height: 32vh; }
+        .t4-grid { display: grid; grid-template-columns: 140px 280px 1fr; gap: 15px; height: calc(100% - 15px); }
+        .inv-wrapper { overflow-y: auto; border: 1px solid var(--border-color); padding: 5px; height: 100%; background: rgba(0,0,0,0.2); }
+        .inv-table { width: 100%; font-family: monospace; font-size: 0.65rem; border-collapse: collapse; }
+        .inv-table td { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        /* Tier 5 (18%) */
+        .t5 { height: 18vh; background: #000; font-family: monospace; font-size: 0.75rem; overflow-y: auto; padding: 10px; border-bottom: none; }
+        .log-line { border-bottom: 1px solid #111; padding: 1px 0; display: flex; gap: 10px; }
+        .ts { color: var(--text-dim); }
+
+        canvas { width: 100% !important; height: 100% !important; display: block; }
+        .blink { animation: soft-blink 0.5s infinite alternate; }
+        @keyframes soft-blink { from { opacity: 1; } to { opacity: 0.6; } }
+    </style>
+</head>
+<body>
+
+<div class="fleet-wall">
+    <div class="section-h">FLEET CONTROL</div>
+    <div class="wall-grid" id="fleet-grid"></div>
+</div>
+
+<div class="main-stack">
+    <section class="t1">
+        <div style="display:flex; align-items:center; gap:15px">
+            <div id="lock-led" class="led-big"></div>
+            <div>
+                <div id="lock-status" style="font-size:1.8rem; font-weight:900">LOCKED</div>
+                <div id="cur-id" style="color:var(--link-cyan); font-weight:bold; font-size:0.7rem">--</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:40px">
+            <div style="display:flex; flex-direction:column"><span class="section-h">RTT (MS)</span><span id="v-rtt" class="srt-val">--</span></div>
+            <div style="display:flex; flex-direction:column"><span class="section-h">PHYS BR</span><span id="v-phys-br" class="srt-val" style="color:var(--link-cyan)">--</span></div>
+        </div>
+        <div id="v-score" class="score-huge">--</div>
+    </section>
+
+    <section class="t2">
+        <div class="section-h">TR 101 290 COMPLIANCE</div>
+        <div class="matrix-grid">
+            <div class="diag-cell" id="m-sync"><span class="diag-tag">P1.1</span>SYNC</div>
+            <div class="diag-cell" id="m-pat"><span class="diag-tag">P1.2</span>PAT</div>
+            <div class="diag-cell" id="m-pmt"><span class="diag-tag">P1.3</span>PMT</div>
+            <div class="diag-cell" id="m-cc"><span class="diag-tag">P1.4</span>CC</div>
+            <div class="diag-cell" id="m-tei" style="opacity:0.6"><span class="diag-tag">P2.1</span>TEI</div>
+            <div class="diag-cell" id="m-crc" style="opacity:0.6"><span class="diag-tag">P2.2</span>CRC</div>
+            <div class="diag-cell" id="m-pcrj" style="opacity:0.6"><span class="diag-tag">P2.3</span>PCR JIT</div>
+            <div class="diag-cell" id="m-pcrr" style="opacity:0.6"><span class="diag-tag">P2.4</span>PCR REP</div>
+        </div>
+    </section>
+
+    <section class="t3">
+        <div class="section-h">ESSENCE VITALS (TIMELINE LOCK)</div>
+        <div class="timeline-row">
+            <div class="chart-box"><span class="diag-tag">FPS</span><span id="v-fps" class="inst-val">--</span><canvas id="c-fps"></canvas></div>
+            <div class="chart-box"><span class="diag-tag">GOP</span><span id="v-gop" class="inst-val">--</span><canvas id="c-gop"></canvas></div>
+            <div class="chart-box"><span class="diag-tag">AV SYNC</span><span id="v-av" class="inst-val">--</span><canvas id="c-av"></canvas></div>
+            <div class="chart-box"><span class="diag-tag">PHYS BR</span><span id="v-br" class="inst-val">--</span><canvas id="c-br"></canvas></div>
+        </div>
+    </section>
+
+    <section class="t4">
+        <div class="t4-grid">
+            <div class="rst-area">
+                <div class="section-h">RST PREDICTION</div>
+                <div style="font-size:1rem; display:flex; justify-content:space-between">NET: <b id="v-rst-n">--</b></div>
+                <div style="font-size:1rem; display:flex; justify-content:space-between; margin-bottom:5px">ENC: <b id="v-rst-e">--</b></div>
+                <div class="section-h">MDI-DF TREND</div>
+                <div class="chart-box" style="height:55px"><canvas id="c-mdi"></canvas></div>
+            </div>
+            <div class="inv-wrapper">
+                <div class="section-h">PID INVENTORY</div>
+                <table class="inv-table"><tbody id="inv-list"></tbody></table>
+            </div>
+            <div class="chart-box">
+                <div class="section-h" style="position:absolute;left:10px;top:5px">PID TIME-SERIES (60S)</div>
+                <canvas id="c-pid-series"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="t5" id="audit-trail"></section>
+</div>
+
+<script>
+    const COLORS = { OK: '#1C8C5E', WARN: '#F5A623', ALARM: '#C0392B', CYAN: '#06B6D4' };
+    const history = { fps:[], gop:[], av:[], br:[], mdi:[], vid:[], aud:[] };
+    const MAX_DATA = 60;
+    let selectedID = "";
+
+    // Load Stream Inventory
+    async function refreshFleet() {
+        try {
+            const res = await fetch('/api/v1/config/streams');
+            const streams = await res.json();
+            const grid = document.getElementById('fleet-grid');
+            grid.innerHTML = '';
+            streams.forEach(s => {
+                const div = document.createElement('div');
+                div.className = 'fleet-tile' + (selectedID === s.id ? ' selected' : '');
+                div.onclick = () => { selectedID = s.id; refreshFleet(); };
+                div.innerHTML = `<div class="led-small" style="background:${COLORS.OK}"></div>${s.id}`;
+                grid.appendChild(div);
+            });
+            if (!selectedID && streams.length > 0) selectedID = streams[0].id;
+        } catch(e) { console.warn("Fleet refresh failed"); }
+    }
+
+    async function pullSnapshot() {
+        if (!selectedID) return;
+        try {
+            const res = await fetch(`/api/v1/snapshot?id=${selectedID}`);
+            if (!res.ok) return;
+            const json = await res.json();
+            renderUI(json);
+        } catch(e) { console.warn("Snapshot pull failed"); }
+    }
+
+    function drawSeries(id, datasets, range, isCenter=false) {
+        const c = document.getElementById(id);
+        const ctx = c.getContext('2d');
+        const w = c.width = c.offsetWidth * 2; const h = c.height = c.offsetHeight * 2;
+        ctx.scale(2,2); const dW = w/2; const dH = h/2;
+        ctx.clearRect(0,0,dW,dH);
+        ctx.strokeStyle = '#222'; ctx.beginPath();
+        const bY = isCenter ? dH/2 : dH * 0.9;
+        ctx.moveTo(0, bY); ctx.lineTo(dW, bY); ctx.stroke();
+        datasets.forEach(ds => {
+            if(ds.data.length < 2) return;
+            ctx.strokeStyle = ds.color; ctx.lineWidth = 2; ctx.beginPath();
+            const step = dW / (MAX_DATA - 1);
+            ds.data.forEach((v, i) => {
+                let y = isCenter ? (dH/2 - (v / range * (dH/2))) : (dH - (v / range * dH));
+                if(i===0) ctx.moveTo(i*step, y); else ctx.lineTo(i*step, y);
+            });
+            ctx.stroke();
+        });
+    }
+
+    function renderUI(json) {
+        document.getElementById('cur-id').innerText = selectedID;
+        const lock = json.status.signal_lock;
+        document.getElementById('lock-led').style.background = lock ? COLORS.OK : COLORS.ALARM;
+        document.getElementById('lock-status').innerText = lock ? "LOCKED" : "LOST";
+        document.getElementById('v-score').innerText = json.status.master_health.toFixed(0);
+        document.getElementById('v-score').style.color = json.status.master_health < 60 ? COLORS.ALARM : COLORS.OK;
+        
+        document.getElementById('v-rtt').innerText = json.tier1_link.srt_rtt_ms;
+        document.getElementById('v-phys-br').innerText = (json.tier1_link.physical_bitrate_bps/1e6).toFixed(1) + "M";
+        
+        const matrix = { 'm-sync': json.tier2_compliance.p1.sync_loss, 'm-pat': json.tier2_compliance.p1.pat_error, 'm-pmt': json.tier2_compliance.p1.pmt_error, 'm-cc': json.tier2_compliance.p1.cc_error };
+        for(let id in matrix) {
+            document.getElementById(id).style.background = matrix[id] > 0 ? COLORS.ALARM : COLORS.OK;
+        }
+
+        document.getElementById('v-fps').innerText = json.tier3_essence.video_fps.toFixed(2);
+        document.getElementById('v-gop').innerText = json.tier3_essence.gop_ms + "ms";
+        document.getElementById('v-av').innerText = (json.tier3_essence.av_sync_offset_ms >= 0 ? "+" : "") + json.tier3_essence.av_sync_offset_ms + "ms";
+        document.getElementById('v-br').innerText = (json.tier3_essence.total_bitrate_bps/1e6).toFixed(1) + "M";
+
+        history.fps.push(json.tier3_essence.video_fps);
+        history.gop.push(json.tier3_essence.gop_ms);
+        history.av.push(json.tier3_essence.av_sync_offset_ms);
+        history.br.push(json.tier3_essence.total_bitrate_bps/1e6);
+        history.mdi.push(json.tier4_predictive.mdi_df_ms);
+        if(history.fps.length > MAX_DATA) Object.values(history).forEach(a => a.shift());
+
+        drawSeries('c-fps', [{data:history.fps, color:COLORS.OK}], 30);
+        drawSeries('c-gop', [{data:history.gop, color:COLORS.WARN}], 1000);
+        drawSeries('c-av', [{data:history.av, color:COLORS.CYAN}], 200, true);
+        drawSeries('c-br', [{data:history.br, color:'#FFF'}], 12);
+        drawSeries('c-mdi', [{data:history.mdi, color:COLORS.ALARM}], 300);
+
+        document.getElementById('v-rst-n').innerText = json.tier4_predictive.rst_network_s.toFixed(1) + "s";
+        document.getElementById('v-rst-e').innerText = json.tier4_predictive.rst_encoder_s.toFixed(1) + "s";
+
+        const invList = document.getElementById('inv-list');
+        invList.innerHTML = json.tier5_inventory.map(p => `<tr><td>${p.pid}</td><td style="color:var(--link-cyan)">${p.type}</td><td>${(p.bps/1000).toFixed(0)}</td><td>${p.bw_pct.toFixed(1)}%</td></tr>`).join('');
+    }
+
+    setInterval(pullSnapshot, 1000);
+    setInterval(refreshFleet, 5000);
+    refreshFleet();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+build/
+*.o
+*.a
+*.so
+*.log
+tspacer.pid
+capture.txt
+
+# TsAnalyzer binaries and logs
+tsanalyzer
+tsa_run.log
+tsa_output.log
+tsa_cctv.log
+cctv_prom.log
+tests/test_cc_classifier_v2
+tests/test_pts_trajectory
+*.pid
