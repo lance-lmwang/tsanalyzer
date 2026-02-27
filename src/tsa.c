@@ -88,6 +88,97 @@ static const char* tsa_stream_type_to_str(uint8_t type) {
     }
 }
 
+/* --- H.264/H.265 ES 深度解析 --- */
+typedef struct {
+    const uint8_t* buf;
+    int size;
+    int pos; // Bit position
+} bit_reader_t;
+
+static uint32_t read_bits(bit_reader_t* r, int n) {
+    uint32_t val = 0;
+    for (int i = 0; i < n; i++) {
+        if (r->pos / 8 >= r->size) break;
+        val = (val << 1) | ((r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1);
+        r->pos++;
+    }
+    return val;
+}
+
+static uint32_t read_ue(bit_reader_t* r) {
+    int count = 0;
+    while (read_bits(r, 1) == 0 && count < 32) count++;
+    return (1 << count) - 1 + read_bits(r, count);
+}
+
+static void parse_h264_sps(tsa_handle_t* h, uint16_t pid, const uint8_t* buf, int size) {
+    if (size < 10) return;
+    bit_reader_t r = {buf, size, 0};
+
+    // Skip NAL header (0x67)
+    read_bits(&r, 8);
+
+    h->pid_profile[pid] = read_bits(&r, 8);
+    read_bits(&r, 16); // constraint_set and level_idc
+    read_ue(&r); // seq_parameter_set_id
+
+    if (h->pid_profile[pid] >= 100) {
+        if (read_ue(&r) == 3) read_bits(&r, 1); // chroma_format_idc
+        read_ue(&r); // bit_depth_luma
+        read_ue(&r); // bit_depth_chroma
+        read_bits(&r, 2); // qpprime_y_zero_transform, seq_scaling_matrix
+    }
+
+    read_ue(&r); // log2_max_frame_num
+    uint32_t pic_order_cnt_type = read_ue(&r);
+    if (pic_order_cnt_type == 0) {
+        read_ue(&r); // log2_max_pic_order_cnt_lsb
+    } else if (pic_order_cnt_type == 1) {
+        read_bits(&r, 1); // delta_pic_order_always_zero
+        read_ue(&r); // offset_for_non_ref_pic
+        read_ue(&r); // offset_for_top_to_bottom_field
+        uint32_t num_ref_frames_in_pic_order_cnt_cycle = read_ue(&r);
+        for (uint32_t i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) read_ue(&r);
+    }
+
+    read_ue(&r); // max_num_ref_frames
+    read_bits(&r, 1); // gaps_in_frame_num_value_allowed
+
+        uint32_t pic_width_in_mbs_minus1 = read_ue(&r);
+        uint32_t pic_height_in_map_units_minus1 = read_ue(&r);
+        uint32_t frame_mbs_only_flag = read_bits(&r, 1);
+
+        if (!frame_mbs_only_flag) read_bits(&r, 1); // mb_adaptive_frame_field_flag
+        read_bits(&r, 1); // direct_8x8_inference_flag
+
+        uint32_t width = (pic_width_in_mbs_minus1 + 1) * 16;
+        uint32_t height = (pic_height_in_map_units_minus1 + 1) * 16 * (2 - frame_mbs_only_flag);
+
+        if (read_bits(&r, 1)) { // frame_cropping_flag
+            uint32_t crop_left = read_ue(&r);
+            uint32_t crop_right = read_ue(&r);
+            uint32_t crop_top = read_ue(&r);
+            uint32_t crop_bottom = read_ue(&r);
+
+            width -= (crop_left + crop_right) * 2;
+            height -= (crop_top + crop_bottom) * 2;
+        }
+
+        h->pid_width[pid] = width;
+        h->pid_height[pid] = height;
+    }
+static void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len) {
+    // 寻找 NALU 起始码 0x000001
+    for (int i = 0; i < len - 4; i++) {
+        if (payload[i] == 0x00 && payload[i+1] == 0x00 && payload[i+2] == 0x01) {
+            uint8_t nal_type = payload[i+3] & 0x1F;
+            if (nal_type == 7) { // H.264 SPS
+                parse_h264_sps(h, pid, payload + i + 3, len - i - 3);
+            }
+        }
+    }
+}
+
 /* --- 专业级 PID 类型识别 --- */
 static const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t pid) {
     if (pid == 0x1FFF) return "Stuffing";
@@ -185,10 +276,14 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
 }
 
 void tsa_destroy(tsa_handle_t* h) {
-    if (h) ts_pcr_window_destroy(&h->pcr_window);
+    if (h) {
+        ts_pcr_window_destroy(&h->pcr_window);
+        for (int i = 0; i < TS_PID_MAX; i++) {
+            if (h->pid_pes_buf[i]) free(h->pid_pes_buf[i]);
+        }
+    }
     free(h);
 }
-
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
     if (!h || !pkt) return;
     if (h->start_ns == 0) h->start_ns = now_ns;
@@ -305,6 +400,31 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
     }
     h->live.pid_last_seen_ns[pid] = now_ns;
 
+    // Expert Mode: PES Reassembly & ES Analysis
+    bool pusi = (pkt[1] & 0x40);
+    uint8_t af_len = (pkt[3] & 0x20) ? pkt[4] + 1 : 0;
+    const uint8_t* payload = pkt + 4 + af_len;
+    int payload_len = TS_PACKET_SIZE - (4 + af_len);
+
+    if (payload_len > 0 && h->live.pid_is_referenced[pid]) {
+        if (pusi) {
+            // New PES packet starts
+            if (h->pid_pes_len[pid] > 0) {
+                tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid]);
+            }
+            h->pid_pes_len[pid] = 0;
+            if (!h->pid_pes_buf[pid]) {
+                h->pid_pes_cap[pid] = 4096; // 足够放下 SPS/PPS
+                h->pid_pes_buf[pid] = malloc(h->pid_pes_cap[pid]);
+            }
+        }
+
+        if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + payload_len <= h->pid_pes_cap[pid]) {
+            memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], payload, payload_len);
+            h->pid_pes_len[pid] += payload_len;
+        }
+    }
+
     // PCR Analysis & P2: PCR Repetition
     if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
         uint64_t pcr_ticks = extract_pcr(pkt);
@@ -351,7 +471,14 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     if (!h) return;
     double ds = (double)(now_ns - h->last_snap_ns) / 1e9;
-    if (ds < 0.1) return; // Allow faster snapshots for high-res monitoring
+    if (ds < 0.1) return;
+
+    // Flush any pending ES analysis before snapshot
+    for (int p = 0; p < TS_PID_MAX; p++) {
+        if (h->pid_pes_len[p] > 0) {
+            tsa_handle_es_payload(h, p, h->pid_pes_buf[p], h->pid_pes_len[p]);
+        }
+    }
 
     uint64_t dp = h->live.total_ts_packets - h->prev_snap_base.total_ts_packets;
     h->live.physical_bitrate_bps = (uint64_t)((double)dp * 188.0 * 8.0 / ds);
@@ -430,6 +557,9 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
             h->snap_state.stats.pids[p].eb_fill_pct = h->live.pid_eb_fill_pct[p];
             h->snap_state.stats.pids[p].tb_fill_pct = 50.0f; // Mocked
             h->snap_state.stats.pids[p].mb_fill_pct = 50.0f; // Mocked
+            h->snap_state.stats.pids[p].width = h->pid_width[p];
+            h->snap_state.stats.pids[p].height = h->pid_height[p];
+            h->snap_state.stats.pids[p].profile = h->pid_profile[p];
         }
     }
 
@@ -694,8 +824,14 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
                          (double)s->pid_bitrate_bps[p] * 100.0 / (double)s->physical_bitrate_bps : 0;
             const char* type = snap->pids[p].type_str;
             if (type[0] == '\0') type = "Unknown";
-            off += snprintf(buf + off, sz - off, "%s{\"pid\":%d,\"type\":\"%s\",\"bitrate_bps\":%llu,\"pct\":%.2f}",
+            off += snprintf(buf + off, sz - off, "%s{\"pid\":%d,\"type\":\"%s\",\"bitrate_bps\":%llu,\"pct\":%.2f",
                            first_pid ? "" : ",", p, type, (unsigned long long)s->pid_bitrate_bps[p], pct);
+
+            if (snap->pids[p].width > 0) {
+                off += snprintf(buf + off, sz - off, ",\"width\":%u,\"height\":%u,\"profile\":%u",
+                               snap->pids[p].width, snap->pids[p].height, snap->pids[p].profile);
+            }
+            off += snprintf(buf + off, sz - off, "}");
             first_pid = false;
         }
     }

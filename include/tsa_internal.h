@@ -91,6 +91,14 @@ struct tsa_handle {
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
 
+    // PES & ES Deep Analysis (Expert Mode)
+    uint8_t* pid_pes_buf[TS_PID_MAX];
+    uint32_t pid_pes_len[TS_PID_MAX];
+    uint32_t pid_pes_cap[TS_PID_MAX];
+    uint16_t pid_width[TS_PID_MAX];
+    uint16_t pid_height[TS_PID_MAX];
+    uint8_t pid_profile[TS_PID_MAX];
+
     alignas(64) struct {
         _Atomic uint32_t seq;
         tsa_snapshot_full_t stats;
