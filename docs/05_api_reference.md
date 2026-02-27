@@ -36,7 +36,43 @@ Initializes the Muscle for pacing. Integrated with the server egress dispatcher.
 
 ---
 
-## 3. Engineering Implementation Contract
+## 3. Metrology JSON Snapshot (`GET /api/v1/metrology/full`)
+
+TsAnalyzer 2.0 provides a structured, broadcast-grade JSON report for live streams.
+
+### 3.1 Response Structure
+```json
+{
+  "status": "ok",
+  "health": 45.0,
+  "signal_lock": true,
+  "p1_alarms": {
+    "cc_error": { "count": 12, "ts": 1772206774646, "msg": "CC mismatch on PID 256: expected 4, found 6" },
+    "pat_error": { "count": 0, "ts": 0, "msg": "" },
+    ...
+  },
+  "p2_alarms": {
+    "pcr_accuracy": { "count": 134, "ts": 1772206774644, "msg": "PCR Jitter 540.2 ns exceeds ±500ns" },
+    "crc_error": { "count": 5, "ts": 1772206774624, "msg": "CRC32 failed for PAT on PID 0" },
+    ...
+  },
+  "metrics": {
+    "bitrate_bps": 10000000,
+    "pcr_jitter_ns": 420.5,
+    "pcr_drift_ppm": 15.2,
+    "mdi_df_ms": 5.24
+  }
+}
+```
+
+### 3.2 Metric Definitions
+- **`health`**: 0-100 score. P1 errors trigger a 40-point penalty and a 60-point "Lid" rule.
+- **`pcr_drift_ppm`**: Clock frequency offset in Parts Per Million. Values > ±30 indicate source clock instability.
+- **`mdi_df_ms`**: Delay Factor. Buffer size (ms) required to neutralize network jitter.
+
+---
+
+## 4. Engineering Implementation Contract
 
 1. **Wait-Free SPSC**: All thread handoffs MUST be wait-free.
 2. **Watchdog Integrity**: The server MUST monitor analysis thread heartbeats to trigger L4 Bypass in < 10ms.

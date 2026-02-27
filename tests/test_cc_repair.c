@@ -45,7 +45,7 @@ void test_cc_repair() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(tsa_gateway_get_tsa_handle(gw), &snap);
 
-    printf("Detected CC Errors: %lu, CC Loss: %lu\n", snap.stats.cc_error_count, snap.stats.cc_loss_count);
+    printf("Detected CC Errors: %lu, CC Loss: %lu\n", snap.stats.cc_error.count, snap.stats.cc_loss_count);
 
     // We expect 4 lost packets (1, 2, 3, 4)
     assert(snap.stats.cc_loss_count == 4);

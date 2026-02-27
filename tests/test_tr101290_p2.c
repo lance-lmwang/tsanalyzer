@@ -45,7 +45,7 @@ void test_p2_pcr_repetition() {
     tsa_snapshot_full_t s;
     tsa_take_snapshot_full(h, &s);
 
-    assert(s.stats.pcr_repetition_error_count > 0);
+    assert(s.stats.pcr_repetition_error.count > 0);
 
     tsa_destroy(h);
     printf("test_p2_pcr_repetition passed.\n");

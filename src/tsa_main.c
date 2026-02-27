@@ -23,6 +23,12 @@ static void fn(struct mg_connection* c, int ev, void* ev_data) {
             static char resp[128 * 1024];
             tsa_exporter_prom_v2(&g_h, 1, resp, sizeof(resp));
             mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", resp);
+        } else if (mg_match(hm->uri, mg_str("/api/v1/metrology/full"), NULL)) {
+            static char resp[128 * 1024];
+            static tsa_snapshot_full_t snap; // Move to static to avoid stack overflow
+            tsa_take_snapshot_full(g_h, &snap);
+            tsa_snapshot_to_json(&snap, resp, sizeof(resp));
+            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", resp);
         }
     }
 }
@@ -41,7 +47,7 @@ static void* http_thread(void* arg) {
 
 int main(int argc, char** argv) {
     if (argc < 2) { printf("Usage: %s <test.ts>\n", argv[0]); return 1; }
-    
+
     tsa_config_t cfg = { .is_live = false, .pcr_ema_alpha = 0.1 };
     strncpy(cfg.input_label, "CLI-TEST", sizeof(cfg.input_label));
     g_h = tsa_create(&cfg);
@@ -66,9 +72,15 @@ int main(int argc, char** argv) {
             tsa_commit_snapshot(g_h, now_ns);
             tsa_snapshot_full_t snap;
             tsa_take_snapshot_full(g_h, &snap);
-            printf("\r[PKTS: %lu] BITRATE: %.2f Mbps | P1 CC ERR: %lu | HEALTH: %.1f", 
-                   count, (double)snap.stats.physical_bitrate_bps / 1e6, 
-                   snap.stats.cc_error_count, snap.predictive.master_health);
+            const tsa_tr101290_stats_t* s = &snap.stats;
+            uint64_t p1_total = s->sync_loss.count + s->pat_error.count + s->cc_error.count +
+                                s->pmt_error.count + s->pid_error.count;
+            uint64_t p2_total = s->transport_error.count + s->crc_error.count +
+                                s->pcr_repetition_error.count + s->pcr_accuracy_error.count;
+
+            printf("\r[PKTS: %lu] BITRATE: %.2f Mbps | P1: %lu | P2: %lu | HEALTH: %.1f",
+                   count, (double)s->physical_bitrate_bps / 1e6,
+                   p1_total, p2_total, snap.predictive.master_health);
             fflush(stdout);
         }
     }

@@ -14,6 +14,7 @@ This hub provides a structured guide to the **OTT Smart Link Assurance Gateway**
 *   **[08: Server API Design](./08_server_api_design.md)**: Multi-tenant fleet orchestration, REST/gRPC endpoints, and webhooks.
 *   **[09: Grafana Dashboard Spec](./09_grafana_dashboard_spec.md)**: Survival-First NOC visualization standards and "Four Masters" logic.
 *   **[12: Professional QoE Design](./12_professional_qoe_design.md)**: ES-layer video content auditing and Stream Wall standards.
+*   **[15: TR 101 290 Metrology Spec](./15_tr101290_analysis_spec.md)**: Broadcast-grade protocol consistency and clock accuracy standards.
 
 ## Pillar 3: Engineering & Implementation
 *   **[04: Resource & Performance](./04_resource_performance.md)**: Cloud edge density, hardware hardening, andAggregate node throughput targets.

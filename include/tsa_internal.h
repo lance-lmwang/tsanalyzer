@@ -58,6 +58,9 @@ struct tsa_handle {
     uint64_t last_snap_ns;
 
     bool seen_pat, seen_pmt;
+    bool signal_lock;
+    uint32_t consecutive_sync_errors;
+    uint32_t consecutive_good_syncs;
 
     // PCR Analysis Core
     uint64_t last_pcr_ticks;
@@ -65,6 +68,7 @@ struct tsa_handle {
     uint64_t pkts_since_pcr;
     double pcr_jitter_sq_sum_ns;
     uint64_t pcr_jitter_count;
+    ts_pcr_window_t pcr_window;
 
     // Statistical Snapshots
     tsa_tr101290_stats_t live;
@@ -74,7 +78,7 @@ struct tsa_handle {
     /* FIX: Use anonymous union to support both pid_eb_fill_bytes and pid_eb_fill_double */
     union {
         double pid_eb_fill_bytes[TS_PID_MAX];
-        double pid_eb_fill_double[TS_PID_MAX]; 
+        double pid_eb_fill_double[TS_PID_MAX];
     };
     uint64_t last_eb_leak_ns[TS_PID_MAX];
 

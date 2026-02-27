@@ -60,7 +60,7 @@ void test_psi_full_chain() {
     tsa_snapshot_full_t stats;
     tsa_take_snapshot_full(h, &stats);
 
-    assert(stats.stats.crc_error_count == 0);
+    assert(stats.stats.crc_error.count == 0);
     assert(stats.stats.pid_is_referenced[0x1BE9] == true);
     assert(stats.stats.pid_is_referenced[0x0202] == true);
 
@@ -87,7 +87,7 @@ void test_pointer_field_offset() {
 
     tsa_snapshot_full_t stats;
     tsa_take_snapshot_full(h, &stats);
-    assert(stats.stats.crc_error_count == 0);
+    assert(stats.stats.crc_error.count == 0);
 
     tsa_destroy(h);
     printf("  Pointer Field offset handling passed.\n");

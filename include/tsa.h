@@ -12,15 +12,23 @@
 typedef struct tsa_handle tsa_handle_t;
 
 typedef struct {
-    uint64_t sync_loss_count;
-    uint64_t sync_byte_error_count;
-    uint64_t pat_error_count;
-    uint64_t cc_error_count;
-    uint64_t pmt_error_count;
-    uint64_t transport_error_count;
-    uint64_t crc_error_count;
-    uint64_t pcr_repetition_error_count;
-    uint64_t pcr_accuracy_error_count;
+    uint64_t count;
+    uint64_t last_timestamp_ns;
+    char message[128];
+} tsa_alarm_t;
+
+typedef struct {
+    tsa_alarm_t sync_loss;
+    tsa_alarm_t sync_byte_error;
+    tsa_alarm_t pat_error;
+    tsa_alarm_t cc_error;
+    tsa_alarm_t pmt_error;
+    tsa_alarm_t pid_error;
+    tsa_alarm_t transport_error;
+    tsa_alarm_t crc_error;
+    tsa_alarm_t pcr_repetition_error;
+    tsa_alarm_t pcr_accuracy_error;
+
     uint64_t cc_loss_count;
     uint64_t cc_duplicate_count;
     uint64_t physical_bitrate_bps;
@@ -30,6 +38,7 @@ typedef struct {
     uint64_t pcr_jitter_max_ns;
     uint64_t pcr_repetition_max_ms;
     double pcr_accuracy_ns;
+    double pcr_drift_ppm;
     double mdi_df_ms;
     double mdi_mlr_pkts_s;
     double video_fps;
@@ -79,6 +88,7 @@ typedef struct {
     tsa_predictive_stats_t predictive;
     struct {
         uint32_t pid;
+        char type_str[16];
         int64_t bitrate_q16_16;
         uint64_t cc_errors;
         uint8_t liveness_status;

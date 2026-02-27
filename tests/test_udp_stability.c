@@ -104,12 +104,12 @@ int main() {
     printf("\n[UDP Stability Report]\n");
     printf("------------------------------------------\n");
     printf("Packets Processed : %lu\n", stats.total_ts_packets);
-    printf("CC Errors Found   : %lu\n", stats.cc_error_count);
+    printf("CC Errors Found   : %lu\n", stats.cc_error.count);
     printf("Simulated Loss    : %d\n", lost_count);
-    printf("Sync Byte Errors  : %lu\n", stats.sync_byte_error_count);
+    printf("Sync Byte Errors  : %lu\n", stats.sync_byte_error.count);
     printf("Accuracy          : %.2f%%\n",
-           (1.0 - (double)abs((int)stats.cc_error_count - lost_count) / TOTAL_PACKETS) * 100.0);
-    printf("Status            : %s\n", (stats.total_ts_packets > 0 && stats.cc_error_count > 0) ? "STABLE" : "FAIL");
+           (1.0 - (double)abs((int)stats.cc_error.count - lost_count) / TOTAL_PACKETS) * 100.0);
+    printf("Status            : %s\n", (stats.total_ts_packets > 0 && stats.cc_error.count > 0) ? "STABLE" : "FAIL");
     printf("------------------------------------------\n");
 
     pthread_cancel(tid);

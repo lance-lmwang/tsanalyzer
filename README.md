@@ -61,8 +61,21 @@ sudo ./build/tsa --server --api-port 8080 --metrics-port 9000
 
 ### Run CLI Mode (File Analysis)
 ```bash
-./build/tsa -f sample_stream.ts --profile STRICT_SYNC
+./build/tsa path/to/stream.ts
 ```
+*   **API (JSON)**: `http://localhost:12345/api/v1/metrology/full`
+*   **Metrics**: `http://localhost:12345/metrics`
+
+---
+
+## TsAnalyzer 2.0 Industrial Features
+
+TsAnalyzer now supports **Broadcast-Grade metrology** benchmarked against Tektronix and DekTec hardware:
+
+*   **Stateful TR 101 290**: Full P1 (Fatal) and P2 (Quality) monitoring with detailed error descriptions.
+*   **Clock Analysis (ppm)**: Real-time frequency offset detection using high-precision linear regression.
+*   **High-Resolution Timing**: Full `CLOCK_MONOTONIC_RAW` implementation for sub-microsecond PCR accuracy tracking.
+*   **Structured Alarm API**: JSON output includes cumulative counts, exact timestamps, and human-readable error reasons.
 
 ---
 

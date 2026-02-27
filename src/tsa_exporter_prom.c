@@ -24,11 +24,11 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         // Tier 1: Core
         off += snprintf(buf + off, sz - off, "tsa_signal_lock_status%s %d\n", labels, snap.summary.signal_lock ? 1 : 0);
         off += snprintf(buf + off, sz - off, "tsa_health_score%s %.1f\n", labels, snap.predictive.master_health);
-        
+
         // Tier 2: ETR 290 P1
-        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_sync_loss%s %llu\n", labels, (unsigned long long)s->sync_loss_count);
-        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_pat_error%s %llu\n", labels, (unsigned long long)s->pat_error_count);
-        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_cc_error%s %llu\n", labels, (unsigned long long)s->cc_error_count);
+        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_sync_loss%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
+        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_pat_error%s %llu\n", labels, (unsigned long long)s->pat_error.count);
+        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_cc_error%s %llu\n", labels, (unsigned long long)s->cc_error.count);
 
         // Tier 3: Analytics
         off += snprintf(buf + off, sz - off, "tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);

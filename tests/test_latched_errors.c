@@ -7,7 +7,7 @@
 
 void test_latched_errors() {
     printf("Testing Latched Errors (Smart Latching)...\n");
-    
+
     tsa_config_t cfg = {0};
     cfg.is_live = true;
     tsa_handle_t* h = tsa_create(&cfg);
@@ -26,7 +26,7 @@ void test_latched_errors() {
 
     tsa_commit_snapshot(h, 3000);
     tsa_take_snapshot_full(h, &snap);
-    assert(snap.stats.cc_error_count > 0);
+    assert(snap.stats.cc_error.count > 0);
     assert(snap.stats.latched_cc_error == 1);
 
     // 3. Inject GOOD packets (latched error should stay 1)

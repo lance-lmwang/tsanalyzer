@@ -63,7 +63,7 @@ void test_multi_packet_psi() {
     tsa_snapshot_full_t stats;
     tsa_take_snapshot_full(h, &stats);
 
-    assert(stats.stats.crc_error_count == 0);
+    assert(stats.stats.crc_error.count == 0);
     // Referenced PIDs should be captured if PMT was parsed
     assert(stats.stats.pid_is_referenced[0x1BE9] == true);
 
