@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa.h"
 #include "tsa_internal.h"
 
@@ -36,8 +37,7 @@ void test_pcr_accuracy_threshold() {
     tsa_commit_snapshot(h, start_ns + 400000000ULL);
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
-    printf("Accuracy (Clean): %.2f ns, Errors: %lu\n", snap.stats.pcr_accuracy_ns,
-           snap.stats.pcr_accuracy_error.count);
+    printf("Accuracy (Clean): %.2f ns, Errors: %lu\n", snap.stats.pcr_accuracy_ns, snap.stats.pcr_accuracy_error.count);
     assert(snap.stats.pcr_accuracy_ns < 100.0);
     assert(snap.stats.pcr_accuracy_error.count == 0);
 

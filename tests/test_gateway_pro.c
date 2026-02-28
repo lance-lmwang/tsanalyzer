@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa.h"
 #include "tsa_internal.h"
 #include "tsp.h"
@@ -11,7 +12,7 @@ void test_gateway_throttling() {
     tsa_gateway_config_t cfg = {0};
     cfg.pacing.bitrate = 10000000;
     cfg.pacing.ts_per_udp = 7;
-    cfg.pacing.mode = TSPACER_MODE_CBR; // Use CBR to be safe
+    cfg.pacing.mode = TSPACER_MODE_CBR;  // Use CBR to be safe
 
     printf("Local Config Bitrate: %lu\n", cfg.pacing.bitrate);
 

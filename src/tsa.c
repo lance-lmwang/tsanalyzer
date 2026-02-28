@@ -536,7 +536,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pes_total_allocated = 0;
         h->pes_max_quota = 64 * 1024 * 1024;  // 64MB Default quota
         h->last_trigger_reason = -1;
-        h->start_ns = 0; // Will be set on first packet
+        h->start_ns = 0;  // Will be set on first packet
         h->last_snap_ns = 0;
         for (int i = 0; i < TS_PID_MAX; i++) {
             h->pid_to_active_idx[i] = -1;
@@ -598,11 +598,13 @@ static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid) {
             for (int i = 0; i < MAX_ACTIVE_PIDS; i++) {
                 bool protected = false;
                 uint16_t cand = h->pid_active_list[i];
-                if (cand == 0 || cand == 1 || h->pid_is_pmt[cand]) protected = true;
+                if (cand == 0 || cand == 1 || h->pid_is_pmt[cand]) protected
+                = true;
                 else {
                     for (int j = 0; j < 16; j++) {
                         if (h->config.protected_pids[j] == cand) {
-                            protected = true;
+                           protected
+                            = true;
                             break;
                         }
                     }
@@ -707,7 +709,7 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
         h->pid_tb_fill_q64[pid] -= (leak_tb_rate * dt);
         if (h->pid_tb_fill_q64[pid] < 0) h->pid_tb_fill_q64[pid] = 0;
 
-        h->pid_mb_fill_q64[pid] -= (leak_tb_rate * dt); // MB usually leaks at same rate as TB in simple models
+        h->pid_mb_fill_q64[pid] -= (leak_tb_rate * dt);  // MB usually leaks at same rate as TB in simple models
         if (h->pid_mb_fill_q64[pid] < 0) h->pid_mb_fill_q64[pid] = 0;
 
         if (h->live.pid_is_referenced[pid]) {
@@ -724,7 +726,7 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
         }
     }
     if (res->pusi && h->live.pid_is_referenced[pid]) {
-        h->pid_eb_fill_q64[pid] -= INT_TO_Q64_64(100000); // Instant drain at PES start (placeholder)
+        h->pid_eb_fill_q64[pid] -= INT_TO_Q64_64(100000);  // Instant drain at PES start (placeholder)
         if (h->pid_eb_fill_q64[pid] < 0) h->pid_eb_fill_q64[pid] = 0;
     }
 
@@ -800,53 +802,55 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
             if (interval_ms > h->live.pcr_repetition_max_ms) h->live.pcr_repetition_max_ms = interval_ms;
 
             int64_t dt_pcr_ticks = (int64_t)pcr_ticks - (int64_t)h->last_pcr_ticks;
-            if (dt_pcr_ticks < -((int64_t)1 << 41)) dt_pcr_ticks += ((int64_t)1 << 42);
-            else if (dt_pcr_ticks > ((int64_t)1 << 41)) dt_pcr_ticks -= ((int64_t)1 << 42);
+            if (dt_pcr_ticks < -((int64_t)1 << 41))
+                dt_pcr_ticks += ((int64_t)1 << 42);
+            else if (dt_pcr_ticks > ((int64_t)1 << 41))
+                dt_pcr_ticks -= ((int64_t)1 << 42);
 
             int64_t inst_jitter_ns = (int64_t)dt_sys - (int64_t)dt_pcr_ticks * 1000 / 27;
             uint64_t abs_inst_jitter = (inst_jitter_ns >= 0) ? (uint64_t)inst_jitter_ns : (uint64_t)(-inst_jitter_ns);
             if (abs_inst_jitter > h->live.pcr_jitter_max_ns) h->live.pcr_jitter_max_ns = abs_inst_jitter;
 
-                        int128_t slope_q64, intercept_q64;
-                        int64_t reg_acc = 0;
-                        int reg_res = ts_pcr_window_regress(&h->pcr_window, &slope_q64, &intercept_q64, &reg_acc);
+            int128_t slope_q64, intercept_q64;
+            int64_t reg_acc = 0;
+            int reg_res = ts_pcr_window_regress(&h->pcr_window, &slope_q64, &intercept_q64, &reg_acc);
 
-                        // Update jitter metrics
-                        h->live.pcr_accuracy_ns = (double)reg_acc;
+            // Update jitter metrics
+            h->live.pcr_accuracy_ns = (double)reg_acc;
 
-                                    if (reg_res == 0) {
-                                        h->stc_locked = true;
-                                        h->stc_slope_q64 = slope_q64;
-                                        h->stc_intercept_q64 = intercept_q64;
+            if (reg_res == 0) {
+                h->stc_locked = true;
+                h->stc_slope_q64 = slope_q64;
+                h->stc_intercept_q64 = intercept_q64;
 
-                                        if (reg_acc > 500) {
-                                            h->live.pcr_accuracy_error.count++;
-                                            h->live.pcr_accuracy_error.last_timestamp_ns = now_ns;
-                                        }
+                if (reg_acc > 500) {
+                    h->live.pcr_accuracy_error.count++;
+                    h->live.pcr_accuracy_error.last_timestamp_ns = now_ns;
+                }
 
-                                        // Jitter stats
-                                        h->pcr_jitter_sq_sum_ns += (int128_t)inst_jitter_ns * inst_jitter_ns;
-                                        h->pcr_jitter_count++;
-                                        h->live.pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
+                // Jitter stats
+                h->pcr_jitter_sq_sum_ns += (int128_t)inst_jitter_ns * inst_jitter_ns;
+                h->pcr_jitter_count++;
+                h->live.pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
 
-                                        if (dt_pcr_ticks > 0) {
-                                            uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
-                                            uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                                            h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
-                                        }
-                                    } else {
-                                        h->stc_locked = false;
+                if (dt_pcr_ticks > 0) {
+                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                    h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                }
+            } else {
+                h->stc_locked = false;
 
-                                        // Even if unlocked, estimate bitrate if pcr delta is reasonable
-                                        if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 5) {
-                                            uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
-                                            uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                                            h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
-                                        }
-                                    }
-                                } else {
-                                    h->stc_ns = pcr_ns;
-                                }
+                // Even if unlocked, estimate bitrate if pcr delta is reasonable
+                if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 5) {
+                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                    h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                }
+            }
+        } else {
+            h->stc_ns = pcr_ns;
+        }
         h->last_pcr_ticks = pcr_ticks;
         h->last_pcr_arrival_ns = now_ns;
         h->last_pcr_stc_ns = h->stc_ns;
@@ -909,7 +913,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     uint64_t current_stc = h->stc_ns;
 
     uint64_t dt_ns = now_ns - h->last_snap_ns;
-    if (dt_ns == 0) dt_ns = 1; // Prevent div by zero
+    if (dt_ns == 0) dt_ns = 1;  // Prevent div by zero
 
     uint64_t dp = h->live.total_ts_packets - h->prev_snap_base.total_ts_packets;
     // Bitrate = pkts * 188 * 8 * 1e9 / dt_ns
@@ -919,7 +923,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     }
 
     // MDI-MLR using integer math: (losses * 1e9) / dt_ns
-    h->live.mdi_mlr_pkts_s = (double)((h->live.cc_loss_count - h->prev_snap_base.cc_loss_count) * 1000000000ULL) / dt_ns;
+    h->live.mdi_mlr_pkts_s =
+        (double)((h->live.cc_loss_count - h->prev_snap_base.cc_loss_count) * 1000000000ULL) / dt_ns;
 
     // For MDI-DF, use the peak jitter observed since last snapshot
     h->live.mdi_df_ms = (double)h->live.pcr_jitter_max_ns / 1000000.0;
@@ -989,8 +994,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     if (h->live.mdi_df_ms > 40.0) c_net_score += 0.4;
     if (rst_n < 5.0) c_net_score += (5.0 - rst_n) / 5.0;
 
-    if (h->live.pcr_jitter_max_ns > 20000000ULL) c_enc_score += 0.8;
-    else if (h->live.pcr_jitter_max_ns > 2000000ULL) c_enc_score += 0.4;
+    if (h->live.pcr_jitter_max_ns > 20000000ULL)
+        c_enc_score += 0.8;
+    else if (h->live.pcr_jitter_max_ns > 2000000ULL)
+        c_enc_score += 0.4;
 
     if (fabs(h->live.pcr_drift_ppm) > 100.0) c_enc_score += 0.4;
 
@@ -1096,18 +1103,17 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
                 h->live.pid_bitrate_bps[p] = cur_br;
             } else {
                 uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                h->live.pid_bitrate_bps[p] = (cur_br * alpha + h->live.pid_bitrate_bps[p] * ((1ULL << 32) - alpha)) >> 32;
+                h->live.pid_bitrate_bps[p] =
+                    (cur_br * alpha + h->live.pid_bitrate_bps[p] * ((1ULL << 32) - alpha)) >> 32;
             }
             if (cur_br > 0) {
-                if (h->pid_bitrate_min[p] == 0 || cur_br < h->pid_bitrate_min[p])
-                    h->pid_bitrate_min[p] = cur_br;
+                if (h->pid_bitrate_min[p] == 0 || cur_br < h->pid_bitrate_min[p]) h->pid_bitrate_min[p] = cur_br;
                 if (cur_br > h->pid_bitrate_max[p]) h->pid_bitrate_max[p] = cur_br;
             }
         }
         h->snap_state.stats.pids[active_idx].pid = p;
         strncpy(h->snap_state.stats.pids[active_idx].type_str, tsa_get_pid_type_name(h, p), 15);
-        h->snap_state.stats.pids[active_idx].bitrate_q16_16 =
-            (int64_t)h->live.pid_bitrate_bps[p] << 16;
+        h->snap_state.stats.pids[active_idx].bitrate_q16_16 = (int64_t)h->live.pid_bitrate_bps[p] << 16;
         h->snap_state.stats.pids[active_idx].bitrate_min = h->pid_bitrate_min[p];
         h->snap_state.stats.pids[active_idx].bitrate_max = h->pid_bitrate_max[p];
         h->snap_state.stats.pids[active_idx].cc_errors = h->live.pid_cc_errors[p];
@@ -1160,9 +1166,8 @@ void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt) {
 bool tsa_forensic_trigger(tsa_handle_t* h, int reason) {
     if (!h) return false;
 
-    uint64_t current_alarms = h->live.sync_loss.count + h->live.pat_error.count +
-                              h->live.cc_error.count + h->live.pmt_error.count +
-                              h->live.pid_error.count + h->live.crc_error.count;
+    uint64_t current_alarms = h->live.sync_loss.count + h->live.pat_error.count + h->live.cc_error.count +
+                              h->live.pmt_error.count + h->live.pid_error.count + h->live.crc_error.count;
 
     bool alarm_count_increased = (current_alarms > h->last_forensic_alarm_count);
 
@@ -1175,8 +1180,8 @@ bool tsa_forensic_trigger(tsa_handle_t* h, int reason) {
 
     // If same reason, only trigger if something worsened significantly (not in basic test)
     if (alarm_count_increased && current_alarms > h->last_forensic_alarm_count + 5) {
-         h->last_forensic_alarm_count = current_alarms;
-         return true;
+        h->last_forensic_alarm_count = current_alarms;
+        return true;
     }
 
     return false;
@@ -1400,7 +1405,7 @@ int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, int64_t*
 
     if (peak_acc) *peak_acc = (int64_t)max_err;
 
-    if (max_err > 10000000) return -1; // Unlock if jitter > 10ms
+    if (max_err > 10000000) return -1;  // Unlock if jitter > 10ms
 
     if (s) *s = (int128_t)(b * (double)((int128_t)1 << 64));
     if (i) *i = (int128_t)(stp - b * sts + a);
@@ -1447,9 +1452,10 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
                     snap->summary.master_health, snap->summary.master_health,
                     snap->summary.signal_lock ? "true" : "false", (long long)snap->srt.rtt_ms);
 
-#define EXPORT_ALARM(n, o)                                                                                                   \
-    off += snprintf(buf + off, sz - off, "\"" #n "\":{\"count\":%llu,\"ts\":%llu,\"vstc\":%llu,\"offset\":%llu,\"msg\":\"%s\"},", \
-                    (unsigned long long)o.count, (unsigned long long)o.last_timestamp_ns,                                     \
+#define EXPORT_ALARM(n, o)                                                                                   \
+    off += snprintf(buf + off, sz - off,                                                                     \
+                    "\"" #n "\":{\"count\":%llu,\"ts\":%llu,\"vstc\":%llu,\"offset\":%llu,\"msg\":\"%s\"},", \
+                    (unsigned long long)o.count, (unsigned long long)o.last_timestamp_ns,                    \
                     (unsigned long long)o.triggering_vstc, (unsigned long long)o.absolute_byte_offset, o.message)
 
     off += snprintf(buf + off, sz - off, "\"p1_alarms\":{");
@@ -1493,26 +1499,25 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
         uint64_t bps = (uint64_t)((double)snap->pids[i].bitrate_q16_16 / 65536.0);
         if (bps == 0) bps = pid_br;
 
-        off += snprintf(
-            buf + off, sz - off,
-            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"status\":%u,\"bps\":%llu,\"min\":%llu,\"max\":%llu,\"pct\":%u.%02u",
-            (i == 0) ? "" : ",", pid, t, snap->pids[i].status, (unsigned long long)bps,
-            (unsigned long long)snap->pids[i].bitrate_min,
-            (unsigned long long)snap->pids[i].bitrate_max, (uint32_t)(pct_q16 / 100), (uint32_t)(pct_q16 % 100));
+        off += snprintf(buf + off, sz - off,
+                        "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"status\":%u,\"bps\":%llu,\"min\":%llu,\"max\":%llu,"
+                        "\"pct\":%u.%02u",
+                        (i == 0) ? "" : ",", pid, t, snap->pids[i].status, (unsigned long long)bps,
+                        (unsigned long long)snap->pids[i].bitrate_min, (unsigned long long)snap->pids[i].bitrate_max,
+                        (uint32_t)(pct_q16 / 100), (uint32_t)(pct_q16 % 100));
 
         if (snap->pids[i].width > 0)
-            off += snprintf(buf + off, sz - off, ",\"width\":%u,\"height\":%u,\"profile\":%u",
-                            snap->pids[i].width, snap->pids[i].height, snap->pids[i].profile);
+            off += snprintf(buf + off, sz - off, ",\"width\":%u,\"height\":%u,\"profile\":%u", snap->pids[i].width,
+                            snap->pids[i].height, snap->pids[i].profile);
         if (snap->pids[i].audio_sample_rate > 0)
-            off += snprintf(buf + off, sz - off, ",\"sample_rate\":%u,\"channels\":%u",
-                            snap->pids[i].audio_sample_rate, snap->pids[i].audio_channels);
+            off += snprintf(buf + off, sz - off, ",\"sample_rate\":%u,\"channels\":%u", snap->pids[i].audio_sample_rate,
+                            snap->pids[i].audio_channels);
         if (snap->pids[i].gop_n > 0)
             off += snprintf(buf + off, sz - off,
                             ",\"gop_n\":%u,\"gop_min\":%u,\"gop_max\":%u,\"gop_ms\":%u,\"i_"
                             "frames\":%llu,\"p_frames\":%llu,\"b_frames\":%llu",
-                            snap->pids[i].gop_n, snap->pids[i].gop_min, snap->pids[i].gop_max,
-                            snap->pids[i].gop_ms, (unsigned long long)snap->pids[i].i_frames,
-                            (unsigned long long)snap->pids[i].p_frames,
+                            snap->pids[i].gop_n, snap->pids[i].gop_min, snap->pids[i].gop_max, snap->pids[i].gop_ms,
+                            (unsigned long long)snap->pids[i].i_frames, (unsigned long long)snap->pids[i].p_frames,
                             (unsigned long long)snap->pids[i].b_frames);
         off += snprintf(buf + off, sz - off, "}");
     }

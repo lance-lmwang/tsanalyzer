@@ -17,7 +17,7 @@ typedef int128_t q64_64;
 
 #define Q32_SHIFT 32
 typedef int64_t q32_32;
-#define TO_Q32_32(x) ((q32_32)((x) * 4294967296.0))
+#define TO_Q32_32(x) ((q32_32)((x)*4294967296.0))
 #define FROM_Q32_32(x) ((double)(x) / 4294967296.0)
 #define INT_TO_Q32_32(x) ((int64_t)(x) << 32)
 
@@ -50,8 +50,7 @@ void ts_pcr_window_destroy(ts_pcr_window_t* w);
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t sys, uint64_t pcr, uint64_t off);
 
 /* Updated signature for determinism: use int64_t for peak_acc in ns */
-int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* slope, int128_t* intercept,
-                          int64_t* peak_accuracy_ns);
+int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* slope, int128_t* intercept, int64_t* peak_accuracy_ns);
 
 #define MAX_PROGRAMS 16
 #define MAX_STREAMS_PER_PROG 32
@@ -68,11 +67,7 @@ typedef struct {
     ts_stream_info_t streams[MAX_STREAMS_PER_PROG];
 } ts_program_info_t;
 
-typedef enum {
-    TSA_STATUS_VALID = 0,
-    TSA_STATUS_DEGRADED = 1,
-    TSA_STATUS_INVALID = 2
-} tsa_measurement_status_t;
+typedef enum { TSA_STATUS_VALID = 0, TSA_STATUS_DEGRADED = 1, TSA_STATUS_INVALID = 2 } tsa_measurement_status_t;
 
 struct tsa_handle {
     tsa_config_t config;

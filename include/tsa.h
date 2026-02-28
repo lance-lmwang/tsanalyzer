@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
 #include "tsp.h"
 
 #define TS_PACKET_SIZE 188

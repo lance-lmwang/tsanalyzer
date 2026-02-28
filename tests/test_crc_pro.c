@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa.h"
 #include "tsa_internal.h"
 
@@ -10,9 +11,8 @@ void test_pat_crc_error() {
     tsa_config_t cfg = {0};
     tsa_handle_t* h = tsa_create(&cfg);
 
-    uint8_t pat_section[] = {0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00,
-                             0x00, 0x00, 0x01, 0xe1, 0x00, 0x00, 0x00,
-                             0x00, 0x00};
+    uint8_t pat_section[] = {0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00,
+                             0x00, 0x01, 0xe1, 0x00, 0x00, 0x00, 0x00, 0x00};
     uint32_t crc = mpegts_crc32(pat_section, 12);
     pat_section[12] = (crc >> 24) & 0xFF;
     pat_section[13] = (crc >> 16) & 0xFF;

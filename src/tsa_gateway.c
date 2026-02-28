@@ -112,9 +112,15 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
     return tsp_enqueue(gw->tsp, pkt, 1);
 }
 
-tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw) { return gw ? gw->tsa : NULL; }
-struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw) { return (struct tsp_handle*)(gw ? gw->tsp : NULL); }
-bool tsa_gateway_is_bypassing(tsa_gateway_t* gw) { return gw ? gw->bypassing : false; }
+tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw) {
+    return gw ? gw->tsa : NULL;
+}
+struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw) {
+    return (struct tsp_handle*)(gw ? gw->tsp : NULL);
+}
+bool tsa_gateway_is_bypassing(tsa_gateway_t* gw) {
+    return gw ? gw->bypassing : false;
+}
 void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns) {
     if (gw) gw->debug_stall_ns += duration_ns;
 }

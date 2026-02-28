@@ -95,12 +95,12 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         for (uint32_t j = 0; j < snap.active_pid_count; j++) {
             uint16_t p = snap.pids[j].pid;
             const char* t = snap.pids[j].type_str[0] ? snap.pids[j].type_str : "Unknown";
+            off +=
+                snprintf(buf + off, sz - off, "tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n",
+                         sid, p, t, (unsigned long long)s->pid_bitrate_bps[p]);
             off += snprintf(buf + off, sz - off,
-                            "tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p, t,
-                            (unsigned long long)s->pid_bitrate_bps[p]);
-            off += snprintf(buf + off, sz - off,
-                            "tsa_pid_inventory_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid,
-                            p, t, (unsigned long long)s->pid_bitrate_bps[p]);
+                            "tsa_pid_inventory_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p,
+                            t, (unsigned long long)s->pid_bitrate_bps[p]);
 
             // Export GOP and Resolution for Video PIDs
             if (snap.pids[j].width > 0) {

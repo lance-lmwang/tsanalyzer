@@ -1,7 +1,7 @@
+#include "spsc_queue.h"
+
 #include <stdlib.h>
 #include <string.h>
-
-#include "spsc_queue.h"
 
 spsc_queue_t* spsc_queue_create(size_t size) {
     if (size == 0) return NULL;

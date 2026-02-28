@@ -1,17 +1,17 @@
 #define _GNU_SOURCE
 #include <pthread.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <sched.h>
 
 #include "../deps/mongoose/mongoose.h"
+#include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
-#include "spsc_queue.h"
 
 static tsa_handle_t* g_h = NULL;
 static volatile int g_keep_running = 1;
@@ -76,7 +76,7 @@ static void* decode_thread(void* arg) {
     ts_packet_t pkt;
     while (1) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
-            if (pkt.timestamp_ns == 0) { // Poison pill
+            if (pkt.timestamp_ns == 0) {  // Poison pill
                 while (!spsc_queue_push(q_dec_to_met, &pkt)) usleep(1);
                 break;
             }
@@ -119,7 +119,7 @@ static void* metrology_thread(void* arg) {
     // Final commit at end of stream using the last seen timestamp
     if (last_ts > 0) tsa_commit_snapshot(g_h, last_ts);
     printf("CLI: Metrology finished.\n");
-    g_keep_running = 0; // Trigger shutdown of main and HTTP
+    g_keep_running = 0;  // Trigger shutdown of main and HTTP
     return NULL;
 }
 
@@ -166,10 +166,14 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc - 1; i++) {
         if (strncmp(argv[i], "--mode=", 7) == 0) {
             const char* m = argv[i] + 7;
-            if (strcmp(m, "live") == 0) cfg.op_mode = TSA_MODE_LIVE;
-            else if (strcmp(m, "replay") == 0) cfg.op_mode = TSA_MODE_REPLAY;
-            else if (strcmp(m, "forensic") == 0) cfg.op_mode = TSA_MODE_FORENSIC;
-            else if (strcmp(m, "certification") == 0) cfg.op_mode = TSA_MODE_CERTIFICATION;
+            if (strcmp(m, "live") == 0)
+                cfg.op_mode = TSA_MODE_LIVE;
+            else if (strcmp(m, "replay") == 0)
+                cfg.op_mode = TSA_MODE_REPLAY;
+            else if (strcmp(m, "forensic") == 0)
+                cfg.op_mode = TSA_MODE_FORENSIC;
+            else if (strcmp(m, "certification") == 0)
+                cfg.op_mode = TSA_MODE_CERTIFICATION;
         }
     }
 

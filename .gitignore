@@ -15,3 +15,6 @@ cctv_prom.log
 tests/test_cc_classifier_v2
 tests/test_pts_trajectory
 *.pid
+Testing/
+*.json
+test.ts
