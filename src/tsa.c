@@ -361,22 +361,23 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
     }
     bool is_h264 = (strcmp(stream_type, "H.264") == 0), is_h265 = (strcmp(stream_type, "HEVC") == 0);
     if (!is_h264 && !is_h265 && strcmp(stream_type, "ES") != 0) return;
-    for (int i = 0; i < len - 4; i++) {
+    for (int i = 0; i <= len - 4; i++) {
         if (payload[i] == 0x00 && payload[i + 1] == 0x00 && payload[i + 2] == 0x01) {
             uint8_t nal_type;
             const uint8_t* nalu_data = payload + i + 3;
-            int nalu_len = len - i - 3;
+            int nalu_len = len - (i + 3);
+            if (nalu_len <= 0) continue;
             bool is_idr = false, is_sps = false;
             if (is_h264) {
-                nal_type = payload[i + 3] & 0x1F;
+                nal_type = nalu_data[0] & 0x1F;
                 is_sps = (nal_type == 7);
                 is_idr = (nal_type == 5);
             } else if (is_h265) {
-                nal_type = (payload[i + 3] & 0x7E) >> 1;
+                nal_type = (nalu_data[0] & 0x7E) >> 1;
                 is_sps = (nal_type == 33);
                 is_idr = (nal_type == 19 || nal_type == 20);
             } else {
-                nal_type = payload[i + 3] & 0x1F;
+                nal_type = nalu_data[0] & 0x1F;
                 is_sps = (nal_type == 7);
                 is_idr = (nal_type == 5);
             }
@@ -523,6 +524,8 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pool_size = 1024 * 1024;
         if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
         h->pool_offset = 0;
+        h->pes_total_allocated = 0;
+        h->pes_max_quota = 64 * 1024 * 1024;  // 64MB Default quota
         for (int i = 0; i < TS_PID_MAX; i++) {
             h->pid_to_active_idx[i] = -1;
             h->pid_gop_min[i] = 0xFFFFFFFF;
@@ -737,8 +740,11 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
                 tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
             h->pid_pes_len[pid] = 0;
             if (!h->pid_pes_buf[pid]) {
-                h->pid_pes_cap[pid] = 4096;
-                h->pid_pes_buf[pid] = malloc(h->pid_pes_cap[pid]);
+                if (h->pes_total_allocated + 4096 <= h->pes_max_quota) {
+                    h->pid_pes_cap[pid] = 4096;
+                    h->pid_pes_buf[pid] = malloc(h->pid_pes_cap[pid]);
+                    if (h->pid_pes_buf[pid]) h->pes_total_allocated += 4096;
+                }
             }
         }
         if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + payload_len <= h->pid_pes_cap[pid]) {
@@ -1039,16 +1045,16 @@ void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt) {
 bool tsa_forensic_trigger(tsa_handle_t* h, int reason) {
     if (!h) return false;
     (void)reason;
-    bool p1_delta = (h->live.sync_loss.count > h->prev_snap_base.sync_loss.count ||
-                     h->live.pat_error.count > h->prev_snap_base.pat_error.count ||
-                     h->live.cc_error.count > h->prev_snap_base.cc_error.count ||
-                     h->live.pmt_error.count > h->prev_snap_base.pmt_error.count ||
-                     h->live.pid_error.count > h->prev_snap_base.pid_error.count);
+    uint64_t current_alarms = h->live.sync_loss.count + h->live.pat_error.count +
+                              h->live.cc_error.count + h->live.pmt_error.count +
+                              h->live.pid_error.count + h->live.crc_error.count;
 
-    bool crc_delta = (h->live.crc_error.count > h->prev_snap_base.crc_error.count);
-    bool rst_critical = (h->snap_state.stats.predictive.rst_network_s < 1.0);
-
-    return p1_delta || crc_delta || rst_critical;
+    if (current_alarms > h->last_forensic_alarm_count ||
+        h->snap_state.stats.predictive.rst_network_s < 1.0) {
+        h->last_forensic_alarm_count = current_alarms;
+        return true;
+    }
+    return false;
 }
 struct tsa_packet_ring {
     uint8_t* buffer;

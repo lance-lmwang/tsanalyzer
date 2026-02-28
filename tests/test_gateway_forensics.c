@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
 #include "tsa.h"
 #include "tsa_internal.h"
 
@@ -27,9 +27,11 @@ void test_auto_forensics() {
         tsa_gateway_process(gw, pkt, now + i * 1000);
     }
 
+    // Trigger Alarm: CC Error
     tsa->live.cc_error.count++;
-    tsa_commit_snapshot(tsa, now + 200000);
+    // commit_snapshot is NOT needed if we fixed the trigger logic to use absolute counts
 
+    // Process to trigger capture
     tsa_gateway_process(gw, pkt, now + 200000000ULL);
 
     glob_t g;

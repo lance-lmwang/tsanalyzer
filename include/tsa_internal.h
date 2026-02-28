@@ -61,6 +61,7 @@ struct tsa_handle {
 
     bool seen_pat, seen_pmt;
     bool signal_lock;
+    uint64_t last_forensic_alarm_count;
     uint32_t consecutive_sync_errors;
     uint32_t consecutive_good_syncs;
 
@@ -105,6 +106,8 @@ struct tsa_handle {
     uint8_t* pid_pes_buf[TS_PID_MAX];
     uint32_t pid_pes_len[TS_PID_MAX];
     uint32_t pid_pes_cap[TS_PID_MAX];
+    size_t pes_total_allocated;
+    size_t pes_max_quota;
     uint16_t pid_width[TS_PID_MAX];
     uint16_t pid_height[TS_PID_MAX];
     uint8_t pid_profile[TS_PID_MAX];

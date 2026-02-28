@@ -12,7 +12,6 @@ struct tsa_gateway {
     tsa_handle_t* tsa;
     tsp_handle_t* tsp;
     tsa_packet_ring_t* ring;
-    tsa_forensic_writer_t* writer;
     uint8_t last_cc[TS_PID_MAX];
     bool pid_seen[TS_PID_MAX];
     bool bypassing;
@@ -29,7 +28,6 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
     gw->cfg = *cfg;
 
     gw->tsa = tsa_create(&cfg->analysis);
-
     gw->tsp = tsp_create(&cfg->pacing);
     tsp_start(gw->tsp);
 
@@ -39,7 +37,6 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
 
     gw->last_process_ns = 0;
     gw->bypassing = false;
-
     return gw;
 }
 
@@ -48,7 +45,6 @@ void tsa_gateway_destroy(tsa_gateway_t* gw) {
     tsp_stop(gw->tsp);
     tsp_destroy(gw->tsp);
     tsa_destroy(gw->tsa);
-    if (gw->writer) tsa_forensic_writer_destroy(gw->writer);
     if (gw->ring) tsa_packet_ring_destroy(gw->ring);
     free(gw);
 }
@@ -62,20 +58,14 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
             gw->bypassing = true;
         }
     }
-    gw->last_process_ns = effective_now;
 
-    if (gw->bypassing) {
-        return tsp_enqueue(gw->tsp, pkt, 1);
-    }
+    if (gw->bypassing) return tsp_enqueue(gw->tsp, pkt, 1);
 
     tsa_process_packet(gw->tsa, pkt, now_ns);
 
-    if (gw->ring) {
-        tsa_packet_ring_push(gw->ring, pkt, now_ns);
-    }
+    if (gw->ring) tsa_packet_ring_push(gw->ring, pkt, now_ns);
 
-    // Throttling Logic (Closed Loop)
-    if (now_ns - gw->last_rst_check_ns > 100000000ULL) {  // Check every 100ms
+    if (now_ns - gw->last_rst_check_ns > 100000000ULL) {
         tsa_snapshot_lite_t snap;
         if (tsa_take_snapshot_lite(gw->tsa, &snap) == 0) {
             if (snap.rst_network_s < 5.0 && !gw->is_throttling) {
@@ -110,31 +100,21 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
                 memset(null_pkt, 0, 188);
                 null_pkt[0] = 0x47;
                 null_pkt[1] = 0x1F;
-                null_pkt[2] = 0xFF;  // NULL PID
-                for (int i = 0; i < loss_count; i++) {
-                    tsp_enqueue(gw->tsp, null_pkt, 1);
-                }
+                null_pkt[2] = 0xFF;
+                for (int i = 0; i < loss_count; i++) tsp_enqueue(gw->tsp, null_pkt, 1);
             }
         }
         gw->last_cc[pid] = cc;
         gw->pid_seen[pid] = true;
     }
 
+    gw->last_process_ns = effective_now;
     return tsp_enqueue(gw->tsp, pkt, 1);
 }
 
-tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw) {
-    return gw ? gw->tsa : NULL;
-}
-tsp_handle_t* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw) {
-    return gw ? gw->tsp : NULL;
-}
-
-bool tsa_gateway_is_bypassing(tsa_gateway_t* gw) {
-    return gw ? gw->bypassing : false;
-}
+tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw) { return gw ? gw->tsa : NULL; }
+struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw) { return (struct tsp_handle*)(gw ? gw->tsp : NULL); }
+bool tsa_gateway_is_bypassing(tsa_gateway_t* gw) { return gw ? gw->bypassing : false; }
 void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns) {
-    if (gw) {
-        gw->debug_stall_ns += duration_ns;
-    }
+    if (gw) gw->debug_stall_ns += duration_ns;
 }
