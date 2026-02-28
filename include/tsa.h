@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "tsp.h"
 
 #define TS_PACKET_SIZE 188
 #define TS_SYNC_BYTE 0x47
@@ -81,6 +82,7 @@ typedef struct {
     bool signal_lock;
     float master_health;
     bool lid_active;
+    float rst_network_s;
     float rst_encoder_s;
     uint32_t active_pid_count;
 } tsa_snapshot_lite_t;
@@ -99,14 +101,17 @@ typedef struct {
         uint64_t cc_errors;
         uint8_t liveness_status;
         uint16_t width;
-        uint16_t height;  // Added for es_metadata test
-        uint8_t profile;  // Added for es_metadata test
+        uint16_t height;
+        uint8_t profile;
         uint32_t audio_sample_rate;
         uint8_t audio_channels;
         uint32_t gop_n;
         uint32_t gop_min;
         uint32_t gop_max;
         uint32_t gop_ms;
+        uint64_t i_frames;
+        uint64_t p_frames;
+        uint64_t b_frames;
         float eb_fill_pct;
         float tb_fill_pct;
         float mb_fill_pct;
@@ -120,7 +125,7 @@ typedef struct {
     bool enable_forensics;
     uint64_t forced_cbr_bitrate;
     uint16_t protected_pids[16];
-    uint32_t entropy_window_packets;  // Added for snapshot test
+    uint32_t entropy_window_packets;
 } tsa_config_t;
 
 /* --- Core TSA API --- */
@@ -132,6 +137,7 @@ int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s);
 int tsa_take_snapshot_lite(tsa_handle_t* h, tsa_snapshot_lite_t* s);
 size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t sz);
 void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz);
+void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
 void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t size);
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt);
 bool tsa_forensic_trigger(tsa_handle_t* h, int reason);
@@ -149,6 +155,7 @@ int tsa_packet_ring_pop(tsa_packet_ring_t* r, uint8_t* pkt, uint64_t* timestamp_
 typedef struct tsa_forensic_writer tsa_forensic_writer_t;
 tsa_forensic_writer_t* tsa_forensic_writer_create(tsa_packet_ring_t* ring, const char* filename);
 void tsa_forensic_writer_destroy(tsa_forensic_writer_t* w);
+int tsa_forensic_writer_write_all(tsa_forensic_writer_t* w);
 void tsa_forensic_writer_start(tsa_forensic_writer_t* w);
 void tsa_forensic_writer_stop(tsa_forensic_writer_t* w);
 
@@ -156,18 +163,13 @@ void tsa_forensic_writer_stop(tsa_forensic_writer_t* w);
 typedef struct tsa_gateway tsa_gateway_t;
 typedef struct {
     tsa_config_t analysis;
-    struct {
-        const char* srt_url;
-        const char* dest_ip;
-        uint16_t port;
-        uint64_t bitrate;
-        uint32_t ts_per_udp;
-        int mode;  // tsp_mode_t
-    } pacing;
+    tsp_config_t pacing;
     bool enable_action_engine;
     bool enable_null_substitution;
     bool enable_pcr_restamp;
-    uint64_t watchdog_timeout_ns;  // Added for fail_safe test
+    bool enable_auto_forensics;
+    uint32_t forensic_ring_size;
+    uint64_t watchdog_timeout_ns;
 } tsa_gateway_config_t;
 
 tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg);
@@ -175,7 +177,7 @@ void tsa_gateway_destroy(tsa_gateway_t* gw);
 int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns);
 tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw);
 struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw);
-bool tsa_gateway_is_bypassing(tsa_gateway_t* gw);                              // Added for fail_safe test
-void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns);  // Added for fail_safe test
+bool tsa_gateway_is_bypassing(tsa_gateway_t* gw);
+void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns);
 
 #endif

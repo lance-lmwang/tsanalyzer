@@ -382,3 +382,32 @@ add_test(NAME test_debounce COMMAND test_debounce)
 add_executable(test_es_deep_analysis tests/test_es_deep_analysis.c)
 target_link_libraries(test_es_deep_analysis tsp_core pthread m)
 add_test(NAME test_es_deep_analysis COMMAND test_es_deep_analysis)
+
+# --- Professional Tier Tests ---
+add_executable(test_pcr_pro tests/test_pcr_pro.c)
+target_link_libraries(test_pcr_pro tsp_core m pthread)
+add_test(NAME test_pcr_pro COMMAND test_pcr_pro)
+
+add_executable(test_tstd_hevc tests/test_tstd_hevc.c)
+target_link_libraries(test_tstd_hevc tsp_core m pthread)
+add_test(NAME test_tstd_hevc COMMAND test_tstd_hevc)
+
+add_executable(test_crc_pro tests/test_crc_pro.c)
+target_link_libraries(test_crc_pro tsp_core m pthread)
+add_test(NAME test_crc_pro COMMAND test_crc_pro)
+
+add_executable(test_gateway_pro tests/test_gateway_pro.c)
+target_link_libraries(test_gateway_pro tsp_core m pthread)
+add_test(NAME test_gateway_pro COMMAND test_gateway_pro)
+
+add_executable(test_gateway_forensics tests/test_gateway_forensics.c)
+target_link_libraries(test_gateway_forensics tsp_core m pthread)
+add_test(NAME test_gateway_forensics COMMAND test_gateway_forensics)
+
+add_executable(test_server_correlation tests/test_server_correlation.c)
+target_link_libraries(test_server_correlation tsp_core m pthread)
+add_test(NAME test_server_correlation COMMAND test_server_correlation)
+
+add_executable(test_qoe_pro tests/test_qoe_pro.c)
+target_link_libraries(test_qoe_pro tsp_core m pthread)
+add_test(NAME test_qoe_pro COMMAND test_qoe_pro)

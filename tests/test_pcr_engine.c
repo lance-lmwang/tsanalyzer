@@ -44,7 +44,7 @@ void test_regression() {
 
     q64_64 slope;
     int128_t intercept;
-    int ret = ts_pcr_window_regress(&w, &slope, &intercept);
+    int ret = ts_pcr_window_regress(&w, &slope, &intercept, NULL);
 
     assert(ret == 0);
     double slope_d = FROM_Q64_64(slope);
@@ -73,7 +73,7 @@ void test_jitter() {
 
     q64_64 slope;
     int128_t intercept;
-    ts_pcr_window_regress(&w, &slope, &intercept);
+    ts_pcr_window_regress(&w, &slope, &intercept, NULL);
 
     int128_t predicted = (int128_t)((slope * sys_now) >> Q_SHIFT) + intercept;
     int64_t residual = (int64_t)(pcr_now - predicted);

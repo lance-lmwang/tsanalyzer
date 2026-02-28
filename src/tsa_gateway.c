@@ -1,5 +1,7 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "tsa.h"
 #include "tsa_internal.h"
@@ -9,10 +11,14 @@ struct tsa_gateway {
     tsa_gateway_config_t cfg;
     tsa_handle_t* tsa;
     tsp_handle_t* tsp;
+    tsa_packet_ring_t* ring;
+    tsa_forensic_writer_t* writer;
     uint8_t last_cc[TS_PID_MAX];
     bool pid_seen[TS_PID_MAX];
     bool bypassing;
+    bool is_throttling;
     uint64_t last_process_ns;
+    uint64_t last_rst_check_ns;
     uint64_t debug_stall_ns;
 };
 
@@ -24,14 +30,12 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
 
     gw->tsa = tsa_create(&cfg->analysis);
 
-    tsp_config_t p_cfg = {.srt_url = cfg->pacing.srt_url,
-                          .dest_ip = cfg->pacing.dest_ip,
-                          .port = cfg->pacing.port,
-                          .bitrate = cfg->pacing.bitrate,
-                          .ts_per_udp = cfg->pacing.ts_per_udp,
-                          .cpu_core = -1};
-    gw->tsp = tsp_create(&p_cfg);
+    gw->tsp = tsp_create(&cfg->pacing);
     tsp_start(gw->tsp);
+
+    if (cfg->enable_auto_forensics) {
+        gw->ring = tsa_packet_ring_create(cfg->forensic_ring_size ? cfg->forensic_ring_size : 10000);
+    }
 
     gw->last_process_ns = 0;
     gw->bypassing = false;
@@ -44,6 +48,8 @@ void tsa_gateway_destroy(tsa_gateway_t* gw) {
     tsp_stop(gw->tsp);
     tsp_destroy(gw->tsp);
     tsa_destroy(gw->tsa);
+    if (gw->writer) tsa_forensic_writer_destroy(gw->writer);
+    if (gw->ring) tsa_packet_ring_destroy(gw->ring);
     free(gw);
 }
 
@@ -63,6 +69,35 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
     }
 
     tsa_process_packet(gw->tsa, pkt, now_ns);
+
+    if (gw->ring) {
+        tsa_packet_ring_push(gw->ring, pkt, now_ns);
+    }
+
+    // Throttling Logic (Closed Loop)
+    if (now_ns - gw->last_rst_check_ns > 100000000ULL) {  // Check every 100ms
+        tsa_snapshot_lite_t snap;
+        if (tsa_take_snapshot_lite(gw->tsa, &snap) == 0) {
+            if (snap.rst_network_s < 5.0 && !gw->is_throttling) {
+                tsp_update_bitrate(gw->tsp, (uint64_t)(gw->cfg.pacing.bitrate * 0.9));
+                gw->is_throttling = true;
+            } else if (snap.rst_network_s > 10.0 && gw->is_throttling) {
+                tsp_update_bitrate(gw->tsp, gw->cfg.pacing.bitrate);
+                gw->is_throttling = false;
+            }
+
+            if (gw->cfg.enable_auto_forensics && tsa_forensic_trigger(gw->tsa, 0)) {
+                char fname[64];
+                snprintf(fname, sizeof(fname), "forensic_%lu.ts", (unsigned long)time(NULL));
+                tsa_forensic_writer_t* tmp_w = tsa_forensic_writer_create(gw->ring, fname);
+                if (tmp_w) {
+                    tsa_forensic_writer_write_all(tmp_w);
+                    tsa_forensic_writer_destroy(tmp_w);
+                }
+            }
+        }
+        gw->last_rst_check_ns = now_ns;
+    }
 
     if (gw->cfg.enable_null_substitution) {
         uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];

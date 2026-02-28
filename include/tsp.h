@@ -79,6 +79,8 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count);
 uint64_t tsp_get_detected_bitrate(tsp_handle_t* h);
 uint64_t tsp_get_total_packets(tsp_handle_t* h);
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h);
+void tsp_update_bitrate(tsp_handle_t* h, uint64_t new_bitrate);
+uint64_t tsp_get_bitrate(tsp_handle_t* h);
 pthread_t tsp_get_thread(tsp_handle_t* h);
 int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
                   uint64_t* pps);

@@ -8,6 +8,28 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
     if (!handles || !buf || sz < 4096) return;
     int off = 0;
 
+    // Global Correlation Analysis
+    int alarmed_streams = 0;
+    int valid_streams = 0;
+    for (int i = 0; i < count; i++) {
+        if (handles[i]) {
+            tsa_snapshot_lite_t s;
+            if (tsa_take_snapshot_lite(handles[i], &s) == 0) {
+                if (s.total_packets > 0) {
+                    valid_streams++;
+                    if (s.master_health < 80.0) alarmed_streams++;
+                }
+            }
+        }
+    }
+    if (valid_streams >= 3 && (double)alarmed_streams / valid_streams > 0.5) {
+        off += snprintf(buf + off, sz - off,
+                        "# HELP tsa_global_network_incident 1 if more than 50%% streams are failing\n");
+        off += snprintf(buf + off, sz - off, "tsa_global_network_incident 1\n");
+    } else {
+        off += snprintf(buf + off, sz - off, "tsa_global_network_incident 0\n");
+    }
+
     for (int i = 0; i < count; i++) {
         tsa_handle_t* h = handles[i];
         if (!h) continue;

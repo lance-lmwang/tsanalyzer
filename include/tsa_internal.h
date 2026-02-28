@@ -33,7 +33,8 @@ void ts_pcr_window_destroy(ts_pcr_window_t* w);
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t sys, uint64_t pcr, uint64_t off);
 
 /* FIX: Match test case signature q64_64* (int128_t*) slope */
-int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* slope, int128_t* intercept);
+int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* slope, int128_t* intercept,
+                          double* peak_accuracy_ns);
 
 #define MAX_PROGRAMS 16
 #define MAX_STREAMS_PER_PROG 32
@@ -92,6 +93,7 @@ struct tsa_handle {
     uint8_t last_cc[TS_PID_MAX];
     bool pid_seen[TS_PID_MAX];
     bool pid_is_pmt[TS_PID_MAX];
+    uint8_t pid_stream_type[TS_PID_MAX];
     int16_t pid_to_active_idx[TS_PID_MAX];
     uint32_t pid_tracker_count;
     uint16_t pid_active_list[128];  // LRU tracker for active PIDs
@@ -119,6 +121,9 @@ struct tsa_handle {
     uint32_t pid_gop_max[TS_PID_MAX];
     uint64_t pid_last_idr_ns[TS_PID_MAX];
     uint32_t pid_gop_ms[TS_PID_MAX];
+    uint64_t pid_i_frames[TS_PID_MAX];
+    uint64_t pid_p_frames[TS_PID_MAX];
+    uint64_t pid_b_frames[TS_PID_MAX];
 
     alignas(64) struct {
         _Atomic uint32_t seq;

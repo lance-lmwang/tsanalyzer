@@ -211,6 +211,14 @@ pthread_t tsp_get_thread(tsp_handle_t* h) {
     return h ? h->thread : (pthread_t)0;
 }
 
+void tsp_update_bitrate(tsp_handle_t* h, uint64_t new_bitrate) {
+    if (h) h->cfg.bitrate = new_bitrate;
+}
+
+uint64_t tsp_get_bitrate(tsp_handle_t* h) {
+    return h ? h->cfg.bitrate : 0;
+}
+
 int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
                   uint64_t* pps) {
     if (!h) return -1;
