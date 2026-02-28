@@ -97,7 +97,7 @@ struct tsa_handle {
     uint8_t pid_stream_type[TS_PID_MAX];
     int16_t pid_to_active_idx[TS_PID_MAX];
     uint32_t pid_tracker_count;
-    uint16_t pid_active_list[128];  // LRU tracker for active PIDs
+    uint16_t pid_active_list[MAX_ACTIVE_PIDS];  // LRU tracker for active PIDs
 
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];

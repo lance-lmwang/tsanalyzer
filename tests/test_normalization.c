@@ -58,8 +58,8 @@ void test_bitrate_normalization() {
 
     uint64_t phys = snap.stats.physical_bitrate_bps;
     uint64_t sum = 0;
-    for (int i = 0; i < 8192; i++) {
-        sum += (uint64_t)(snap.pids[i].bitrate_q16_16 / 65536.0);
+    for (uint32_t i = 0; i < snap.active_pid_count; i++) {
+        sum += (uint64_t)((double)snap.pids[i].bitrate_q16_16 / 65536.0);
     }
 
     printf("Physical: %lu, Sum PID: %lu\n", phys, sum);

@@ -61,10 +61,13 @@ void test_tstd_reset_on_res_change() {
     tsa_commit_snapshot(h, 1800000000ULL);
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
-    printf("Updated Width: %u\n", snap.pids[0x100].width);
 
-    assert(snap.pids[0x100].width != 1920);  // Should have changed
-    assert(fill == 188);                     // Should have reset to 0 then added current packet (188)
+    int idx = tsa_find_pid_in_snapshot(&snap, 0x100);
+    assert(idx != -1);
+    printf("Updated Width: %u\n", snap.pids[idx].width);
+
+    assert(snap.pids[idx].width != 1920);  // Should have changed
+    assert(fill == 188);                   // Should have reset to 0 then added current packet (188)
 
     tsa_destroy(h);
     printf("test_tstd_reset_on_res_change passed.\n");

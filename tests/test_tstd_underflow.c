@@ -31,7 +31,11 @@ void test_eb_underflow_detection() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("EB Fill: %u bytes, Pct: %.2f%%\n", snap.stats.pid_eb_fill_bytes[0x100], snap.pids[0x100].eb_fill_pct);
+    int idx = tsa_find_pid_in_snapshot(&snap, 0x100);
+    assert(idx != -1);
+
+    printf("EB Fill: %u bytes, Pct: %.2f%%\n", snap.stats.pid_eb_fill_bytes[0x100],
+           snap.pids[idx].eb_fill_pct);
 
     // RED PHASE: We expect EB to be empty (0 bytes) because drain > input.
     // We also expect some indication of underflow.

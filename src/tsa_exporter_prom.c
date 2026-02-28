@@ -92,28 +92,27 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         off += snprintf(buf + off, sz - off, "tsa_rst_network_seconds%s %.2f\n", labels, snap.predictive.rst_network_s);
 
         // PID Details
-        for (int p = 0; p < TS_PID_MAX; p++) {
-            if (s->pid_packet_count[p] > 0) {
-                const char* t = snap.pids[p].type_str[0] ? snap.pids[p].type_str : "Unknown";
-                off += snprintf(buf + off, sz - off,
-                                "tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p, t,
-                                (unsigned long long)s->pid_bitrate_bps[p]);
-                off += snprintf(buf + off, sz - off,
-                                "tsa_pid_inventory_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n",
-                                sid, p, t, (unsigned long long)s->pid_bitrate_bps[p]);
+        for (uint32_t j = 0; j < snap.active_pid_count; j++) {
+            uint16_t p = snap.pids[j].pid;
+            const char* t = snap.pids[j].type_str[0] ? snap.pids[j].type_str : "Unknown";
+            off += snprintf(buf + off, sz - off,
+                            "tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p, t,
+                            (unsigned long long)s->pid_bitrate_bps[p]);
+            off += snprintf(buf + off, sz - off,
+                            "tsa_pid_inventory_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid,
+                            p, t, (unsigned long long)s->pid_bitrate_bps[p]);
 
-                // Export GOP and Resolution for Video PIDs
-                if (snap.pids[p].width > 0) {
-                    off += snprintf(buf + off, sz - off, "tsa_video_width{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid,
-                                    p, snap.pids[p].width);
-                    off += snprintf(buf + off, sz - off, "tsa_video_height{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid,
-                                    p, snap.pids[p].height);
-                    if (snap.pids[p].gop_n > 0) {
-                        off += snprintf(buf + off, sz - off, "tsa_video_gop_n{stream_id=\"%s\",pid=\"0x%04x\"} %u\n",
-                                        sid, p, snap.pids[p].gop_n);
-                        off += snprintf(buf + off, sz - off, "tsa_video_gop_ms{stream_id=\"%s\",pid=\"0x%04x\"} %u\n",
-                                        sid, p, snap.pids[p].gop_ms);
-                    }
+            // Export GOP and Resolution for Video PIDs
+            if (snap.pids[j].width > 0) {
+                off += snprintf(buf + off, sz - off, "tsa_video_width{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p,
+                                snap.pids[j].width);
+                off += snprintf(buf + off, sz - off, "tsa_video_height{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p,
+                                snap.pids[j].height);
+                if (snap.pids[j].gop_n > 0) {
+                    off += snprintf(buf + off, sz - off, "tsa_video_gop_n{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid,
+                                    p, snap.pids[j].gop_n);
+                    off += snprintf(buf + off, sz - off, "tsa_video_gop_ms{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid,
+                                    p, snap.pids[j].gop_ms);
                 }
             }
         }

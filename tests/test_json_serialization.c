@@ -14,9 +14,10 @@ int main() {
     snap.stats.video_fps = 25.0f;
 
     // Add one PID
-    snap.pids[0x100].pid = 0x100;
-    snap.pids[0x100].liveness_status = 1;
-    snap.pids[0x100].bitrate_q16_16 = (int64_t)7450000 << 16;
+    snap.active_pid_count = 1;
+    snap.pids[0].pid = 0x100;
+    snap.pids[0].liveness_status = 1;
+    snap.pids[0].bitrate_q16_16 = (int64_t)7450000 << 16;
 
     char buffer[4096];
     size_t len = tsa_snapshot_to_json(&snap, buffer, sizeof(buffer));

@@ -44,8 +44,8 @@ void test_bitrate_atomic_sync() {
 
     uint64_t physical_br = snap.stats.physical_bitrate_bps;
     uint64_t sum_pids_br = 0;
-    for (int i = 0; i < 8192; i++) {
-        sum_pids_br += (uint64_t)(snap.pids[i].bitrate_q16_16 / 65536.0);
+    for (uint32_t i = 0; i < snap.active_pid_count; i++) {
+        sum_pids_br += (uint64_t)((double)snap.pids[i].bitrate_q16_16 / 65536.0);
     }
 
     printf("Physical Bitrate: %lu bps\n", physical_br);

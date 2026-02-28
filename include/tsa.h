@@ -9,6 +9,7 @@
 #define TS_PACKET_SIZE 188
 #define TS_SYNC_BYTE 0x47
 #define TS_PID_MAX 8192
+#define MAX_ACTIVE_PIDS 256
 
 typedef struct tsa_handle tsa_handle_t;
 
@@ -92,6 +93,7 @@ typedef struct {
     tsa_tr101290_stats_t stats;
     tsa_srt_stats_t srt;
     tsa_predictive_stats_t predictive;
+    uint32_t active_pid_count;
     struct {
         uint32_t pid;
         char type_str[16];
@@ -115,7 +117,7 @@ typedef struct {
         float eb_fill_pct;
         float tb_fill_pct;
         float mb_fill_pct;
-    } pids[TS_PID_MAX];
+    } pids[MAX_ACTIVE_PIDS];
 } tsa_snapshot_full_t;
 
 typedef struct {
@@ -179,5 +181,13 @@ tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw);
 struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw);
 bool tsa_gateway_is_bypassing(tsa_gateway_t* gw);
 void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns);
+
+/* --- Utility to find a PID in a dense snapshot --- */
+static inline int tsa_find_pid_in_snapshot(const tsa_snapshot_full_t* snap, uint16_t pid) {
+    for (uint32_t i = 0; i < snap->active_pid_count; i++) {
+        if (snap->pids[i].pid == pid) return (int)i;
+    }
+    return -1;
+}
 
 #endif

@@ -28,9 +28,12 @@ void test_buffer_fill_percentages() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    float tb_pct = snap.pids[0x100].tb_fill_pct;
-    float mb_pct = snap.pids[0x100].mb_fill_pct;
-    float eb_pct = snap.pids[0x100].eb_fill_pct;
+    int idx = tsa_find_pid_in_snapshot(&snap, 0x100);
+    assert(idx != -1);
+
+    float tb_pct = snap.pids[idx].tb_fill_pct;
+    float mb_pct = snap.pids[idx].mb_fill_pct;
+    float eb_pct = snap.pids[idx].eb_fill_pct;
 
     printf("TB Fill: %.2f%%, MB Fill: %.2f%%, EB Fill: %.2f%%\n", tb_pct, mb_pct, eb_pct);
 

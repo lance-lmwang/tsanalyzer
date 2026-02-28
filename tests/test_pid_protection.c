@@ -44,7 +44,7 @@ void test_pid_protection() {
     bool found_1 = false;
     bool found_2 = false;
     bool found_200 = false;
-    for (int i = 0; i < 8192; i++) {
+    for (uint32_t i = 0; i < full.active_pid_count; i++) {
         if (full.pids[i].pid == 1 && full.pids[i].liveness_status == 1) found_1 = true;
         if (full.pids[i].pid == 2 && full.pids[i].liveness_status == 1) found_2 = true;
         if (full.pids[i].pid == 200 && full.pids[i].liveness_status == 1) found_200 = true;

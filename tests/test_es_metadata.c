@@ -81,11 +81,14 @@ void test_h264_metadata_extraction() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("Extracted Resolution: %ux%u, Profile: %u\n", snap.pids[0x100].width, snap.pids[0x100].height,
-           snap.pids[0x100].profile);
+    int idx = tsa_find_pid_in_snapshot(&snap, 0x100);
+    assert(idx != -1);
 
-    assert(snap.pids[0x100].width == 1920);
-    assert(snap.pids[0x100].height == 1080);
+    printf("Extracted Resolution: %ux%u, Profile: %u\n", snap.pids[idx].width, snap.pids[idx].height,
+           snap.pids[idx].profile);
+
+    assert(snap.pids[idx].width == 1920);
+    assert(snap.pids[idx].height == 1080);
 
     tsa_destroy(h);
     printf("test_h264_metadata_extraction passed.\n");

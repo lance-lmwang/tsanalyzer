@@ -11,7 +11,12 @@ void test_h264_frame_counting() {
     tsa_handle_t* h = tsa_create(&cfg);
     uint16_t pid = 0x100;
     h->live.pid_is_referenced[pid] = true;
-    h->pid_seen[pid] = true; // CRITICAL FIX
+    h->pid_seen[pid] = true;  // CRITICAL FIX
+
+    // Register in active list
+    uint8_t dummy_pkt[188] = {0x47, 0x01, 0x00, 0x10};
+    tsa_process_packet(h, dummy_pkt, 500000);
+
     h->program_count = 1;
     h->programs[0].stream_count = 1;
     h->programs[0].streams[0].pid = pid;
@@ -37,12 +42,15 @@ void test_h264_frame_counting() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("Frames - I: %llu, P: %llu, B: %llu\n", (unsigned long long)snap.pids[pid].i_frames,
-           (unsigned long long)snap.pids[pid].p_frames, (unsigned long long)snap.pids[pid].b_frames);
+    int idx = tsa_find_pid_in_snapshot(&snap, pid);
+    assert(idx != -1);
 
-    assert(snap.pids[pid].i_frames == 1);
-    assert(snap.pids[pid].p_frames == 1);
-    assert(snap.pids[pid].b_frames == 1);
+    printf("Frames - I: %llu, P: %llu, B: %llu\n", (unsigned long long)snap.pids[idx].i_frames,
+           (unsigned long long)snap.pids[idx].p_frames, (unsigned long long)snap.pids[idx].b_frames);
+
+    assert(snap.pids[idx].i_frames == 1);
+    assert(snap.pids[idx].p_frames == 1);
+    assert(snap.pids[idx].b_frames == 1);
 
     tsa_destroy(h);
     printf("test_h264_frame_counting passed.\n");

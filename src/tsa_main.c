@@ -96,21 +96,22 @@ int main(int argc, char** argv) {
             double stuffing_pct = 0;
             const char* profile = "";
 
-            for (int p = 0; p < TS_PID_MAX; p++) {
-                if (snap.pids[p].width > 0 && w == 0) {
-                    w = snap.pids[p].width;
-                    h = snap.pids[p].height;
-                    gop = snap.pids[p].gop_n;
-                    g_min = snap.pids[p].gop_min;
-                    g_max = snap.pids[p].gop_max;
-                    v_br = (uint64_t)((double)snap.pids[p].bitrate_q16_16 / 65536.0);
-                    v_min = snap.pids[p].bitrate_min;
-                    v_max = snap.pids[p].bitrate_max;
-                    if (snap.pids[p].profile == 100)
+            for (uint32_t i = 0; i < snap.active_pid_count; i++) {
+                uint16_t p = snap.pids[i].pid;
+                if (snap.pids[i].width > 0 && w == 0) {
+                    w = snap.pids[i].width;
+                    h = snap.pids[i].height;
+                    gop = snap.pids[i].gop_n;
+                    g_min = snap.pids[i].gop_min;
+                    g_max = snap.pids[i].gop_max;
+                    v_br = (uint64_t)((double)snap.pids[i].bitrate_q16_16 / 65536.0);
+                    v_min = snap.pids[i].bitrate_min;
+                    v_max = snap.pids[i].bitrate_max;
+                    if (snap.pids[i].profile == 100)
                         profile = "High";
-                    else if (snap.pids[p].profile == 77)
+                    else if (snap.pids[i].profile == 77)
                         profile = "Main";
-                    else if (snap.pids[p].profile == 66)
+                    else if (snap.pids[i].profile == 66)
                         profile = "Baseline";
                 }
                 if (p == 0x1FFF) {

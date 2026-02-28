@@ -33,8 +33,11 @@ void test_rst_tstd_integration() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
+    int idx = tsa_find_pid_in_snapshot(&snap, 0x100);
+    assert(idx != -1);
+
     float rst_enc = snap.summary.rst_encoder_s;
-    printf("RST Encoder: %.2f s (Fill: %.2f%%)\n", rst_enc, snap.pids[0x100].tb_fill_pct);
+    printf("RST Encoder: %.2f s (Fill: %.2f%%)\n", rst_enc, snap.pids[idx].tb_fill_pct);
 
     // TB should be filling because Input (100Mbps) > Leak (60Mbps = 1.2*50)
     // Expect RST < 900s
