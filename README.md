@@ -1,98 +1,62 @@
-# TsAnalyzer & TsPacer: OTT Smart Link Assurance Gateway
+# TsAnalyzer: Deterministic Transport Stream Metrology Platform
 
-**TsAnalyzer & TsPacer** form a strictly cloud-first, metrology-driven gateway for MPEG-TS stream integrity and predictive operational assurance. Designed to replace expensive, hardware-bound legacy equipment, this suite provides a quantifiable, predictable, and controllable bridge for OTT encoding, CDN, and edge nodes.
-
----
-
-## Strategic Value: The Big Nine
-
-1.  **Industrial Metrology**: Full ETSI TR 101 290 (P1/P2/P3) and MDI (DF:MLR) instrumentation.
-2.  **Predictive Survivability**: **RST (Remaining Safe Time)** proactive countdown (100ms refresh).
-3.  **Smart Forwarding & Relay**: Metrology-driven re-streaming with integrated rate pacing (TsPacer).
-4.  **Transparent Failover**: Hardware-grade **L4 Bypass** ensures zero downtime during maintenance or failure.
-5.  **ABR-Ready Content Audit**: Deep scanning for **GOP Jitter** and **IDR alignment** consistency.
-6.  **Secure Cloud Relay**: Real-time **AES-128/256** decryption monitoring and secure re-wrapping.
-7.  **Automated RCA**: Instant domain attribution (Network vs. Encoder) via weighted superposition.
-8.  **SLA & Webhooks**: Real-time SLA reporting and event-driven HTTP callbacks for cloud orchestration.
-9.  **Automated Forensic Bundle**: capture of raw TS + trace logic triggered by critical risk events.
+TsAnalyzer is a professional-grade **Software-Defined Measurement Instrument** designed for broadcast-grade TS analysis. It combines laboratory-grade protocol depth with a 1.2M PPS high-performance deterministic engine.
 
 ---
 
-## The Closed-Loop Workflow
+## 🚀 Phase 1 Engineering Vision
 
-Unlike passive side-path tools, we sit "in the wire" to execute an active lifecycle:
+Our mission is to provide the absolute **Source of Truth** for TS metrology, ensuring that analysis results are mathematically precise, bit-exact reproducible, and experimentally verifiable.
 
-1.  **Analyze**: Deep metrology (101 290 / MDI) at 1ms precision.
-2.  **Predict**: Calculate RST and RCA score every 100ms.
-3.  **Control**: Trigger **TsPacer** for reactive wave-shaping or bitrate adjustment (< 5ms response).
-4.  **Verify**: Execute forensic replays and automated CI/CD stress regression.
-
----
-
-## Deployment Architecture
-
-### Server Mode (High-Density Hub)
-A persistent multi-tenant daemon designed for Kubernetes (K8s) orchestration.
-*   **SRT Multiplexing**: Single-port Listener mode using `StreamID` routing.
-*   **Dynamic API**: REST/gRPC control plane for live task management.
-*   **Performance**: 10+ Gbps throughput and 1000+ streams per node.
-
-### CLI Mode (Engineering Tool)
-Quick-start diagnostic tool for local file analysis or multicast segment validation.
+### Core Implementation Pillars:
+- **Temporal Fidelity**: Sub-microsecond arrival precision via NIC Hardware Timestamping.
+- **Deterministic Engine**: 100% bit-identical results across PCAP replays (MD5-consistent JSON).
+- **Decoder Digital Twin**: ISO/IEC 13818-1 Annex D faithful buffer simulation (VBV/T-STD).
+- **MTTR Reduction**: Slashing fault isolation time from hours to minutes via deterministic diagnostics.
 
 ---
 
-## Build & Quick Start
+## 📚 Technical Documentation Stack (Phase 1)
 
-### Requirements
-*   CMake 3.10+, GCC (C11)
-*   Linux Kernel (RT-capable recommended)
-*   OpenSSL & libsrt (v1.5.4)
+The following documents define the "Instrument-Grade" specification of TsAnalyzer:
 
-### Build
-```bash
-./build.sh
-```
+### 1. Strategy & Overview
+- **[Product Overview](./docs/00_product_overview.md)**: The V2.3 Whitepaper defining the Engineering Identity and Metrology Domains.
+- **[Engine Execution Model](./docs/01_engine_execution_model.md)**: Deterministic runtime architecture, thread topology, and packet ownership rules.
+- **[Timing Model](./docs/02_timing_model.md)**: Temporal physics defining HAT, STC, and VSTC domains.
+- **[Buffer Model](./docs/03_buffer_model.md)**: Deterministic ISO/IEC 13818-1 Annex D simulation and RST derivation.
+- **[Metrology Model](./docs/04_metrology_model.md)**: Measurement theory, causality engine, and traceability contract.
+- **[Determinism Contract](./docs/05_determinism_contract.md)**: The "Constitution" guaranteeing bit-identical reproducibility.
+- **[Performance Contract](./docs/06_performance_contract.md)**: Throughput and latency budgets as correctness requirements.
+- **[Error Model](./docs/07_error_model.md)**: Error propagation physics and measurement validity hierarchy.
+- **[Validation Methodology](./docs/08_validation_methodology.md)**: The framework for proving accuracy, repeatability, and real-world equivalence.
+- **[Operational Modes](./docs/09_operational_modes.md)**: Trust levels defining measurement authority.
+- **[Engine Constraints](./docs/10_engine_constraints.md)**: Non-negotiable architectural laws to preserve metrological integrity.
+- **[Implementation Roadmap](./docs/11_implementation_roadmap.md)**: The sequential path to achieving instrument-grade precision.
 
-### Run Server Mode (Management API)
-```bash
-sudo ./build/tsa --server --api-port 8080 --metrics-port 9000
-```
+### 2. Technical Specifications
+- **[TR 101 290 Metrology Spec](./docs/16_tr101290_analysis_spec.md)**: Detailed mathematical implementation of P1/P2/P3, V-STC, VBV simulation, and commercial ad-audits.
+- **[Deterministic 4-Layer Architecture](./docs/12_system_architecture_diagram.md)**: Low-level engine design including NUMA, Zero-copy, and L2-cache optimizations.
+- **[High-Performance Server Design](./docs/34_server_high_performance_design.md)**: Bare-metal OS sealing and math precision preservation strategies.
 
-### Run CLI Mode (File Analysis)
-```bash
-./build/tsa path/to/stream.ts
-```
-*   **API (JSON)**: `http://localhost:12345/api/v1/metrology/full`
-*   **Metrics**: `http://localhost:12345/metrics`
-
----
-
-## TsAnalyzer 2.0 Industrial Features
-
-TsAnalyzer now supports **Broadcast-Grade metrology** benchmarked against Tektronix and DekTec hardware:
-
-*   **Stateful TR 101 290**: Full P1 (Fatal) and P2 (Quality) monitoring with detailed error descriptions.
-*   **Clock Analysis (ppm)**: Real-time frequency offset detection using high-precision linear regression.
-*   **High-Resolution Timing**: Full `CLOCK_MONOTONIC_RAW` implementation for sub-microsecond PCR accuracy tracking.
-*   **Structured Alarm API**: JSON output includes cumulative counts, exact timestamps, and human-readable error reasons.
+### 3. Verification & Determinism
+- **[Engine Verification Matrix](./docs/21_engine_verification_matrix.md)**: The "Proof of Correctness" protocols for hardware-reference benchmarking.
+- **[Determinism Threat Model](./docs/22_determinism_threat_model.md)**: Systematic identification and mitigation of timing and memory entropy.
+- **[Resource & Performance Spec](./docs/15_resource_performance.md)**: Defined throughput, latency, and determinism gates (G1-G4).
 
 ---
 
-## Operational Documentation Suite
+## 🛠️ Key Metrology Metrics
+| Tier | Category | Key Indicators |
+| :--- | :--- | :--- |
+| **Tier 1** | IP/Transport | MDI (DF:MLR), Path Skew (2022-7), SRT RTT. |
+| **Tier 2** | MPEG-TS | TR 101 290 P1/P2/P3, **RST (Remaining Safe Time)**. |
+| **Tier 3** | Content Audit | SCTE-35 Precision Alignment, Audio Loudness (BS.1770-4). |
+| **Tier 4** | ABR Synergy | Cross-profile PTS Drift, IDR/GOP Boundary matching. |
 
-*   **[00: Product Overview](docs/00_product_overview.md)** - Vision, Glossary, and Strategy.
-*   **[01: Causal Analysis Spec](docs/01_causal_analysis_spec.md)** - RST/RCA mathematical models and action matrix.
-*   **[02: Monitoring & PRD](docs/02_monitoring_prd.md)** - Prometheus metrics and Grafana NOC design.
-*   **[03: Verification Strategy](docs/03_verification_strategy.md)** - CI/CD stress testing and replay validation.
-*   **[04: Resource & Performance](docs/04_resource_performance.md)** - Cloud edge density and hardware hardening.
-*   **[05: API Reference](docs/05_api_reference.md)** - C Library and Automation REST endpoints.
-*   **[06: Design Review Guide](docs/06_design_review_guide.md)** - Engineering iron rules and implemention guide.
-*   **[07: Forensic Guide](docs/07_forensic_verification_guide.md)** - Auditing automated evidence bundles.
-*   **[08: Server API Design](docs/08_server_api_design.md)** - Multi-tenant fleet orchestration and webhooks.
-*   **[09: Grafana Dashboard Spec](docs/09_grafana_dashboard_spec.md)** - Survival-First NOC visualization layout.
-*   **[10: Implementation Roadmap](docs/10_implementation_roadmap.md)** - C11 zero-allocation architecture and CI/CD production gates.
-*   **[11: System Architecture Diagram](docs/11_system_architecture_diagram.md)** - Multi-level functional mapping and decision logic.
+---
 
-## License
-MIT
+## ⚖️ Determinism Contract
+> *Input (Packet Sequence + HW Timestamp) + Engine version (MD5) = Bit-identical JSON Analysis.*
+
+This contract ensures that TsAnalyzer is not just a monitoring tool, but a **Forensic Grade Instrument** suitable for legal and SLA dispute resolution.
