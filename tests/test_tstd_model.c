@@ -17,6 +17,7 @@ void test_tstd_full_pipeline() {
     pkt[1] = 0x01;  // PID 0x100
     pkt[2] = 0x00;
     pkt[3] = TS_PAYLOAD_FLAG;
+    h->live.pid_is_referenced[0x100] = true;  // Mark as elementary stream
 
     // 1. Initial Packet
     uint64_t now_ns = 1000000000ULL;

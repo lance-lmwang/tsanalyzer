@@ -1,9 +1,10 @@
+#include <arpa/inet.h>
+#include <srt.h>
 #include <stdlib.h>
 #include <string.h>
-#include <srt.h>
-#include <arpa/inet.h>
-#include "tsp.h"
+
 #include "tsa.h"
+#include "tsp.h"
 
 struct ts_ingest_srt {
     SRTSOCKET sock;
@@ -17,7 +18,7 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
 
     srt_startup();
     SRTSOCKET s = srt_create_socket();
-    
+
     int transtype = SRTT_LIVE;
     srt_setsockopt(s, 0, SRTO_TRANSTYPE, &transtype, sizeof(transtype));
 
@@ -75,12 +76,20 @@ int ts_ingest_srt_get_stats(ts_ingest_srt_t* ingest, tsa_srt_stats_t* srt) {
     return 0;
 }
 
-struct ts_ingest_udp { int fd; };
+struct ts_ingest_udp {
+    int fd;
+};
 ts_ingest_udp_t* ts_ingest_udp_create(const char* ip, uint16_t port) {
-    (void)ip; (void)port;
+    (void)ip;
+    (void)port;
     return calloc(1, sizeof(ts_ingest_udp_t));
 }
-void ts_ingest_udp_destroy(ts_ingest_udp_t* ingest) { free(ingest); }
+void ts_ingest_udp_destroy(ts_ingest_udp_t* ingest) {
+    free(ingest);
+}
 int ts_ingest_udp_recv(ts_ingest_udp_t* ingest, uint8_t* buf, int sz) {
-    (void)ingest; (void)buf; (void)sz; return 0;
+    (void)ingest;
+    (void)buf;
+    (void)sz;
+    return 0;
 }

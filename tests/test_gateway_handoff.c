@@ -25,12 +25,12 @@ void test_gateway_handoff_latency() {
     pkt[0] = 0x47;
 
     struct timespec start, end;
-    
+
     // Warmup
-    for(int i=0; i<100; i++) tsa_gateway_process(gw, pkt, i*1000);
+    for (int i = 0; i < 100; i++) tsa_gateway_process(gw, pkt, i * 1000);
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    tsa_gateway_process(gw, pkt, 100*1000);
+    tsa_gateway_process(gw, pkt, 100 * 1000);
     clock_gettime(CLOCK_MONOTONIC, &end);
 
     uint64_t latency_ns = (end.tv_sec - start.tv_sec) * 1000000000ULL + (end.tv_nsec - start.tv_nsec);

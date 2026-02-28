@@ -1,16 +1,16 @@
 #define _GNU_SOURCE
+#include <pthread.h>
+#include <sched.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-#include <pthread.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-#include <sched.h>
 
-#include "tsa.h"
 #include "alloc_tracker.h"
+#include "tsa.h"
 
 #define BATCH_SIZE 1000000
 #define NUM_THREADS 4
@@ -25,7 +25,7 @@ static volatile int g_keep_running = 1;
 
 void* benchmark_worker(void* arg) {
     thread_data_t* data = (thread_data_t*)arg;
-    
+
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(data->thread_id % sysconf(_SC_NPROCESSORS_ONLN), &cpuset);
@@ -37,7 +37,7 @@ void* benchmark_worker(void* arg) {
 
     uint8_t pkt[188];
     memset(pkt, 0x47, 188);
-    pkt[1] = 0x01; // PID 0x100
+    pkt[1] = 0x01;  // PID 0x100
 
     // Warmup
     for (int i = 0; i < 1000; i++) tsa_process_packet(h, pkt, i);

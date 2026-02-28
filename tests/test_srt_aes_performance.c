@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
 #include "tsa.h"
 #include "tsp.h"
 
@@ -11,14 +12,15 @@ void test_srt_aes_performance() {
     printf("Running test_srt_aes_performance...\n");
 
     const char* srt_url = "srt://127.0.0.1:9004?mode=caller&passphrase=benchmark-secret-key-123&pbkeylen=16";
-    
+
     tsp_config_t cfg = {0};
-    cfg.bitrate = 100000000; // 100 Mbps
+    cfg.bitrate = 100000000;  // 100 Mbps
     cfg.ts_per_udp = 7;
     cfg.srt_url = srt_url;
 
     // Start a dummy listener to accept connection
-    ts_ingest_srt_t* listener = ts_ingest_srt_create("srt://:9004?mode=listener&passphrase=benchmark-secret-key-123&pbkeylen=16");
+    ts_ingest_srt_t* listener =
+        ts_ingest_srt_create("srt://:9004?mode=listener&passphrase=benchmark-secret-key-123&pbkeylen=16");
     assert(listener != NULL);
 
     tsp_handle_t* pacer = tsp_create(&cfg);

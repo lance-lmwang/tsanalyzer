@@ -22,15 +22,18 @@ void test_rca_ok() {
     printf("Running test_rca_ok...\n");
     tsa_config_t cfg = {0};
     tsa_handle_t* h = tsa_create(&cfg);
-    
+
     // Stable stream
     uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x10, 0x00};
-    for(int i=0; i<10; i++) {
+    uint8_t pat_pkt[188] = {0x47, 0x40, 0x00, 0x10, 0x00, 0x00, 0xb0, 0x0d};  // Simplified PAT
+    tsa_process_packet(h, pat_pkt, 0);
+
+    for (int i = 0; i < 10; i++) {
         pkt[3] = 0x10 | (i % 16);
-        tsa_process_packet(h, pkt, i * 1000000);
+        tsa_process_packet(h, pkt, (i + 1) * 1000000);
     }
 
-    tsa_commit_snapshot(h, 1000000000);
+    tsa_commit_snapshot(h, 10000000);  // Snapshot at 10ms instead of 1s
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
@@ -47,9 +50,9 @@ void test_rca_network_fault() {
     tsa_handle_t* h = tsa_create(&cfg);
 
     // Simulating packet loss (CC errors)
-    uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x10}; 
+    uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x10};
     tsa_process_packet(h, pkt, 1000000);
-    pkt[3] = 0x12; // Loss
+    pkt[3] = 0x12;  // Loss
     tsa_process_packet(h, pkt, 2000000);
 
     tsa_commit_snapshot(h, 1000000000);
@@ -68,12 +71,12 @@ void test_rca_encoder_fault() {
     tsa_config_t cfg = {0};
     tsa_handle_t* h = tsa_create(&cfg);
 
-    uint8_t pkt_pcr[188] = {0x47, 0x01, 0x00, 0x30, 0x07, 0x10}; 
+    uint8_t pkt_pcr[188] = {0x47, 0x01, 0x00, 0x30, 0x07, 0x10};
     encode_pcr(pkt_pcr, 0);
     tsa_process_packet(h, pkt_pcr, 0);
     encode_pcr(pkt_pcr, 40 * 27000);
     tsa_process_packet(h, pkt_pcr, 40000000);
-    encode_pcr(pkt_pcr, 80 * 27000); // 30ms jitter
+    encode_pcr(pkt_pcr, 80 * 27000);  // 30ms jitter
     tsa_process_packet(h, pkt_pcr, 110000000);
 
     tsa_commit_snapshot(h, 200000000);
@@ -93,26 +96,26 @@ void test_rca_multi_causal() {
     tsa_handle_t* h = tsa_create(&cfg);
 
     // 1. Network Issue: MLR
-    uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x10}; 
+    uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x10};
     tsa_process_packet(h, pkt, 1000000);
-    pkt[3] = 0x12; // Loss
+    pkt[3] = 0x12;  // Loss
     tsa_process_packet(h, pkt, 2000000);
 
     // 2. Encoder Issue: High Jitter
-    uint8_t pkt_pcr[188] = {0x47, 0x01, 0x00, 0x30, 0x07, 0x10}; 
+    uint8_t pkt_pcr[188] = {0x47, 0x01, 0x00, 0x30, 0x07, 0x10};
     encode_pcr(pkt_pcr, 0);
     tsa_process_packet(h, pkt_pcr, 0);
     encode_pcr(pkt_pcr, 40 * 27000);
     tsa_process_packet(h, pkt_pcr, 40000000);
-    encode_pcr(pkt_pcr, 80 * 27000); // 30ms jitter
+    encode_pcr(pkt_pcr, 80 * 27000);  // 30ms jitter
     tsa_process_packet(h, pkt_pcr, 110000000);
 
     tsa_commit_snapshot(h, 1000000000);
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("MLR: %.2f, PCR Jitter Max: %ld ns, Fault Domain: %u\n", 
-           snap.stats.mdi_mlr_pkts_s, snap.stats.pcr_jitter_max_ns, snap.predictive.fault_domain);
+    printf("MLR: %.2f, PCR Jitter Max: %ld ns, Fault Domain: %u\n", snap.stats.mdi_mlr_pkts_s,
+           snap.stats.pcr_jitter_max_ns, snap.predictive.fault_domain);
     // score_net = 0.8 (MLR), score_enc = 0.8 (Jitter)
     // Both > 0.4 -> Domain 3
     assert(snap.predictive.fault_domain == 3);

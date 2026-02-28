@@ -22,8 +22,8 @@ void test_buffer_fill_percentages() {
     // 1. Process 1 packet
     tsa_process_packet(h, pkt, 1000000000ULL);
 
-    // Trigger snapshot commit to update percentages
-    tsa_commit_snapshot(h, 1500000000ULL);
+    // Trigger snapshot commit IMMEDIATELY to avoid drain
+    tsa_commit_snapshot(h, 1000000001ULL);
 
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);

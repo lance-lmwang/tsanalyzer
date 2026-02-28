@@ -1,9 +1,10 @@
 #ifndef TSANALYZER_INTERNAL_H
 #define TSANALYZER_INTERNAL_H
 
-#include <stdatomic.h>
 #include <stdalign.h>
+#include <stdatomic.h>
 #include <time.h>
+
 #include "tsa.h"
 
 typedef __int128_t int128_t;
@@ -13,7 +14,7 @@ typedef int128_t q64_64;
 #define FROM_Q64_64(x) ((double)(x) / (double)((int128_t)1 << 64))
 
 #define NS_PER_SEC 1000000000ULL
-#define Q_SHIFT 32
+#define Q_SHIFT 64
 
 typedef struct {
     uint64_t sys_ns;
@@ -91,8 +92,9 @@ struct tsa_handle {
     uint8_t last_cc[TS_PID_MAX];
     bool pid_seen[TS_PID_MAX];
     bool pid_is_pmt[TS_PID_MAX];
+    int16_t pid_to_active_idx[TS_PID_MAX];
     uint32_t pid_tracker_count;
-    uint16_t pid_active_list[128]; // LRU tracker for active PIDs
+    uint16_t pid_active_list[128];  // LRU tracker for active PIDs
 
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
@@ -111,8 +113,8 @@ struct tsa_handle {
     bool pid_frame_num_valid[TS_PID_MAX];
 
     // GOP Tracking
-    uint32_t pid_gop_n[TS_PID_MAX];      // Current GOP frame count
-    uint32_t pid_last_gop_n[TS_PID_MAX]; // Result of last complete GOP
+    uint32_t pid_gop_n[TS_PID_MAX];       // Current GOP frame count
+    uint32_t pid_last_gop_n[TS_PID_MAX];  // Result of last complete GOP
     uint32_t pid_gop_min[TS_PID_MAX];
     uint32_t pid_gop_max[TS_PID_MAX];
     uint64_t pid_last_idr_ns[TS_PID_MAX];
@@ -125,8 +127,8 @@ struct tsa_handle {
 
     alignas(64) double stc_drift_slope;
     bool stc_locked;
-    uint64_t stc_ns;             // PCR-driven System Time Clock
-    uint64_t last_pcr_stc_ns;    // STC at last PCR arrival
+    uint64_t stc_ns;           // PCR-driven System Time Clock
+    uint64_t last_pcr_stc_ns;  // STC at last PCR arrival
 
     void* pool_base;
     size_t pool_offset;
@@ -134,18 +136,25 @@ struct tsa_handle {
 };
 
 /* --- TS Packet Flags --- */
-#define TS_AF_FLAG      0x20
+#define TS_AF_FLAG 0x20
 #define TS_PAYLOAD_FLAG 0x10
-#define TS_PCR_FLAG     0x10
+#define TS_PCR_FLAG 0x10
 
 /* --- Internal Utilities --- */
+const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t pid);
 int tsa_fast_itoa(char* buf, int64_t val);
 int tsa_fast_ftoa(char* buf, float val, int precision);
 
 /* FIX: Use anonymous union to align engine ptr/size with test base/capacity */
 typedef struct {
-    union { char* ptr; char* base; };
-    union { size_t size; size_t capacity; };
+    union {
+        char* ptr;
+        char* base;
+    };
+    union {
+        size_t size;
+        size_t capacity;
+    };
     size_t offset;
 } tsa_metric_buffer_t;
 

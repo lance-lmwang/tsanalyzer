@@ -8,9 +8,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../deps/mongoose/mongoose.h"
 #include "tsa.h"
 #include "tsp.h"
-#include "../deps/mongoose/mongoose.h"
 
 static volatile int g_keep_running = 1;
 static tsa_gateway_t* g_gw = NULL;
@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (cfg.pacing.bitrate == 0) cfg.pacing.bitrate = 10000000; // Default 10Mbps
+    if (cfg.pacing.bitrate == 0) cfg.pacing.bitrate = 10000000;  // Default 10Mbps
 
     cfg.analysis.is_live = true;
     cfg.enable_action_engine = (cfg.enable_null_substitution || cfg.enable_pcr_restamp || pacing_pcr);

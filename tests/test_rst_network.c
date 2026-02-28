@@ -19,17 +19,17 @@ void test_rst_network_depletion() {
     h->live.total_ts_packets = pkts;
     h->prev_snap_base.total_ts_packets = 0;
     h->last_snap_ns = h->start_ns;
-    
+
     h->live.pcr_bitrate_bps = 10000000;
-    h->live.pcr_jitter_max_ns = 10000000; // 10ms jitter
-    h->srt_live.effective_rcv_latency_ms = 50; // 40ms margin
-    
+    h->live.pcr_jitter_max_ns = 10000000;       // 10ms jitter
+    h->srt_live.effective_rcv_latency_ms = 50;  // 40ms margin
+
     tsa_commit_snapshot(h, h->start_ns + 1000000000ULL);
 
     tsa_snapshot_full_t s1;
     tsa_take_snapshot_full(h, &s1);
-    printf("Network RST: %.3f s (MDI-DF: %.2f ms, Phys: %lu)\n", 
-           s1.predictive.rst_network_s, s1.stats.mdi_df_ms, s1.stats.physical_bitrate_bps);
+    printf("Network RST: %.3f s (MDI-DF: %.2f ms, Phys: %lu)\n", s1.predictive.rst_network_s, s1.stats.mdi_df_ms,
+           s1.stats.physical_bitrate_bps);
 
     // Margin = 40ms. Bits = 400,000. Depletion = 2,000,000. RST = 0.2s.
     assert(s1.predictive.rst_network_s > 0.19 && s1.predictive.rst_network_s < 0.21);

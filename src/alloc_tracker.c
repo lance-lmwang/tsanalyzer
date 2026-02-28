@@ -1,10 +1,10 @@
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <dlfcn.h>
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 static _Atomic uint64_t g_malloc_count = 0;
@@ -36,11 +36,11 @@ void* malloc(size_t size) {
     if (!real_malloc) {
         real_malloc = (malloc_t)dlsym(RTLD_NEXT, "malloc");
     }
-    
+
     if (g_tracking_enabled) {
         atomic_fetch_add(&g_malloc_count, 1);
     }
-    
+
     return real_malloc(size);
 }
 
@@ -48,8 +48,8 @@ void free(void* ptr) {
     if (!real_free) {
         real_free = (free_t)dlsym(RTLD_NEXT, "free");
     }
-    
-    // We don't necessarily count frees for zero-malloc audit, 
+
+    // We don't necessarily count frees for zero-malloc audit,
     // but we must call the real free.
     real_free(ptr);
 }

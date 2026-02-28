@@ -70,6 +70,11 @@ void test_h264_metadata_extraction() {
     tsa_process_packet(h, pmt_pkt, 1100000000ULL);
     tsa_process_packet(h, pkt, 1200000000ULL);
 
+    // Send a second PUSI packet to flush the first one
+    uint8_t pkt2[188];
+    memcpy(pkt2, pkt, 188);
+    tsa_process_packet(h, pkt2, 1300000000ULL);
+
     // Trigger snapshot
     tsa_commit_snapshot(h, 1500000000ULL);
 

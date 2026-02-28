@@ -1,7 +1,8 @@
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
+
 #include "tsa.h"
 
 int main() {
@@ -11,24 +12,24 @@ int main() {
     snap.summary.master_health = 92.5f;
     snap.srt.rtt_ms = 32;
     snap.stats.video_fps = 25.0f;
-    
+
     // Add one PID
     snap.pids[0x100].pid = 0x100;
     snap.pids[0x100].liveness_status = 1;
     snap.pids[0x100].bitrate_q16_16 = (int64_t)7450000 << 16;
-    
+
     char buffer[4096];
     size_t len = tsa_snapshot_to_json(&snap, buffer, sizeof(buffer));
-    
+
     printf("JSON Length: %zu\n", len);
     printf("JSON Output: %s\n", buffer);
-    
+
     assert(len > 0);
     assert(strstr(buffer, "\"master_health\":92.5") != NULL);
     assert(strstr(buffer, "\"srt_rtt_ms\":32") != NULL);
     assert(strstr(buffer, "\"pid\":\"0x0100\"") != NULL);
     assert(strstr(buffer, "\"bps\":7450000") != NULL);
-    
+
     printf("JSON serialization verified.\n");
     return 0;
 }

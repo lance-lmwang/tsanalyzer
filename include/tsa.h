@@ -1,9 +1,9 @@
 #ifndef TSANALYZER_H
 #define TSANALYZER_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define TS_PACKET_SIZE 188
 #define TS_SYNC_BYTE 0x47
@@ -60,6 +60,9 @@ typedef struct tsa_srt_stats {
     int64_t rtt_ms;
     uint32_t byte_rcv_buf;
     uint32_t effective_rcv_latency_ms;
+    double retransmit_tax;
+    uint64_t bytes_received;
+    uint64_t bytes_lost;
 } tsa_srt_stats_t;
 
 typedef struct {
@@ -117,7 +120,7 @@ typedef struct {
     bool enable_forensics;
     uint64_t forced_cbr_bitrate;
     uint16_t protected_pids[16];
-    uint32_t entropy_window_packets; // Added for snapshot test
+    uint32_t entropy_window_packets;  // Added for snapshot test
 } tsa_config_t;
 
 /* --- Core TSA API --- */
@@ -159,12 +162,12 @@ typedef struct {
         uint16_t port;
         uint64_t bitrate;
         uint32_t ts_per_udp;
-        int mode; // tsp_mode_t
+        int mode;  // tsp_mode_t
     } pacing;
     bool enable_action_engine;
     bool enable_null_substitution;
     bool enable_pcr_restamp;
-    uint64_t watchdog_timeout_ns; // Added for fail_safe test
+    uint64_t watchdog_timeout_ns;  // Added for fail_safe test
 } tsa_gateway_config_t;
 
 tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg);
@@ -172,7 +175,7 @@ void tsa_gateway_destroy(tsa_gateway_t* gw);
 int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns);
 tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw);
 struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw);
-bool tsa_gateway_is_bypassing(tsa_gateway_t* gw); // Added for fail_safe test
-void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns); // Added for fail_safe test
+bool tsa_gateway_is_bypassing(tsa_gateway_t* gw);                              // Added for fail_safe test
+void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns);  // Added for fail_safe test
 
 #endif

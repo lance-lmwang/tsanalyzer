@@ -6,7 +6,8 @@
 #include "tsa_internal.h"
 
 // Extended SRT URL Parser: srt://host:port?mode=caller&latency=200&passphrase=abc&pbkeylen=16
-int parse_srt_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase, int* pbkeylen) {
+int parse_srt_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
+                      int* pbkeylen) {
     if (strncmp(url, "srt://", 6) != 0) return -1;
 
     char buf[256];

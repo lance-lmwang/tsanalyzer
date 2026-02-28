@@ -14,6 +14,7 @@ void test_eb_underflow_detection() {
     assert(h != NULL);
 
     uint8_t pkt[188] = {TS_SYNC_BYTE, 0x01, 0x00, 0x10};  // PID 0x100
+    h->live.pid_is_referenced[0x100] = true;              // Mark as elementary stream
 
     // Simulate 100kbps stream (very low)
     // Required ES rate is ~40Mbps (based on my 50Mbps default TS rate in implementation)

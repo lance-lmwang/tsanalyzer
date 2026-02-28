@@ -1,13 +1,13 @@
 #ifndef TSP_H
 #define TSP_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <netinet/in.h>
-#include <stdalign.h>
+#include <pthread.h>
 #include <srt.h>
+#include <stdalign.h>
+#include <stdatomic.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #define TS_PACKET_SIZE 188
 #ifndef RING_BUFFER_SIZE
@@ -20,7 +20,7 @@ typedef enum {
     TSPACER_MODE_PCR,
     TSPACER_MODE_ETF,
     TSPACER_MODE_CBR,
-    TSPACER_MODE_BASIC // Added for pacing test
+    TSPACER_MODE_BASIC  // Added for pacing test
 } tsp_mode_t;
 
 typedef struct {
@@ -62,7 +62,7 @@ struct tsp_handle {
     uint8_t stuffing_packet[TS_PACKET_SIZE];
     _Atomic uint64_t total_udp_packets;
     _Atomic uint64_t detected_bitrate;
-    
+
     // Legacy members for tests
     uint64_t pcr_base;
     uint64_t sys_time_base;
@@ -80,7 +80,8 @@ uint64_t tsp_get_detected_bitrate(tsp_handle_t* h);
 uint64_t tsp_get_total_packets(tsp_handle_t* h);
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h);
 pthread_t tsp_get_thread(tsp_handle_t* h);
-int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate, uint64_t* pps);
+int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
+                  uint64_t* pps);
 int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* snap);
 uint64_t calculate_target_time(tsp_handle_t* h, uint64_t pcr, uint64_t byte_off, uint64_t now);
 
@@ -104,6 +105,7 @@ void spsc_ring_destroy(spsc_ring_t* r);
 int spsc_ring_push(spsc_ring_t* r, const uint8_t* data, size_t sz);
 int spsc_ring_pop(spsc_ring_t* r, uint8_t* data, size_t sz);
 
-int parse_srt_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase, int* pbkeylen);
+int parse_srt_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
+                      int* pbkeylen);
 
 #endif

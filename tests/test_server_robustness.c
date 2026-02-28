@@ -1,17 +1,18 @@
 #include <assert.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+
 #include "tsa.h"
 #include "tsa_internal.h"
 
 void test_handle_limit() {
     printf("Testing handle limit and concurrency...\n");
-    tsa_handle_t* handles[50]; // Reduced for faster CI
+    tsa_handle_t* handles[50];  // Reduced for faster CI
     tsa_config_t cfg = {0};
     cfg.is_live = true;
-    cfg.enable_forensics = false; 
+    cfg.enable_forensics = false;
 
     for (int i = 0; i < 50; i++) {
         handles[i] = tsa_create(&cfg);
@@ -39,15 +40,15 @@ void test_invalid_json_mock() {
     printf("Testing serializer robustness...\n");
     tsa_snapshot_full_t snap;
     memset(&snap, 0, sizeof(snap));
-    
+
     char buf[1024];
     // Test with tiny buffer (should not crash)
-    tsa_snapshot_to_json(&snap, buf, 5); 
+    tsa_snapshot_to_json(&snap, buf, 5);
 
     // Test with nulls
     size_t res = tsa_snapshot_to_json(NULL, buf, 1024);
     assert(res == 0);
-    
+
     printf("[PASS] Serializer safety verified.\n");
 }
 
