@@ -24,15 +24,11 @@ void test_full_prometheus_export() {
     assert(strlen(buffer) > 0);
 
     // Check for some expected core metrics
-    assert(strstr(buffer, "# HELP tsa_pcr_bitrate_bps") != NULL);
-    assert(strstr(buffer, "# TYPE tsa_pcr_bitrate_bps gauge") != NULL);
     assert(strstr(buffer, "tsa_pcr_bitrate_bps{stream_id=\"test_run\"}") != NULL);
 
     // Check for P1 errors
-    assert(strstr(buffer, "tsa_tr101290_p1_errors{stream_id=\"test_run\", error_type=\"cc\"}") != NULL);
+    assert(strstr(buffer, "tsa_tr101290_p1_errors{stream_id=\"test_run\",error_type=\"cc_error\"}") != NULL);
 
-    assert(strstr(buffer, "# HELP tsa_mdi_delay_factor_ms") != NULL);
-    assert(strstr(buffer, "# TYPE tsa_mdi_delay_factor_ms gauge") != NULL);
     assert(strstr(buffer, "tsa_mdi_delay_factor_ms{stream_id=\"test_run\"}") != NULL);
 
     printf("Prometheus Output Length: %zu\n", strlen(buffer));

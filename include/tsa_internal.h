@@ -80,6 +80,8 @@ struct tsa_handle {
         double pid_eb_fill_bytes[TS_PID_MAX];
         double pid_eb_fill_double[TS_PID_MAX];
     };
+    double pid_tb_fill_bytes[TS_PID_MAX];
+    double pid_mb_fill_bytes[TS_PID_MAX];
     uint64_t last_eb_leak_ns[TS_PID_MAX];
 
     // PID State Tracking

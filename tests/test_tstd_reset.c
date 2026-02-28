@@ -51,6 +51,10 @@ void test_tstd_reset_on_res_change() {
     memcpy(pkt + 4 + sizeof(pes), sps720, sizeof(sps720));
     tsa_process_packet(h, pkt, 1300000000ULL);
 
+    // Flush the second PES packet
+    uint8_t flush_pkt[188] = {TS_SYNC_BYTE, 0x41, 0x00, 0x10};
+    tsa_process_packet(h, flush_pkt, 1400000000ULL);
+
     uint32_t fill = tsa_get_pid_tb_fill(h, 0x100);
     printf("TB Fill after resolution change: %u\n", fill);
 
