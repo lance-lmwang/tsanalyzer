@@ -159,7 +159,8 @@ struct tsa_handle {
         tsa_snapshot_full_t stats;
     } snap_state;
 
-    alignas(64) double stc_drift_slope;
+    alignas(64) int128_t stc_slope_q64;
+    int128_t stc_intercept_q64;
     bool stc_locked;
     uint64_t stc_ns;           // PCR-driven System Time Clock
     uint64_t last_pcr_stc_ns;  // STC at last PCR arrival

@@ -77,6 +77,7 @@ typedef struct {
     bool lid_active;
     double stc_drift_slope;
     bool stc_locked_bool;
+    uint64_t pcr_jitter_ns;
 } tsa_predictive_stats_t;
 
 typedef struct {

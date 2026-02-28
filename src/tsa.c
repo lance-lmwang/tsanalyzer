@@ -807,49 +807,46 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
             uint64_t abs_inst_jitter = (inst_jitter_ns >= 0) ? (uint64_t)inst_jitter_ns : (uint64_t)(-inst_jitter_ns);
             if (abs_inst_jitter > h->live.pcr_jitter_max_ns) h->live.pcr_jitter_max_ns = abs_inst_jitter;
 
-            int128_t slope_q64;
-            int64_t reg_acc = 0;
-            int reg_res = ts_pcr_window_regress(&h->pcr_window, &slope_q64, NULL, &reg_acc);
+                        int128_t slope_q64, intercept_q64;
+                        int64_t reg_acc = 0;
+                        int reg_res = ts_pcr_window_regress(&h->pcr_window, &slope_q64, &intercept_q64, &reg_acc);
 
-            // Update jitter metrics
-            h->live.pcr_accuracy_ns = (double)reg_acc;
+                        // Update jitter metrics
+                        h->live.pcr_accuracy_ns = (double)reg_acc;
 
-            if (reg_res == 0) {
-                h->stc_locked = true;
-                if (reg_acc > 500) {
-                    h->live.pcr_accuracy_error.count++;
-                    h->live.pcr_accuracy_error.last_timestamp_ns = now_ns;
-                }
+                                    if (reg_res == 0) {
+                                        h->stc_locked = true;
+                                        h->stc_slope_q64 = slope_q64;
+                                        h->stc_intercept_q64 = intercept_q64;
 
-                // Update STC based on pcr advancement
-                h->stc_ns += (dt_pcr_ticks * 1000 / 27);
+                                        if (reg_acc > 500) {
+                                            h->live.pcr_accuracy_error.count++;
+                                            h->live.pcr_accuracy_error.last_timestamp_ns = now_ns;
+                                        }
 
-                // Jitter stats
-                h->pcr_jitter_sq_sum_ns += (int128_t)inst_jitter_ns * inst_jitter_ns;
-                h->pcr_jitter_count++;
-                h->live.pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
+                                        // Jitter stats
+                                        h->pcr_jitter_sq_sum_ns += (int128_t)inst_jitter_ns * inst_jitter_ns;
+                                        h->pcr_jitter_count++;
+                                        h->live.pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
 
-                if (dt_pcr_ticks > 0) {
-                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
-                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                    h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
-                }
-            } else {
-                h->stc_locked = false;
-                // Fallback STC advancement
-                h->stc_ns += (now_ns - h->last_pcr_arrival_ns);
+                                        if (dt_pcr_ticks > 0) {
+                                            uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                                            uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                                            h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                                        }
+                                    } else {
+                                        h->stc_locked = false;
 
-                // Even if unlocked, estimate bitrate if pcr delta is reasonable
-                if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 5) {
-                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
-                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                    h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
-                }
-            }
-        } else {
-            h->stc_ns = pcr_ns;
-        }
-
+                                        // Even if unlocked, estimate bitrate if pcr delta is reasonable
+                                        if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 5) {
+                                            uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                                            uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                                            h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                                        }
+                                    }
+                                } else {
+                                    h->stc_ns = pcr_ns;
+                                }
         h->last_pcr_ticks = pcr_ticks;
         h->last_pcr_arrival_ns = now_ns;
         h->last_pcr_stc_ns = h->stc_ns;
@@ -889,7 +886,13 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
             h->signal_lock = true;
         }
     }
-    if (!h->stc_locked) h->stc_ns = now_ns;
+
+    if (h->stc_locked) {
+        // Doc 02: Continuous VSTC projection using slope extrapolation
+        h->stc_ns = (uint64_t)((h->stc_intercept_q64 + (int128_t)now_ns * h->stc_slope_q64) >> 64);
+    } else {
+        h->stc_ns = now_ns;
+    }
 
     ts_decode_result_t res;
     tsa_decode_packet(h, pkt, now_ns, &res);
@@ -955,7 +958,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
         h->snap_state.stats.predictive.stc_locked_bool = true;
     } else {
         h->snap_state.stats.predictive.stc_locked_bool = false;
-        if (h->stc_drift_slope > 0) slope = h->stc_drift_slope;
+        if (h->stc_slope_q64 > 0) slope = (double)FROM_Q64_64(h->stc_slope_q64);
     }
     float rst_n = 999.0f;
     uint64_t br_pcr = h->live.pcr_bitrate_bps, br_phys = h->live.physical_bitrate_bps;
@@ -1069,6 +1072,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     atomic_store(&h->snap_state.seq, seq + 1);
     h->snap_state.stats.predictive.lid_active = p1_active_delta || (rst_n < 1.0);
     h->snap_state.stats.predictive.master_health = health;
+    h->snap_state.stats.predictive.stc_locked_bool = h->stc_locked;
+    h->snap_state.stats.predictive.stc_drift_slope = (float)FROM_Q64_64(h->stc_slope_q64);
+    h->snap_state.stats.predictive.pcr_jitter_ns = (uint64_t)h->live.pcr_accuracy_ns;
+
     h->snap_state.stats.summary.master_health = health;
     h->snap_state.stats.summary.total_packets = h->live.total_ts_packets;
     h->snap_state.stats.summary.signal_lock = h->signal_lock;
@@ -1349,13 +1356,19 @@ void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t s, uint64_t p, uint64_t o) {
 }
 
 int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, int64_t* peak_acc) {
-    if (w->count < 2) return -1;
-    double sx = 0, sy = 0, sxy = 0, sxx = 0;
-    uint64_t sts = w->samples[(w->head - w->count + w->size) % w->size].sys_ns;
-    uint64_t stp = w->samples[(w->head - w->count + w->size) % w->size].pcr_ns;
+    uint32_t n_samples = w->count;
+    if (n_samples < 2) return -1;
 
-    for (uint32_t k = 0; k < w->count; k++) {
-        uint32_t idx = (w->head - w->count + k + w->size) % w->size;
+    double sx = 0, sy = 0, sxy = 0, sxx = 0;
+    uint32_t head = w->head;
+    uint32_t size = w->size;
+
+    uint64_t sts = w->samples[(head - n_samples + size) % size].sys_ns;
+    uint64_t stp = w->samples[(head - n_samples + size) % size].pcr_ns;
+
+    // Use a flat loop to encourage compiler auto-vectorization
+    for (uint32_t k = 0; k < n_samples; k++) {
+        uint32_t idx = (head - n_samples + k + size) % size;
         double x = (double)(w->samples[idx].sys_ns - sts);
         double y = (double)(w->samples[idx].pcr_ns - stp);
         sx += x;
@@ -1364,7 +1377,7 @@ int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, int64_t*
         sxx += x * x;
     }
 
-    double n = (double)w->count;
+    double n = (double)n_samples;
     double det = (n * sxx - sx * sx);
     if (fabs(det) < 1e-9) return -1;
 
@@ -1372,8 +1385,8 @@ int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, int64_t*
     double a = (sy - b * sx) / n;
 
     double max_err = 0;
-    for (uint32_t k = 0; k < w->count; k++) {
-        uint32_t idx = (w->head - w->count + k + w->size) % w->size;
+    for (uint32_t k = 0; k < n_samples; k++) {
+        uint32_t idx = (head - n_samples + k + size) % size;
         double x = (double)(w->samples[idx].sys_ns - sts);
         double y = (double)(w->samples[idx].pcr_ns - stp);
         double f = a + b * x;

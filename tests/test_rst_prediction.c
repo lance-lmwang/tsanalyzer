@@ -33,7 +33,7 @@ int main() {
     // Remaining Drift = 90ms
     // RST = 0.09 / 0.001 = 90s
     h->live.pcr_accuracy_ns = 10000000;
-    h->stc_drift_slope = 1.001;  // 1000ppm too fast
+    h->stc_slope_q64 = TO_Q64_64(1.001);  // 1000ppm too fast
 
     tsa_commit_snapshot(h, h->start_ns + ds_ns * 2);
     tsa_take_snapshot_full(h, &snap);

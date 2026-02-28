@@ -21,7 +21,7 @@ int main() {
     h->live.pcr_bitrate_bps = bitrate;
     h->live.mdi_df_ms = 5.0;
     h->live.mdi_mlr_pkts_s = 0.0;
-    h->stc_drift_slope = 1.0;
+    h->stc_slope_q64 = (int128_t)1 << 64;
     h->seen_pat = true;
     h->seen_pmt = true;
     // Align PAT/PMT timestamps to NOW to avoid timeout penalty

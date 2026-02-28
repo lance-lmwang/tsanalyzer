@@ -42,7 +42,7 @@ int main() {
     h->seen_pat = h->seen_pmt = true;
     h->last_pat_ns = h->last_pmt_ns = now;
     h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
-    h->stc_drift_slope = 1.0;
+    h->stc_slope_q64 = (int128_t)1 << 64;
 
     tsa_commit_snapshot(h, now);
     tsa_snapshot_full_t s1;
@@ -68,7 +68,7 @@ int main() {
     }
     h->last_pat_ns = h->last_pmt_ns = now;
     h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
-    h->stc_drift_slope = 1.0;
+    h->stc_slope_q64 = (int128_t)1 << 64;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &s1);
     printf("   Health: %.1f, RST Net: %.1f, MDI-DF: %.1f\n", s1.summary.master_health, s1.predictive.rst_network_s,
@@ -88,7 +88,7 @@ int main() {
     }
     h->last_pat_ns = h->last_pmt_ns = now;
     h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
-    h->stc_drift_slope = 1.0;
+    h->stc_slope_q64 = (int128_t)1 << 64;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &s1);
     printf("   Health: %.1f, RST Net: %.1f, MDI-DF: %.1f\n", s1.summary.master_health, s1.predictive.rst_network_s,
