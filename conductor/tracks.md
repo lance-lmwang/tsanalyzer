@@ -1,8 +1,8 @@
-# TsAnalyzer Project Tracks Registry
+# Project Tracks
 
-This file registers all active engineering tracks for the TsAnalyzer and TsPacer gateway.
+This file tracks all major tracks for the project. Each track has its own detailed plan in its respective folder.
 
-| Track ID | Title | Status | Link |
-| :--- | :--- | :--- | :--- |
-| `metrology-2.0` | Professional P1/P2 Metrology | COMPLETED | [Done] |
-| `expert-analysis` | Deep ES & T-STD Buffer Modeling | IN_PROGRESS | [Index](./tracks/expert-analysis/index.md) |
+---
+
+- [ ] **Track: Docs Alignment (First 10 Documents)**
+  *Link: [./tracks/docs_alignment_20260228/](./tracks/docs_alignment_20260228/)*
