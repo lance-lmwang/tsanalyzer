@@ -41,7 +41,7 @@ int main() {
     }
     h->seen_pat = h->seen_pmt = true;
     h->last_pat_ns = h->last_pmt_ns = now;
-    h->pid_eb_fill_double[0x0100] = 50000000;
+    h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
     h->stc_drift_slope = 1.0;
 
     tsa_commit_snapshot(h, now);
@@ -67,7 +67,7 @@ int main() {
         cc = (cc + 1) & 0x0F;
     }
     h->last_pat_ns = h->last_pmt_ns = now;
-    h->pid_eb_fill_double[0x0100] = 50000000;
+    h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
     h->stc_drift_slope = 1.0;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &s1);
@@ -87,7 +87,7 @@ int main() {
         cc = (cc + 1) & 0x0F;
     }
     h->last_pat_ns = h->last_pmt_ns = now;
-    h->pid_eb_fill_double[0x0100] = 50000000;
+    h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
     h->stc_drift_slope = 1.0;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &s1);

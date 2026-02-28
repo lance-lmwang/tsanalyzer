@@ -10,11 +10,28 @@
 typedef __int128_t int128_t;
 typedef int128_t q64_64;
 
+#define Q_SHIFT 64
 #define TO_Q64_64(x) ((q64_64)((x) * (double)((int128_t)1 << 64)))
 #define FROM_Q64_64(x) ((double)(x) / (double)((int128_t)1 << 64))
+#define INT_TO_Q64_64(x) ((int128_t)(x) << 64)
+
+#define Q32_SHIFT 32
+typedef int64_t q32_32;
+#define TO_Q32_32(x) ((q32_32)((x) * 4294967296.0))
+#define FROM_Q32_32(x) ((double)(x) / 4294967296.0)
+#define INT_TO_Q32_32(x) ((int64_t)(x) << 32)
 
 #define NS_PER_SEC 1000000000ULL
-#define Q_SHIFT 64
+
+typedef uint64_t stc_27m_t;
+
+typedef struct {
+    stc_27m_t dts;
+    stc_27m_t pts;
+    size_t size;
+    uint64_t arrival_vstc;
+    uint16_t pid;
+} ts_access_unit_t;
 
 typedef struct {
     uint64_t sys_ns;
@@ -32,9 +49,9 @@ void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t sz);
 void ts_pcr_window_destroy(ts_pcr_window_t* w);
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t sys, uint64_t pcr, uint64_t off);
 
-/* FIX: Match test case signature q64_64* (int128_t*) slope */
+/* Updated signature for determinism: use int64_t for peak_acc in ns */
 int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* slope, int128_t* intercept,
-                          double* peak_accuracy_ns);
+                          int64_t* peak_accuracy_ns);
 
 #define MAX_PROGRAMS 16
 #define MAX_STREAMS_PER_PROG 32
@@ -51,16 +68,26 @@ typedef struct {
     ts_stream_info_t streams[MAX_STREAMS_PER_PROG];
 } ts_program_info_t;
 
+typedef enum {
+    TSA_STATUS_VALID = 0,
+    TSA_STATUS_DEGRADED = 1,
+    TSA_STATUS_INVALID = 2
+} tsa_measurement_status_t;
+
 struct tsa_handle {
     tsa_config_t config;
 
     alignas(64) uint64_t start_ns;
+    bool engine_started;
     uint64_t last_pat_ns;
     uint64_t last_pmt_ns;
     uint64_t last_snap_ns;
 
+    tsa_measurement_status_t pid_status[TS_PID_MAX];
+
     bool seen_pat, seen_pmt;
     bool signal_lock;
+    int last_trigger_reason;
     uint64_t last_forensic_alarm_count;
     uint32_t consecutive_sync_errors;
     uint32_t consecutive_good_syncs;
@@ -69,7 +96,7 @@ struct tsa_handle {
     uint64_t last_pcr_ticks;
     uint64_t last_pcr_arrival_ns;
     uint64_t pkts_since_pcr;
-    double pcr_jitter_sq_sum_ns;
+    int128_t pcr_jitter_sq_sum_ns;
     uint64_t pcr_jitter_count;
     ts_pcr_window_t pcr_window;
 
@@ -78,14 +105,13 @@ struct tsa_handle {
     tsa_tr101290_stats_t prev_snap_base;
     tsa_srt_stats_t srt_live;
 
-    /* FIX: Use anonymous union to support both pid_eb_fill_bytes and pid_eb_fill_double */
-    union {
-        double pid_eb_fill_bytes[TS_PID_MAX];
-        double pid_eb_fill_double[TS_PID_MAX];
-    };
-    double pid_tb_fill_bytes[TS_PID_MAX];
-    double pid_mb_fill_bytes[TS_PID_MAX];
-    uint64_t last_eb_leak_ns[TS_PID_MAX];
+    q32_32 pcr_ema_alpha_q32;
+
+    /* Fixed-point Buffer Simulation (Q64.64) */
+    int128_t pid_eb_fill_q64[TS_PID_MAX];
+    int128_t pid_tb_fill_q64[TS_PID_MAX];
+    int128_t pid_mb_fill_q64[TS_PID_MAX];
+    uint64_t last_buffer_leak_vstc[TS_PID_MAX];
 
     // PID State Tracking
     double pid_bitrate_ema[TS_PID_MAX];
@@ -142,6 +168,21 @@ struct tsa_handle {
     size_t pool_offset;
     size_t pool_size;
 };
+
+/* Stage-specific processing for multithreaded pipeline */
+typedef struct {
+    uint16_t pid;
+    uint8_t pusi;
+    uint8_t af_len;
+    bool has_payload;
+    int payload_len;
+    uint8_t cc;
+    bool has_discontinuity;
+} ts_decode_result_t;
+
+void tsa_decode_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
+void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
+void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, const ts_decode_result_t* res);
 
 /* --- TS Packet Flags --- */
 #define TS_AF_FLAG 0x20

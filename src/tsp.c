@@ -156,14 +156,14 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
 
             if (h->last_pcr_val_tx != INVALID_PCR && pcr_val > h->last_pcr_val_tx) {
                 uint64_t dt_pcr_ns = (pcr_val - h->last_pcr_val_tx) * 1000 / 27;
-                uint64_t db_bytes = ((head + i) * TS_PACKET_SIZE) - h->byte_offset_base;
+                uint64_t db_bytes = ((head + i + 1) * TS_PACKET_SIZE) - h->byte_offset_base;
                 if (dt_pcr_ns > 0) {
                     uint64_t br = (db_bytes * 8 * 1000000000ULL) / dt_pcr_ns;
                     atomic_store(&h->detected_bitrate, br);
                 }
             }
             h->last_pcr_val_tx = pcr_val;
-            h->byte_offset_base = (head + i) * TS_PACKET_SIZE;
+            h->byte_offset_base = (head + i + 1) * TS_PACKET_SIZE;
         } else {
             // Fallback: Use system time if no PCR present
             struct timespec ts;

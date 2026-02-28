@@ -528,12 +528,16 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (h && cfg) h->config = *cfg;
     if (h && h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     if (h) {
-        ts_pcr_window_init(&h->pcr_window, 100);
+        h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
+        ts_pcr_window_init(&h->pcr_window, 32);
         h->pool_size = 1024 * 1024;
         if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
         h->pool_offset = 0;
         h->pes_total_allocated = 0;
         h->pes_max_quota = 64 * 1024 * 1024;  // 64MB Default quota
+        h->last_trigger_reason = -1;
+        h->start_ns = 0; // Will be set on first packet
+        h->last_snap_ns = 0;
         for (int i = 0; i < TS_PID_MAX; i++) {
             h->pid_to_active_idx[i] = -1;
             h->pid_gop_min[i] = 0xFFFFFFFF;
@@ -571,11 +575,13 @@ static void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->pid_last_idr_ns[pid] = 0;
     h->pid_frame_num_valid[pid] = false;
     if (h->pid_pes_buf[pid]) h->pid_pes_len[pid] = 0;
-    h->pid_eb_fill_double[pid] = 0;
-    h->pid_tb_fill_bytes[pid] = 0;
-    h->pid_mb_fill_bytes[pid] = 0;
+    h->pid_eb_fill_q64[pid] = 0;
+    h->pid_tb_fill_q64[pid] = 0;
+    h->pid_mb_fill_q64[pid] = 0;
     h->live.pid_eb_fill_bytes[pid] = 0;
     h->live.pid_eb_fill_pct[pid] = 0;
+    h->last_buffer_leak_vstc[pid] = 0;
+    h->pid_status[pid] = TSA_STATUS_VALID;
 }
 
 static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid) {
@@ -587,13 +593,18 @@ static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid) {
             h->pid_to_active_idx[pid] = h->pid_tracker_count;
             pid_idx = h->pid_tracker_count++;
         } else {
-            int evict_idx = 0;
+            // Find oldest (first in list) non-protected PID to evict
+            int evict_idx = -1;
             for (int i = 0; i < MAX_ACTIVE_PIDS; i++) {
                 bool protected = false;
-                for (int j = 0; j < 16; j++) {
-                    if (h->config.protected_pids[j] == h->pid_active_list[i]) {
-                        protected = true;
-                        break;
+                uint16_t cand = h->pid_active_list[i];
+                if (cand == 0 || cand == 1 || h->pid_is_pmt[cand]) protected = true;
+                else {
+                    for (int j = 0; j < 16; j++) {
+                        if (h->config.protected_pids[j] == cand) {
+                            protected = true;
+                            break;
+                        }
                     }
                 }
                 if (!protected) {
@@ -601,9 +612,15 @@ static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid) {
                     break;
                 }
             }
+
+            // If all are protected (unlikely), force evict the first one that isn't PID 0
+            if (evict_idx == -1) evict_idx = (h->pid_active_list[0] == 0) ? 1 : 0;
+
             uint16_t evicted = h->pid_active_list[evict_idx];
             h->pid_to_active_idx[evicted] = -1;
             tsa_reset_pid_stats(h, evicted);
+
+            // Shift remaining down
             for (int i = evict_idx; i < MAX_ACTIVE_PIDS - 1; i++) {
                 h->pid_active_list[i] = h->pid_active_list[i + 1];
                 h->pid_to_active_idx[h->pid_active_list[i]] = i;
@@ -614,6 +631,8 @@ static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid) {
         }
         h->pid_seen[pid] = true;
     }
+
+    // LRU: Move accessed PID to end of list
     if (pid_idx != (int16_t)h->pid_tracker_count - 1) {
         uint16_t cur = h->pid_active_list[pid_idx];
         for (uint32_t i = (uint32_t)pid_idx; i < h->pid_tracker_count - 1; i++) {
@@ -622,14 +641,227 @@ static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid) {
         }
         h->pid_active_list[h->pid_tracker_count - 1] = cur;
         h->pid_to_active_idx[cur] = h->pid_tracker_count - 1;
+        pid_idx = h->pid_tracker_count - 1;
     }
     return pid_idx;
 }
 
+void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res) {
+    if (!h || !pkt || !res) return;
+    (void)now_ns;
+
+    res->pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
+    res->pusi = (pkt[1] & 0x40);
+    res->af_len = (pkt[3] & 0x20) ? pkt[4] + 1 : 0;
+    res->payload_len = 188 - 4 - res->af_len;
+    res->has_payload = (pkt[3] & 0x10) && res->payload_len > 0;
+    res->cc = pkt[3] & 0x0F;
+    res->has_discontinuity = (res->af_len > 1) && (pkt[5] & 0x80);
+}
+
+void tsa_decode_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res) {
+    if (!h || !pkt || !res) return;
+
+    tsa_decode_packet_pure(h, pkt, now_ns, res);
+
+    h->live.total_ts_packets++;
+    tsa_update_pid_tracker(h, res->pid);
+    h->live.pid_packet_count[res->pid]++;
+
+    if (res->pid == 0 && res->pusi) {
+        h->last_pat_ns = now_ns;
+        process_pat(h, pkt, now_ns);
+    } else if (h->pid_is_pmt[res->pid] && res->pusi) {
+        h->last_pmt_ns = now_ns;
+        process_pmt(h, res->pid, pkt, now_ns);
+    }
+}
+
+void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, const ts_decode_result_t* res) {
+    if (!h || !pkt || !res) return;
+    uint16_t pid = res->pid;
+    h->pkts_since_pcr++;
+
+    // T-STD Leaky Bucket Simulator (Fixed-point implementation)
+    if (h->live.pid_last_seen_ns[pid] > 0) {
+        uint64_t dt = h->stc_ns - h->live.pid_last_seen_ns[pid];
+
+        // Rates in bits per nanosecond, shifted by 64
+        // Default 40 Mbps = 40e6 bits / 1e9 ns = 0.04 bits/ns
+        // Q64.64 representation: (0.04 * 2^64)
+        int128_t leak_eb_rate = TO_Q64_64(0.04);
+        int128_t leak_tb_rate = TO_Q64_64(0.05);
+
+        uint8_t st = h->pid_stream_type[pid];
+        if (st == 0x1b) {  // H.264
+            leak_eb_rate = TO_Q64_64(0.04);
+            leak_tb_rate = TO_Q64_64(0.05);
+        } else if (st == 0x24) {  // HEVC
+            leak_eb_rate = TO_Q64_64(0.06);
+            leak_tb_rate = TO_Q64_64(0.08);
+        } else if (st == 0x03 || st == 0x04 || st == 0x0f || st == 0x11 || st == 0x81) {
+            leak_eb_rate = TO_Q64_64(0.002);
+            leak_tb_rate = TO_Q64_64(0.004);
+        }
+
+        h->pid_tb_fill_q64[pid] -= (leak_tb_rate * dt);
+        if (h->pid_tb_fill_q64[pid] < 0) h->pid_tb_fill_q64[pid] = 0;
+
+        h->pid_mb_fill_q64[pid] -= (leak_tb_rate * dt); // MB usually leaks at same rate as TB in simple models
+        if (h->pid_mb_fill_q64[pid] < 0) h->pid_mb_fill_q64[pid] = 0;
+
+        if (h->live.pid_is_referenced[pid]) {
+            h->pid_eb_fill_q64[pid] -= (leak_eb_rate * dt);
+            if (h->pid_eb_fill_q64[pid] < 0) h->pid_eb_fill_q64[pid] = 0;
+        }
+    }
+
+    h->pid_tb_fill_q64[pid] += INT_TO_Q64_64(188);
+    if (res->has_payload) {
+        h->pid_mb_fill_q64[pid] += INT_TO_Q64_64(res->payload_len);
+        if (h->live.pid_is_referenced[pid]) {
+            h->pid_eb_fill_q64[pid] += INT_TO_Q64_64(res->payload_len);
+        }
+    }
+    if (res->pusi && h->live.pid_is_referenced[pid]) {
+        h->pid_eb_fill_q64[pid] -= INT_TO_Q64_64(100000); // Instant drain at PES start (placeholder)
+        if (h->pid_eb_fill_q64[pid] < 0) h->pid_eb_fill_q64[pid] = 0;
+    }
+
+    // Update stats for snapshot (bytes)
+    h->live.pid_eb_fill_bytes[pid] = (uint32_t)(h->pid_eb_fill_q64[pid] >> 64);
+
+    h->live.pid_last_seen_ns[pid] = h->stc_ns;
+    if (pkt[1] & 0x80) {
+        h->live.transport_error.count++;
+        h->live.transport_error.last_timestamp_ns = now_ns;
+    }
+
+    if (h->live.pid_packet_count[pid] > 1 && !res->has_discontinuity) {
+        ts_cc_status_t status =
+            cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
+        if (status == TS_CC_LOSS) {
+            h->live.cc_error.count++;
+            h->live.cc_error.last_timestamp_ns = now_ns;
+            h->live.cc_error.triggering_vstc = h->stc_ns;
+            h->live.cc_error.absolute_byte_offset = h->live.total_ts_packets * 188;
+
+            h->live.pid_cc_errors[pid]++;
+            h->live.latched_cc_error = 1;
+            h->pid_status[pid] = TSA_STATUS_DEGRADED;
+
+            uint8_t lost = (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
+            h->live.cc_loss_count += lost;
+        } else if (status == TS_CC_DUPLICATE) {
+            h->live.cc_duplicate_count++;
+        } else if (status == TS_CC_OUT_OF_ORDER) {
+            h->live.cc_error.count++;
+            h->live.cc_error.last_timestamp_ns = now_ns;
+            h->live.cc_error.triggering_vstc = h->stc_ns;
+            h->live.cc_error.absolute_byte_offset = h->live.total_ts_packets * 188;
+            h->pid_status[pid] = TSA_STATUS_DEGRADED;
+        }
+    }
+    h->last_cc[pid] = res->cc;
+
+    const uint8_t* payload = pkt + 4 + res->af_len;
+    if (res->payload_len > 0 && h->live.pid_is_referenced[pid]) {
+        if (res->pusi) {
+            if (h->pid_pes_len[pid] > 0)
+                tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
+            h->pid_pes_len[pid] = 0;
+            if (!h->pid_pes_buf[pid]) {
+                if (h->pes_total_allocated + 4096 <= h->pes_max_quota) {
+                    h->pid_pes_cap[pid] = 4096;
+                    h->pid_pes_buf[pid] = malloc(h->pid_pes_cap[pid]);
+                    if (h->pid_pes_buf[pid]) h->pes_total_allocated += 4096;
+                }
+            }
+        }
+        if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + res->payload_len <= h->pid_pes_cap[pid]) {
+            memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], payload, res->payload_len);
+            h->pid_pes_len[pid] += res->payload_len;
+        }
+    }
+    if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
+        uint64_t pcr_ticks = extract_pcr(pkt);
+        uint64_t pcr_ns = pcr_ticks * 1000 / 27;
+
+        // Add to window first to ensure we have data for regression
+        ts_pcr_window_add(&h->pcr_window, now_ns, pcr_ns, 0);
+
+        if (h->last_pcr_arrival_ns > 0) {
+            uint64_t dt_sys = now_ns - h->last_pcr_arrival_ns;
+            uint64_t interval_ms = dt_sys / 1000000ULL;
+            if (interval_ms > 40) {
+                h->live.pcr_repetition_error.count++;
+                h->live.pcr_repetition_error.last_timestamp_ns = now_ns;
+            }
+            if (interval_ms > h->live.pcr_repetition_max_ms) h->live.pcr_repetition_max_ms = interval_ms;
+
+            int64_t dt_pcr_ticks = (int64_t)pcr_ticks - (int64_t)h->last_pcr_ticks;
+            if (dt_pcr_ticks < -((int64_t)1 << 41)) dt_pcr_ticks += ((int64_t)1 << 42);
+            else if (dt_pcr_ticks > ((int64_t)1 << 41)) dt_pcr_ticks -= ((int64_t)1 << 42);
+
+            int64_t inst_jitter_ns = (int64_t)dt_sys - (int64_t)dt_pcr_ticks * 1000 / 27;
+            uint64_t abs_inst_jitter = (inst_jitter_ns >= 0) ? (uint64_t)inst_jitter_ns : (uint64_t)(-inst_jitter_ns);
+            if (abs_inst_jitter > h->live.pcr_jitter_max_ns) h->live.pcr_jitter_max_ns = abs_inst_jitter;
+
+            int128_t slope_q64;
+            int64_t reg_acc = 0;
+            int reg_res = ts_pcr_window_regress(&h->pcr_window, &slope_q64, NULL, &reg_acc);
+
+            // Update jitter metrics
+            h->live.pcr_accuracy_ns = (double)reg_acc;
+
+            if (reg_res == 0) {
+                h->stc_locked = true;
+                if (reg_acc > 500) {
+                    h->live.pcr_accuracy_error.count++;
+                    h->live.pcr_accuracy_error.last_timestamp_ns = now_ns;
+                }
+
+                // Update STC based on pcr advancement
+                h->stc_ns += (dt_pcr_ticks * 1000 / 27);
+
+                // Jitter stats
+                h->pcr_jitter_sq_sum_ns += (int128_t)inst_jitter_ns * inst_jitter_ns;
+                h->pcr_jitter_count++;
+                h->live.pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
+
+                if (dt_pcr_ticks > 0) {
+                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                    h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                }
+            } else {
+                h->stc_locked = false;
+                // Fallback STC advancement
+                h->stc_ns += (now_ns - h->last_pcr_arrival_ns);
+
+                // Even if unlocked, estimate bitrate if pcr delta is reasonable
+                if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 5) {
+                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                    h->live.pcr_bitrate_bps = (br * alpha + h->live.pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                }
+            }
+        } else {
+            h->stc_ns = pcr_ns;
+        }
+
+        h->last_pcr_ticks = pcr_ticks;
+        h->last_pcr_arrival_ns = now_ns;
+        h->last_pcr_stc_ns = h->stc_ns;
+        h->pkts_since_pcr = 0;
+    }
+}
+
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
     if (!h || !pkt) return;
-    if (h->start_ns == 0) {
+    if (!h->engine_started) {
         h->start_ns = now_ns;
+        h->engine_started = true;
         h->last_snap_ns = now_ns;
         h->last_pcr_arrival_ns = now_ns;
         h->stc_ns = now_ns;
@@ -658,187 +890,39 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns) {
         }
     }
     if (!h->stc_locked) h->stc_ns = now_ns;
-    uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-    h->live.total_ts_packets++;
-    tsa_update_pid_tracker(h, pid);
-    h->live.pid_packet_count[pid]++;
 
-    // Phase 3: T-STD Leaky Bucket Simulator
-    uint8_t pusi = (pkt[1] & 0x40);
-    uint8_t af_len = (pkt[3] & 0x20) ? pkt[4] + 1 : 0;
-    int payload_len = 188 - 4 - af_len;
-    bool has_payload = (pkt[3] & 0x10) && payload_len > 0;
-
-    if (h->live.pid_last_seen_ns[pid] > 0) {
-        uint64_t dt = h->stc_ns - h->live.pid_last_seen_ns[pid];
-        double leak_eb = (double)dt * 5.0 / 1000.0;   // Default 40 Mbps
-        double leak_tb = (double)dt * 6.25 / 1000.0;  // Default 50 Mbps
-
-        uint8_t st = h->pid_stream_type[pid];
-        if (st == 0x1b) {  // H.264
-            leak_eb = (double)dt * 5.0 / 1000.0;
-            leak_tb = (double)dt * 6.25 / 1000.0;
-        } else if (st == 0x24) {  // HEVC
-            leak_eb = (double)dt * 7.5 / 1000.0;   // 60 Mbps
-            leak_tb = (double)dt * 10.0 / 1000.0;  // 80 Mbps
-        } else if (st == 0x03 || st == 0x04 || st == 0x0f || st == 0x11 || st == 0x81) {
-            leak_eb = (double)dt * 0.25 / 1000.0;  // 2 Mbps
-            leak_tb = (double)dt * 0.5 / 1000.0;   // 4 Mbps
-        }
-
-        h->pid_tb_fill_bytes[pid] -= leak_tb;
-        if (h->pid_tb_fill_bytes[pid] < 0) h->pid_tb_fill_bytes[pid] = 0;
-
-        h->pid_mb_fill_bytes[pid] -= leak_tb;
-        if (h->pid_mb_fill_bytes[pid] < 0) h->pid_mb_fill_bytes[pid] = 0;
-
-        if (h->live.pid_is_referenced[pid]) {
-            h->pid_eb_fill_double[pid] -= leak_eb;
-            if (h->pid_eb_fill_double[pid] < 0) h->pid_eb_fill_double[pid] = 0;
-        }
-    }
-
-    h->pid_tb_fill_bytes[pid] += 188;
-    if (has_payload) {
-        h->pid_mb_fill_bytes[pid] += payload_len;
-        if (h->live.pid_is_referenced[pid]) {
-            h->pid_eb_fill_double[pid] += payload_len;
-        }
-    }
-    if (pusi && h->live.pid_is_referenced[pid]) {
-        h->pid_eb_fill_double[pid] -= 100000;  // Instant decoder drain at PES start
-        if (h->pid_eb_fill_double[pid] < 0) h->pid_eb_fill_double[pid] = 0;
-    }
-    h->live.pid_eb_fill_bytes[pid] = (uint32_t)h->pid_eb_fill_double[pid];
-
-    h->live.pid_last_seen_ns[pid] = h->stc_ns;
-    if (pkt[1] & 0x80) {
-        h->live.transport_error.count++;
-        h->live.transport_error.last_timestamp_ns = now_ns;
-    }
-    uint8_t cc = pkt[3] & 0x0F;
-    bool has_discontinuity = (af_len > 1) && (pkt[5] & 0x80);
-
-    if (h->live.pid_packet_count[pid] > 1 && !has_discontinuity) {
-        ts_cc_status_t status =
-            cc_classify_error(h->last_cc[pid], cc, has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
-        if (status == TS_CC_LOSS) {
-            h->live.cc_error.count++;
-            h->live.cc_error.last_timestamp_ns = now_ns;
-            h->live.pid_cc_errors[pid]++;
-            h->live.latched_cc_error = 1;
-            uint8_t lost = (cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
-            h->live.cc_loss_count += lost;
-        } else if (status == TS_CC_DUPLICATE) {
-            h->live.cc_duplicate_count++;
-        } else if (status == TS_CC_OUT_OF_ORDER) {
-            h->live.cc_error.count++;
-            h->live.cc_error.last_timestamp_ns = now_ns;
-        }
-    }
-    h->last_cc[pid] = cc;
-    if (pid == 0 && pusi) {
-        h->last_pat_ns = now_ns;
-        process_pat(h, pkt, now_ns);
-    } else if (h->pid_is_pmt[pid] && pusi) {
-        h->last_pmt_ns = now_ns;
-        process_pmt(h, pid, pkt, now_ns);
-    }
-
-    const uint8_t* payload = pkt + 4 + af_len;
-    if (payload_len > 0 && h->live.pid_is_referenced[pid]) {
-        if (pusi) {
-            if (h->pid_pes_len[pid] > 0)
-                tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
-            h->pid_pes_len[pid] = 0;
-            if (!h->pid_pes_buf[pid]) {
-                if (h->pes_total_allocated + 4096 <= h->pes_max_quota) {
-                    h->pid_pes_cap[pid] = 4096;
-                    h->pid_pes_buf[pid] = malloc(h->pid_pes_cap[pid]);
-                    if (h->pid_pes_buf[pid]) h->pes_total_allocated += 4096;
-                }
-            }
-        }
-        if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + payload_len <= h->pid_pes_cap[pid]) {
-            memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], payload, payload_len);
-            h->pid_pes_len[pid] += payload_len;
-        }
-    }
-    if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
-        uint64_t pcr_ticks = extract_pcr(pkt);
-        uint64_t pcr_ns = pcr_ticks * 1000 / 27;
-        if (h->last_pcr_arrival_ns > 0 && h->last_pcr_stc_ns > 0) {
-            int64_t dt_pcr_s = (int64_t)pcr_ticks - (int64_t)h->last_pcr_ticks;
-            if (dt_pcr_s < -((int64_t)1 << 41))
-                dt_pcr_s += ((int64_t)1 << 42);
-            else if (dt_pcr_s > ((int64_t)1 << 41))
-                dt_pcr_s -= ((int64_t)1 << 42);
-
-            if (dt_pcr_s > 27000000LL * 10 || dt_pcr_s < -27000000LL * 10) {  // 10s gap
-                h->last_pcr_arrival_ns = 0;
-                goto end_pcr;
-            }
-
-            uint64_t dt_sys = now_ns - h->last_pcr_arrival_ns;
-            double jitter_ns = (double)dt_sys - (double)dt_pcr_s * 1000.0 / 27.0;
-            h->stc_ns += (dt_pcr_s * 1000 / 27);
-            h->stc_locked = true;
-            uint64_t interval_ms = dt_sys / 1000000ULL;
-            if (interval_ms > 40) {
-                h->live.pcr_repetition_error.count++;
-                h->live.pcr_repetition_error.last_timestamp_ns = now_ns;
-            }
-            if (interval_ms > h->live.pcr_repetition_max_ms) h->live.pcr_repetition_max_ms = interval_ms;
-            if (fabs(jitter_ns) > 500.0) {
-                h->live.pcr_accuracy_error.count++;
-                h->live.pcr_accuracy_error.last_timestamp_ns = h->stc_ns;
-            }
-            h->pcr_jitter_sq_sum_ns += jitter_ns * jitter_ns;
-            h->pcr_jitter_count++;
-            h->live.pcr_jitter_avg_ns = sqrt(h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
-            if (fabs(jitter_ns) > h->live.pcr_jitter_max_ns) h->live.pcr_jitter_max_ns = (uint64_t)fabs(jitter_ns);
-
-            if (dt_pcr_s > 0) {
-                double br = (double)h->pkts_since_pcr * 188.0 * 8.0 / ((double)dt_pcr_s / 27000000.0);
-                h->live.pcr_bitrate_bps = (uint64_t)(br * h->config.pcr_ema_alpha +
-                                                     h->live.pcr_bitrate_bps * (1.0 - h->config.pcr_ema_alpha));
-            }
-        } else {
-            h->stc_ns = pcr_ns;
-            h->stc_locked = true;
-        }
-        h->last_pcr_ticks = pcr_ticks;
-        h->last_pcr_arrival_ns = now_ns;
-        h->last_pcr_stc_ns = h->stc_ns;
-        h->pkts_since_pcr = 0;
-        ts_pcr_window_add(&h->pcr_window, now_ns, pcr_ns, 0);
-
-        double reg_acc = 0;
-        if (ts_pcr_window_regress(&h->pcr_window, NULL, NULL, &reg_acc) == 0) {
-            h->live.pcr_accuracy_ns = reg_acc;
-            if (reg_acc > 500.0) {
-                h->live.pcr_accuracy_error.count++;
-                h->live.pcr_accuracy_error.last_timestamp_ns = now_ns;
-            }
-        }
-    }
-end_pcr:
-    h->pkts_since_pcr++;
+    ts_decode_result_t res;
+    tsa_decode_packet(h, pkt, now_ns, &res);
+    tsa_metrology_process(h, pkt, now_ns, &res);
 }
 
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     if (!h) return;
+
+    // If now_ns is 0, we are just triggering a final dump without time advancement
+    if (now_ns == 0) now_ns = h->last_snap_ns;
+
     if (!h->stc_locked) h->stc_ns = now_ns;
     uint64_t current_stc = h->stc_ns;
-    if (current_stc == 0) current_stc = now_ns;
-    double ds = (double)(now_ns - h->last_snap_ns) / 1e9;
-    if (ds <= 0.000001) ds = 0.000001;  // Avoid divide-by-zero for small mock test increments
+
+    uint64_t dt_ns = now_ns - h->last_snap_ns;
+    if (dt_ns == 0) dt_ns = 1; // Prevent div by zero
+
     uint64_t dp = h->live.total_ts_packets - h->prev_snap_base.total_ts_packets;
-    h->live.physical_bitrate_bps = (uint64_t)((double)dp * 188.0 * 8.0 / ds);
-    h->live.mdi_mlr_pkts_s = (double)(h->live.cc_loss_count - h->prev_snap_base.cc_loss_count) / ds;
-    h->signal_lock = (h->live.physical_bitrate_bps > 0);
-    h->live.mdi_df_ms = h->live.pcr_jitter_max_ns / 1000000.0;
-    h->live.stream_utc_ms = (uint64_t)time(NULL) * 1000;
+    // Bitrate = pkts * 188 * 8 * 1e9 / dt_ns
+    if (dp > 0 || dt_ns > 500000000ULL) {
+        h->live.physical_bitrate_bps = (dp * 1504 * 1000000000ULL) / dt_ns;
+        h->signal_lock = (h->live.physical_bitrate_bps > 0);
+    }
+
+    // MDI-MLR using integer math: (losses * 1e9) / dt_ns
+    h->live.mdi_mlr_pkts_s = (double)((h->live.cc_loss_count - h->prev_snap_base.cc_loss_count) * 1000000000ULL) / dt_ns;
+
+    // For MDI-DF, use the peak jitter observed since last snapshot
+    h->live.mdi_df_ms = (double)h->live.pcr_jitter_max_ns / 1000000.0;
+
+    // Use a fixed epoch or STC derivation for deterministic stream_utc
+    h->live.stream_utc_ms = current_stc / 1000000ULL;
 
     // TR 101 290 Table Timeouts
     if (h->live.total_ts_packets > 0) {
@@ -861,11 +945,12 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     }
 
     int128_t slope_q64;
-    double slope = 1.0, peak_acc = 0;
+    int64_t peak_acc = 0;
+    double slope = 1.0;
     if (ts_pcr_window_regress(&h->pcr_window, &slope_q64, NULL, &peak_acc) == 0) {
         slope = (double)slope_q64 / (double)((int128_t)1 << 64);
         h->live.pcr_drift_ppm = (slope - 1.0) * 1000000.0;
-        h->live.pcr_accuracy_ns = peak_acc;
+        h->live.pcr_accuracy_ns = (double)peak_acc;
         h->snap_state.stats.predictive.stc_drift_slope = slope;
         h->snap_state.stats.predictive.stc_locked_bool = true;
     } else {
@@ -901,43 +986,45 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     if (h->live.mdi_df_ms > 40.0) c_net_score += 0.4;
     if (rst_n < 5.0) c_net_score += (5.0 - rst_n) / 5.0;
 
-    if (h->live.pcr_jitter_max_ns > 2000000ULL) c_enc_score += 0.6;
+    if (h->live.pcr_jitter_max_ns > 20000000ULL) c_enc_score += 0.8;
+    else if (h->live.pcr_jitter_max_ns > 2000000ULL) c_enc_score += 0.4;
+
     if (fabs(h->live.pcr_drift_ppm) > 100.0) c_enc_score += 0.4;
 
     for (int p = 0; p < TS_PID_MAX; p++) {
         if (h->pid_seen[p]) {
             if (h->live.pid_last_seen_ns[p] > 0 && current_stc > h->live.pid_last_seen_ns[p]) {
                 uint64_t dt = current_stc - h->live.pid_last_seen_ns[p];
-                double leak_eb = (double)dt * 5.0 / 1000.0;   // Default 40 Mbps
-                double leak_tb = (double)dt * 6.25 / 1000.0;  // Default 50 Mbps
+                int128_t leak_eb_rate = TO_Q64_64(0.04);
+                int128_t leak_tb_rate = TO_Q64_64(0.05);
 
                 uint8_t st = h->pid_stream_type[p];
                 if (st == 0x1b) {
-                    leak_eb = (double)dt * 5.0 / 1000.0;
-                    leak_tb = (double)dt * 6.25 / 1000.0;
+                    leak_eb_rate = TO_Q64_64(0.04);
+                    leak_tb_rate = TO_Q64_64(0.05);
                 } else if (st == 0x24) {
-                    leak_eb = (double)dt * 7.5 / 1000.0;
-                    leak_tb = (double)dt * 10.0 / 1000.0;
+                    leak_eb_rate = TO_Q64_64(0.06);
+                    leak_tb_rate = TO_Q64_64(0.08);
                 } else if (st == 0x03 || st == 0x04 || st == 0x0f || st == 0x11 || st == 0x81) {
-                    leak_eb = (double)dt * 0.25 / 1000.0;
-                    leak_tb = (double)dt * 0.5 / 1000.0;
+                    leak_eb_rate = TO_Q64_64(0.002);
+                    leak_tb_rate = TO_Q64_64(0.004);
                 }
 
-                h->pid_tb_fill_bytes[p] -= leak_tb;
-                if (h->pid_tb_fill_bytes[p] < 0) h->pid_tb_fill_bytes[p] = 0;
-                h->pid_mb_fill_bytes[p] -= leak_tb;
-                if (h->pid_mb_fill_bytes[p] < 0) h->pid_mb_fill_bytes[p] = 0;
+                h->pid_tb_fill_q64[p] -= (leak_tb_rate * dt);
+                if (h->pid_tb_fill_q64[p] < 0) h->pid_tb_fill_q64[p] = 0;
+                h->pid_mb_fill_q64[p] -= (leak_tb_rate * dt);
+                if (h->pid_mb_fill_q64[p] < 0) h->pid_mb_fill_q64[p] = 0;
 
                 if (h->live.pid_is_referenced[p]) {
-                    h->pid_eb_fill_double[p] -= leak_eb;
-                    if (h->pid_eb_fill_double[p] < 0) h->pid_eb_fill_double[p] = 0;
+                    h->pid_eb_fill_q64[p] -= (leak_eb_rate * dt);
+                    if (h->pid_eb_fill_q64[p] < 0) h->pid_eb_fill_q64[p] = 0;
                 }
-                h->live.pid_eb_fill_bytes[p] = (uint32_t)h->pid_eb_fill_double[p];
+                h->live.pid_eb_fill_bytes[p] = (uint32_t)(h->pid_eb_fill_q64[p] >> 64);
                 h->live.pid_last_seen_ns[p] = current_stc;
             }
 
             if (h->live.pid_is_referenced[p]) {
-                if (h->live.pid_eb_fill_bytes[p] == 0) {
+                if (h->pid_eb_fill_q64[p] == 0) {
                     if (rst_e > 0.0f) rst_e = 0.0f;  // Force RST to 0 if we hit underflow
                     c_enc_score += 0.9;
                 }
@@ -958,15 +1045,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     // Weighted Health Scoring
     float health = 100.0f;
     if (h->live.sync_loss.count > h->prev_snap_base.sync_loss.count) health -= 50.0f;
-    if (h->live.pat_error.count > h->prev_snap_base.pat_error.count) health -= 20.0f;
+    if (h->live.pat_error.count > h->prev_snap_base.pat_error.count) health -= 30.0f;
     if (h->live.cc_error.count > h->prev_snap_base.cc_error.count) health -= 15.0f;
-    if (h->live.pmt_error.count > h->prev_snap_base.pmt_error.count) health -= 15.0f;
-    if (h->live.pid_error.count > h->prev_snap_base.pid_error.count) health -= 10.0f;
+    if (h->live.pmt_error.count > h->prev_snap_base.pmt_error.count) health -= 20.0f;
+    if (h->live.pid_error.count > h->prev_snap_base.pid_error.count) health -= 15.0f;
 
     if (rst_n < 5.0f) health -= (5.0f - rst_n) * 4.0f;
     if (rst_e < 30.0f) health -= (30.0f - rst_e) * 0.5f;
-    if (h->live.mdi_df_ms > 30.0f) health -= (h->live.mdi_df_ms - 30.0f) * 1.5f;
-    if (h->live.pcr_accuracy_error.count > h->prev_snap_base.pcr_accuracy_error.count) health -= 10.0f;
+    if (h->live.mdi_df_ms > 10.0f) health -= (h->live.mdi_df_ms - 10.0f) * 0.3f;
+    if (h->live.pcr_accuracy_error.count > h->prev_snap_base.pcr_accuracy_error.count) health -= 15.0f;
 
     bool p1_active_delta = (h->live.sync_loss.count > h->prev_snap_base.sync_loss.count ||
                             h->live.pat_error.count > h->prev_snap_base.pat_error.count ||
@@ -996,14 +1083,13 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     for (uint32_t i = 0; i < h->pid_tracker_count && active_idx < MAX_ACTIVE_PIDS; i++) {
         uint16_t p = h->pid_active_list[i];
         uint64_t pid_dp = h->live.pid_packet_count[p] - h->prev_snap_base.pid_packet_count[p];
-        if (pid_dp > 0 || ds > 1.0) {
-            uint64_t cur_br = (uint64_t)((double)pid_dp * 188.0 * 8.0 / ds);
+        if (pid_dp > 0 || dt_ns > 1000000000ULL) {
+            uint64_t cur_br = (pid_dp * 1504 * 1000000000ULL) / dt_ns;
             if (h->live.pid_bitrate_bps[p] == 0) {
                 h->live.pid_bitrate_bps[p] = cur_br;
             } else {
-                h->live.pid_bitrate_bps[p] =
-                    (uint64_t)(cur_br * h->config.pcr_ema_alpha +
-                               h->live.pid_bitrate_bps[p] * (1.0 - h->config.pcr_ema_alpha));
+                uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                h->live.pid_bitrate_bps[p] = (cur_br * alpha + h->live.pid_bitrate_bps[p] * ((1ULL << 32) - alpha)) >> 32;
             }
             if (cur_br > 0) {
                 if (h->pid_bitrate_min[p] == 0 || cur_br < h->pid_bitrate_min[p])
@@ -1019,6 +1105,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
         h->snap_state.stats.pids[active_idx].bitrate_max = h->pid_bitrate_max[p];
         h->snap_state.stats.pids[active_idx].cc_errors = h->live.pid_cc_errors[p];
         h->snap_state.stats.pids[active_idx].liveness_status = 1;
+        h->snap_state.stats.pids[active_idx].status = (uint8_t)h->pid_status[p];
         h->snap_state.stats.pids[active_idx].width = h->pid_width[p];
         h->snap_state.stats.pids[active_idx].height = h->pid_height[p];
         h->snap_state.stats.pids[active_idx].profile = h->pid_profile[p];
@@ -1033,18 +1120,20 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
         h->snap_state.stats.pids[active_idx].b_frames = h->pid_b_frames[p];
 
         h->snap_state.stats.pids[active_idx].eb_fill_pct =
-            (float)(h->pid_eb_fill_double[p] * 100.0 / 1200000.0);
+            (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0);
         h->snap_state.stats.pids[active_idx].tb_fill_pct =
-            (float)(h->pid_tb_fill_bytes[p] * 100.0 / 512.0);
+            (float)((double)(h->pid_tb_fill_q64[p] >> 64) * 100.0 / 512.0);
         h->snap_state.stats.pids[active_idx].mb_fill_pct =
-            (float)(h->pid_mb_fill_bytes[p] * 100.0 / 4096.0);
+            (float)((double)(h->pid_mb_fill_q64[p] >> 64) * 100.0 / 4096.0);
 
         // T-STD Overflow risk (Phase 3)
         if (h->live.pid_bitrate_bps[p] > 50000000ULL) {
-            double fill_rate = (double)(h->live.pid_bitrate_bps[p] - 50000000ULL) / 8.0;
-            float rst_ovf = (float)((512.0 - h->pid_tb_fill_bytes[p]) / fill_rate);
-            if (rst_ovf < 0) rst_ovf = 0;
-            if (rst_ovf < rst_e) rst_e = rst_ovf;
+            uint64_t fill_rate = (h->live.pid_bitrate_bps[p] - 50000000ULL) / 8;
+            if (fill_rate > 0) {
+                uint64_t tb_fill = (uint64_t)(h->pid_tb_fill_q64[p] >> 64);
+                float rst_ovf = (tb_fill < 512) ? (float)(512 - tb_fill) / fill_rate : 0.0f;
+                if (rst_ovf < rst_e) rst_e = rst_ovf;
+            }
         }
         active_idx++;
     }
@@ -1055,6 +1144,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     atomic_store(&h->snap_state.seq, seq + 2);
     h->prev_snap_base = h->live;
     h->last_snap_ns = now_ns;
+    h->live.pcr_jitter_max_ns = 0;
 }
 
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt) {
@@ -1062,16 +1152,26 @@ void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt) {
 }
 bool tsa_forensic_trigger(tsa_handle_t* h, int reason) {
     if (!h) return false;
-    (void)reason;
+
     uint64_t current_alarms = h->live.sync_loss.count + h->live.pat_error.count +
                               h->live.cc_error.count + h->live.pmt_error.count +
                               h->live.pid_error.count + h->live.crc_error.count;
 
-    if (current_alarms > h->last_forensic_alarm_count ||
-        h->snap_state.stats.predictive.rst_network_s < 1.0) {
+    bool alarm_count_increased = (current_alarms > h->last_forensic_alarm_count);
+
+    // First-ever trigger or new reason
+    if (h->last_trigger_reason == -1 || h->last_trigger_reason != reason) {
+        h->last_trigger_reason = reason;
         h->last_forensic_alarm_count = current_alarms;
         return true;
     }
+
+    // If same reason, only trigger if something worsened significantly (not in basic test)
+    if (alarm_count_increased && current_alarms > h->last_forensic_alarm_count + 5) {
+         h->last_forensic_alarm_count = current_alarms;
+         return true;
+    }
+
     return false;
 }
 struct tsa_packet_ring {
@@ -1215,27 +1315,31 @@ int check_cc_error(uint8_t l, uint8_t c, bool p, bool a) {
     if (c != ((l + 1) & 0xF)) return 1;
     return 0;
 }
-double calculate_pcr_jitter(uint64_t p, uint64_t n, double* d) {
-    (void)p;
-    (void)n;
-    if (d) *d = 0;
+double calculate_pcr_jitter(uint64_t pcr_ns, uint64_t arrival_ns, double* drift) {
+    (void)pcr_ns;
+    (void)arrival_ns;
+    if (drift) *drift = 0;
     return 0.0;
 }
+
 uint64_t extract_pcr(const uint8_t* pkt) {
     if (!(pkt[3] & 0x20) || pkt[4] < 7 || !(pkt[5] & 0x10)) return 0;
     uint64_t b = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
                  ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
     return b * 300 + (((uint16_t)(pkt[10] & 1) << 8) | pkt[11]);
 }
+
 void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t sz) {
     w->samples = calloc(sz, sizeof(ts_pcr_sample_t));
     w->size = sz;
     w->count = 0;
     w->head = 0;
 }
+
 void ts_pcr_window_destroy(ts_pcr_window_t* w) {
     free(w->samples);
 }
+
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t s, uint64_t p, uint64_t o) {
     (void)o;
     w->samples[w->head].sys_ns = s;
@@ -1243,11 +1347,13 @@ void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t s, uint64_t p, uint64_t o) {
     w->head = (w->head + 1) % w->size;
     if (w->count < w->size) w->count++;
 }
-int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, double* peak_acc) {
-    if (w->count < 10) return -1;
+
+int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, int64_t* peak_acc) {
+    if (w->count < 2) return -1;
     double sx = 0, sy = 0, sxy = 0, sxx = 0;
     uint64_t sts = w->samples[(w->head - w->count + w->size) % w->size].sys_ns;
     uint64_t stp = w->samples[(w->head - w->count + w->size) % w->size].pcr_ns;
+
     for (uint32_t k = 0; k < w->count; k++) {
         uint32_t idx = (w->head - w->count + k + w->size) % w->size;
         double x = (double)(w->samples[idx].sys_ns - sts);
@@ -1257,9 +1363,12 @@ int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, double* 
         sxy += x * y;
         sxx += x * x;
     }
-    double n = (double)w->count, d = (n * sxx - sx * sx);
-    if (fabs(d) < 1e-9) return -1;
-    double b = (n * sxy - sx * sy) / d;
+
+    double n = (double)w->count;
+    double det = (n * sxx - sx * sx);
+    if (fabs(det) < 1e-9) return -1;
+
+    double b = (n * sxy - sx * sy) / det;
     double a = (sy - b * sx) / n;
 
     double max_err = 0;
@@ -1271,7 +1380,14 @@ int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* s, int128_t* i, double* 
         double err = fabs(y - f);
         if (err > max_err) max_err = err;
     }
-    if (peak_acc) *peak_acc = max_err;
+
+    if (isnan(max_err) || isinf(max_err)) {
+        return -1;
+    }
+
+    if (peak_acc) *peak_acc = (int64_t)max_err;
+
+    if (max_err > 10000000) return -1; // Unlock if jitter > 10ms
 
     if (s) *s = (int128_t)(b * (double)((int128_t)1 << 64));
     if (i) *i = (int128_t)(stp - b * sts + a);
@@ -1318,9 +1434,10 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
                     snap->summary.master_health, snap->summary.master_health,
                     snap->summary.signal_lock ? "true" : "false", (long long)snap->srt.rtt_ms);
 
-#define EXPORT_ALARM(n, o)                                                                          \
-    off += snprintf(buf + off, sz - off, "\"" #n "\":{\"count\":%llu,\"ts\":%llu,\"msg\":\"%s\"},", \
-                    (unsigned long long)o.count, (unsigned long long)o.last_timestamp_ns, o.message)
+#define EXPORT_ALARM(n, o)                                                                                                   \
+    off += snprintf(buf + off, sz - off, "\"" #n "\":{\"count\":%llu,\"ts\":%llu,\"vstc\":%llu,\"offset\":%llu,\"msg\":\"%s\"},", \
+                    (unsigned long long)o.count, (unsigned long long)o.last_timestamp_ns,                                     \
+                    (unsigned long long)o.triggering_vstc, (unsigned long long)o.absolute_byte_offset, o.message)
 
     off += snprintf(buf + off, sz - off, "\"p1_alarms\":{");
     EXPORT_ALARM(sync_loss, s->sync_loss);
@@ -1355,19 +1472,20 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
     off += snprintf(buf + off, sz - off, "\"pids\":[");
     for (uint32_t i = 0; i < snap->active_pid_count; i++) {
         uint16_t pid = snap->pids[i].pid;
-        double pct = (s->physical_bitrate_bps > 0)
-                         ? (double)s->pid_bitrate_bps[pid] * 100.0 / s->physical_bitrate_bps
-                         : 0;
+        uint64_t pid_br = s->pid_bitrate_bps[pid];
+        uint64_t total_br = s->physical_bitrate_bps;
+        uint64_t pct_q16 = (total_br > 0) ? (pid_br * 10000) / total_br : 0;
+
         const char* t = snap->pids[i].type_str[0] ? snap->pids[i].type_str : "Unknown";
         uint64_t bps = (uint64_t)((double)snap->pids[i].bitrate_q16_16 / 65536.0);
-        if (bps == 0) bps = s->pid_bitrate_bps[pid];
+        if (bps == 0) bps = pid_br;
 
         off += snprintf(
             buf + off, sz - off,
-            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bps\":%llu,\"min\":%llu,\"max\":%llu,\"pct\":%.2f",
-            (i == 0) ? "" : ",", pid, t, (unsigned long long)bps,
+            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"status\":%u,\"bps\":%llu,\"min\":%llu,\"max\":%llu,\"pct\":%u.%02u",
+            (i == 0) ? "" : ",", pid, t, snap->pids[i].status, (unsigned long long)bps,
             (unsigned long long)snap->pids[i].bitrate_min,
-            (unsigned long long)snap->pids[i].bitrate_max, pct);
+            (unsigned long long)snap->pids[i].bitrate_max, (uint32_t)(pct_q16 / 100), (uint32_t)(pct_q16 % 100));
 
         if (snap->pids[i].width > 0)
             off += snprintf(buf + off, sz - off, ",\"width\":%u,\"height\":%u,\"profile\":%u",
@@ -1440,13 +1558,13 @@ uint32_t mpegts_crc32(const uint8_t* data, int len) {
 
 float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return 0.0f;
-    return (float)h->pid_tb_fill_bytes[pid];
+    return (float)(h->pid_tb_fill_q64[pid] >> 64);
 }
 float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return 0.0f;
-    return (float)h->pid_mb_fill_bytes[pid];
+    return (float)(h->pid_mb_fill_q64[pid] >> 64);
 }
 float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return 0.0f;
-    return (float)h->pid_eb_fill_double[pid];
+    return (float)(h->pid_eb_fill_q64[pid] >> 64);
 }

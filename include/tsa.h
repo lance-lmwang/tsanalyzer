@@ -9,13 +9,15 @@
 #define TS_PACKET_SIZE 188
 #define TS_SYNC_BYTE 0x47
 #define TS_PID_MAX 8192
-#define MAX_ACTIVE_PIDS 256
+#define MAX_ACTIVE_PIDS 128
 
 typedef struct tsa_handle tsa_handle_t;
 
 typedef struct {
     uint64_t count;
     uint64_t last_timestamp_ns;
+    uint64_t triggering_vstc;
+    uint64_t absolute_byte_offset;
     char message[128];
 } tsa_alarm_t;
 
@@ -102,6 +104,7 @@ typedef struct {
         uint64_t bitrate_max;
         uint64_t cc_errors;
         uint8_t liveness_status;
+        uint8_t status;
         uint16_t width;
         uint16_t height;
         uint8_t profile;
@@ -120,9 +123,17 @@ typedef struct {
     } pids[MAX_ACTIVE_PIDS];
 } tsa_snapshot_full_t;
 
+typedef enum {
+    TSA_MODE_LIVE = 0,
+    TSA_MODE_REPLAY = 1,
+    TSA_MODE_FORENSIC = 2,
+    TSA_MODE_CERTIFICATION = 3
+} tsa_op_mode_t;
+
 typedef struct {
     char input_label[32];
     bool is_live;
+    tsa_op_mode_t op_mode;
     double pcr_ema_alpha;
     bool enable_forensics;
     uint64_t forced_cbr_bitrate;

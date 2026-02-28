@@ -102,6 +102,7 @@ void test_stc_jitter_stability() {
         tsa_process_packet(h, pkt, now_ns);
         if (i % 10 == 0) tsa_commit_snapshot(h, now_ns);
     }
+    tsa_commit_snapshot(h, start_ns + 299 * 100000000ULL);
 
     tsa_take_snapshot_full(h, &snap);
     printf("Status after recovery: %s\n", snap.predictive.stc_locked_bool ? "Locked" : "Unlocked");

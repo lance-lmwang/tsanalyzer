@@ -17,7 +17,7 @@ set(USE_STATIC_LIBSTDCXX ON CACHE BOOL "Use static libstdc++ for air-gapped depl
 add_subdirectory(deps/srt)
 include_directories(include deps/mongoose deps/srt/srtcore ${CMAKE_CURRENT_BINARY_DIR}/deps/srt)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c)
 target_link_libraries(tsp_core srt_static pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
@@ -57,6 +57,10 @@ target_link_libraries(tsp tsp_core pthread)
 add_executable(test_server_hpc tests/test_server_hpc.c)
 target_link_libraries(test_server_hpc tsp_core pthread)
 add_test(NAME test_server_hpc COMMAND test_server_hpc)
+
+add_executable(test_spsc_queue tests/test_spsc_queue.c)
+target_link_libraries(test_spsc_queue tsp_core pthread)
+add_test(NAME test_spsc_queue COMMAND test_spsc_queue)
 
 add_executable(test_spsc tests/test_spsc.c)
 target_link_libraries(test_spsc tsp_core pthread)
