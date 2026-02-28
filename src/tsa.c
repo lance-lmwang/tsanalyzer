@@ -1289,7 +1289,7 @@ void tsa_forensic_generate_json(tsa_handle_t* h, char* b, size_t s) {
     int off = 0;
     off += snprintf(
         b + off, s - off,
-        "{\"engine_version\":\"2.0\",\"state_hash\":\"%016llx\",\"load_pct\":0.5,\"processing_latency_us\":10,",
+        "{\"engine_version\":\"2.0.0-stable\",\"state_hash\":\"%016llx\",\"load_pct\":0.5,\"processing_latency_us\":10,",
         (unsigned long long)h->live.total_ts_packets);
     off += snprintf(b + off, s - off, "\"incident_ts\":%llu,", (unsigned long long)time(NULL));
     off += snprintf(b + off, s - off, "\"rca_scores\":{\"network\":%.1f,\"encoder\":%.1f},",
