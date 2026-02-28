@@ -30,10 +30,27 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_pat_error%s %llu\n", labels, (unsigned long long)s->pat_error.count);
         off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_cc_error%s %llu\n", labels, (unsigned long long)s->cc_error.count);
 
+        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid, (unsigned long long)s->sync_loss.count);
+        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid, (unsigned long long)s->pat_error.count);
+        off += snprintf(buf + off, sz - off, "tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid, (unsigned long long)s->cc_error.count);
+
+        // Compatibility names for older tests
+        off += snprintf(buf + off, sz - off, "tsa_continuity_errors_total%s %llu\n", labels, (unsigned long long)s->cc_error.count);
+        off += snprintf(buf + off, sz - off, "tsa_sync_byte_errors_total%s %llu\n", labels, (unsigned long long)s->sync_byte_error.count);
+        off += snprintf(buf + off, sz - off, "tsa_pcr_jitter_ms%s %.3f\n", labels, s->pcr_jitter_avg_ns / 1000000.0);
+
+        // Document Aligned Metrics
+        off += snprintf(buf + off, sz - off, "tsa_sync_loss_errors%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
+        off += snprintf(buf + off, sz - off, "tsa_pat_error_count%s %llu\n", labels, (unsigned long long)s->pat_error.count);
+        off += snprintf(buf + off, sz - off, "tsa_pmt_error_count%s %llu\n", labels, (unsigned long long)s->pmt_error.count);
+        off += snprintf(buf + off, sz - off, "tsa_srt_rtt_ms%s %lld\n", labels, (long long)snap.srt.rtt_ms);
+
         // Tier 3: Analytics
         off += snprintf(buf + off, sz - off, "tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
         off += snprintf(buf + off, sz - off, "tsa_pcr_bitrate_bps%s %llu\n", labels, (unsigned long long)s->pcr_bitrate_bps);
         off += snprintf(buf + off, sz - off, "tsa_mdi_delay_factor_ms%s %.2f\n", labels, (float)s->mdi_df_ms);
+        off += snprintf(buf + off, sz - off, "tsa_essence_video_fps%s %.2f\n", labels, (float)s->video_fps);
+        off += snprintf(buf + off, sz - off, "tsa_essence_av_sync_ms%s %d\n", labels, s->av_sync_ms);
 
         // Tier 4: RST
         off += snprintf(buf + off, sz - off, "tsa_rst_network_seconds%s %.2f\n", labels, snap.predictive.rst_network_s);
@@ -41,7 +58,19 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         // PID Details
         for (int p = 0; p < TS_PID_MAX; p++) {
             if (s->pid_packet_count[p] > 0) {
-                off += snprintf(buf + off, sz - off, "tsa_pid_bitrate_bps{stream_id=\"%s\", pid=\"0x%04x\"} %llu\n", sid, p, (unsigned long long)s->pid_bitrate_bps[p]);
+                const char* t = snap.pids[p].type_str[0] ? snap.pids[p].type_str : "Unknown";
+                off += snprintf(buf + off, sz - off, "tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p, t, (unsigned long long)s->pid_bitrate_bps[p]);
+                off += snprintf(buf + off, sz - off, "tsa_pid_inventory_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p, t, (unsigned long long)s->pid_bitrate_bps[p]);
+
+                // Export GOP and Resolution for Video PIDs
+                if (snap.pids[p].width > 0) {
+                    off += snprintf(buf + off, sz - off, "tsa_video_width{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap.pids[p].width);
+                    off += snprintf(buf + off, sz - off, "tsa_video_height{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap.pids[p].height);
+                    if (snap.pids[p].gop_n > 0) {
+                        off += snprintf(buf + off, sz - off, "tsa_video_gop_n{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap.pids[p].gop_n);
+                        off += snprintf(buf + off, sz - off, "tsa_video_gop_ms{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap.pids[p].gop_ms);
+                    }
+                }
             }
         }
     }

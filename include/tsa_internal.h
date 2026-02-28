@@ -84,9 +84,13 @@ struct tsa_handle {
 
     // PID State Tracking
     double pid_bitrate_ema[TS_PID_MAX];
+    uint64_t pid_bitrate_min[TS_PID_MAX];
+    uint64_t pid_bitrate_max[TS_PID_MAX];
     uint8_t last_cc[TS_PID_MAX];
     bool pid_seen[TS_PID_MAX];
     bool pid_is_pmt[TS_PID_MAX];
+    uint32_t pid_tracker_count;
+    uint16_t pid_active_list[128]; // LRU tracker for active PIDs
 
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
@@ -98,6 +102,19 @@ struct tsa_handle {
     uint16_t pid_width[TS_PID_MAX];
     uint16_t pid_height[TS_PID_MAX];
     uint8_t pid_profile[TS_PID_MAX];
+    uint32_t pid_audio_sample_rate[TS_PID_MAX];
+    uint8_t pid_audio_channels[TS_PID_MAX];
+    uint8_t pid_log2_max_frame_num[TS_PID_MAX];
+    uint32_t pid_last_frame_num[TS_PID_MAX];
+    bool pid_frame_num_valid[TS_PID_MAX];
+
+    // GOP Tracking
+    uint32_t pid_gop_n[TS_PID_MAX];      // Current GOP frame count
+    uint32_t pid_last_gop_n[TS_PID_MAX]; // Result of last complete GOP
+    uint32_t pid_gop_min[TS_PID_MAX];
+    uint32_t pid_gop_max[TS_PID_MAX];
+    uint64_t pid_last_idr_ns[TS_PID_MAX];
+    uint32_t pid_gop_ms[TS_PID_MAX];
 
     alignas(64) struct {
         _Atomic uint32_t seq;
@@ -106,6 +123,12 @@ struct tsa_handle {
 
     alignas(64) double stc_drift_slope;
     bool stc_locked;
+    uint64_t stc_ns;             // PCR-driven System Time Clock
+    uint64_t last_pcr_stc_ns;    // STC at last PCR arrival
+
+    void* pool_base;
+    size_t pool_offset;
+    size_t pool_size;
 };
 
 /* --- TS Packet Flags --- */
@@ -149,6 +172,8 @@ int128_t ts_time_to_ns128(struct timespec ts);
 struct timespec ns128_to_timespec(int128_t ns);
 int128_t ts_now_ns128(void);
 
+void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len, uint64_t now_ns);
+const char* tsa_stream_type_to_str(uint8_t type);
 void tsa_export_pid_labels(tsa_metric_buffer_t* buf, tsa_handle_t* h, uint16_t pid);
 
 #endif

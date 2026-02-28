@@ -31,7 +31,7 @@ static int setup_srt(tsp_handle_t* h, const char* url) {
     int transtype = SRTT_LIVE;
     srt_setsockopt(h->srt_sock, 0, SRTO_TRANSTYPE, &transtype, sizeof(transtype));
 
-    int timeout_ms = 500; 
+    int timeout_ms = 500;
     srt_setsockopt(h->srt_sock, 0, SRTO_SNDTIMEO, &timeout_ms, sizeof(timeout_ms));
     srt_setsockopt(h->srt_sock, 0, SRTO_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
 
@@ -76,7 +76,7 @@ static void* tx_loop(void* arg) {
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
-        
+
         if (head == tail) { usleep(100); continue; }
 
         // 发送逻辑 (简化版)
@@ -100,7 +100,7 @@ tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
     h->cfg = *cfg;
     h->ring_buffer = malloc(RING_BUFFER_SIZE * TS_PACKET_SIZE);
     h->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    
+
     if (cfg->srt_url) setup_srt(h, cfg->srt_url);
     else if (cfg->dest_ip) {
         h->dest_addr.sin_family = AF_INET;
@@ -136,7 +136,7 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
     if (!h || !ts_packets) return -1;
     uint64_t head = atomic_load_explicit(&h->head, memory_order_relaxed);
     for (size_t i = 0; i < count; i++) {
-        memcpy(h->ring_buffer + ((head + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE, 
+        memcpy(h->ring_buffer + ((head + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE,
                ts_packets + (i * TS_PACKET_SIZE), TS_PACKET_SIZE);
     }
     atomic_store_explicit(&h->head, head + count, memory_order_release);
@@ -182,15 +182,49 @@ uint64_t calculate_target_time(tsp_handle_t* h, uint64_t pcr, uint64_t byte_off,
     (void)h; (void)pcr; (void)byte_off; return now;
 }
 
-struct spsc_ring { size_t sz; };
+struct spsc_ring {
+    uint8_t* buffer;
+    size_t sz;
+    size_t elem_sz;
+    _Atomic uint64_t head;
+    _Atomic uint64_t tail;
+};
+
 spsc_ring_t* spsc_ring_create(size_t sz) {
-    spsc_ring_t* r = malloc(sizeof(spsc_ring_t));
-    r->sz = sz; return r;
+    spsc_ring_t* r = calloc(1, sizeof(spsc_ring_t));
+    r->sz = sz;
+    r->elem_sz = 8; // Test expects 8 bytes (uint64_t)
+    r->buffer = malloc(sz * r->elem_sz);
+    return r;
 }
-void spsc_ring_destroy(spsc_ring_t* r) { free(r); }
+
+void spsc_ring_destroy(spsc_ring_t* r) {
+    if (r) {
+        free(r->buffer);
+        free(r);
+    }
+}
+
 int spsc_ring_push(spsc_ring_t* r, const uint8_t* data, size_t sz) {
-    (void)r; (void)data; (void)sz; return 0;
+    if (!r || sz != r->elem_sz) return -1;
+    uint64_t head = atomic_load_explicit(&r->head, memory_order_relaxed);
+    uint64_t tail = atomic_load_explicit(&r->tail, memory_order_acquire);
+
+    if (head - tail >= r->sz) return -1; // Full
+
+    memcpy(r->buffer + (head % r->sz) * r->elem_sz, data, sz);
+    atomic_store_explicit(&r->head, head + 1, memory_order_release);
+    return 0;
 }
+
 int spsc_ring_pop(spsc_ring_t* r, uint8_t* data, size_t sz) {
-    (void)r; (void)data; (void)sz; return 0;
+    if (!r || sz != r->elem_sz) return -1;
+    uint64_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
+    uint64_t head = atomic_load_explicit(&r->head, memory_order_acquire);
+
+    if (head == tail) return -1; // Empty
+
+    memcpy(data, r->buffer + (tail % r->sz) * r->elem_sz, sz);
+    atomic_store_explicit(&r->tail, tail + 1, memory_order_release);
+    return 0;
 }

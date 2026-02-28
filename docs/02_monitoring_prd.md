@@ -35,7 +35,22 @@ To ensure 100% consistency across backend, API, and frontend implementations, th
 
 ---
 
-## 2. Metric Layers (The "Five Tiers")
+## 2. Hierarchical Monitoring Strategy
+
+TsAnalyzer Pro implements a tiered data architecture to optimize for both **Instant Forensics** and **Scalable Observability**.
+
+| Tier | Focus | Key Metrics | Data Format |
+| :--- | :--- | :--- | :--- |
+| **Kernel/Forensic** | Real-time capturing and historical extrema tracking. | `bitrate_min/max`, `gop_min/max`, detailed error messages. | Internal C Structs / JSON API |
+| **Observability/TSDB** | Long-term trend analysis and visual correlation. | Instantaneous values (current bitrate, current gop_n). | Prometheus Exporter |
+
+### 2.1 The "No-Static-Lines" Principle
+We avoid exporting long-term historical extrema (like `global_min_bitrate`) to Prometheus to prevent "Static Line Pollution" in TSDB.
+- **Rule**: Prometheus only receives instantaneous observations.
+- **Analytics**: Historical ranges in Grafana are calculated dynamically using functions like `min_over_time(metric[range])`.
+- **CLI Exception**: In CLI mode, since no database is present, the tool extracts `min/max` directly from the Kernel Tier to provide an immediate summary report.
+
+## 3. Metric Layers (The "Five Tiers")
 
 ### Tier 0: Global Fleet Triage (Fleet Grid)
 - **Goal**: High-density triage of 1000+ streams.

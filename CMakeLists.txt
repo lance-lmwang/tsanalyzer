@@ -378,3 +378,7 @@ add_test(NAME test_bitrate_comparison COMMAND test_bitrate_comparison)
 add_executable(test_debounce tests/test_debounce.c)
 target_link_libraries(test_debounce tsp_core pthread m)
 add_test(NAME test_debounce COMMAND test_debounce)
+
+add_executable(test_es_deep_analysis tests/test_es_deep_analysis.c)
+target_link_libraries(test_es_deep_analysis tsp_core pthread m)
+add_test(NAME test_es_deep_analysis COMMAND test_es_deep_analysis)

@@ -78,9 +78,36 @@ int main(int argc, char** argv) {
             uint64_t p2_total = s->transport_error.count + s->crc_error.count +
                                 s->pcr_repetition_error.count + s->pcr_accuracy_error.count;
 
-            printf("\r[PKTS: %lu] BITRATE: %.2f Mbps | P1: %lu | P2: %lu | HEALTH: %.1f",
-                   count, (double)s->physical_bitrate_bps / 1e6,
-                   p1_total, p2_total, snap.predictive.master_health);
+            // Find primary video and stuffing info for CLI display
+            uint32_t w = 0, h = 0, gop = 0, g_min = 0, g_max = 0;
+            uint64_t v_br = 0, v_min = 0, v_max = 0;
+            double stuffing_pct = 0;
+            const char* profile = "";
+
+            for (int p=0; p<TS_PID_MAX; p++) {
+                if (snap.pids[p].width > 0 && w == 0) {
+                    w = snap.pids[p].width;
+                    h = snap.pids[p].height;
+                    gop = snap.pids[p].gop_n;
+                    g_min = snap.pids[p].gop_min;
+                    g_max = snap.pids[p].gop_max;
+                    v_br = (uint64_t)((double)snap.pids[p].bitrate_q16_16 / 65536.0);
+                    v_min = snap.pids[p].bitrate_min;
+                    v_max = snap.pids[p].bitrate_max;
+                    if (snap.pids[p].profile == 100) profile = "High";
+                    else if (snap.pids[p].profile == 77) profile = "Main";
+                    else if (snap.pids[p].profile == 66) profile = "Baseline";
+                }
+                if (p == 0x1FFF) {
+                    stuffing_pct = (s->physical_bitrate_bps > 0) ?
+                                   (double)s->pid_bitrate_bps[p] * 100.0 / (double)s->physical_bitrate_bps : 0;
+                }
+            }
+
+            printf("\r[PKTS: %lu] BITRATE: %.2f Mbps (Null: %.1f%%) | P1: %lu | VIDEO: %ux%u | V-BR: %.2f (%.2f-%.2f) Mbps | GOP: %u (%u-%u) | HEALTH: %.1f",
+                   count, (double)s->physical_bitrate_bps / 1e6, stuffing_pct,
+                   p1_total, w, h, (double)v_br / 1e6, (double)v_min / 1e6, (double)v_max / 1e6,
+                   gop, g_min, g_max, snap.predictive.master_health);
             fflush(stdout);
         }
     }

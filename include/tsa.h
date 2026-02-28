@@ -74,6 +74,7 @@ typedef struct {
 
 typedef struct {
     uint64_t total_packets;
+    uint64_t physical_bitrate_bps;
     bool signal_lock;
     float master_health;
     bool lid_active;
@@ -90,11 +91,19 @@ typedef struct {
         uint32_t pid;
         char type_str[16];
         int64_t bitrate_q16_16;
+        uint64_t bitrate_min;
+        uint64_t bitrate_max;
         uint64_t cc_errors;
         uint8_t liveness_status;
         uint16_t width;
         uint16_t height;  // Added for es_metadata test
         uint8_t profile;  // Added for es_metadata test
+        uint32_t audio_sample_rate;
+        uint8_t audio_channels;
+        uint32_t gop_n;
+        uint32_t gop_min;
+        uint32_t gop_max;
+        uint32_t gop_ms;
         float eb_fill_pct;
         float tb_fill_pct;
         float mb_fill_pct;

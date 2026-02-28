@@ -1,14 +1,14 @@
 # Implementation Plan: ES & T-STD Extension
 
 ## Phase 1: PES & NALU Foundation (The Scanner)
-- [ ] Implement a wait-free PES reassembler in `src/tsa.c`.
-- [ ] Integrate a lightweight NALU start-code scanner (`0x000001`).
-- [ ] Add `es_type` identification for H.264/H.265.
+- [x] Implement a wait-free PES reassembler in `src/tsa.c`.
+- [x] Integrate a lightweight NALU start-code scanner (`0x000001`).
+- [x] Add `es_type` identification for H.264/H.265.
 
 ## Phase 2: Content Metadata Extraction (The Brain)
-- [ ] Implement H.264 SPS/PPS parsing logic.
-- [ ] Add GOP structure tracking (detecting I, P, B frame sequences).
-- [ ] Export `width`, `height`, `fps`, and `gop_n` to the JSON API.
+- [x] Implement H.264 SPS/PPS parsing logic.
+- [x] Add GOP structure tracking (detecting I, P, B frame sequences).
+- [x] Export `width`, `height`, `fps`, and `gop_n` to the JSON API.
 
 ## Phase 3: T-STD Buffer Simulator (The Muscle)
 - [ ] Implement the leaky bucket algorithm for TB and MB stages.
