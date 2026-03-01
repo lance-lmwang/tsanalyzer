@@ -761,8 +761,13 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
     static uint64_t last_in_now = 0;
     static uint64_t sub_ns_off = 0;
     if (now_ns == last_in_now) {
-        // If packets arrive at same ns, spread them out based on 10Mbps pace (placeholder)
-        sub_ns_off += 150400; // ~150ns per packet
+        // If packets arrive at same ns, spread them out based on observed bitrate
+        uint64_t br = h->live->physical_bitrate_bps;
+        if (br < 1000000) br = 10000000; // Fallback to 10Mbps if not yet measured
+        
+        // 1 TS packet = 1504 bits. Gap in ns = 1504 * 1e9 / br
+        uint64_t gap_ns = (1504ULL * 1000000000ULL) / br;
+        sub_ns_off += gap_ns;
         now_ns += sub_ns_off;
     } else {
         last_in_now = now_ns;

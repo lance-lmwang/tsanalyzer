@@ -50,11 +50,29 @@ The following conversions are strictly FORBIDDEN to ensure determinism:
 Between valid PCR samples ($PCR_1$ at $HAT_1$ and $PCR_2$ at $HAT_2$):
 1.  **Interpolation Slope**: $STC_{rate} = (PCR_2 - PCR_1) / (HAT_2 - HAT_1)$
 2.  **Calculation**: Intermediate values derive solely from this linear relation.
-3.  **Rigor**: Must use **fixed-point arithmetic** and deterministic rounding to ensure bit-identical reconstruction across different CPU architectures.
+3.  **Rigor**: Uses **__int128 fixed-point arithmetic** to ensure overflow protection and bit-identical reconstruction across architectures.
 
 ---
 
-## 5. Temporal Discontinuities
+## 5. High-Precision Pacing Model (Pacer Side)
+
+TsAnalyzer's pacer (`tsp`) implements a **Hybrid Deterministic Scheduler**:
+- **Strategy**: Wait time > 2ms → `clock_nanosleep(TIMER_ABSTIME)`; Wait time < 2ms → `busy-wait + pause`.
+- **Clock Source**: `CLOCK_MONOTONIC` to ensure immunity to system time adjustments.
+- **Burst Control**: Token bucket depth is capped at **10ms** of bitrate traffic to suppress micro-bursts and preserve NIC buffer integrity.
+
+---
+
+## 6. Arrival Time Normalization (Analyzer Side)
+
+To eliminate artifacts from OS/NIC batching (where multiple packets arrive in a single nanosecond, especially on `localhost`):
+- **Dynamic Spreading**: The engine automatically spreads packets arriving at the same timestamp based on the **Instantaneous Physical Bitrate**.
+- **Calculation**: $Gap_{ns} = (Packet_{bits} * 1e9) / Bitrate_{bps}$.
+- **Effect**: Restores physical plausibility to IP-Jitter measurements by realigning the arrival axis with real-world transmission physics.
+
+---
+
+## 7. Temporal Discontinuities
 
 TsAnalyzer maintains a **Segmented Temporal Continuum**. Upon detecting a PCR reset, CC loss, or stream splice:
 - The current STC segment is closed.
@@ -63,7 +81,7 @@ TsAnalyzer maintains a **Segmented Temporal Continuum**. Upon detecting a PCR re
 
 ---
 
-## 6. Jitter Measurement Model
+## 8. Jitter Measurement Model
 
 Metrology distinguishes between three orthogonal jitter sources:
 - **Network Jitter**: Arrival instability (HAT variance).
@@ -72,13 +90,13 @@ Metrology distinguishes between three orthogonal jitter sources:
 
 ---
 
-## 7. Replay Temporal Equivalence
+## 9. Replay Temporal Equivalence
 
 Replay mode reuses recorded Hardware Timestamps and PCR observations. To the engine, **Live Time ≡ Replay Time**. No temporal recomputation is allowed during replay, ensuring that "Re-analyzing is Re-measuring."
 
 ---
 
-## 8. Temporal Invariants
+## 10. Temporal Invariants
 
 1. Arrival order defines causality.
 2. STC derives only from PCR.

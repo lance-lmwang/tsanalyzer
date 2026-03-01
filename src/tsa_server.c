@@ -40,8 +40,8 @@ static void *worker(void *arg) {
             int128_t now = ts_now_ns128();
             uint64_t now64 = (uint64_t)now;
             for (int i = 0; i < (int)len / 188; i++) {
-                // Increment timestamp slightly per packet in batch to help regress
-                tsa_process_packet(s->tsa, buf + (i * 188), now64 + (i * 10));
+                // Let tsa.c's metrology engine handle normalization for bulk packets
+                tsa_process_packet(s->tsa, buf + (i * 188), now64);
             }
             
             if (now64 - last_commit_ns > 1000000000ULL) {

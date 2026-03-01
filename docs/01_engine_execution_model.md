@@ -56,19 +56,21 @@ NIC RX Queue
 
 ---
 
-## 5. Memory Ownership Model
+## 5. Memory & Ownership Model
 
-### 5.1 Linear Ownership Rule
-Packet memory moves strictly: NIC DMA → RX Slot → Descriptor → Decode → Metrology → Serialization → Release.
-- **Copying**: Forbidden.
-- **Mutation**: Single-owner only.
-- **Back-reference**: Forbidden.
+### 5.1 Lean Handle Architecture (V2)
+To support massive concurrency (8+ streams) without risking stack overflow:
+- **Struct Slimming**: `tsa_handle_t` is reduced from >2.4MB to ~2KB.
+- **Heap-Resident State**: All PID-indexed arrays are dynamically allocated on the heap.
+- **Cache Alignment**: Descriptors and core counters are aligned to 64-byte cache-lines to prevent false sharing.
 
-### 5.2 Memory Wall
+### 5.2 Linear Ownership & NUMA Determinism
+- **Ownership**: Packet memory moves strictly from NIC DMA to Serialization via a single-owner functional pipeline.
+- **Affinity**: All runtime buffers SHALL be allocated on NIC-local NUMA nodes.
+- **Zero-Copy**: Data processing occurs in-place; shared mutable memory is strictly forbidden.
+
+### 5.3 Memory Wall
 After ownership transfer, the previous stage loses write permission logically. Packets SHALL NEVER cross stages bidirectionally, establishing a memory visibility wall.
-
-### 5.3 Cache & NUMA Determinism
-All runtime buffers SHALL be allocated on NIC-local NUMA nodes and remain CPU-local. Descriptors are aligned to 64-byte cache-line boundaries to prevent false sharing.
 
 ---
 

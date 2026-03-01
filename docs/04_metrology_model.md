@@ -40,7 +40,22 @@ TsAnalyzer unifies all analysis into four deterministic domains, all sharing the
 
 ---
 
-## 4. Measurement Causality Engine
+## 4. Measurement Precision & Stability (V2)
+
+### 4.1 128-bit Metrology Guard
+To support 100Gbps+ links and multi-day monitoring without numerical overflow:
+- **Intermediate Products**: $PCR \times Bitrate$ calculations use `__int128` to maintain full precision.
+- **Fixed-point Reconstruction**: All VBV simulations use **Q64.64** fixed-point math to ensure deterministic results across execution platforms.
+
+### 4.2 Adaptive PCR Lock: Fast Cold-start
+The V2 engine features a **Fast Cold-start** locking mechanism:
+- **Instantaneous Estimate**: Initial bitrate is estimated from the first two valid PCR pairs, bypassing long-term regression constraints.
+- **EMA Transition**: Smoothly transitions to Exponential Moving Average (EMA) filtering once the regression window matures, ensuring rapid metrics reporting (within <1s).
+- **Linear Regression**: A 32-sample sliding window uses linear regression to calculate **PCR-Accuracy** and **Drift (ppm)** with high statistical confidence.
+
+---
+
+## 5. Measurement Causality Engine
 
 A core invariant: **Every alarm MUST have a measurable physical cause.**
 TsAnalyzer records the full causal path:
@@ -48,14 +63,14 @@ TsAnalyzer records the full causal path:
 
 ---
 
-## 5. Traceability Contract
+## 6. Traceability Contract
 
 Each measurement reported by the engine is traceable down to the bit-level:
 **Output Metric → Simulation State → Access Unit → TS Packet → Absolute Byte Offset.**
 
 ---
 
-## 6. Forbidden Metrology Practices (Normative)
+## 7. Forbidden Metrology Practices (Normative)
 
 To preserve instrument integrity, the engine MUST NOT:
 1.  **Average away jitter**: Never smooth out transient physical violations.
@@ -65,7 +80,7 @@ To preserve instrument integrity, the engine MUST NOT:
 
 ---
 
-## 7. Instrument Identity
+## 8. Instrument Identity
 
 TsAnalyzer behaves as a **Software-Defined Measurement Instrument**. Its output is designed for:
 - Laboratory validation and encoder certification.

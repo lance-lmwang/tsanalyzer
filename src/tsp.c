@@ -44,25 +44,51 @@ static void* tx_loop(void* arg) {
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
     }
     uint64_t last_token_ns = 0; double tokens = 0;
+    const uint64_t BUSY_WAIT_THRESHOLD_NS = 2000000; // 2ms
+
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
-        if (head == tail) { usleep(100); continue; }
+        if (head == tail) { 
+            usleep(100); 
+            continue; 
+        }
 
-        struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
-        uint64_t now = (uint64_t)ts.tv_sec * 1e9 + ts.tv_nsec;
+        struct timespec ts_now;
+        clock_gettime(CLOCK_MONOTONIC, &ts_now);
+        uint64_t now = (uint64_t)ts_now.tv_sec * 1e9 + ts_now.tv_nsec;
         if (last_token_ns == 0) last_token_ns = now;
 
         uint64_t br = atomic_load(&h->detected_bitrate);
         if (br == 0) br = h->cfg.bitrate ? h->cfg.bitrate : 8000000;
 
+        // Token bucket: 1 token = 1 bit
         tokens += (double)(now - last_token_ns) * br / 1e9;
         last_token_ns = now;
-        if (tokens > (double)br * 0.01) tokens = (double)br * 0.01;
 
-        if (tokens < (TS_PACKET_SIZE * 8)) {
-            if (br > 50000000) __asm__ volatile("pause" ::: "memory");
-            else usleep(100);
+        // Cap bucket size to 10ms of traffic to prevent huge bursts after pauses
+        double max_tokens = (double)br * 0.01;
+        if (tokens > max_tokens) tokens = max_tokens;
+
+        uint64_t packet_bits = TS_PACKET_SIZE * 8;
+        if (tokens < (double)packet_bits) {
+            // Calculate time needed until we have enough tokens for one packet
+            double needed_bits = (double)packet_bits - tokens;
+            uint64_t wait_ns = (uint64_t)(needed_bits * 1e9 / br);
+
+            if (wait_ns >= BUSY_WAIT_THRESHOLD_NS) {
+                struct timespec ts_wait;
+                ts_wait.tv_sec = ts_now.tv_sec;
+                ts_wait.tv_nsec = ts_now.tv_nsec + wait_ns;
+                if (ts_wait.tv_nsec >= 1000000000L) {
+                    ts_wait.tv_sec++;
+                    ts_wait.tv_nsec -= 1000000000L;
+                }
+                clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_wait, NULL);
+            } else if (wait_ns > 500) {
+                // Short wait: busy-wait with pause to save power and be precise
+                for (int i = 0; i < 100; i++) __asm__ volatile("pause" ::: "memory");
+            }
             continue;
         }
 
@@ -70,7 +96,7 @@ static void* tx_loop(void* arg) {
         if (h->srt_enabled) srt_send(h->srt_sock, (const char*)pkt, TS_PACKET_SIZE);
         else sendto(h->fd, pkt, TS_PACKET_SIZE, 0, (struct sockaddr*)&h->dest_addr, sizeof(h->dest_addr));
         
-        tokens -= (TS_PACKET_SIZE * 8);
+        tokens -= (double)packet_bits;
         atomic_store_explicit(&h->tail, tail + 1, memory_order_release);
         atomic_fetch_add(&h->total_udp_packets, 1);
     }
