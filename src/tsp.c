@@ -50,6 +50,10 @@ static int setup_srt(tsp_handle_t* h, const char* url) {
     srt_setsockopt(h->srt_sock, 0, SRTO_TSBPDMODE, &tsbpd, sizeof(tsbpd));
     srt_setsockopt(h->srt_sock, 0, SRTO_TLPKTDROP, &tlpktdrop, sizeof(tlpktdrop));
 
+    int sync = 1;
+    srt_setsockopt(h->srt_sock, 0, SRTO_RCVSYN, &sync, sizeof(sync));
+    srt_setsockopt(h->srt_sock, 0, SRTO_SNDSYN, &sync, sizeof(sync));
+
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);

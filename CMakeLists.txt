@@ -46,6 +46,12 @@ if(NOT MSVC)
     target_compile_options(tsa_server PRIVATE -Wno-all -Wno-extra -Wno-error)
 endif()
 
+add_executable(tsa_server_pro src/tsa_server_pro.c src/tsa_exporter_prom.c deps/mongoose/mongoose.c)
+target_link_libraries(tsa_server_pro tsp_core srt_static pthread m dl ssl crypto)
+if(NOT MSVC)
+    target_compile_options(tsa_server_pro PRIVATE -Wno-all -Wno-extra -Wno-error)
+endif()
+
 add_executable(tsb src/tsb_main.c)
 target_link_libraries(tsb tsp_core pthread m dl)
 if(NOT MSVC)
