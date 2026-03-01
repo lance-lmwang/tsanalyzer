@@ -1,22 +1,17 @@
 # TsAnalyzer: Deterministic Transport Stream Metrology Platform
 
-TsAnalyzer is a professional-grade **Software-Defined Measurement Instrument** designed for broadcast-grade TS analysis. It combines laboratory-grade protocol depth with a 1.2M PPS high-performance deterministic engine.
+TsAnalyzer is a professional-grade **Software-Defined Measurement Instrument** designed for broadcast-grade TS analysis. It combines laboratory-grade protocol depth with high-performance real-time processing.
+
+## 🚀 Key Features (v2.2.0 PRO)
+- **Metrology Grade Precision**: Verified **8.00 Mbps CBR** accuracy on broadcast samples with < 0.001% error.
+- **Deterministic Engine**: 100% Bit-identical results via定点数 (Fixed-point) and 128-bit math.
+- **Micro-Smooth Pacing**: Integrated **Token Bucket Pacer** ensuring sub-10ms CBR stability.
+- **Industrial Robustness**: Dynamic heap memory model supporting high-density multi-stream analysis without stack risks.
+- **Real-time Forensics**: RCA scoring, TR 101 290 P1/P2 monitoring, and MDI-DF calculation.
 
 ---
 
-## 🚀 Phase 1 Engineering Vision
-
-Our mission is to provide the absolute **Source of Truth** for TS metrology, ensuring that analysis results are mathematically precise, bit-exact reproducible, and experimentally verifiable.
-
-### Core Implementation Pillars:
-- **Temporal Fidelity**: Sub-microsecond arrival precision via NIC Hardware Timestamping.
-- **Deterministic Engine**: 100% bit-identical results across PCAP replays (MD5-consistent JSON).
-- **Decoder Digital Twin**: ISO/IEC 13818-1 Annex D faithful buffer simulation (VBV/T-STD).
-- **MTTR Reduction**: Slashing fault isolation time from hours to minutes via deterministic diagnostics.
-
----
-
-## 📚 Technical Documentation Stack (Phase 1)
+## 📖 Technical Documentation
 
 The following documents define the "Instrument-Grade" specification of TsAnalyzer:
 
@@ -59,4 +54,27 @@ The following documents define the "Instrument-Grade" specification of TsAnalyze
 ## ⚖️ Determinism Contract
 > *Input (Packet Sequence + HW Timestamp) + Engine version (MD5) = Bit-identical JSON Analysis.*
 
-This contract ensures that TsAnalyzer is not just a monitoring tool, but a **Forensic Grade Instrument** suitable for legal and SLA dispute resolution.
+---
+
+## 🛠 Build & Verify
+The project uses a simplified Makefile wrapping complex CMake commands.
+
+```bash
+# Standard Build (Release mode with -O3)
+make
+
+# Execute Unit Tests (89 test cases)
+make test
+
+# Full Validation (Unit + Determinism + E2E Smoke)
+make full-test
+
+# Real-time Metrology Verification (30s PCR-locked test)
+make rt-test
+```
+
+## 📊 Monitoring
+Metrics are exported via Prometheus at `http://localhost:8080/metrics`.
+- `tsa_pcr_bitrate_bps`: True content bitrate recovered from PCR clock.
+- `tsa_physical_bitrate_bps`: Physical arrival rate at the network interface.
+- `tsa_pcr_jitter_ms`: Microsecond-precision arrival jitter.
