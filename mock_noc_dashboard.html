@@ -191,32 +191,40 @@
         ctx.setLineDash([]);
     }
 
-    function update() {
-        let lock=true, loss=0, rtt=32, retr=1.1, score=92, fps=25.0, gop=500, av=12, br_phys=8.2, br_pcr=8.1, rstn=18, rste=42, mdi=30;
-        if(selectedID === 8) { loss=45; score=42; lock=false; fps=12.5; rstn=2; mdi=260; }
-        
-        document.getElementById('lock-led').style.background = lock ? COLORS.OK : COLORS.ALARM;
-        document.getElementById('v-score').innerText = score;
-        document.getElementById('v-rtt').innerText = rtt;
-        document.getElementById('v-retr').innerText = retr;
-        document.getElementById('v-unr').innerText = loss;
-        document.getElementById('v-unr').style.color = loss > 0 ? COLORS.ALARM : COLORS.OK;
-        document.getElementById('v-fps').innerText = fps.toFixed(2);
-        document.getElementById('v-br').innerText = `${br_phys.toFixed(1)}M / ${br_pcr.toFixed(1)}M`;
+    async function update() {
+        try {
+            const resp = await fetch('http://localhost:8080/api/snapshot');
+            const data = await resp.json();
+            
+            const score = data.master_health || 0;
+            const bitrate = data.metrics.bitrate_bps / 1000000; // Mbps
+            const lock = score > 0;
 
-        history.fps.push(fps); history.gop.push(gop); history.av.push(av); history.br_phys.push(br_phys); history.br_pcr.push(br_pcr); history.mdi.push(mdi);
-        history.vid.push(br_phys * 0.88); history.aud.push(br_phys * 0.02);
-        Object.values(history).forEach(a => { if(a.length > MAX_DATA) a.shift(); });
+            document.getElementById('lock-led').style.background = lock ? COLORS.OK : COLORS.ALARM;
+            document.getElementById('lock-status').innerText = lock ? 'LOCKED' : 'SIGNAL LOSS';
+            document.getElementById('v-score').innerText = score.toFixed(0);
+            document.getElementById('v-br').innerText = `${bitrate.toFixed(1)}M / --M`;
 
-        drawSeries('c-fps', [{data:history.fps, color:COLORS.OK, range:30}], 30);
-        drawSeries('c-gop', [{data:history.gop, color:COLORS.WARN, range:1000}], 1000);
-        drawSeries('c-av', [{data:history.av, color:COLORS.CYAN, range:200}], 200, true);
-        drawSeries('c-br-comp', [{data:history.br_phys, color:COLORS.CYAN, range:12}, {data:history.br_pcr, color:'#FFF', range:12, dashed:true}], 12);
-        drawSeries('c-mdi', [{data:history.mdi, color:COLORS.ALARM, range:300}], 300);
-        drawSeries('c-pid-series', [{data:history.vid, color:COLORS.OK, range:10}, {data:history.aud, color:COLORS.WARN, range:10}], 10);
+            history.br_phys.push(bitrate);
+            if(history.br_phys.length > MAX_DATA) history.br_phys.shift();
+            
+            drawSeries('c-br-comp', [{data:history.br_phys, color:COLORS.CYAN, range:12}], 12);
 
-        const invList = document.getElementById('inv-list');
-        invList.innerHTML = `<tr><td>0x0100</td><td style="color:${COLORS.OK}">VID</td><td>${(br_phys*880).toFixed(0)}</td><td>88%</td></tr><tr><td>0x0101</td><td style="color:${COLORS.WARN}">AUD</td><td>${(br_phys*20).toFixed(0)}</td><td>2%</td></tr>`;
+            const invList = document.getElementById('inv-list');
+            invList.innerHTML = '';
+            if (data.pids) {
+                data.pids.forEach(p => {
+                    const row = document.createElement('tr');
+                    const br_kbps = (p.bps / 1000).toFixed(0);
+                    row.innerHTML = `<td>0x${p.pid.toString(16).padStart(4,'0')}</td><td style="color:${COLORS.CYAN}">${p.type}</td><td>${br_kbps}k</td><td>-</td>`;
+                    invList.appendChild(row);
+                });
+            }
+        } catch (e) {
+            console.error("Dashboard Sync Error:", e);
+            document.getElementById('lock-status').innerText = 'OFFLINE';
+            document.getElementById('lock-led').style.background = COLORS.ALARM;
+        }
     }
 
     setInterval(update, 1000);
