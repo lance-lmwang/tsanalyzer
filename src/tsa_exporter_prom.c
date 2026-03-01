@@ -95,7 +95,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
             const char* t = snap->pids[j].type_str[0] ? snap->pids[j].type_str : "Unknown";
             SAFE_APPEND("tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n",
                          sid, p, t, (unsigned long long)s->pid_bitrate_bps[p]);
-            
+
             if (snap->pids[j].width > 0) {
                 SAFE_APPEND("tsa_video_width{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap->pids[j].width);
                 SAFE_APPEND("tsa_video_height{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap->pids[j].height);

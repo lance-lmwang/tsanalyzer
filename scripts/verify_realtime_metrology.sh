@@ -27,7 +27,7 @@ SUCCESS_COUNT=0
 for i in {1..6}; do
     sleep 5
     METRICS=$(curl -s http://localhost:$PORT_API/metrics | grep 'stream_id="STR-1"' || true)
-    
+
     if [ -z "$METRICS" ]; then
         echo "[$((i*5+10))s] | Waiting... | -- | -- | ❌ NO DATA"
         continue
@@ -36,7 +36,7 @@ for i in {1..6}; do
     P_BPS=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | awk '{print $2}' || echo "0")
     C_BPS=$(echo "$METRICS" | grep "tsa_pcr_bitrate_bps" | awk '{print $2}' || echo "0")
     JITTER=$(echo "$METRICS" | grep "tsa_pcr_jitter_ms" | awk '{print $2}' || echo "0.0")
-    
+
     if [ "$C_BPS" == "0" ]; then
         echo "[$((i*5+10))s] | PCR NOT LOCKED | -- | $JITTER ms | ⚠️ LOCKING"
         continue
@@ -44,7 +44,7 @@ for i in {1..6}; do
 
     P_MBPS=$(echo "scale=2; $P_BPS / 1000000" | bc)
     C_MBPS=$(echo "scale=2; $C_BPS / 1000000" | bc)
-    
+
     J_STATUS="✅"
     if (( $(echo "$JITTER > 10.0" | bc -l) )); then J_STATUS="⚠️"; fi
 

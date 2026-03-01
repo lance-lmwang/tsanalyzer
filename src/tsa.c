@@ -424,12 +424,89 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     double cn = 0, ce = 0; if (h->live->mdi_mlr_pkts_s > 0) cn += 0.8; if (rn < 5.0) cn += (5.0 - rn) / 5.0; if (h->live->pcr_jitter_max_ns > 10000000ULL) ce += 0.8; else if (h->live->pcr_jitter_max_ns > 500000ULL) ce += 0.5; if (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count) ce += 0.4;
     for (int p = 0; p < TS_PID_MAX; p++) if (h->pid_seen[p] && h->pid_eb_fill_q64[p] == 0 && h->live->pid_is_referenced[p]) ce += 0.9;
     h->snap_state.stats->predictive.fault_domain = (cn > 0.6 && ce < 0.2) ? 1 : (ce > 0.6 && cn < 0.2) ? 2 : (cn > 0.4 && ce > 0.4) ? 3 : 0;
-    float he = 100.0f; if (!h->signal_lock) he = 0; else { if (rn < 5.0f) he -= (5.0f - rn) * 4.0f; if (re < 30.0f) he -= (30.0f - re) * 0.5f; } if (he < 0) he = 0;
-    uint32_t s = atomic_load(&h->snap_state.seq); atomic_store(&h->snap_state.seq, s + 1); h->snap_state.stats->predictive.master_health = he; h->snap_state.stats->summary.master_health = he; h->snap_state.stats->summary.total_packets = h->live->total_ts_packets; h->snap_state.stats->summary.signal_lock = h->signal_lock; h->snap_state.stats->summary.physical_bitrate_bps = h->live->physical_bitrate_bps; h->snap_state.stats->stats = *h->live;
-    uint32_t ai = 0; for (uint32_t i = 0; i < h->pid_tracker_count && ai < MAX_ACTIVE_PIDS; i++) {
-        uint16_t p = h->pid_active_list[i]; uint64_t pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p]; if (pd > 0) { uint64_t cb = (pd * 1504 * 1000000000ULL) / dt; if (h->live->pid_bitrate_bps[p] == 0) h->live->pid_bitrate_bps[p] = cb; else h->live->pid_bitrate_bps[p] = (cb * (uint64_t)h->pcr_ema_alpha_q32 + h->live->pid_bitrate_bps[p] * ((1ULL << 32) - (uint64_t)h->pcr_ema_alpha_q32)) >> 32; if (cb > 0) { if (h->pid_bitrate_min[p] == 0 || cb < h->pid_bitrate_min[p]) h->pid_bitrate_min[p] = cb; if (cb > h->pid_bitrate_max[p]) h->pid_bitrate_max[p] = cb; } }
-        tsa_snapshot_full_t* sn = h->snap_state.stats; sn->pids[ai].pid = p; strncpy(sn->pids[ai].type_str, tsa_get_pid_type_name(h, p), 15); sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16; sn->pids[ai].status = (uint8_t)h->pid_status[p]; sn->pids[ai].width = h->pid_width[p]; sn->pids[ai].height = h->pid_height[p]; sn->pids[ai].i_frames = h->pid_i_frames[p]; sn->pids[ai].eb_fill_pct = (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0); ai++;
-    } h->snap_state.stats->active_pid_count = ai; atomic_store(&h->snap_state.seq, s + 2); *h->prev_snap_base = *h->live; h->last_snap_ns = n; h->live->pcr_jitter_max_ns = 0;
+    // Signal Loss Check (Timeout: 500ms relative to system time n)
+    bool any_packets_recently = false;
+    for (int p = 0; p < TS_PID_MAX; p++) {
+        if (h->pid_seen[p]) {
+            if (h->live->pid_last_seen_ns[p] > 0 && n > h->live->pid_last_seen_ns[p]) {
+                uint64_t dt = n - h->live->pid_last_seen_ns[p];
+                if (dt < 500000000ULL) {
+                    any_packets_recently = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (!any_packets_recently && h->live->total_ts_packets > 0) {
+        h->signal_lock = false;
+    }
+
+    // BASE SCORING
+    float current_health = 100.0f;
+    if (!h->signal_lock) {
+        current_health = 0.0f;
+    } else {
+        // Penalty for SRT/Network Jitter
+        if (rn < 5.0f) {
+            current_health -= (5.0f - rn) * 4.0f;
+        }
+        // Penalty for Encoder Drift
+        if (re < 30.0f) {
+            current_health -= (30.0f - re) * 0.5f;
+        }
+        // AGGRESSIVE Penalty for CC Errors
+        uint64_t total_cc = h->live->cc_error.count;
+        uint64_t prev_cc = h->prev_snap_base->cc_error.count;
+        if (total_cc > prev_cc) {
+            current_health -= 25.0f; // Drop 25 points immediately on CC error
+        }
+    }
+
+    if (current_health < 0) current_health = 0;
+
+    // Smooth Transition (to make errors visible on dashboard)
+    // If the new score is lower, jump there immediately.
+    // If higher, recover slowly.
+    if (current_health < h->last_health_score || h->last_health_score < 0.1) {
+        h->last_health_score = current_health;
+    } else {
+        h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
+    }
+    float he = h->last_health_score;
+
+    uint32_t s = atomic_load(&h->snap_state.seq);
+    atomic_store(&h->snap_state.seq, s + 1);
+    h->snap_state.stats->predictive.master_health = he;
+    h->snap_state.stats->summary.master_health = he;
+    h->snap_state.stats->summary.total_packets = h->live->total_ts_packets;
+    h->snap_state.stats->summary.signal_lock = h->signal_lock;
+    h->snap_state.stats->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
+    h->snap_state.stats->stats = *h->live;
+    uint32_t ai = 0;
+    for (uint32_t i = 0; i < h->pid_tracker_count && ai < MAX_ACTIVE_PIDS; i++) {
+        uint16_t p = h->pid_active_list[i];
+        uint64_t pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
+        if (pd > 0) {
+            uint64_t cb = (pd * 1504 * 1000000000ULL) / dt;
+            if (h->live->pid_bitrate_bps[p] == 0) h->live->pid_bitrate_bps[p] = cb;
+            else h->live->pid_bitrate_bps[p] = (cb * (uint64_t)h->pcr_ema_alpha_q32 + h->live->pid_bitrate_bps[p] * ((1ULL << 32) - (uint64_t)h->pcr_ema_alpha_q32)) >> 32;
+            if (cb > 0) { if (h->pid_bitrate_min[p] == 0 || cb < h->pid_bitrate_min[p]) h->pid_bitrate_min[p] = cb; if (cb > h->pid_bitrate_max[p]) h->pid_bitrate_max[p] = cb; }
+        }
+        tsa_snapshot_full_t* sn = h->snap_state.stats;
+        sn->pids[ai].pid = p;
+        strncpy(sn->pids[ai].type_str, tsa_get_pid_type_name(h, p), 15);
+        sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16;
+        sn->pids[ai].status = (uint8_t)h->pid_status[p];
+        sn->pids[ai].width = h->pid_width[p];
+        sn->pids[ai].height = h->pid_height[p];
+        sn->pids[ai].i_frames = h->pid_i_frames[p];
+        sn->pids[ai].eb_fill_pct = (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0); ai++;
+    }
+    h->snap_state.stats->active_pid_count = ai;
+    atomic_store(&h->snap_state.seq, s + 2);
+    *h->prev_snap_base = *h->live;
+    h->last_snap_ns = n;
+    h->live->pcr_jitter_max_ns = 0;
 }
 
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {

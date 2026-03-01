@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -153,7 +153,7 @@ int HaiCrypt_Tx_Process(HaiCrypt_Handle hhc,
 	nbout += hcryptCtx_Tx_InjectKM(crypto, out_p, out_len_p, maxout);
 
 	/* Get packet index */
-	ctx->msg_info->indexMsg(in_msg, ctx->MSpfx_cache); 
+	ctx->msg_info->indexMsg(in_msg, ctx->MSpfx_cache);
 
 	/* Encrypt */
 	nb = maxout - nbout;

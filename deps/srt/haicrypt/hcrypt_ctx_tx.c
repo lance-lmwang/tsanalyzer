@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -86,8 +86,8 @@ int hcryptCtx_Tx_Rekey(hcrypt_Session *crypto, hcrypt_Ctx *ctx)
 	}
 	if ((HCRYPT_CTX_S_KEYED <= ctx->alt->status)
 	&&  hcryptMsg_KM_HasBothSek(ctx->alt->KMmsg_cache)) {
-		/* 
-		 * previous context KM announced in alternate (odd/even) KM, 
+		/*
+		 * previous context KM announced in alternate (odd/even) KM,
 		 * reassemble it without our KM
 		*/
 		hcryptCtx_Tx_AsmKM(crypto, ctx->alt, NULL);
@@ -148,8 +148,8 @@ int hcryptCtx_Tx_CloneKey(hcrypt_Session *crypto, hcrypt_Ctx *ctx, const hcrypt_
 	}
 	if ((HCRYPT_CTX_S_KEYED <= ctx->alt->status)
 	&&  hcryptMsg_KM_HasBothSek(ctx->alt->KMmsg_cache)) {
-		/* 
-		 * previous context KM announced in alternate (odd/even) KM, 
+		/*
+		 * previous context KM announced in alternate (odd/even) KM,
 		 * reassemble it without our KM
 		*/
 		hcryptCtx_Tx_AsmKM(crypto, ctx->alt, NULL);
@@ -163,7 +163,7 @@ int hcryptCtx_Tx_CloneKey(hcrypt_Session *crypto, hcrypt_Ctx *ctx, const hcrypt_
 	return(0);
 }
 
-/* 
+/*
  * Refresh the alternate context from the current.
  * Regenerates the SEK but keep the salt, doing so also
  * preserve the KEK generated from secret password and salt.
@@ -219,7 +219,7 @@ int hcryptCtx_Tx_Refresh(hcrypt_Session *crypto)
 	return(0);
 }
 
-/* 
+/*
  * Prepare context switch
  * both odd & even keys announced
  */
@@ -294,7 +294,7 @@ int hcryptCtx_Tx_AsmKM(hcrypt_Session *crypto, hcrypt_Ctx *ctx, unsigned char *a
 	ctx->KMmsg_len = 0;
 
 	memset(km_msg, 0, msg_len);
-	ctx->msg_info->resetCache(km_msg, HCRYPT_MSG_PT_KM, 
+	ctx->msg_info->resetCache(km_msg, HCRYPT_MSG_PT_KM,
 		2 == sek_cnt ? HCRYPT_MSG_F_xSEK : (ctx->flags & HCRYPT_MSG_F_xSEK));
 
 	/* crypto->KMmsg_cache[4..7]: KEKI=0 */
@@ -342,8 +342,8 @@ int hcryptCtx_Tx_ManageKM(hcrypt_Session *crypto)
 
 	if ((ctx->pkt_cnt > crypto->km.refresh_rate)
 	||  (ctx->pkt_cnt == 0)) {	//rolled over
-		/* 
-		 * End of crypto period for current SEK, 
+		/*
+		 * End of crypto period for current SEK,
 		 * switch to other (even/odd) SEK
 		 */
 		HCRYPT_LOG(LOG_INFO, "KM[%d] Activated\n",
@@ -351,15 +351,15 @@ int hcryptCtx_Tx_ManageKM(hcrypt_Session *crypto)
 
 		hcryptCtx_Tx_Switch(crypto);
 
-	} else 
+	} else
 	if ((ctx->pkt_cnt > (crypto->km.refresh_rate - crypto->km.pre_announce))
 	&&  !(ctx->alt->flags & HCRYPT_CTX_F_ANNOUNCE)) {
-		/* 
+		/*
 		 * End of crypto period approach for this SEK,
 		 * prepare next SEK for announcement
 		 */
 		hcryptCtx_Tx_Refresh(crypto);
-		
+
 		HCRYPT_LOG(LOG_INFO, "KM[%d] Pre-announced\n",
 			(ctx->alt->flags & HCRYPT_CTX_F_xSEK)/2);
 
@@ -368,7 +368,7 @@ int hcryptCtx_Tx_ManageKM(hcrypt_Session *crypto)
 	} else
 	if ((ctx->alt->status == HCRYPT_CTX_S_DEPRECATED)
 	&&  (ctx->pkt_cnt > crypto->km.pre_announce)) {
-		/* 
+		/*
 		 * Deprecated SEK is no longer needed (for late packets),
 		 * decommission it
 		 */
@@ -401,8 +401,8 @@ int hcryptCtx_Tx_InjectKM(hcrypt_Session *crypto,
 	ASSERT(maxout >= 2);
 	for (i=0; i<2; i++) {
 		if (crypto->ctx_pair[i].flags & HCRYPT_CTX_F_TTSEND) { /* Time To Send */
-			HCRYPT_LOG(LOG_DEBUG, "Send KMmsg[%d] len=%zd\n", i, 
-				crypto->ctx_pair[i].KMmsg_len); 
+			HCRYPT_LOG(LOG_DEBUG, "Send KMmsg[%d] len=%zd\n", i,
+				crypto->ctx_pair[i].KMmsg_len);
 			/* Send Keying Material */
 			out_p[nbout] = crypto->ctx_pair[i].KMmsg_cache;
 			out_len_p[nbout] = crypto->ctx_pair[i].KMmsg_len;

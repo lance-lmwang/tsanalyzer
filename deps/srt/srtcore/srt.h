@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -295,7 +295,7 @@ static const int SRT_LIVE_MAX_PLSIZE = 1456; // MTU(1500) - UDP.hdr(28) - SRT.hd
 // Latency for Live transmission: default is 120
 static const int SRT_LIVE_DEF_LATENCY_MS = 120;
 
-// Importrant note: please add new fields to this structure to the end and don't remove any existing fields 
+// Importrant note: please add new fields to this structure to the end and don't remove any existing fields
 struct CBytePerfMon
 {
    // global measurements

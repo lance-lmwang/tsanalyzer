@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -377,7 +377,7 @@ public: // for CUDTUnited API
 
    /// delete all user sockets (SRT sockets) from an EPoll
    /// @param [in] eid EPoll ID.
-   /// @return 0 
+   /// @return 0
    int clear_usocks(int eid);
 
    /// add a system socket to an EPoll.

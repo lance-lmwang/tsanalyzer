@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -247,7 +247,7 @@ enum UDTMessageType
 // each other's cookie generated during the URQ_WAVEAHAND handshake phase.
 // The cookies are simply compared as integer numbers; the party which's cookie
 // is a greater number becomes an INITIATOR, and the other party becomes a
-// RESPONDER. 
+// RESPONDER.
 //
 // The case of a draw - that both occasionally have baked identical cookies -
 // is treated as an extremely rare and virtually impossible case, so this
@@ -589,7 +589,7 @@ public:
 
    // The std::rel_ops namespace cannot be "imported"
    // as a whole into the class - it can only be used
-   // in the application code. 
+   // in the application code.
    bool operator != (const CSeqNo& other) const { return other.value != value; }
    bool operator > (const CSeqNo& other) const { return other < *this; }
    bool operator >= (const CSeqNo& other) const
@@ -667,7 +667,7 @@ public:
    /// MAX+1 value should be added to it to get the proper result.
    ///
    /// Note: this function does more calculations than seqcmp, so it should
-   /// be used if you need the exact distance between two sequences. If 
+   /// be used if you need the exact distance between two sequences. If
    /// you are only interested with their relationship, use seqcmp.
    inline static int seqoff(int32_t seq1, int32_t seq2)
    {

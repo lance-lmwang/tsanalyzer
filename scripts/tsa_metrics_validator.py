@@ -22,39 +22,39 @@ import re
 
 def run_audit():
     print("=== TSANALYZER PRO: AUTOMATED METRICS AUDIT ===")
-    
+
     # Baseline
     print("Sampling baseline...")
     m1 = get_metrics()
     if not m1: return False
-    
+
     time.sleep(5)
-    
+
     # Comparison
     print("Sampling convergence...")
     m2 = get_metrics()
     if not m2: return False
-    
+
     # Discover stream IDs from m2
     # Pattern: tsa_total_packets{stream_id="STREAM_ID"}
     streams = re.findall(r'tsa_total_packets\{stream_id="([^"]+)"\}', m2)
     if not streams:
         print("ERROR: No active streams found in metrics!")
         return False
-    
+
     streams = sorted(list(set(streams)))
     print(f"Discovered {len(streams)} active streams.")
-    
+
     all_pass = True
     print(f"{'Stream':<12} | {'Packets':<10} | {'Bitrate':<12} | {'Health':<8} | {'Status'}")
     print("-" * 65)
-    
+
     for s in streams:
         p1 = parse_metric(m1, "tsa_total_packets", s)
         p2 = parse_metric(m2, "tsa_total_packets", s)
         br = parse_metric(m2, "tsa_physical_bitrate_bps", s)
         hl = parse_metric(m2, "tsa_health_score", s)
-        
+
         # Validation Logic
         if p1 is None or p2 is None:
             status = "MISSING"
@@ -67,7 +67,7 @@ def run_audit():
             all_pass = False
         else:
             status = "OK"
-            
+
         print(f"{s:<8} | {int(p2 if p2 else 0):<10} | {int(br if br else 0):<12} | {hl:<8} | {status}")
 
     return all_pass

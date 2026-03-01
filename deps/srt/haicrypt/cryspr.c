@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2019 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -198,7 +198,7 @@ int crysprFallback_AES_WrapKey(CRYSPR_cb *cryspr_cb,
 				cryspr_cb->cryspr->aes_ecb_cipher(true, aes_kek, B, 16, B, &outlen);
 			}
 			A[7] ^= (unsigned char)(t & 0xff);
-			if (t > 0xff)	
+			if (t > 0xff)
 			{
 				A[6] ^= (unsigned char)((t >> 8) & 0xff);
 				A[5] ^= (unsigned char)((t >> 16) & 0xff);
@@ -234,7 +234,7 @@ int crysprFallback_AES_UnwrapKey(CRYSPR_cb *cryspr_cb,
 		for (i = 0; i < inlen; i += 8, t--, R -= 8)
 		{
 			A[7] ^= (unsigned char)(t & 0xff);
-			if (t > 0xff)	
+			if (t > 0xff)
 			{
 				A[6] ^= (unsigned char)((t >> 8) & 0xff);
 				A[5] ^= (unsigned char)((t >> 16) & 0xff);
@@ -423,7 +423,7 @@ static int crysprFallback_MsEncrypt(
 	ASSERT(NULL != cryspr_cb);
 	ASSERT((NULL != in_data) || (1 == nbin)); //Only one in_data[] supported
 
-	/* 
+	/*
 	 * Get message prefix length
 	 * to reserve room for unencrypted message header in output buffer
 	 */
@@ -733,8 +733,8 @@ static int crysprFallback_MsDecrypt(CRYSPR_cb *cryspr_cb, hcrypt_Ctx *ctx,
 			if ((++nberr == 1)
 					||  ((nberr > 500) && (0 == ((((unsigned char *)&MSmsg->pki)[2] & 0x0F)|((unsigned char *)&MSmsg->pki)[3])))) {
 				HCRYPT_LOG(LOG_DEBUG, "keyindex=%d\n", hcryptCtx_GetKeyIndex(ctx));
-				HCRYPT_PRINTKEY(ctx->sek, ctx->sek_len, "sek"); 
-				HCRYPT_PRINTKEY(ctx->salt, ctx->salt_len, "salt"); 
+				HCRYPT_PRINTKEY(ctx->sek, ctx->sek_len, "sek");
+				HCRYPT_PRINTKEY(ctx->salt, ctx->salt_len, "salt");
 			}
 		} else {
 			nberr = 0;

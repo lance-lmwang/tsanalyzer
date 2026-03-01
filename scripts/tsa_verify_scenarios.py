@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--url", default="http://localhost:8000/metrics", help="Prometheus metrics URL")
     parser.add_argument("--scenario", choices=["loss", "jitter", "compound"], help="Pre-defined scenario to verify")
     parser.add_argument("--duration", type=int, default=10, help="Duration to poll (seconds)")
-    
+
     args = parser.parse_args()
 
     scenarios = {
@@ -74,22 +74,22 @@ def main():
         if val is not None:
             if initial_val is None:
                 initial_val = val
-            
+
             max_val = max(max_val, val)
             print(f"Current {args.metric}: {val}")
-            
+
             if mode == "increase":
                 if val > initial_val:
                     passed = True
             elif mode == "max":
                 if val > args.threshold:
                     passed = True
-        
+
         if passed and mode == "increase":
             # For increase, we can stop early if we saw it happen
             # Actually better to keep polling to see total impact
             pass
-            
+
         time.sleep(1)
 
     if passed:

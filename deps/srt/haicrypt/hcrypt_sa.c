@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -18,7 +18,7 @@ written by
 *****************************************************************************/
 
 /*
- * For now: 
+ * For now:
  *  Pre-shared or password derived KEK (Key Encrypting Key)
  * Future:
  *  Certificate-based association
@@ -54,7 +54,7 @@ int hcryptCtx_SetSecret(hcrypt_Session *crypto, hcrypt_Ctx *ctx, const HaiCrypt_
 		break;
 
 	default:
-	    HCRYPT_LOG(LOG_ERR, "Unknown secret type  %d\n", 
+	    HCRYPT_LOG(LOG_ERR, "Unknown secret type  %d\n",
 			secret->typ);
 		return(-1);
 	}
@@ -70,13 +70,13 @@ int hcryptCtx_GenSecret(hcrypt_Session *crypto, hcrypt_Ctx *ctx)
 	unsigned char kek[HAICRYPT_KEY_MAX_SZ];
 	size_t kek_len = ctx->sek_len;
 	size_t pbkdf_salt_len = (ctx->salt_len >= HAICRYPT_PBKDF2_SALT_LEN
-		? HAICRYPT_PBKDF2_SALT_LEN 
+		? HAICRYPT_PBKDF2_SALT_LEN
 		: ctx->salt_len);
 	int iret = 0;
 	(void)crypto;
 
 	iret = crypto->cryspr->km_pbkdf2(crypto->cryspr_cb, ctx->cfg.pwd, ctx->cfg.pwd_len,
-		&ctx->salt[ctx->salt_len - pbkdf_salt_len], pbkdf_salt_len, 
+		&ctx->salt[ctx->salt_len - pbkdf_salt_len], pbkdf_salt_len,
 		HAICRYPT_PBKDF2_ITER_CNT, kek_len, kek);
 
 	if(iret) {
@@ -85,7 +85,7 @@ int hcryptCtx_GenSecret(hcrypt_Session *crypto, hcrypt_Ctx *ctx)
 	}
 	HCRYPT_PRINTKEY(ctx->cfg.pwd, ctx->cfg.pwd_len, "pwd");
 	HCRYPT_PRINTKEY(kek, kek_len, "kek");
-	
+
 	/* KEK: Key Encrypting Key */
 	if (0 > (iret = crypto->cryspr->km_setkey(crypto->cryspr_cb, ((HCRYPT_CTX_F_ENCRYPT & ctx->flags) ? true : false), kek, kek_len))) {
 		HCRYPT_LOG(LOG_ERR, "km_setkey(pdkek[%zd]) failed (rc=%d)\n", kek_len, iret);

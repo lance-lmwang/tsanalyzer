@@ -34,7 +34,7 @@ PREV_CC=-1
 while true; do
     CURRENT_TIME=$(date +%s)
     ELAPSED=$((CURRENT_TIME - START_TIME))
-    
+
     if [ $ELAPSED -ge $DURATION ]; then
         break
     fi
@@ -45,7 +45,7 @@ while true; do
         CC=$(echo "$METRICS" | grep "tsa_cc_errors_total" | awk '{print $2}')
         BPS=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | awk '{print $2}')
         MBPS=$(echo "scale=2; $BPS / 1000000" | bc)
-        
+
         printf "[%3ds] | %6.1f | %9d | %6.2f Mbps
 " "$ELAPSED" "$HEALTH" "$CC" "$MBPS"
 
@@ -58,7 +58,7 @@ while true; do
     else
         echo "Waiting for metrics..."
     fi
-    
+
     sleep 5
 done
 

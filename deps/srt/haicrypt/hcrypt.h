@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -57,7 +57,7 @@ written by
 
 typedef struct hcrypt_Session_str {
 #ifdef HAICRYPT_SUPPORT_CRYPTO_API
-        /* 
+        /*
          * Resv matches internal upper layer handle (crypto_api)
          * They are not used in HaiCrypt.
          * This make 3 layers using the same handle.
@@ -84,7 +84,7 @@ typedef struct hcrypt_Session_str {
         }cfg;
 
         struct {
-            struct timeval  tx_period;      /* Keying Material tx period (milliseconds) */  
+            struct timeval  tx_period;      /* Keying Material tx period (milliseconds) */
             struct timeval  tx_last;        /* Keying Material last tx time */
             unsigned int    refresh_rate;   /* SEK use period */
             unsigned int    pre_announce;   /* Pre/Post next/old SEK announce */
@@ -120,7 +120,7 @@ typedef struct hcrypt_Session_str {
  * +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
  * |                   0s                  |      pki      |  ctr  |
  * +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
- *                            XOR                         
+ *                            XOR
  * +---+---+---+---+---+---+---+---+---+---+---+---+---+---+
  * |                         nonce                         +
  * +---+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -136,11 +136,11 @@ typedef struct hcrypt_Session_str {
         } while(0)
 
 /* HaiCrypt-TP GCM mode IV (96-bit) - SRT 1.5.4:
- *    0   1   2   3   4   5  6   7   8   9   10  11 
+ *    0   1   2   3   4   5  6   7   8   9   10  11
  * +---+---+---+---+---+---+---+---+---+---+---+---+
  * |                   0s          |      pki      |
  * +---+---+---+---+---+---+---+---+---+---+---+---+
- *                         XOR                   
+ *                         XOR
  * +---+---+---+---+---+---+---+---+---+---+---+---+
  * |                      nonce                    +
  * +---+---+---+---+---+---+---+---+---+---+---+---+

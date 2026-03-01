@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -351,7 +351,7 @@ public:
         RDV_WAVING,     //< Initial state for rendezvous. No contact seen from the peer.
         RDV_ATTENTION,  //< When received URQ_WAVEAHAND. [WAVING]:URQ_WAVEAHAND  --> [ATTENTION].
         RDV_FINE,       //< When received URQ_CONCLUSION. [WAVING]:URQ_CONCLUSION --> [FINE].
-        RDV_INITIATED,  //< When received URQ_CONCLUSION+HSREQ extension in ATTENTION state. 
+        RDV_INITIATED,  //< When received URQ_CONCLUSION+HSREQ extension in ATTENTION state.
         RDV_CONNECTED   //< Final connected state. [ATTENTION]:URQ_CONCLUSION --> [CONNECTED] <-- [FINE]:URQ_AGREEMENT.
     };
 

@@ -70,7 +70,7 @@ for i in $(seq 1 $STREAMS); do
         curl -s -X POST -H "Content-Type: application/json" \
              -d "{\"stream_id\":\"$SID\",\"url\":\"udp://127.0.0.1:$UDP_PORT\"}" \
              "http://127.0.0.1:$PORT/api/v1/config/streams" > /dev/null
-        
+
         # Verify creation
         if curl -s "http://127.0.0.1:$PORT/api/v1/config/streams" | grep -q "$SID"; then
             log "Stream $SID created successfully."
@@ -79,7 +79,7 @@ for i in $(seq 1 $STREAMS); do
         log "Retry creating $SID (attempt $attempt)..."
         sleep 1
     done
-    
+
     # Start generator
     nohup ./build/tsp -i 127.0.0.1 -p $UDP_PORT -l -f "$SAMPLE_FILE" -b 5000000 > /dev/null 2>&1 &
 done
@@ -109,32 +109,32 @@ while [ $(date +%s) -lt $END_TIME ]; do
     STATS=$(ps -p $SERVER_PID -o %cpu,rss --no-headers)
     CPU=$(echo $STATS | awk '{print $1}')
     RSS=$(echo $STATS | awk '{print $2}')
-    
+
     # File Descriptors
     FD_COUNT=$(lsof -p $SERVER_PID | wc -l)
-    
+
     # Logic check: Active streams in metrics
     ACTIVE_STREAMS=$(curl -s "$METRICS_URL" | grep "tsa_physical_bitrate_bps" | wc -l)
-    
+
     TS=$(date +'%H:%M:%S')
     echo "$TS,$CPU,$RSS,$FD_COUNT,$ACTIVE_STREAMS" >> $CSV_FILE
-    
+
     # Progress indication
     REMAINING=$((END_TIME - $(date +%s)))
     log "Status: CPU:${CPU}% RSS:${RSS}KB FD:${FD_COUNT} Active:${ACTIVE_STREAMS} (Rem: ${REMAINING}s)"
-    
+
     # Immediate Failure Detection
     if [ "$ACTIVE_STREAMS" -lt "$STREAMS" ]; then
         log "${RED}CRITICAL: Stream drop detected! Expected $STREAMS, got $ACTIVE_STREAMS${NC}"
         # We don't exit immediately to see if it recovers, but mark as failure
         STABILITY_FAILED=1
     fi
-    
+
     if ! kill -0 $SERVER_PID 2>/dev/null; then
         log "${RED}CRITICAL: Server CRASHED!${NC}"
         exit 1
     fi
-    
+
     sleep 10
 done
 

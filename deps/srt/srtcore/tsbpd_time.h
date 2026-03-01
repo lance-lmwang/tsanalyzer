@@ -64,11 +64,11 @@ public:
     /// ACKACK packets are sent immediately (except for UDP buffering).
     /// Therefore their timestamp roughly corresponds to the time of sending
     /// and can be used to estimate clock drift.
-    /// 
+    ///
     /// @param [in] pktTimestamp Timestamp of the arrived ACKACK packet.
     /// @param [in] tsPktArrival packet arrival time.
     /// @param [in] usRTTSample RTT sample from an ACK-ACKACK pair. If no sample, pass '-1'.
-    /// 
+    ///
     /// @return true if TSBPD base time has changed, false otherwise.
     bool addDriftSample(uint32_t pktTimestamp, const time_point& tsPktArrival, int usRTTSample);
 

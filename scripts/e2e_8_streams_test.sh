@@ -39,7 +39,7 @@ echo "=== [2/2] INJECTING 8 STREAMS AT 10MBPS EACH ==="
 for i in {1..8}; do
     UDP_PORT=$((BASE_UDP_PORT + i - 1))
     BR=10000000 # 10 Mbps
-    
+
     echo "  -> Stream $i on port $UDP_PORT (10 Mbps)"
     ./build/tsp -i 127.0.0.1 -p $UDP_PORT -l -f "$SAMPLE_FILE" -b $BR > /dev/null 2>&1 &
 done

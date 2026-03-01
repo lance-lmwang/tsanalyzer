@@ -440,7 +440,7 @@ public:
     /// @param lock Corresponding mutex locked by UniqueLock
     void wait(UniqueLock& lock);
 
-    /// Atomically releases lock, blocks the current executing thread, 
+    /// Atomically releases lock, blocks the current executing thread,
     /// and adds it to the list of threads waiting on *this.
     /// The thread will be unblocked when notify_all() or notify_one() is executed,
     /// or when the relative timeout rel_time expires.
@@ -460,8 +460,8 @@ public:
     /// Causes the current thread to block until the condition variable is notified,
     /// a specific time is reached, or a spurious wakeup occurs.
     ///
-    /// @param[in] lock  an object of type UniqueLock, which must be locked by the current thread 
-    /// @param[in] timeout_time an object of type time_point representing the time when to stop waiting 
+    /// @param[in] lock  an object of type UniqueLock, which must be locked by the current thread
+    /// @param[in] timeout_time an object of type time_point representing the time when to stop waiting
     ///
     /// @returns false if the relative timeout specified by timeout_time expired,
     ///          true otherwise (signal or spurious wake up).
@@ -491,7 +491,7 @@ inline void releaseCond(Condition& cv) { cv.destroy(); }
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Implementation of a read-write mutex. 
+/// Implementation of a read-write mutex.
 /// This allows multiple readers at a time, or a single writer.
 /// TODO: The class can be improved if needed to give writer a preference
 /// by adding additional m_iWritersWaiting member variable (counter).

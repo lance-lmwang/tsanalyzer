@@ -7,7 +7,7 @@ case "$1" in
     apply)
         # First clean up
         tc qdisc del dev $INTERFACE root 2>/dev/null
-        
+
         case "$2" in
             loss)
                 PERCENT=$3

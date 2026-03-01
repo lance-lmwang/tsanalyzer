@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -135,7 +135,7 @@ int HaiCrypt_Create(const HaiCrypt_Cfg *cfg, HaiCrypt_Handle *phhc)
         return(-1);
     } else if ((HAICRYPT_SECTYP_PRESHARED == cfg->secret.typ)
             &&  (cfg->key_len > cfg->secret.len)) {
-        HCRYPT_LOG(LOG_ERR, "preshared secret length (%d) smaller than key length (%d)\n", 
+        HCRYPT_LOG(LOG_ERR, "preshared secret length (%d) smaller than key length (%d)\n",
                 (int)cfg->secret.len, (int)cfg->key_len);
         return(-1);
     } else if (NULL == cfg->cryspr) {
@@ -208,7 +208,7 @@ int HaiCrypt_ExtractConfig(HaiCrypt_Handle hhcSrc, HaiCrypt_Cfg* pcfg)
     pcfg->flags = HAICRYPT_CFG_F_CRYPTO;
     if ((ctx->flags & HCRYPT_CTX_F_ENCRYPT) == HCRYPT_CTX_F_ENCRYPT)
         pcfg->flags |= HAICRYPT_CFG_F_TX;
-   
+
     if (ctx->mode == HCRYPT_CTX_MODE_AESGCM)
         pcfg->flags |= HAICRYPT_CFG_F_GCM;
 
@@ -269,7 +269,7 @@ int HaiCrypt_Clone(HaiCrypt_Handle hhcSrc, HaiCrypt_CryptoDir tx, HaiCrypt_Handl
                 ||  hcryptCtx_Tx_Init(cryptoClone, &cryptoClone->ctx_pair[1], &crypto_config)) {
             free(cryptoClone);
             return(-1);
-        }			
+        }
         /* Clone keys for first (default) context from the source RX crypto */
         if (hcryptCtx_Tx_CloneKey(cryptoClone, &cryptoClone->ctx_pair[0], cryptoSrc)) {
             free(cryptoClone);
@@ -281,7 +281,7 @@ int HaiCrypt_Clone(HaiCrypt_Handle hhcSrc, HaiCrypt_CryptoDir tx, HaiCrypt_Handl
 
     } else { /* Receiver */
 
-        /* 
+        /*
          * If cryspr has no special input buffer alignment requirement,
          * handle it in the crypto session.
          */

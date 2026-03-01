@@ -142,7 +142,7 @@ class ThreadName
             if (tid == pthread_self())
                 set(old_name);
         }
-    
+
     private:
         ThreadNameImpl(ThreadNameImpl& other);
         ThreadNameImpl& operator=(const ThreadNameImpl& other);

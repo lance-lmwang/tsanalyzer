@@ -28,14 +28,14 @@ int main() {
     printf("Attempting to create gateway (caller mode)...\n");
     // This should fail fast if no server is listening
     tsa_gateway_t* gw = tsa_gateway_create(&cfg);
-    
+
     if (gw) {
         printf("SUCCESS: Gateway created.\n");
         tsa_gateway_destroy(gw);
     } else {
         printf("Gateway creation failed as expected (or due to no listener).\n");
     }
-    
+
     printf("Test finished.\n");
     return 0;
 }

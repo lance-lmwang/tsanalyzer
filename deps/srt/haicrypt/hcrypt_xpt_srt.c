@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -133,7 +133,7 @@ int hcryptMsg_SRT_ParseMsg(const hcrypt_MsgInfo* mi, unsigned char *msg)
 	&&  (HCRYPT_MSG_SIGN    == hcryptMsg_KM_GetSign(msg))) {	/* 'HAI' PnP Mfr ID */
 		rc = HCRYPT_MSG_PT_KM;
 	} else {
-		//Assume it's data. 
+		//Assume it's data.
 		//SRT does not call this for MS msg
 		rc = HCRYPT_MSG_PT_MS;
 	}
@@ -142,7 +142,7 @@ int hcryptMsg_SRT_ParseMsg(const hcrypt_MsgInfo* mi, unsigned char *msg)
 	case HCRYPT_MSG_PT_MS:
 		if (hcryptMsg_HasNoSek(mi, msg)
 		||  hcryptMsg_HasBothSek(mi, msg)) {
-			HCRYPT_LOG(LOG_ERR, "invalid MS msg flgs: %02x\n", 
+			HCRYPT_LOG(LOG_ERR, "invalid MS msg flgs: %02x\n",
 				hcryptMsg_GetKeyIndex(mi, msg));
 			return(-1);
 		}
@@ -165,6 +165,6 @@ int hcryptMsg_SRT_ParseMsg(const hcrypt_MsgInfo* mi, unsigned char *msg)
 		break;
 	}
 	return(rc);	/* -1: error, 0: unknown: >0: PT */
-}	
+}
 
 

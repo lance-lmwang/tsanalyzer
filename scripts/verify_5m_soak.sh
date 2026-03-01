@@ -28,7 +28,7 @@ START=$(date +%s)
 while true; do
     ELAPSED=$(($(date +%s) - START))
     if [ $ELAPSED -ge $DURATION ]; then break; fi
-    
+
     CUR_CC=$(curl -s http://localhost:$PORT_API/metrics | grep "tsa_cc" | awk '{sum+=$2} END {print sum}')
     if [ "$CUR_CC" -gt "$BASE_CC" ]; then
         echo "❌ FAILURE: CC Leakage detected! (+$((CUR_CC - BASE_CC)))"

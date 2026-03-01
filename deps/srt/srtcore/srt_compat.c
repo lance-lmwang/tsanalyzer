@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 // Implementation file for srt_compat.h
@@ -50,7 +50,7 @@ static const char* SysStrError_Fallback(int errnum, char* buf, size_t buflen)
 // When the error code is incorrect for the given error message function,
 // a fallback message will be returned, either as returned by the underlying
 // function, or crafted by this function as a response to error in an
-// underlying function. 
+// underlying function.
 extern const char * SysStrError(int errnum, char * buf, size_t buflen)
 {
     if (buf == NULL || buflen < 4) // Required to put ??? into it as a fallback

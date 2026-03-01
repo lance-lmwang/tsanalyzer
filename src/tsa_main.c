@@ -130,14 +130,14 @@ static void* metrology_thread(void* arg) {
             if (pkt.timestamp_ns == 0) break;
             last_ts = pkt.timestamp_ns;
             ts_decode_result_t res;
-            
+
             struct timespec start, end;
             clock_gettime(CLOCK_MONOTONIC, &start);
 
             // The packet was already decoded in the decode_thread.
             tsa_decode_packet_pure(g_h, pkt.data, pkt.timestamp_ns, &res);
             tsa_metrology_process(g_h, pkt.data, pkt.timestamp_ns, &res);
-            
+
             clock_gettime(CLOCK_MONOTONIC, &end);
             uint64_t lat = (end.tv_sec - start.tv_sec) * 1000000000ULL + (end.tv_nsec - start.tv_nsec);
             // Engine processing latency metric update (internal hook)

@@ -44,7 +44,7 @@ while true; do
     if [ $ELAPSED -ge $DURATION ]; then break; fi
 
     CURRENT_CC=$(curl -s http://localhost:$PORT_API/metrics | grep "tsa_cc" | awk '{sum+=$2} END {print sum}' || echo "$BASELINE")
-    
+
     STATUS="STABLE"
     if [ "$CURRENT_CC" -gt "$BASELINE" ]; then
         DIFF=$((CURRENT_CC - BASELINE))

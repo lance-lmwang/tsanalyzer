@@ -194,7 +194,7 @@ public:
 
     /// Get information on packets available to be read.
     /// @returns a pair of sequence numbers (first available; first unavailable).
-    /// 
+    ///
     /// @note CSeqNo::seqoff(first, second) is 0 if nothing to read.
     std::pair<int, int> getAvailablePacketsRange() const;
 
@@ -379,7 +379,7 @@ public: // TSBPD public functions
     /// @return 0
     void setTsbPdMode(const time_point& timebase, bool wrap, duration delay);
 
-    void setPeerRexmitFlag(bool flag) { m_bPeerRexmitFlag = flag; } 
+    void setPeerRexmitFlag(bool flag) { m_bPeerRexmitFlag = flag; }
 
     void applyGroupTime(const time_point& timebase, bool wrp, uint32_t delay, const duration& udrift);
 

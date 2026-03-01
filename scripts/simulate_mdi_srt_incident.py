@@ -28,7 +28,7 @@ def calculate_health(df, mlr, srt_retransmit, srt_unrecovered, latency=250):
         print(" [!] SRT Unrecovered Loss: -30")
 
     score = health - penalties
-    
+
     # 5. The Lid Rule
     if lid_active:
         score = min(score, 60)
@@ -39,7 +39,7 @@ def calculate_health(df, mlr, srt_retransmit, srt_unrecovered, latency=250):
 def simulate():
     print("=== TsAnalyzer Pro: MDI + SRT Causal Simulation ===")
     print("Config: SRT Latency = 250ms")
-    
+
     # Timeline: Time (s), MDI-DF (ms), MDI-MLR (pkts/s), Retransmit (%), Unrecovered
     timeline = [
         (0,  30,  0, 2,  0),  # T=0: Healthy
@@ -53,11 +53,11 @@ def simulate():
         print(f"\n--- T = {t}s ---")
         print(f"Metrics: DF={df}ms, MLR={mlr}, Retransmit={ret}%, Unrecovered={unr}")
         score = calculate_health(df, mlr, ret, unr)
-        
+
         status = "OPTIMAL (GREEN)"
         if score < 70: status = "EMERGENCY (RED)"
         elif score < 90: status = "CRITICAL (ORANGE)"
-        
+
         print(f"RESULT >> Health Score: {score} | NOC Status: {status}")
         if t == 10:
             print(" [INSIGHT] PREDICTIVE ALERT: MDI-DF is approaching buffer limit. 5s before CC errors!")

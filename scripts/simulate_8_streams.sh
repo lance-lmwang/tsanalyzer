@@ -28,7 +28,7 @@ for i in {1..8}; do
     STREAM_ID="ST-$i"
     UDP_PORT=$((BASE_UDP_PORT + i - 1))
     BR=2000000
-    
+
     echo "  -> $STREAM_ID on port $UDP_PORT (2 Mbps)"
     curl -s -X POST -H "Content-Type: application/json" -d "{\"stream_id\":\"$STREAM_ID\",\"url\":\"udp://127.0.0.1:$UDP_PORT\"}" "http://localhost:$PORT/api/v1/config/streams" > /dev/null
     nohup ./build/tsp -i 127.0.0.1 -p $UDP_PORT -l -f "$SAMPLE_FILE" -b $BR > /dev/null 2>&1 &

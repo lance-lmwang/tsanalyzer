@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2019 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -191,7 +191,7 @@ typedef struct tag_CRYSPR_methods {
         * returns *nbout encrypted data packets of length out_len_p[] into out_p[]
         *
         * If cipher implements deferred encryption (co-processor, async encryption),
-        * it may return no encrypted packets, or encrypted packets for clear text packets of a previous call.  
+        * it may return no encrypted packets, or encrypted packets for clear text packets of a previous call.
         */
         int (*ms_encrypt)(
             CRYSPR_cb *cryspr_cb,                           /* Cryspr Control Block */

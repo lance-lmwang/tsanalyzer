@@ -2,7 +2,7 @@
 # TsAnalyzer Pro: Enterprise Kernel Hardening Script
 # Based on Tencent Cloud High-Perf Architecture Design
 
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
     echo "CRITICAL: This script must be run as root to modify kernel parameters."
     exit 1
 fi

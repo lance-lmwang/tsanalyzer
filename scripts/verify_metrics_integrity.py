@@ -18,12 +18,12 @@ def verify():
     for line in lines:
         if line.startswith("#") or not line.strip():
             continue
-        
+
         # 解析指标名和标签
         parts = line.split('{')
         name = parts[0]
         label_part = parts[1].split('}')[0] if len(parts) > 1 else ""
-        
+
         # 记录该指标名下的所有标签集
         metrics_map[name].append(label_part)
 
@@ -41,7 +41,7 @@ def verify():
             print(f"[ERROR] 缺失关键指标: {m}")
             errors += 1
             continue
-        
+
         # 针对每个 stream_id 检查
         stream_ids = defaultdict(int)
         for lp in labels:
@@ -51,7 +51,7 @@ def verify():
                     sid = pair.split('=')[1].strip('"')
             if sid:
                 stream_ids[sid] += 1
-        
+
         for sid, count in stream_ids.items():
             if count > 1:
                 print(f"[CRITICAL] 指标重复: {m} 在 {sid} 下出现了 {count} 次！")

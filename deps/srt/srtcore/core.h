@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -686,11 +686,11 @@ private:
     SRT_ERRNO applyMemberConfigObject(const SRT_SocketOptionObject& opt);
 #endif
 
-    /// read the performance data with bytes counters since bstats() 
-    ///  
+    /// read the performance data with bytes counters since bstats()
+    ///
     /// @param perf [in, out] pointer to a CPerfMon structure to record the performance data.
-    /// @param clear [in] flag to decide if the local performance trace should be cleared. 
-    /// @param instantaneous [in] flag to request instantaneous data 
+    /// @param clear [in] flag to decide if the local performance trace should be cleared.
+    /// @param instantaneous [in] flag to request instantaneous data
     /// instead of moving averages.
     void bstats(CBytePerfMon* perf, bool clear = true, bool instantaneous = false);
 
@@ -705,7 +705,7 @@ private:
 
     SRT_ATTR_EXCLUDES(m_ConnectionLock)
     void checkSndTimers();
-    
+
     /// @brief Check and perform KM refresh if needed.
     void checkSndKMRefresh();
 
@@ -834,7 +834,7 @@ private:
     sync::atomic<bool> m_bPeerHealth;            // If the peer status is normal
     sync::atomic<int> m_RejectReason;
     bool m_bOpened;                              // If the UDT entity has been opened
-                                                 // A counter (number of GC checks happening every 1s) to let the GC tag this socket as closed.   
+                                                 // A counter (number of GC checks happening every 1s) to let the GC tag this socket as closed.
     sync::atomic<int> m_iBrokenCounter;          // If a broken socket still has data in the receiver buffer, it is not marked closed until the counter is 0.
 
     int m_iEXPCount;                             // Expiration counter
@@ -993,7 +993,7 @@ private: // Receiving related data
     uint32_t m_uPeerSrtVersion;
     uint32_t m_uPeerSrtFlags;
 
-    bool m_bTsbPd;                               // Peer sends TimeStamp-Based Packet Delivery Packets 
+    bool m_bTsbPd;                               // Peer sends TimeStamp-Based Packet Delivery Packets
     bool m_bGroupTsbPd;                          // TSBPD should be used for GROUP RECEIVER instead
 
     SRT_ATTR_GUARDED_BY(m_RcvTsbPdStartupLock)
@@ -1049,7 +1049,7 @@ private: // synchronization: mutexes and conditions
 
 private: // Common connection Congestion Control setup
     // This can fail only when it failed to create a congctl
-    // which only may happen when the congctl list is extended 
+    // which only may happen when the congctl list is extended
     // with user-supplied congctl modules, not a case so far.
     SRT_ATR_NODISCARD
     SRT_REJECT_REASON setupCC();
@@ -1077,7 +1077,7 @@ private: // Generation and processing of packets
     void sendLossReport(const std::vector< std::pair<int32_t, int32_t> >& losslist);
 
     void processCtrl(const CPacket& ctrlpkt);
-    
+
     /// @brief Process incoming control ACK packet.
     /// @param ctrlpkt incoming ACK packet
     /// @param currtime current clock time

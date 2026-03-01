@@ -28,12 +28,12 @@ def run():
     cleanup()
     print(f"Starting server on port {PORT}...")
     server = subprocess.Popen(["./build/tsa_server", f"http://0.0.0.0:{PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
+
     if not verify_server():
         print("CRITICAL: Server failed to start or respond on port 8082")
         server.terminate()
         return False
-        
+
     print("Server is UP. Creating stream...")
     try:
         requests.post(f"{URL_BASE}/streams?id={STREAM_ID}", timeout=5)
@@ -44,7 +44,7 @@ def run():
 
     print("Starting simulator...")
     sim = subprocess.Popen(["python3", "scripts/simulate_mdi_srt_incident.py", "--stream_id", STREAM_ID, "--mode", "clean"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
+
     start = time.time()
     try:
         while time.time() - start < TEST_DURATION:
@@ -59,10 +59,10 @@ def run():
                     for line in metrics.splitlines():
                         if f'tsa_cc_errors_total{{stream_id="{STREAM_ID}"}}' in line: cc = int(float(line.split()[-1]))
                         if f'tsa_health_score{{stream_id="{STREAM_ID}"}}' in line: health = float(line.split()[-1])
-                    
+
                     print(f"[{elapsed:3d}s] Health:{health:.1f} CC:{cc}")
                     sys.stdout.flush()
-                    
+
                     if cc > 0:
                         print("\nFAILURE: CC Errors detected!")
                         return False

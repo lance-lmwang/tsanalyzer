@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 /*****************************************************************************
@@ -194,7 +194,7 @@ SRT_API int64_t recvfile(SRTSOCKET u, std::fstream& ofs, int64_t& offset, int64_
 SRT_API int64_t sendfile2(SRTSOCKET u, const char* path, int64_t* offset, int64_t size, int block = 364000);
 SRT_API int64_t recvfile2(SRTSOCKET u, const char* path, int64_t* offset, int64_t size, int block = 7280000);
 
-// select and selectEX are DEPRECATED; please use epoll. 
+// select and selectEX are DEPRECATED; please use epoll.
 SRT_API int select(int nfds, UDSET* readfds, UDSET* writefds, UDSET* exceptfds, const struct timeval* timeout);
 SRT_API int selectEx(const std::vector<SRTSOCKET>& fds, std::vector<SRTSOCKET>* readfds,
                      std::vector<SRTSOCKET>* writefds, std::vector<SRTSOCKET>* exceptfds, int64_t msTimeOut);

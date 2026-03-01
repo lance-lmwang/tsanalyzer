@@ -49,9 +49,9 @@ static void* tx_loop(void* arg) {
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
-        if (head == tail) { 
-            usleep(100); 
-            continue; 
+        if (head == tail) {
+            usleep(100);
+            continue;
         }
 
         struct timespec ts_now;
@@ -95,7 +95,7 @@ static void* tx_loop(void* arg) {
         uint8_t* pkt = h->ring_buffer + (tail % RING_BUFFER_SIZE) * TS_PACKET_SIZE;
         if (h->srt_enabled) srt_send(h->srt_sock, (const char*)pkt, TS_PACKET_SIZE);
         else sendto(h->fd, pkt, TS_PACKET_SIZE, 0, (struct sockaddr*)&h->dest_addr, sizeof(h->dest_addr));
-        
+
         tokens -= (double)packet_bits;
         atomic_store_explicit(&h->tail, tail + 1, memory_order_release);
         atomic_fetch_add(&h->total_udp_packets, 1);

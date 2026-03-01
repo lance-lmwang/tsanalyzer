@@ -9,7 +9,7 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain')
             self.end_headers()
-            
+
             # Aggregate all stat files
             output = []
             for path in glob.glob("/tmp/tsa_stream_*.stats"):
@@ -17,7 +17,7 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                     with open(path, "r") as f:
                         output.append(f.read())
                 except: pass
-            
+
             self.wfile.write("
 ".join(output).encode())
         else:

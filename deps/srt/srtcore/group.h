@@ -226,7 +226,7 @@ private:
     /// This function checks if the member has just become idle (check if sender buffer is empty) to send a KEEPALIVE immidiatelly.
     /// @todo Check it is some abandoned logic.
     void sendBackup_CheckIdleTime(gli_t w_d);
-    
+
     /// Qualify states of member links.
     /// [[using locked(this->m_GroupLock, m_pGlobal->m_GlobControlLock)]]
     /// @param[out] w_sendBackupCtx  the context will be updated with state qualifications
@@ -254,7 +254,7 @@ private:
     /// @return group send result: -1 if sending over all members has failed; number of bytes sent overwise.
     int sendBackup_SendOverActive(const char* buf, int len, SRT_MSGCTRL& w_mc, const steady_clock::time_point& currtime, int32_t& w_curseq,
         size_t& w_nsuccessful, uint16_t& w_maxActiveWeight, SendBackupCtx& w_sendBackupCtx, CUDTException& w_cx);
-    
+
     /// Check link sending status
     /// @param[in]  currtime       Current time (logging only)
     /// @param[in]  send_status    Result of sending over the socket
@@ -490,7 +490,7 @@ public:
     //    - before the group is moved to ClosedGroups (this allows it to be found)
     //    - after the group is moved to ClosedGroups (this makes the group not found)
     //    - NOT after the group was deleted, as it could not be found and occupied.
-    //    
+    //
     // 2. Before release of GlobControlLock (acquired by GC), but before the
     //    API function locks GroupLock:
     //    - the GC call to isStillBusy locks GroupLock, but BUSY flag is already set
@@ -498,7 +498,7 @@ public:
     //
     // 3. In any further place up to the exit of the API implementation function,
     // the BUSY flag is still set.
-    // 
+    //
     // 4. After exit of GroupKeeper destructor and unlock of GroupLock
     //    - the group is no longer being accessed and can be freely deleted.
     //    - the group also can no longer be found by ID.

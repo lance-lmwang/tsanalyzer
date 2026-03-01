@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -23,7 +23,7 @@ written by
 #include <string.h>				/* memcmp */
 #include "hcrypt.h"
 
-int HaiCrypt_Rx_Data(HaiCrypt_Handle hhc, 
+int HaiCrypt_Rx_Data(HaiCrypt_Handle hhc,
 	unsigned char *in_pfx, unsigned char *data, size_t data_len)
 {
 	hcrypt_Session *crypto = (hcrypt_Session *)hhc;
@@ -61,8 +61,8 @@ int HaiCrypt_Rx_Data(HaiCrypt_Handle hhc,
 	return(nb);
 }
 
-int HaiCrypt_Rx_Process(HaiCrypt_Handle hhc, 
-	unsigned char *in_msg, size_t in_len, 
+int HaiCrypt_Rx_Process(HaiCrypt_Handle hhc,
+	unsigned char *in_msg, size_t in_len,
 	void *out_p[], size_t out_len_p[], int maxout)
 {
 	hcrypt_Session *crypto = (hcrypt_Session *)hhc;

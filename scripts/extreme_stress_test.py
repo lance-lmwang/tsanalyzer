@@ -22,19 +22,19 @@ def run_extreme_test():
     print(f"🚀 MUX DIRECTOR EXTREME STRESS: {STREAMS} STREAMS")
     subprocess.run(f"fuser -k -9 {PORT_API}/tcp", shell=True, stderr=subprocess.DEVNULL)
     for i in range(STREAMS): subprocess.run(f"fuser -k -9 {12345+i}/udp", shell=True, stderr=subprocess.DEVNULL)
-    
+
     server = subprocess.Popen(["./build/tsa_server"])
     time.sleep(3)
-    
+
     pacers = []
     for i in range(STREAMS):
         p = subprocess.Popen(["./build/tsp", "-P", "-l", "-t", "7", "-i", "127.0.0.1", "-p", str(12345+i), "-f", SAMPLE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         pacers.append(p)
-    
+
     print("[*] All Pacers Active. Calibrating baseline...")
     time.sleep(5)
     baseline = get_stats()
-    
+
     if not baseline:
         print("❌ CRITICAL: Could not gather metrics.")
         return False

@@ -37,7 +37,7 @@ if echo "$METRICS" | grep -q "tsa"; then
     echo "Metrology Sample:"
     echo "$METRICS" | grep "muxrate"
     echo "$METRICS" | grep "continuity_errors"
-    
+
     # Check if action engine mitigations are visible if we can
     # (Actually we'd need to induce errors to see them in action)
 else

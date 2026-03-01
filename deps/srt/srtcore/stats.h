@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2021 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 #ifndef INC_SRT_STATS_H
@@ -37,7 +37,7 @@ public:
         return *this;
     }
 
-    uint32_t count() const 
+    uint32_t count() const
     {
         return m_count;
     }
@@ -72,12 +72,12 @@ public:
         m_bytes += bytes;
     }
 
-    uint64_t bytes() const 
+    uint64_t bytes() const
     {
         return m_bytes;
     }
 
-    uint32_t count() const 
+    uint32_t count() const
     {
         return m_packets;
     }
@@ -140,7 +140,7 @@ struct Sender
     Metric<BytesPackets> dropped; // The number of data packets dropped by the sender.
 
     Metric<Packets> sentFilterExtra; // The number of packets generate by the packet filter and sent by the sender.
-    
+
     Metric<Packets> recvdAck; // The number of ACK packets received by the sender.
     Metric<Packets> recvdNak; // The number of ACK packets received by the sender.
 

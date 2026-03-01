@@ -13,7 +13,7 @@ def get_json(url):
 
 def check_pipeline():
     print("=== TSA PRO: DATA FLOW PIPELINE AUDIT ===\n")
-    
+
     # 1. 检查后端指标产出
     print("[1/4] Checking TSA Server Metrics (/metrics)...")
     try:
@@ -34,7 +34,7 @@ def check_pipeline():
     if not targets:
         print("  - [FAIL] Prometheus API unreachable.")
         return False
-    
+
     found_up = False
     for t in targets['data']['activeTargets']:
         if t['labels'].get('instance') == "PRO-STABILITY-TEST":

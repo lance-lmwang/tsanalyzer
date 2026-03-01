@@ -30,7 +30,7 @@ void* producer(void* arg) {
         ts_packet_t pkt;
         pkt.timestamp_ns = i;
         memset(pkt.data, (uint8_t)(i & 0xFF), 188);
-        
+
         int spins = 0;
         while (!spsc_queue_push(q, &pkt)) {
             if (++spins > 1000) {
@@ -87,7 +87,7 @@ int main() {
     pthread_join(c, NULL);
 
     spsc_queue_destroy(q);
-    
+
     if (test_failed) {
         printf("spsc_queue test FAILED due to timeout or error.\n");
         return 1;

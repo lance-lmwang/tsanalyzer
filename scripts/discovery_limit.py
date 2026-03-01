@@ -14,15 +14,15 @@ def run_limit_discovery():
     print("🚀 STARTING STEPPED SCALING DISCOVERY")
     server = subprocess.Popen(["./build/tsa_server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(3)
-    
+
     for count in range(1, MAX_STREAMS + 1):
         print(f"--- Adding Stream #{count} ---")
         port = 12345 + count - 1
-        core = count 
+        core = count
         subprocess.Popen(["taskset", "-c", str(core), "./build/tsp", "-P", "-l", "-t", "7", "-i", "127.0.0.1", "-p", str(port), "-f", SAMPLE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
+
         time.sleep(5)
-        
+
         start_api = time.time()
         try:
             r = requests.get(f"http://localhost:{PORT_API}/metrics", timeout=3)

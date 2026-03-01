@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -175,7 +175,7 @@ int hcryptCtx_Rx_ParseKM(hcrypt_Session *crypto, unsigned char *km_msg, size_t m
 		return(-3);
 	}
 
-	/* 
+	/*
 	 * Regenerate KEK if it is password derived
 	 * and Salt or SEK length changed
 	 */
@@ -189,7 +189,7 @@ int hcryptCtx_Rx_ParseKM(hcrypt_Session *crypto, unsigned char *km_msg, size_t m
 
 	/* Unwrap SEK(s) and set in context */
 	if (0 > crypto->cryspr->km_unwrap(crypto->cryspr_cb, seks,
-		&km_msg[HCRYPT_MSG_KM_OFS_SALT + salt_len], 
+		&km_msg[HCRYPT_MSG_KM_OFS_SALT + salt_len],
 		(unsigned int)((sek_cnt * sek_len) + HAICRYPT_WRAPKEY_SIGN_SZ))) {
 		HCRYPT_LOG(LOG_WARNING, "%s", "unwrap key failed\n");
 		return(-2); //Report unmatched shared secret

@@ -1,11 +1,11 @@
 /*
  * SRT - Secure, Reliable, Transport
  * Copyright (c) 2018 Haivision Systems Inc.
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * 
+ *
  */
 
 
@@ -108,7 +108,7 @@ static struct TestVector {
 static int hc_ut_pbkdf2(unsigned verbose)
 {
 	int i;
-	int nbt = sizeof(tv)/sizeof(tv[0]);	
+	int nbt = sizeof(tv)/sizeof(tv[0]);
 	int nbe = 0;
 	unsigned char dk[32];
 	struct timeval tstart, tstop, tdiff;
@@ -118,10 +118,10 @@ static int hc_ut_pbkdf2(unsigned verbose)
 			printf("PBKDF2 test vector %d", i+1);
 			fflush(stdout);
 			gettimeofday(&tstart, NULL);
-		}	
+		}
 
-		hcrypt_pbkdf2_hmac_sha1(tv[i].pwd, tv[i].pwd_len, 
-			tv[i].salt, tv[i].salt_len, 
+		hcrypt_pbkdf2_hmac_sha1(tv[i].pwd, tv[i].pwd_len,
+			tv[i].salt, tv[i].salt_len,
 			tv[i].cnt, tv[i].dk_len, dk);
 
 		if (verbose) {
@@ -199,8 +199,8 @@ int hc_ut_encrypt_ctr_speed(void)
 	}
 	gettimeofday(&tstop, NULL);
 	timersub(&tstop, &tstart, &tdiff);
-	printf("\nhaicrypt: encrypted %ld packets in %lu.%06lu sec (%ld.%03ld kbps)\n", 
-		UT_NBPKTS, tdiff.tv_sec, (unsigned long)tdiff.tv_usec, 
+	printf("\nhaicrypt: encrypted %ld packets in %lu.%06lu sec (%ld.%03ld kbps)\n",
+		UT_NBPKTS, tdiff.tv_sec, (unsigned long)tdiff.tv_usec,
 		(((UT_NBPKTS * UT_PKTSZ*10)/((tdiff.tv_sec*10) + (tdiff.tv_usec/100))) / 1000),
 		(((UT_NBPKTS * UT_PKTSZ*10)/((tdiff.tv_sec*10) + (tdiff.tv_usec/100))) % 1000));
 
@@ -210,7 +210,7 @@ int hc_ut_encrypt_ctr_speed(void)
 
 int main(int argc, char *argv[])
 {
-    
+
 	int nbe = 0;
     (void)argc;
     (void)argv;

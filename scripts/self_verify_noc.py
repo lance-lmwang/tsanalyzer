@@ -63,7 +63,7 @@ def run_all():
     if not check_labels(): success = False
     if not check_metrics(): success = False
     if not check_dashboard_match(): success = False
-    
+
     if success:
         print("\n[RESULT] ALL SYSTEMS NORMAL. Ready for drill-down.")
         sys.exit(0)

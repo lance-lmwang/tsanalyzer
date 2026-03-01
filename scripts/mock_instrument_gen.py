@@ -12,13 +12,13 @@ class MockMetricsHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             output = []
-            
+
             now = time.time()
             for s in STREAMS:
                 seed = (hash(s) + int(now/15)) % 100
                 is_lost = 1 if seed > 98 else 0
                 is_impaired = 1 if (seed > 90 and seed <= 98) else 0
-                
+
                 # TIER 1: EXECUTIVE (New Names)
                 status = 0 if is_lost else 1
                 output.append(f'tsa_executive_signal_lock{{stream_id="{s}"}} {status}')
