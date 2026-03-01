@@ -20,9 +20,9 @@ pkill tsa_server
 TSA_PID=$!
 
 # 3. Start TSP Fleet using Physical IP
-echo "TSP: Starting 8-stream simulation fleet via $IP..."
+echo "TSP: Starting 4-stream simulation fleet via $IP..."
 pkill tsp
-for i in {1..8}; do
+for i in {1..4}; do
     PORT=$((19000 + i))
     ./build/tsp -b 5000000 -i $IP -p $PORT -l > /dev/null 2>&1 &
     echo "  - Stream #$i: 5Mbps -> $IP:$PORT"

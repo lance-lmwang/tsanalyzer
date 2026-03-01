@@ -1,31 +1,70 @@
-import urllib.request, time, sys
+import time
+import requests
+import re
+import sys
 
-def audit():
-    print("=== SUSTAINED STABILITY AUDIT (8 STREAMS) ===")
-    history = {f"S{i}": [] for i in range(1, 9)}
-    for cycle in range(1, 13):
-        time.sleep(5)
-        try:
-            with urllib.request.urlopen("http://127.0.0.1:8080/metrics", timeout=2) as r:
-                data = r.read().decode('utf-8')
-                out = f"Cycle {cycle:02d}: "
-                for i in range(1, 9):
-                    sid = f"S{i}"
-                    val = 0
-                    for line in data.splitlines():
-                        if f'tsa_physical_bitrate_bps{{mode="{sid}"}}' in line:
-                            val = int(float(line.split()[-1]))
-                            break
-                    history[sid].append(val)
-                    out += f"{sid}:{val/1e6:3.1f}M "
-                print(out + "| ALIVE")
-        except Exception as e:
-            print(f"Cycle {cycle:02d}: [CRASHED] {e}")
-            return
-    print("\n=== FINAL REPORT ===")
-    for sid, rates in history.items():
-        avg = sum(rates)/len(rates)
-        print(f"Stream {sid}: Avg={avg/1e6:3.2f}Mbps")
+# Configuration
+URL = "http://localhost:8080/metrics"
+DURATION_SEC = 600  # 10 minutes
+INTERVAL_SEC = 5
+SAMPLES = DURATION_SEC // INTERVAL_SEC
 
-if __name__ == "__main__":
-    audit()
+print(f"=== TsAnalyzer Stability Audit: 10 Minutes @ 5s intervals ===")
+print(f"Monitoring 4 streams at {URL}")
+print(f"{'Time':<10} | {'Stream':<8} | {'Bitrate':<12} | {'CC Err':<8} | {'Health':<8} | {'Jitter':<8}")
+print("-" * 75)
+
+def get_metrics():
+    try:
+        resp = requests.get(URL, timeout=2)
+        content = resp.text
+        results = {}
+
+        # Extract metrics using regex
+        # Pattern: metric_name{stream_id="STR-X"} value
+        patterns = {
+            'bitrate': r'tsa_physical_bitrate_bps\{stream_id="STR-(\d+)"\} ([\d\.]+)',
+            'cc_err': r'tsa_tr101290_p1_cc_error\{stream_id="STR-(\d+)"\} ([\d\.]+)',
+            'health': r'tsa_health_score\{stream_id="STR-(\d+)"\} ([\d\.]+)',
+            'jitter': r'tsa_pcr_jitter_ms\{stream_id="STR-(\d+)"\} ([\d\.]+)'
+        }
+
+        for m_name, pat in patterns.items():
+            matches = re.findall(pat, content)
+            for sid, val in matches:
+                if sid not in results: results[sid] = {}
+                results[sid][m_name] = float(val)
+        return results
+    except Exception as e:
+        print(f"Error fetching metrics: {e}")
+        return None
+
+# Audit Log
+log_file = "stability_audit.log"
+with open(log_file, "w") as f:
+    f.write("Timestamp,Stream,Bitrate,CC_Errors,Health,Jitter\n")
+
+for i in range(SAMPLES):
+    data = get_metrics()
+    timestamp = time.strftime("%H:%M:%S")
+
+    if data:
+        for sid in sorted(data.keys()):
+            m = data[sid]
+            # Output to console
+            print(f"{timestamp:<10} | STR-{sid:<4} | {m['bitrate']:>10.0f} | {m['cc_err']:>8.0f} | {m['health']:>8.1f} | {m['jitter']:>8.3f}")
+
+            # Save to log
+            with open(log_file, "a") as f:
+                f.write(f"{timestamp},STR-{sid},{m['bitrate']},{m['cc_err']},{m['health']},{m['jitter']}\n")
+
+            # Immediate anomaly check
+            if m['cc_err'] > 0:
+                print(f"!! ANOMALY DETECTED: CC Error on Stream {sid} !!")
+            if m['health'] < 80:
+                print(f"!! ANOMALY DETECTED: Low Health on Stream {sid} !!")
+
+    time.sleep(INTERVAL_SEC)
+
+print("-" * 75)
+print("Audit Complete. Final results saved to stability_audit.log")

@@ -14,7 +14,7 @@ GREEN  := \033[32m
 RED    := \033[31m
 RESET  := \033[0m
 
-.PHONY: all debug release clean test full-test rt-test install lint format help
+.PHONY: all debug release clean test full-test rt-test install lint format help test-e2e test-e2d
 
 all: release
 
@@ -71,6 +71,14 @@ install: release
 	@echo "$(BLUE)=== Installing to $(INSTALL_PREFIX) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(MAKE) install
 
+# --- End-to-End Dashboard Test ---
+test-e2e: release
+	@echo "$(GREEN)=== Running End-to-End Dashboard Test ===$(RESET)"
+	@chmod +x scripts/test_big_screen_e2e.sh
+	@./scripts/test_big_screen_e2e.sh
+
+test-e2d: test-e2e
+
 help:
 	@echo "$(GREEN)TsAnalyzer Build System$(RESET)"
 	@echo "Usage:"
@@ -79,6 +87,7 @@ help:
 	@echo "  make clean     - Remove all build artifacts"
 	@echo "  make test      - Run all unit tests"
 	@echo "  make full-test - Run Unit + Determinism + E2E tests"
+	@echo "  make test-e2e  - Run End-to-End Dashboard Test"
 	@echo "  make rt-test   - Run Real-time Metrology (30s)"
 	@echo "  make lint      - Run cppcheck static analysis"
 	@echo "  make format    - Apply clang-format"

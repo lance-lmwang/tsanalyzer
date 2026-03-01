@@ -13,7 +13,7 @@
 
 extern void tsa_exporter_prom_v2(tsa_handle_t **handles, int count, char *buf, size_t sz);
 
-#define MAX_STREAMS 8
+#define MAX_STREAMS 4
 #define HTTP_PORT "8080"
 
 typedef struct {
