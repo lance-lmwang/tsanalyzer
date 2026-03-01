@@ -18,3 +18,4 @@ tests/test_pts_trajectory
 Testing/
 *.json
 test.ts
+sample/

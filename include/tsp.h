@@ -16,12 +16,7 @@
 #define NS_PER_SEC 1000000000ULL
 #define INVALID_PCR 0xFFFFFFFFFFFFFFFFULL
 
-typedef enum {
-    TSPACER_MODE_PCR,
-    TSPACER_MODE_ETF,
-    TSPACER_MODE_CBR,
-    TSPACER_MODE_BASIC
-} tsp_mode_t;
+typedef enum { TSPACER_MODE_PCR, TSPACER_MODE_ETF, TSPACER_MODE_CBR, TSPACER_MODE_BASIC } tsp_mode_t;
 
 typedef struct {
     uint64_t total_packets;

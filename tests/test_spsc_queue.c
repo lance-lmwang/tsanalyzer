@@ -1,11 +1,11 @@
 #include <assert.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <sched.h>
 #include <unistd.h>
 
 #include "spsc_queue.h"

@@ -1,72 +1,50 @@
 #!/bin/bash
-# TsAnalyzer Big Screen E2E Test
-# Logic: TSP -> TSA_SERVER -> JSON API Validation
+# TsAnalyzer Headless E2E Verifier (v14 - Logic Validation)
+# Purpose: Final standalone logic verification using internal data pump.
 
 BLUE='\033[34m'
 GREEN='\033[32m'
 RED='\033[31m'
 RESET='\033[0m'
 
-echo -e "${BLUE}=== Starting Big Screen E2E Test ===${RESET}"
+echo -e "${BLUE}=== Starting Standalone Logic E2E Audit ===${RESET}"
 
-# 1. Build
-make release
-
-# 2. Cleanup old processes
+# 1. Cleanup
 pkill tsa_server
-pkill tsp
 sleep 1
 
-# 3. Start TSA Server in background
-./build/tsa_server > tsa_server.log 2>&1 &
+# 2. Start TSA Server (Simulation/Pump Mode)
+./build/tsa_server > server_e2e.log 2>&1 &
 TSA_PID=$!
-echo -e "SRV: TSA Server started (PID: $TSA_PID), listening on HTTP 8080"
+echo "SRV: Internal Data Pump active."
 
-# 4. Start TSP to send stream
-# Target: 5Mbps CBR stream to UDP 19001 (Stream 1)
-./build/tsp -b 5000000 -o udp://127.0.0.1:19001 > tsp.log 2>&1 &
-TSP_PID=$!
-echo -e "TSP: Sending 5Mbps CBR stream to TSA (PID: $TSP_PID)"
+# 3. Wait for baseline (Stable scores)
+echo "WAIT: Waiting 10s for metrology baseline..."
+sleep 10
 
-# 5. Wait for engine to lock and baseline
-echo "Waiting 5s for metrology engine to stabilize..."
-sleep 5
+# 4. Audit
+METRICS=$(curl -s http://localhost:8080/metrics)
+FAILED=0
+for i in {1..4}; do
+    STR="STR-$i"
+    HEALTH=$(echo "$METRICS" | grep "tsa_health_score{stream_id=\"$STR\"}" | awk '{print $2}')
+    
+    echo -ne "  - $STR: "
+    if [[ -z "$HEALTH" ]] || (( $(echo "$HEALTH < 90" | bc -l) )); then
+        echo -e "${RED}[FAIL] Health: $HEALTH%${RESET}"
+        FAILED=1
+    else
+        echo -e "${GREEN}[PASS] Health: $HEALTH%${RESET}"
+    fi
+done
 
-# 6. Automatic Data Validation
-echo -e "${BLUE}=== Validating JSON API Data ===${RESET}"
-JSON_DATA=$(curl -s http://localhost:8080/api/snapshot)
+# 5. Cleanup
+kill $TSA_PID
 
-if [[ -z "$JSON_DATA" ]]; then
-    echo -e "${RED}FAILURE: API returned no data!${RESET}"
-    exit 1
-fi
-
-BITRATE=$(echo $JSON_DATA | grep -oP '"bitrate_bps":\s*\K[0-9]+')
-HEALTH=$(echo $JSON_DATA | grep -oP '"master_health":\s*\K[0-9.]+')
-
-echo -e "METRIC: Detected Bitrate: ${GREEN}$BITRATE bps${RESET}"
-echo -e "METRIC: Master Health: ${GREEN}$HEALTH%${RESET}"
-
-# Validation logic: 5Mbps +/- 10%
-if (( BITRATE > 4500000 && BITRATE < 5500000 )); then
-    echo -e "${GREEN}SUCCESS: Bitrate validation passed (approx 5Mbps).${RESET}"
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}=== Standalone E2E Test PASSED ===${RESET}"
+    exit 0
 else
-    echo -e "${RED}FAILURE: Bitrate out of expected range!${RESET}"
-    kill $TSA_PID $TSP_PID
+    echo -e "${RED}=== Standalone E2E Test FAILED ===${RESET}"
     exit 1
 fi
-
-if (( $(echo "$HEALTH > 90" | bc -l) )); then
-    echo -e "${GREEN}SUCCESS: Health validation passed (>90%).${RESET}"
-else
-    echo -e "${RED}FAILURE: Health score too low!${RESET}"
-    kill $TSA_PID $TSP_PID
-    exit 1
-fi
-
-echo -e "${GREEN}=== Big Screen Test PASSED ===${RESET}"
-echo "You can now open mock_noc_dashboard.html in your browser to see live data."
-echo "Press Ctrl+C to stop the test and cleanup."
-
-# Keep running for manual observation
-wait

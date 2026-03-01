@@ -78,7 +78,7 @@ struct tsa_handle {
     uint64_t last_pmt_ns;
     uint64_t last_snap_ns;
 
-    tsa_measurement_status_t* pid_status; // Dynamic [TS_PID_MAX]
+    tsa_measurement_status_t* pid_status;  // Dynamic [TS_PID_MAX]
 
     bool seen_pat, seen_pmt;
     bool signal_lock;
@@ -152,7 +152,7 @@ struct tsa_handle {
 
     alignas(64) struct {
         _Atomic uint32_t seq;
-        tsa_snapshot_full_t* stats; // Now a pointer to avoid MB-sized copy risks
+        tsa_snapshot_full_t* stats;  // Now a pointer to avoid MB-sized copy risks
     } snap_state;
 
     alignas(64) int128_t stc_slope_q64;

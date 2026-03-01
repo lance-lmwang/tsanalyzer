@@ -41,7 +41,7 @@ int main() {
     h->live->cc_error.count = 1;
     now += 1000000000ULL;
     h->live->total_ts_packets += pkts;  // Maintain bitrate
-    h->last_pat_ns = now;              // keep healthy
+    h->last_pat_ns = now;               // keep healthy
     h->last_pmt_ns = now;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &snap);

@@ -21,7 +21,7 @@ void test_rst_network_depletion() {
     h->last_snap_ns = h->start_ns;
 
     h->live->pcr_bitrate_bps = 10000000;
-    h->live->pcr_jitter_max_ns = 10000000;       // 10ms jitter
+    h->live->pcr_jitter_max_ns = 10000000;      // 10ms jitter
     h->srt_live.effective_rcv_latency_ms = 50;  // 40ms margin
 
     tsa_commit_snapshot(h, h->start_ns + 1000000000ULL);

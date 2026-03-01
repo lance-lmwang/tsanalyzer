@@ -1,10 +1,15 @@
 #define _GNU_SOURCE
+#include <arpa/inet.h>
+#include <errno.h>
+#include <getopt.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
+#include <srt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -54,37 +59,107 @@ static void backoff_sleep(int count) {
     }
 }
 
-/* 1. Capture Thread */
+typedef struct {
+    tsa_config_t cfg;
+    char filename[512];
+} capture_args_t;
+
+/* 1. Capture Thread - Supports File, UDP, and SRT */
 static void* capture_thread(void* arg) {
-    const char* filename = (const char*)arg;
+    capture_args_t* args = (capture_args_t*)arg;
+    tsa_config_t* cfg = &args->cfg;
     set_thread_affinity(0);
-
-    FILE* f = fopen(filename, "rb");
-    if (!f) {
-        fprintf(stderr, "[FATAL ERROR] Cannot open input TS file: '%s'. Reason: %s\n", filename, strerror(errno));
-        g_keep_running = 0;
-        return NULL;
-    }
-
     ts_packet_t pkt;
-    // Base epoch for deterministic results: 2024-01-01
-    uint64_t now_ns = 1704067200000000000ULL;
+    uint8_t raw_buf[1500];
     int backoff_cnt = 0;
 
-    while (g_keep_running && fread(pkt.data, 1, 188, f) == 188) {
-        pkt.timestamp_ns = now_ns;
-        while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) {
-            backoff_sleep(backoff_cnt++);
+    if (cfg->op_mode == TSA_MODE_REPLAY && strlen(args->filename) > 0) {
+        FILE* f = fopen(args->filename, "rb");
+        if (!f) {
+            fprintf(stderr, "[FATAL ERROR] Cannot open input TS file: '%s'\n", args->filename);
+            g_keep_running = 0;
+            return NULL;
         }
-        backoff_cnt = 0;
-        now_ns += 188ULL * 8 * 1000000000 / 10000000;
+        printf("CLI: Replay Mode Active (File: %s)\n", args->filename);
+        uint64_t simulated_now_ns = 1704067200000000000ULL;
+        while (g_keep_running && fread(pkt.data, 1, 188, f) == 188) {
+            pkt.timestamp_ns = simulated_now_ns;
+            while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
+            backoff_cnt = 0;
+            simulated_now_ns += 188ULL * 8 * 1000000000 / 10000000;
+        }
+        fclose(f);
+    } else if (cfg->udp_port > 0) {
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        struct sockaddr_in sa = {0};
+        sa.sin_family = AF_INET;
+        sa.sin_port = htons(cfg->udp_port);
+        sa.sin_addr.s_addr = INADDR_ANY;
+        if (bind(fd, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+            fprintf(stderr, "[FATAL] UDP Bind failed on %d\n", cfg->udp_port);
+            g_keep_running = 0;
+            return NULL;
+        }
+        printf("CLI: UDP Live Capture Active (Port: %d)\n", cfg->udp_port);
+        while (g_keep_running) {
+            ssize_t len = recv(fd, raw_buf, sizeof(raw_buf), MSG_DONTWAIT);
+            if (len > 0) {
+                uint64_t now = (uint64_t)ts_now_ns128();
+                for (int i = 0; i < len / 188; i++) {
+                    memcpy(pkt.data, raw_buf + (i * 188), 188);
+                    pkt.timestamp_ns = now;
+                    while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
+                    backoff_cnt = 0;
+                }
+            } else
+                usleep(1000);
+        }
+        close(fd);
+    } else if (strlen(cfg->srt_url) > 0) {
+        srt_startup();
+        SRTSOCKET sock = srt_create_socket();
+        struct sockaddr_in sa = {0};
+        char addr_str[256];
+        int port = 9000;
+        sscanf(cfg->srt_url, "srt://%[^:]:%d", addr_str, &port);
+        sa.sin_family = AF_INET;
+        sa.sin_port = htons(port);
+        sa.sin_addr.s_addr = (strlen(addr_str) == 0 || addr_str[0] == ':') ? INADDR_ANY : inet_addr(addr_str);
+        int yes = 1;
+        srt_setsockopt(sock, 0, SRTO_RCVSYN, &yes, sizeof(yes));
+        if (srt_bind(sock, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
+            srt_listen(sock, 1);
+            printf("CLI: SRT Live Capture Active (%s)\n", cfg->srt_url);
+            while (g_keep_running) {
+                struct sockaddr_in cli;
+                int clen = sizeof(cli);
+                SRTSOCKET conn = srt_accept(sock, (struct sockaddr*)&cli, &clen);
+                if (conn == SRT_INVALID_SOCK) {
+                    usleep(100000);
+                    continue;
+                }
+                while (g_keep_running) {
+                    int len = srt_recvmsg(conn, (char*)raw_buf, sizeof(raw_buf));
+                    if (len > 0) {
+                        uint64_t now = (uint64_t)ts_now_ns128();
+                        for (int i = 0; i < len / 188; i++) {
+                            memcpy(pkt.data, raw_buf + (i * 188), 188);
+                            pkt.timestamp_ns = now;
+                            while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
+                            backoff_cnt = 0;
+                        }
+                    } else if (len == SRT_ERROR)
+                        break;
+                }
+                srt_close(conn);
+            }
+        }
+        srt_close(sock);
+        srt_cleanup();
     }
 
-    // Poison pill
-    pkt.timestamp_ns = 0;
+    pkt.timestamp_ns = 0;  // Poison pill
     while (!spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(100);
-
-    fclose(f);
     printf("CLI: Capture finished.\n");
     return NULL;
 }
@@ -93,25 +168,19 @@ static void* capture_thread(void* arg) {
 static void* decode_thread(void* arg) {
     (void)arg;
     set_thread_affinity(1);
-
     ts_packet_t pkt;
     int backoff_cnt = 0;
     while (1) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
+            if (pkt.timestamp_ns == 0) break;
+            while (g_keep_running && !spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(backoff_cnt++);
             backoff_cnt = 0;
-            if (pkt.timestamp_ns == 0) {  // Poison pill
-                while (!spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(100);
-                break;
-            }
-            ts_decode_result_t res;
-            tsa_decode_packet(g_h, pkt.data, pkt.timestamp_ns, &res);
-            while (!spsc_queue_push(q_dec_to_met, &pkt)) {
-                backoff_sleep(10);
-            }
         } else {
             backoff_sleep(backoff_cnt++);
         }
     }
+    pkt.timestamp_ns = 0;
+    while (!spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(100);
     printf("CLI: Decode finished.\n");
     return NULL;
 }
@@ -120,36 +189,22 @@ static void* decode_thread(void* arg) {
 static void* metrology_thread(void* arg) {
     (void)arg;
     set_thread_affinity(2);
-
     ts_packet_t pkt;
-    uint64_t last_ts = 0;
     int backoff_cnt = 0;
+    uint64_t last_ts = 0;
     while (1) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
-            backoff_cnt = 0;
             if (pkt.timestamp_ns == 0) break;
+            tsa_process_packet(g_h, pkt.data, pkt.timestamp_ns);
             last_ts = pkt.timestamp_ns;
-            ts_decode_result_t res;
-
-            struct timespec start, end;
-            clock_gettime(CLOCK_MONOTONIC, &start);
-
-            // The packet was already decoded in the decode_thread.
-            tsa_decode_packet_pure(g_h, pkt.data, pkt.timestamp_ns, &res);
-            tsa_metrology_process(g_h, pkt.data, pkt.timestamp_ns, &res);
-
-            clock_gettime(CLOCK_MONOTONIC, &end);
-            uint64_t lat = (end.tv_sec - start.tv_sec) * 1000000000ULL + (end.tv_nsec - start.tv_nsec);
-            // Engine processing latency metric update (internal hook)
-            g_h->live->engine_processing_latency_ns = (g_h->live->engine_processing_latency_ns * 99 + lat) / 100;
+            backoff_cnt = 0;
         } else {
             backoff_sleep(backoff_cnt++);
         }
     }
-    // Final commit at end of stream using the last seen timestamp
     if (last_ts > 0) tsa_commit_snapshot(g_h, last_ts);
     printf("CLI: Metrology finished.\n");
-    g_keep_running = 0;  // Trigger shutdown of main and HTTP
+    g_keep_running = 0;
     return NULL;
 }
 
@@ -160,13 +215,7 @@ static void fn(struct mg_connection* c, int ev, void* ev_data) {
         if (mg_match(hm->uri, mg_str("/metrics"), NULL)) {
             static char resp[128 * 1024];
             tsa_exporter_prom_v2(&g_h, 1, resp, sizeof(resp));
-            mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", resp);
-        } else if (mg_match(hm->uri, mg_str("/api/v1/metrology/full"), NULL)) {
-            static char resp[128 * 1024];
-            static tsa_snapshot_full_t snap;
-            tsa_take_snapshot_full(g_h, &snap);
-            tsa_snapshot_to_json(&snap, resp, sizeof(resp));
-            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", resp);
+            mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         }
     }
 }
@@ -176,9 +225,7 @@ static void* http_thread(void* arg) {
     set_thread_affinity(3);
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
-    if (mg_http_listen(&mgr, "http://0.0.0.0:12345", fn, NULL) == NULL) {
-        return NULL;
-    }
+    if (mg_http_listen(&mgr, "http://0.0.0.0:12345", fn, NULL) == NULL) return NULL;
     while (g_keep_running) mg_mgr_poll(&mgr, 100);
     mg_mgr_free(&mgr);
     return NULL;
@@ -186,59 +233,72 @@ static void* http_thread(void* arg) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        printf("Usage: %s [--mode=live|replay|forensic|certification] <test.ts>\n", argv[0]);
+        printf("Usage: %s [options] <input.ts>\n", argv[0]);
+        printf("Options:\n  --udp <port>\n  --srt-url <url>\n  --mode=live|replay|forensic|certification\n");
         return 1;
     }
 
-    tsa_config_t cfg = {.is_live = false, .pcr_ema_alpha = 0.1, .op_mode = TSA_MODE_REPLAY};
-    const char* filename = argv[argc - 1];
+    capture_args_t cap_args;
+    memset(&cap_args, 0, sizeof(cap_args));
+    cap_args.cfg.is_live = true;
+    cap_args.cfg.pcr_ema_alpha = 0.1;
+    cap_args.cfg.op_mode = TSA_MODE_LIVE;
 
-    for (int i = 1; i < argc - 1; i++) {
-        if (strncmp(argv[i], "--mode=", 7) == 0) {
-            const char* m = argv[i] + 7;
-            if (strcmp(m, "live") == 0)
-                cfg.op_mode = TSA_MODE_LIVE;
-            else if (strcmp(m, "replay") == 0)
-                cfg.op_mode = TSA_MODE_REPLAY;
-            else if (strcmp(m, "forensic") == 0)
-                cfg.op_mode = TSA_MODE_FORENSIC;
-            else if (strcmp(m, "certification") == 0)
-                cfg.op_mode = TSA_MODE_CERTIFICATION;
+    int opt;
+    static struct option long_options[] = {{"udp", required_argument, 0, 'u'},
+                                           {"srt-url", required_argument, 0, 's'},
+                                           {"mode", required_argument, 0, 'm'},
+                                           {0, 0, 0, 0}};
+
+    while ((opt = getopt_long(argc, argv, "u:s:m:", long_options, NULL)) != -1) {
+        switch (opt) {
+            case 'u':
+                cap_args.cfg.udp_port = atoi(optarg);
+                break;
+            case 's':
+                strncpy(cap_args.cfg.srt_url, optarg, sizeof(cap_args.cfg.srt_url) - 1);
+                break;
+            case 'm':
+                if (strcmp(optarg, "live") == 0)
+                    cap_args.cfg.op_mode = TSA_MODE_LIVE;
+                else if (strcmp(optarg, "replay") == 0)
+                    cap_args.cfg.op_mode = TSA_MODE_REPLAY;
+                else if (strcmp(optarg, "forensic") == 0)
+                    cap_args.cfg.op_mode = TSA_MODE_FORENSIC;
+                else if (strcmp(optarg, "certification") == 0)
+                    cap_args.cfg.op_mode = TSA_MODE_CERTIFICATION;
+                break;
         }
     }
-
-    if (cfg.op_mode == TSA_MODE_CERTIFICATION) {
-        // Doc 09: Enforce isolcpus check (simplified for now)
-        printf("CLI: Certification Mode Active. Verifying environment...\n");
-        // In a real implementation, we'd check /proc/cmdline or similar.
+    if (optind < argc) {
+        strncpy(cap_args.filename, argv[optind], sizeof(cap_args.filename) - 1);
+        strncpy(cap_args.cfg.input_label, "CLI-FILE", sizeof(cap_args.cfg.input_label) - 1);
+    } else {
+        strncpy(cap_args.cfg.input_label, "CLI-NET", sizeof(cap_args.cfg.input_label) - 1);
     }
 
-    strncpy(cfg.input_label, "CLI-PIPE", sizeof(cfg.input_label));
-    g_h = tsa_create(&cfg);
+    if (cap_args.cfg.op_mode == TSA_MODE_CERTIFICATION) printf("CLI: Certification Mode Active.\n");
 
-    q_cap_to_dec = spsc_queue_create(8192);
-    q_dec_to_met = spsc_queue_create(8192);
+    g_h = tsa_create(&cap_args.cfg);
+    q_cap_to_dec = spsc_queue_create(16384);
+    q_dec_to_met = spsc_queue_create(16384);
 
     signal(SIGINT, sig_handler);
-
     pthread_t t_cap, t_dec, t_met, t_http;
-    pthread_create(&t_cap, NULL, capture_thread, (void*)filename);
+    pthread_create(&t_cap, NULL, capture_thread, &cap_args);
     pthread_create(&t_dec, NULL, decode_thread, NULL);
     pthread_create(&t_met, NULL, metrology_thread, NULL);
     pthread_create(&t_http, NULL, http_thread, NULL);
 
     printf("CLI: 4-Thread Pipeline Started. Core Affinity [0,1,2,3]\n");
-
-    while (g_keep_running) {
-        usleep(100000);
-    }
+    while (g_keep_running) usleep(100000);
 
     pthread_join(t_cap, NULL);
     pthread_join(t_dec, NULL);
     pthread_join(t_met, NULL);
     pthread_join(t_http, NULL);
 
-    // Dump final snapshot for verification
+    // Dump final report
     tsa_snapshot_full_t snap;
     if (tsa_take_snapshot_full(g_h, &snap) == 0) {
         char* buf = malloc(256 * 1024);
@@ -247,7 +307,7 @@ int main(int argc, char** argv) {
         if (f_out) {
             fprintf(f_out, "%s\n", buf);
             fclose(f_out);
-            printf("\nCLI: Final metrology saved to final_metrology.json\n");
+            printf("CLI: Final metrology saved.\n");
         }
         free(buf);
     }
@@ -255,7 +315,6 @@ int main(int argc, char** argv) {
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);
     tsa_destroy(g_h);
-
     printf("CLI: Shutdown Complete.\n");
     return 0;
 }

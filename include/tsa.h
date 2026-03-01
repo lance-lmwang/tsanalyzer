@@ -142,6 +142,9 @@ typedef struct {
     uint64_t forced_cbr_bitrate;
     uint16_t protected_pids[16];
     uint32_t entropy_window_packets;
+
+    int udp_port;
+    char srt_url[256];
 } tsa_config_t;
 
 /* --- Core TSA API --- */

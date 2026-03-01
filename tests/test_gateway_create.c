@@ -1,13 +1,13 @@
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include "tsa.h"
 
 void* terminator_thread(void* arg) {
     (void)arg;
-    sleep(5); // Hard limit for this specific test
+    sleep(5);  // Hard limit for this specific test
     printf("Test stuck for 5s, forcing exit...\n");
     exit(1);
 }

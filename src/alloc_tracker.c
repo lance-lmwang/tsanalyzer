@@ -82,7 +82,15 @@ int posix_memalign(void** memptr, size_t alignment, size_t size) {
     return real_posix_memalign(memptr, alignment, size);
 }
 
-void start_allocation_tracking() { g_tracking_enabled = true; }
-void stop_allocation_tracking() { g_tracking_enabled = false; }
-uint64_t get_malloc_count() { return atomic_load(&g_malloc_count); }
-void reset_malloc_count() { atomic_store(&g_malloc_count, 0); }
+void start_allocation_tracking() {
+    g_tracking_enabled = true;
+}
+void stop_allocation_tracking() {
+    g_tracking_enabled = false;
+}
+uint64_t get_malloc_count() {
+    return atomic_load(&g_malloc_count);
+}
+void reset_malloc_count() {
+    atomic_store(&g_malloc_count, 0);
+}

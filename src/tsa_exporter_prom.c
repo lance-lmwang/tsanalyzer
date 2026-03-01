@@ -9,9 +9,10 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
     int off = 0;
     int n;
 
-    #define SAFE_APPEND(...) { \
+#define SAFE_APPEND(...)                                                           \
+    {                                                                              \
         n = snprintf(buf + off, (sz > (size_t)off) ? (sz - off) : 0, __VA_ARGS__); \
-        if (n > 0) off += (off + n < (int)sz) ? n : (int)(sz - off - 1); \
+        if (n > 0) off += (off + n < (int)sz) ? n : (int)(sz - off - 1);           \
     }
 
     // Global Correlation Analysis
@@ -60,12 +61,12 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_tr101290_p1_pat_error%s %llu\n", labels, (unsigned long long)s->pat_error.count);
         SAFE_APPEND("tsa_tr101290_p1_cc_error%s %llu\n", labels, (unsigned long long)s->cc_error.count);
 
-        SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n",
-                    sid, (unsigned long long)s->sync_loss.count);
-        SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n",
-                    sid, (unsigned long long)s->pat_error.count);
-        SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n",
-                    sid, (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
+                    (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid,
+                    (unsigned long long)s->pat_error.count);
+        SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid,
+                    (unsigned long long)s->cc_error.count);
 
         // Compatibility names
         SAFE_APPEND("tsa_continuity_errors_total%s %llu\n", labels, (unsigned long long)s->cc_error.count);
@@ -84,7 +85,8 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_mdi_delay_factor_ms%s %.2f\n", labels, (float)s->mdi_df_ms);
         SAFE_APPEND("tsa_essence_video_fps%s %.2f\n", labels, (float)s->video_fps);
         SAFE_APPEND("tsa_essence_av_sync_ms%s %d\n", labels, s->av_sync_ms);
-        SAFE_APPEND("tsa_engine_processing_latency_ns%s %llu\n", labels, (unsigned long long)s->engine_processing_latency_ns);
+        SAFE_APPEND("tsa_engine_processing_latency_ns%s %llu\n", labels,
+                    (unsigned long long)s->engine_processing_latency_ns);
 
         // Tier 4: RST
         SAFE_APPEND("tsa_rst_network_seconds%s %.2f\n", labels, snap->predictive.rst_network_s);
@@ -93,8 +95,8 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         for (uint32_t j = 0; j < snap->active_pid_count; j++) {
             uint16_t p = snap->pids[j].pid;
             const char* t = snap->pids[j].type_str[0] ? snap->pids[j].type_str : "Unknown";
-            SAFE_APPEND("tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n",
-                         sid, p, t, (unsigned long long)s->pid_bitrate_bps[p]);
+            SAFE_APPEND("tsa_pid_bitrate_bps{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"} %llu\n", sid, p, t,
+                        (unsigned long long)s->pid_bitrate_bps[p]);
 
             if (snap->pids[j].width > 0) {
                 SAFE_APPEND("tsa_video_width{stream_id=\"%s\",pid=\"0x%04x\"} %u\n", sid, p, snap->pids[j].width);
@@ -103,7 +105,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         }
     }
     free(snap);
-    #undef SAFE_APPEND
+#undef SAFE_APPEND
 }
 
 // Compatibility wrapper for older tests
