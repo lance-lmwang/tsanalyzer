@@ -145,18 +145,34 @@ uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h) { uint64_t br = atomic_load(&h
 void tsp_update_bitrate(tsp_handle_t* h, uint64_t nb) { h->cfg.bitrate = nb; }
 uint64_t tsp_get_bitrate(tsp_handle_t* h) { return h->cfg.bitrate; }
 pthread_t tsp_get_thread(tsp_handle_t* h) { return h->thread; }
-int tsp_get_stats(tsp_handle_t* h, uint64_t* t, int64_t* mx, int64_t* mn, uint64_t* d, uint64_t* dr, uint64_t* pps) { if (t) *t = atomic_load(&h->total_udp_packets); if (dr) *dr = atomic_load(&h->detected_bitrate); return 0; }
+int tsp_get_stats(tsp_handle_t* h, uint64_t* t, int64_t* mx, int64_t* mn, uint64_t* d, uint64_t* dr, uint64_t* pps) {
+    (void)mx; (void)mn; (void)d; (void)pps;
+    if (t) *t = atomic_load(&h->total_udp_packets);
+    if (dr) *dr = atomic_load(&h->detected_bitrate);
+    return 0;
+}
 int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s) { s->detected_bitrate = atomic_load(&h->detected_bitrate); return 0; }
-uint64_t calculate_target_time(tsp_handle_t* h, uint64_t p, uint64_t b, uint64_t n) { return n; }
+uint64_t calculate_target_time(tsp_handle_t* h, uint64_t p, uint64_t b, uint64_t n) {
+    (void)h; (void)p; (void)b;
+    return n;
+}
 spsc_ring_t* spsc_ring_create(size_t s) { spsc_ring_t* r = calloc(1, sizeof(struct spsc_ring)); r->sz = s; r->elem_sz = 8; r->buffer = malloc(s * 8); return r; }
 void spsc_ring_destroy(spsc_ring_t* r) { if (r) { free(r->buffer); free(r); } }
 int spsc_ring_push(spsc_ring_t* r, const uint8_t* d, size_t s) {
+    (void)s;
     uint64_t head = atomic_load(&r->head), tail = atomic_load(&r->tail);
-    if (head - tail >= r->sz) return -1; memcpy(r->buffer + (head % r->sz) * 8, d, 8);
+    if (head - tail >= r->sz) {
+        return -1;
+    }
+    memcpy(r->buffer + (head % r->sz) * 8, d, 8);
     atomic_store(&r->head, head + 1); return 0;
 }
 int spsc_ring_pop(spsc_ring_t* r, uint8_t* d, size_t s) {
+    (void)s;
     uint64_t head = atomic_load(&r->head), tail = atomic_load(&r->tail);
-    if (head == tail) return -1; memcpy(d, r->buffer + (tail % r->sz) * 8, 8);
+    if (head == tail) {
+        return -1;
+    }
+    memcpy(d, r->buffer + (tail % r->sz) * 8, 8);
     atomic_store(&r->tail, tail + 1); return 0;
 }

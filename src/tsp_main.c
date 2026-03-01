@@ -124,7 +124,7 @@ int main(int argc, char* argv[]) {
     if (input_file) {
         in = fopen(input_file, "rb");
         if (!in) {
-            perror("fopen failed");
+            fprintf(stderr, "[FATAL ERROR] Cannot open input TS file: '%s'. Reason: %s\n", input_file, strerror(errno));
             return 1;
         }
     }

@@ -61,7 +61,7 @@ static void* capture_thread(void* arg) {
 
     FILE* f = fopen(filename, "rb");
     if (!f) {
-        perror("fopen");
+        fprintf(stderr, "[FATAL ERROR] Cannot open input TS file: '%s'. Reason: %s\n", filename, strerror(errno));
         g_keep_running = 0;
         return NULL;
     }
