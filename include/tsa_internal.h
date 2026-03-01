@@ -101,6 +101,7 @@ struct tsa_handle {
     tsa_srt_stats_t srt_live;
 
     q32_32 pcr_ema_alpha_q32;
+    float last_health_score;
 
     /* Fixed-point Buffer Simulation (Q64.64) - Dynamic */
     int128_t* pid_eb_fill_q64;
