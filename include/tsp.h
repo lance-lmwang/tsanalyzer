@@ -20,7 +20,7 @@ typedef enum {
     TSPACER_MODE_PCR,
     TSPACER_MODE_ETF,
     TSPACER_MODE_CBR,
-    TSPACER_MODE_BASIC  // Added for pacing test
+    TSPACER_MODE_BASIC
 } tsp_mode_t;
 
 typedef struct {
@@ -45,7 +45,7 @@ typedef struct {
     const char* dest_ip;
     uint16_t port;
     uint16_t pcr_pid;
-    uint32_t pcr_sync_precision_ns;
+    uint32_t busy_wait_ns;
     tsp_stats_cb_t stats_cb;
     void* user_data;
 } tsp_config_t;
@@ -65,11 +65,14 @@ struct tsp_handle {
     _Atomic uint64_t total_udp_packets;
     _Atomic uint64_t detected_bitrate;
 
-    // Legacy members for tests
+    // Pacing & Metrology State (Used by tx_loop and tsp_enqueue)
+    uint64_t last_token_ns;
+    double tokens;
+    uint64_t last_pcr_val_tx;
+    uint64_t pkts_since_pcr;
+    uint64_t byte_offset_base;
     uint64_t pcr_base;
     uint64_t sys_time_base;
-    uint64_t last_pcr_val_tx;
-    uint64_t byte_offset_base;
 };
 
 /* API */

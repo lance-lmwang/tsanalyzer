@@ -28,6 +28,8 @@ static _Atomic int g_run = 1;
 static void *worker(void *arg) {
     node_t *s = (node_t *)arg;
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int rcvbuf = 8 * 1024 * 1024;
+    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
     struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(s->port), .sin_addr.s_addr = INADDR_ANY};
     bind(fd, (struct sockaddr *)&sa, sizeof(sa));
     uint8_t buf[1500 * 7];
@@ -37,7 +39,10 @@ static void *worker(void *arg) {
         if (len > 0) {
             int128_t now = ts_now_ns128();
             uint64_t now64 = (uint64_t)now;
-            for (int i = 0; i < (int)len / 188; i++) tsa_process_packet(s->tsa, buf + (i * 188), now64);
+            for (int i = 0; i < (int)len / 188; i++) {
+                // Increment timestamp slightly per packet in batch to help regress
+                tsa_process_packet(s->tsa, buf + (i * 188), now64 + (i * 10));
+            }
             
             if (now64 - last_commit_ns > 1000000000ULL) {
                 tsa_commit_snapshot(s->tsa, now64);

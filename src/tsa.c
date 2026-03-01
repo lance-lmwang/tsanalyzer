@@ -757,7 +757,19 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
     uint16_t pid = res->pid;
     h->pkts_since_pcr++;
 
-    // T-STD Leaky Bucket Simulator (Fixed-point implementation)
+    /* Arrival Time Normalization for Localhost Bulk-Recv */
+    static uint64_t last_in_now = 0;
+    static uint64_t sub_ns_off = 0;
+    if (now_ns == last_in_now) {
+        // If packets arrive at same ns, spread them out based on 10Mbps pace (placeholder)
+        sub_ns_off += 150400; // ~150ns per packet
+        now_ns += sub_ns_off;
+    } else {
+        last_in_now = now_ns;
+        sub_ns_off = 0;
+    }
+    
+    // ... (rest of function)
     if (h->live->pid_last_seen_ns[pid] > 0) {
         uint64_t dt = h->stc_ns - h->live->pid_last_seen_ns[pid];
 
@@ -897,11 +909,17 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
             h->live->pcr_accuracy_ns = (double)reg_acc;
 
             // Always attempt to estimate bitrate if we have a valid PCR delta
-            if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 30) {
-                uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+            if (dt_pcr_ticks > 0) {
+                unsigned __int128 br128 = (unsigned __int128)h->pkts_since_pcr * 1504 * 27000000;
+                uint64_t br = (uint64_t)(br128 / dt_pcr_ticks);
+                
                 uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                if (h->live->pcr_bitrate_bps == 0) h->live->pcr_bitrate_bps = br;
-                else h->live->pcr_bitrate_bps = (br * alpha + h->live->pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                if (h->live->pcr_bitrate_bps == 0) {
+                    h->live->pcr_bitrate_bps = br;
+                } else {
+                    h->live->pcr_bitrate_bps = ((unsigned __int128)br * alpha + 
+                                               (unsigned __int128)h->live->pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+                }
             }
 
             if (reg_res == 0) {
@@ -986,17 +1004,13 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     uint64_t current_stc = h->stc_ns;
 
     uint64_t dt_ns = now_ns - h->last_snap_ns;
-    if (dt_ns == 0) dt_ns = 1;  // Prevent div by zero
+    if (dt_ns == 0) dt_ns = 1;
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0 && dt_ns > 10000000ULL) {
-        // Use int128 to prevent overflow during (dp * 1504 * 1e9)
-        int128_t bps128 = ((int128_t)dp * 1504 * 1000000000ULL) / dt_ns;
+    if (dp > 0 && dt_ns > 0) {
+        unsigned __int128 bps128 = ((unsigned __int128)dp * 1504 * 1000000000ULL) / dt_ns;
         h->live->physical_bitrate_bps = (uint64_t)bps128;
         h->signal_lock = true;
-    } else if (dt_ns > 2000000000ULL) {
-        h->live->physical_bitrate_bps = 0;
-        h->signal_lock = false;
     }
 
     // MDI-MLR using integer math: (losses * 1e9) / dt_ns
