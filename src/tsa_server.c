@@ -31,36 +31,36 @@ static void *worker(void *arg) {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     int rcvbuf = 8 * 1024 * 1024;
     setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-    
+
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(s->port);
     sa.sin_addr.s_addr = htonl(INADDR_ANY);
-    
+
     if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
         perror("SRV: Bind failed");
         close(fd);
         return NULL;
     }
-    
+
     uint8_t buf[1500 * 7];
     uint64_t last_commit_ns = (uint64_t)ts_now_ns128();
 
     while (atomic_load(&g_run)) {
         ssize_t len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
         uint64_t now64 = (uint64_t)ts_now_ns128();
-        
+
         if (len > 0) {
             for (int i = 0; i < (int)len / 188; i++) {
                 tsa_process_packet(s->tsa, buf + (i * 188), now64);
             }
         }
-        
+
         if (now64 - last_commit_ns > 1000000000ULL) {
             tsa_commit_snapshot(s->tsa, now64);
             last_commit_ns = now64;
         }
-        
+
         if (len <= 0) usleep(1000);
     }
     close(fd);

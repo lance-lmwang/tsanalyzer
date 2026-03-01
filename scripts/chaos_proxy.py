@@ -12,7 +12,7 @@ MAP = {
 
 CONFIG_FILE = "chaos_config.json"
 # Default State
-state = {"drop_rates": {"19002": 0.0}} 
+state = {"drop_rates": {"19002": 0.0}}
 
 def load_config():
     global state
@@ -28,13 +28,13 @@ def relay(in_port, out_port):
     sock.bind(('0.0.0.0', in_port))
     dest = ('127.0.0.1', out_port)
     print(f"CHAOS: Relay {in_port} -> {out_port}")
-    
+
     while True:
         data, addr = sock.recvfrom(4096)
         # Dynamic drop check
         rate = state.get("drop_rates", {}).get(str(out_port), 0.0)
         if rate > 0 and random.random() < rate:
-            continue 
+            continue
         sock.sendto(data, dest)
 
 # Start Relays
