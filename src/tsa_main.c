@@ -67,15 +67,11 @@ static void* capture_thread(void* arg) {
     }
 
     ts_packet_t pkt;
-    uint64_t now_ns = 0;
+    // Base epoch for deterministic results: 2024-01-01
+    uint64_t now_ns = 1704067200000000000ULL;
     int backoff_cnt = 0;
 
     while (g_keep_running && fread(pkt.data, 1, 188, f) == 188) {
-        if (now_ns == 0) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-        }
         pkt.timestamp_ns = now_ns;
         while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) {
             backoff_sleep(backoff_cnt++);

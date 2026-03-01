@@ -31,7 +31,7 @@ static void *worker(void *arg) {
     struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(s->port), .sin_addr.s_addr = INADDR_ANY};
     bind(fd, (struct sockaddr *)&sa, sizeof(sa));
     uint8_t buf[1500 * 7];
-    uint64_t last_commit_ns = 0;
+    uint64_t last_commit_ns = (uint64_t)ts_now_ns128();
     while (atomic_load(&g_run)) {
         ssize_t len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
         if (len > 0) {
@@ -42,6 +42,11 @@ static void *worker(void *arg) {
             if (now64 - last_commit_ns > 1000000000ULL) {
                 tsa_commit_snapshot(s->tsa, now64);
                 last_commit_ns = now64;
+                if (s->tsa->live->pcr_bitrate_bps > 0) {
+                    printf("SRV: [%s] PCR-BR: %lu bps, Jitter: %.3f ms\n",
+                           s->tsa->config.input_label, s->tsa->live->pcr_bitrate_bps,
+                           s->tsa->live->pcr_jitter_avg_ns / 1000000.0);
+                }
             }
         } else {
             usleep(500);

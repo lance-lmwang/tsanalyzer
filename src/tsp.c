@@ -110,7 +110,12 @@ static void* tx_loop(void* arg) {
                         first_pcr_val = pcr_val;
                         start_time_ns = now_ns;
                     } else {
-                        uint64_t dt_pcr_ns = (pcr_val - first_pcr_val) * 1000 / 27;
+                        int64_t diff_pcr = (int64_t)pcr_val - (int64_t)first_pcr_val;
+                        // Handle 42-bit wrap around
+                        if (diff_pcr < -((int64_t)1 << 41)) diff_pcr += ((int64_t)1 << 42);
+                        else if (diff_pcr > ((int64_t)1 << 41)) diff_pcr -= ((int64_t)1 << 42);
+
+                        uint64_t dt_pcr_ns = (uint64_t)diff_pcr * 1000 / 27;
                         uint64_t target_ns = start_time_ns + dt_pcr_ns;
 
                         if (target_ns > now_ns) {

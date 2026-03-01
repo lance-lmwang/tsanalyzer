@@ -989,10 +989,14 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now_ns) {
     if (dt_ns == 0) dt_ns = 1;  // Prevent div by zero
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    // Bitrate = pkts * 188 * 8 * 1e9 / dt_ns
-    if (dp > 0 || dt_ns > 500000000ULL) {
-        h->live->physical_bitrate_bps = (dp * 1504 * 1000000000ULL) / dt_ns;
-        h->signal_lock = (h->live->physical_bitrate_bps > 0);
+    if (dp > 0 && dt_ns > 10000000ULL) {
+        // Use int128 to prevent overflow during (dp * 1504 * 1e9)
+        int128_t bps128 = ((int128_t)dp * 1504 * 1000000000ULL) / dt_ns;
+        h->live->physical_bitrate_bps = (uint64_t)bps128;
+        h->signal_lock = true;
+    } else if (dt_ns > 2000000000ULL) {
+        h->live->physical_bitrate_bps = 0;
+        h->signal_lock = false;
     }
 
     // MDI-MLR using integer math: (losses * 1e9) / dt_ns
