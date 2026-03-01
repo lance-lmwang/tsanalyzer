@@ -24,6 +24,7 @@ void print_usage(const char* prog) {
     printf("  -p, --port <port>     Destination UDP port\n");
     printf("      --srt-url <url>   SRT destination URL (e.g., srt://127.0.0.1:9000)\n");
     printf("  -P, --pcr             PCR-locked pacing mode\n");
+    printf("  -m, --pcr-pid <pid>   PID to extract PCR from (default: first PID with PCR)\n");
     printf("  -l, --loop            Loop input file infinitely\n");
     printf("  -f, --file <file>     Input TS file (default: stdin)\n");
     printf("  -t, --ts-per-udp <n>  TS packets per UDP packet (default: 7)\n");
@@ -54,6 +55,7 @@ int main(int argc, char* argv[]) {
                                            {"port", required_argument, 0, 'p'},
                                            {"srt-url", required_argument, 0, 'S'},
                                            {"pcr", no_argument, 0, 'P'},
+                                           {"pcr-pid", required_argument, 0, 'm'},
                                            {"loop", no_argument, 0, 'l'},
                                            {"file", required_argument, 0, 'f'},
                                            {"ts-per-udp", required_argument, 0, 't'},
@@ -63,7 +65,7 @@ int main(int argc, char* argv[]) {
 
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "b:i:p:S:Plf:t:c:h", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "b:i:p:S:Pm:lf:t:c:h", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'b':
                 cfg.bitrate = strtoull(optarg, NULL, 10);
@@ -79,6 +81,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'P':
                 cfg.mode = TSPACER_MODE_PCR;
+                break;
+            case 'm':
+                cfg.pcr_pid = (uint16_t)strtol(optarg, NULL, 0);
                 break;
             case 'l':
                 loop_file = 1;

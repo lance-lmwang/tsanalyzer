@@ -858,7 +858,12 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
             h->pid_pes_len[pid] += res->payload_len;
         }
     }
+
     if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
+        // AUTO-ACTIVATE: Ensure PCR-bearing PIDs are tracked and referenced
+        h->live->pid_is_referenced[pid] = true;
+        tsa_update_pid_tracker(h, pid); 
+
         uint64_t pcr_ticks = extract_pcr(pkt);
         uint64_t pcr_ns = pcr_ticks * 1000 / 27;
 
@@ -891,6 +896,14 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
             // Update jitter metrics
             h->live->pcr_accuracy_ns = (double)reg_acc;
 
+            // Always attempt to estimate bitrate if we have a valid PCR delta
+            if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 30) {
+                uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
+                uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
+                if (h->live->pcr_bitrate_bps == 0) h->live->pcr_bitrate_bps = br;
+                else h->live->pcr_bitrate_bps = (br * alpha + h->live->pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
+            }
+
             if (reg_res == 0) {
                 h->stc_locked = true;
                 h->stc_slope_q64 = slope_q64;
@@ -905,21 +918,8 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
                 h->pcr_jitter_sq_sum_ns += (int128_t)inst_jitter_ns * inst_jitter_ns;
                 h->pcr_jitter_count++;
                 h->live->pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
-
-                if (dt_pcr_ticks > 0) {
-                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
-                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                    h->live->pcr_bitrate_bps = (br * alpha + h->live->pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
-                }
             } else {
                 h->stc_locked = false;
-
-                // Even if unlocked, estimate bitrate if pcr delta is reasonable
-                if (dt_pcr_ticks > 0 && dt_pcr_ticks < 27000000LL * 5) {
-                    uint64_t br = (uint64_t)h->pkts_since_pcr * 188 * 8 * 27000000 / dt_pcr_ticks;
-                    uint64_t alpha = (uint64_t)h->pcr_ema_alpha_q32;
-                    h->live->pcr_bitrate_bps = (br * alpha + h->live->pcr_bitrate_bps * ((1ULL << 32) - alpha)) >> 32;
-                }
             }
         } else {
             h->stc_ns = pcr_ns;
@@ -1408,10 +1408,14 @@ double calculate_pcr_jitter(uint64_t pcr_ns, uint64_t arrival_ns, double* drift)
 }
 
 uint64_t extract_pcr(const uint8_t* pkt) {
-    if (!(pkt[3] & 0x20) || pkt[4] < 7 || !(pkt[5] & 0x10)) return 0;
+    if (!(pkt[3] & 0x20)) return INVALID_PCR;
+    if (pkt[4] == 0) return INVALID_PCR;
+    if (!(pkt[5] & 0x10)) return INVALID_PCR;
+
     uint64_t b = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
                  ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
-    return b * 300 + (((uint16_t)(pkt[10] & 1) << 8) | pkt[11]);
+    uint16_t e = ((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11];
+    return b * 300 + e;
 }
 
 void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t sz) {
@@ -1555,8 +1559,9 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
     SAFE_APPEND("},");
     #undef EXPORT_ALARM
 
-    SAFE_APPEND("\"metrics\":{\"bitrate_bps\":%llu,\"pcr_jitter_ns\":%.1f,\"pcr_drift_ppm\":%.2f,\"mdi_df_ms\":%.2f,\"engine_latency_ns\":%llu},",
-                (unsigned long long)s->physical_bitrate_bps, s->pcr_jitter_avg_ns, s->pcr_drift_ppm, s->mdi_df_ms,
+    SAFE_APPEND("\"},\"metrics\":{\"bitrate_bps\":%llu,\"pcr_bitrate_bps\":%llu,\"pcr_jitter_ns\":%.1f,\"pcr_drift_ppm\":%.2f,\"mdi_df_ms\":%.2f,\"engine_latency_ns\":%llu},",
+                (unsigned long long)s->physical_bitrate_bps, (unsigned long long)s->pcr_bitrate_bps,
+                s->pcr_jitter_avg_ns, s->pcr_drift_ppm, s->mdi_df_ms,
                 (unsigned long long)s->engine_processing_latency_ns);
 
     SAFE_APPEND("\"predictive\":{\"rst_network_s\":%.3f,\"rst_encoder_s\":%.3f,\"fault_domain\":%u,\"lid_active\":%s},",

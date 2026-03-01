@@ -31,13 +31,18 @@ static void *worker(void *arg) {
     struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(s->port), .sin_addr.s_addr = INADDR_ANY};
     bind(fd, (struct sockaddr *)&sa, sizeof(sa));
     uint8_t buf[1500 * 7];
+    uint64_t last_commit_ns = 0;
     while (atomic_load(&g_run)) {
         ssize_t len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
         if (len > 0) {
             int128_t now = ts_now_ns128();
             uint64_t now64 = (uint64_t)now;
             for (int i = 0; i < (int)len / 188; i++) tsa_process_packet(s->tsa, buf + (i * 188), now64);
-            tsa_commit_snapshot(s->tsa, now64);
+            
+            if (now64 - last_commit_ns > 1000000000ULL) {
+                tsa_commit_snapshot(s->tsa, now64);
+                last_commit_ns = now64;
+            }
         } else {
             usleep(500);
         }

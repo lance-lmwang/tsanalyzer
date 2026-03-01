@@ -76,17 +76,62 @@ static void* tx_loop(void* arg) {
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
     }
 
+    uint64_t start_time_ns = 0;
+    uint64_t first_pcr_val = INVALID_PCR;
+
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
 
         if (head == tail) {
-            usleep(100);
+            struct timespec ts = {0, 100000}; // 100us
+            nanosleep(&ts, NULL);
             continue;
         }
 
-        // Send logic (simplified)
         uint8_t* pkt = h->ring_buffer + (tail % RING_BUFFER_SIZE) * TS_PACKET_SIZE;
+        uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
+
+        // Mode: PCR Locked Pacing
+        if (h->cfg.mode == TSPACER_MODE_PCR) {
+            if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
+                uint16_t current_pcr_pid = pid;
+                if (h->cfg.pcr_pid == 0 || current_pcr_pid == h->cfg.pcr_pid) {
+                    uint64_t pbase = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
+                                     ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
+                    uint16_t pext = ((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11];
+                    uint64_t pcr_val = pbase * 300 + pext;
+
+                    struct timespec now_ts;
+                    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+                    uint64_t now_ns = (uint64_t)now_ts.tv_sec * 1000000000ULL + now_ts.tv_nsec;
+
+                    if (first_pcr_val == INVALID_PCR) {
+                        first_pcr_val = pcr_val;
+                        start_time_ns = now_ns;
+                    } else {
+                        uint64_t dt_pcr_ns = (pcr_val - first_pcr_val) * 1000 / 27;
+                        uint64_t target_ns = start_time_ns + dt_pcr_ns;
+
+                        if (target_ns > now_ns) {
+                            uint64_t diff = target_ns - now_ns;
+                            if (diff > 1000000) { // > 1ms, use nanosleep
+                                struct timespec sleep_ts = { (time_t)(diff / 1000000000), (long)(diff % 1000000000) };
+                                nanosleep(&sleep_ts, NULL);
+                            } else { // Busy wait for nanosecond precision
+                                while (1) {
+                                    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+                                    if ((uint64_t)now_ts.tv_sec * 1000000000ULL + now_ts.tv_nsec >= target_ns) break;
+                                    __asm__ volatile("pause" ::: "memory");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Send logic
         if (h->srt_enabled) {
             srt_send(h->srt_sock, (const char*)pkt, TS_PACKET_SIZE);
         } else {

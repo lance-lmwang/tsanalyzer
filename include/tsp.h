@@ -44,6 +44,8 @@ typedef struct {
     const char* srt_url;
     const char* dest_ip;
     uint16_t port;
+    uint16_t pcr_pid;
+    uint32_t pcr_sync_precision_ns;
     tsp_stats_cb_t stats_cb;
     void* user_data;
 } tsp_config_t;
