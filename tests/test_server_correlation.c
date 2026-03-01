@@ -28,7 +28,7 @@ void test_global_correlation() {
 
     // 2. 3 out of 4 fail
     for (int i = 0; i < 3; i++) {
-        h[i]->live.sync_loss.count++;
+        h[i]->live->sync_loss.count++;
         tsa_commit_snapshot(h[i], 1000000000ULL);
     }
     tsa_commit_snapshot(h[3], 1000000000ULL);

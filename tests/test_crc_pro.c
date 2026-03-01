@@ -28,12 +28,12 @@ void test_pat_crc_error() {
 
     uint64_t now = 1000000000ULL;
     tsa_process_packet(h, pkt, now);
-    assert(h->live.crc_error.count == 0);
+    assert(h->live->crc_error.count == 0);
     assert(h->seen_pat == true);
 
     pkt[10] ^= 0xFF;
     tsa_process_packet(h, pkt, now + 1000000);
-    assert(h->live.crc_error.count == 1);
+    assert(h->live->crc_error.count == 1);
 
     tsa_destroy(h);
     printf("test_pat_crc_error passed.\n");

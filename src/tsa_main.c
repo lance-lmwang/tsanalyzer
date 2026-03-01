@@ -35,6 +35,25 @@ static void set_thread_affinity(int core_id) {
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 }
 
+static inline void cpu_relax(void) {
+#if defined(__x86_64__) || defined(__i386__)
+    __asm__ volatile("rep; nop" ::: "memory");
+#else
+    __asm__ volatile("" ::: "memory");
+#endif
+}
+
+static void backoff_sleep(int count) {
+    if (count < 10) {
+        cpu_relax();
+    } else if (count < 50) {
+        for (int i = 0; i < 10; i++) cpu_relax();
+    } else {
+        struct timespec ts = {0, 1000};  // 1us
+        nanosleep(&ts, NULL);
+    }
+}
+
 /* 1. Capture Thread */
 static void* capture_thread(void* arg) {
     const char* filename = (const char*)arg;
@@ -50,18 +69,20 @@ static void* capture_thread(void* arg) {
     ts_packet_t pkt;
     // Standardize initial timestamp for deterministic replay
     uint64_t now_ns = 1700000000000000000ULL;
+    int backoff_cnt = 0;
 
     while (g_keep_running && fread(pkt.data, 1, 188, f) == 188) {
         pkt.timestamp_ns = now_ns;
         while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) {
-            usleep(1);
+            backoff_sleep(backoff_cnt++);
         }
+        backoff_cnt = 0;
         now_ns += 188ULL * 8 * 1000000000 / 10000000;
     }
 
     // Poison pill
     pkt.timestamp_ns = 0;
-    while (!spsc_queue_push(q_cap_to_dec, &pkt)) usleep(1);
+    while (!spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(100);
 
     fclose(f);
     printf("CLI: Capture finished.\n");
@@ -74,19 +95,21 @@ static void* decode_thread(void* arg) {
     set_thread_affinity(1);
 
     ts_packet_t pkt;
+    int backoff_cnt = 0;
     while (1) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
+            backoff_cnt = 0;
             if (pkt.timestamp_ns == 0) {  // Poison pill
-                while (!spsc_queue_push(q_dec_to_met, &pkt)) usleep(1);
+                while (!spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(100);
                 break;
             }
             ts_decode_result_t res;
             tsa_decode_packet(g_h, pkt.data, pkt.timestamp_ns, &res);
             while (!spsc_queue_push(q_dec_to_met, &pkt)) {
-                usleep(1);
+                backoff_sleep(10);
             }
         } else {
-            usleep(10);
+            backoff_sleep(backoff_cnt++);
         }
     }
     printf("CLI: Decode finished.\n");
@@ -100,20 +123,27 @@ static void* metrology_thread(void* arg) {
 
     ts_packet_t pkt;
     uint64_t last_ts = 0;
-    uint64_t count = 0;
+    int backoff_cnt = 0;
     while (1) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
+            backoff_cnt = 0;
             if (pkt.timestamp_ns == 0) break;
             last_ts = pkt.timestamp_ns;
             ts_decode_result_t res;
+            
+            struct timespec start, end;
+            clock_gettime(CLOCK_MONOTONIC, &start);
+
             // The packet was already decoded in the decode_thread.
-            // Using pure version to avoid side effects (LRU updates).
             tsa_decode_packet_pure(g_h, pkt.data, pkt.timestamp_ns, &res);
             tsa_metrology_process(g_h, pkt.data, pkt.timestamp_ns, &res);
-
-            count++;
+            
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            uint64_t lat = (end.tv_sec - start.tv_sec) * 1000000000ULL + (end.tv_nsec - start.tv_nsec);
+            // Engine processing latency metric update (internal hook)
+            g_h->live->engine_processing_latency_ns = (g_h->live->engine_processing_latency_ns * 99 + lat) / 100;
         } else {
-            usleep(10);
+            backoff_sleep(backoff_cnt++);
         }
     }
     // Final commit at end of stream using the last seen timestamp

@@ -11,7 +11,7 @@ void test_h264_frame_counting() {
     tsa_config_t cfg = {0};
     tsa_handle_t* h = tsa_create(&cfg);
     uint16_t pid = 0x100;
-    h->live.pid_is_referenced[pid] = true;
+    h->live->pid_is_referenced[pid] = true;
     h->pid_seen[pid] = true;  // CRITICAL FIX
 
     // Register in active list

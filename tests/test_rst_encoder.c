@@ -17,7 +17,7 @@ void test_rst_encoder_drift() {
     // Current Drift = 10ms
     // Drift Rate = 1000ppm = 0.001
     // Remaining = 90ms / 0.001 = 90s
-    h->live.pcr_accuracy_ns = 10000000;
+    h->live->pcr_accuracy_ns = 10000000;
     h->stc_slope_q64 = TO_Q64_64(1.001);
 
     tsa_commit_snapshot(h, h->start_ns + 1000000000ULL);

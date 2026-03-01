@@ -59,6 +59,7 @@ typedef struct {
     uint32_t pid_eb_fill_bytes[TS_PID_MAX];
     uint64_t pid_last_seen_ns[TS_PID_MAX];
     uint64_t total_ts_packets;
+    uint64_t engine_processing_latency_ns;
 } tsa_tr101290_stats_t;
 
 typedef struct tsa_srt_stats {

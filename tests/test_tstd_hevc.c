@@ -13,7 +13,7 @@ void test_hevc_tstd_logic() {
 
     uint16_t video_pid = 0x101;
     h->pid_stream_type[video_pid] = 0x24;  // Manually mark as HEVC
-    h->live.pid_is_referenced[video_pid] = true;
+    h->live->pid_is_referenced[video_pid] = true;
 
     uint8_t pkt[188] = {0x47, 0x01, 0x01, 0x10};  // PID 0x101, Payload only
     uint64_t now_ns = 1000000000ULL;
@@ -32,7 +32,7 @@ void test_hevc_tstd_logic() {
 
     uint16_t audio_pid = 0x102;
     h->pid_stream_type[audio_pid] = 0x0f;  // ADTS-AAC
-    h->live.pid_is_referenced[audio_pid] = true;
+    h->live->pid_is_referenced[audio_pid] = true;
     pkt[2] = 0x02;
 
     for (int i = 0; i < 1000; i++) {

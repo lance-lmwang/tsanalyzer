@@ -29,7 +29,7 @@ void test_auto_forensics() {
     }
 
     // Trigger Alarm: CC Error
-    tsa->live.cc_error.count++;
+    tsa->live->cc_error.count++;
     // commit_snapshot is NOT needed if we fixed the trigger logic to use absolute counts
 
     // Process to trigger capture

@@ -24,7 +24,7 @@ void test_pcr_accuracy_threshold() {
     cfg.pcr_ema_alpha = 0.1;
     tsa_handle_t* h = tsa_create(&cfg);
     uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x30, 0x07, 0x10};  // PID 0x100, AF+PCR
-    h->live.pid_is_referenced[0x100] = true;
+    h->live->pid_is_referenced[0x100] = true;
 
     uint64_t start_ns = 1000000000ULL;
     // 1. Process 20 packets with NO jitter (linear)

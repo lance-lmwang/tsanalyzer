@@ -4,7 +4,11 @@ project(tspacer C CXX)
 enable_testing()
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall -Wextra -Werror")
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=native -DNDEBUG")
+else()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -Wall -Wextra -Werror")
+endif()
 
 # SRT Configuration
 set(ENABLE_SHARED OFF CACHE BOOL "Disable shared library" FORCE)

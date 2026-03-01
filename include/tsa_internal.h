@@ -78,7 +78,7 @@ struct tsa_handle {
     uint64_t last_pmt_ns;
     uint64_t last_snap_ns;
 
-    tsa_measurement_status_t pid_status[TS_PID_MAX];
+    tsa_measurement_status_t* pid_status; // Dynamic [TS_PID_MAX]
 
     bool seen_pat, seen_pmt;
     bool signal_lock;
@@ -95,63 +95,63 @@ struct tsa_handle {
     uint64_t pcr_jitter_count;
     ts_pcr_window_t pcr_window;
 
-    // Statistical Snapshots
-    tsa_tr101290_stats_t live;
-    tsa_tr101290_stats_t prev_snap_base;
+    // Statistical Snapshots (Now Pointers)
+    tsa_tr101290_stats_t* live;
+    tsa_tr101290_stats_t* prev_snap_base;
     tsa_srt_stats_t srt_live;
 
     q32_32 pcr_ema_alpha_q32;
 
-    /* Fixed-point Buffer Simulation (Q64.64) */
-    int128_t pid_eb_fill_q64[TS_PID_MAX];
-    int128_t pid_tb_fill_q64[TS_PID_MAX];
-    int128_t pid_mb_fill_q64[TS_PID_MAX];
-    uint64_t last_buffer_leak_vstc[TS_PID_MAX];
+    /* Fixed-point Buffer Simulation (Q64.64) - Dynamic */
+    int128_t* pid_eb_fill_q64;
+    int128_t* pid_tb_fill_q64;
+    int128_t* pid_mb_fill_q64;
+    uint64_t* last_buffer_leak_vstc;
 
-    // PID State Tracking
-    double pid_bitrate_ema[TS_PID_MAX];
-    uint64_t pid_bitrate_min[TS_PID_MAX];
-    uint64_t pid_bitrate_max[TS_PID_MAX];
-    uint8_t last_cc[TS_PID_MAX];
-    bool pid_seen[TS_PID_MAX];
-    bool pid_is_pmt[TS_PID_MAX];
-    uint8_t pid_stream_type[TS_PID_MAX];
-    int16_t pid_to_active_idx[TS_PID_MAX];
+    // PID State Tracking - Dynamic
+    double* pid_bitrate_ema;
+    uint64_t* pid_bitrate_min;
+    uint64_t* pid_bitrate_max;
+    uint8_t* last_cc;
+    bool* pid_seen;
+    bool* pid_is_pmt;
+    uint8_t* pid_stream_type;
+    int16_t* pid_to_active_idx;
     uint32_t pid_tracker_count;
-    uint16_t pid_active_list[MAX_ACTIVE_PIDS];  // LRU tracker for active PIDs
+    uint16_t pid_active_list[MAX_ACTIVE_PIDS];  // Small, keep in-struct
 
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
 
-    // PES & ES Deep Analysis (Expert Mode)
-    uint8_t* pid_pes_buf[TS_PID_MAX];
-    uint32_t pid_pes_len[TS_PID_MAX];
-    uint32_t pid_pes_cap[TS_PID_MAX];
+    // PES & ES Deep Analysis (Expert Mode) - Dynamic
+    uint8_t** pid_pes_buf;
+    uint32_t* pid_pes_len;
+    uint32_t* pid_pes_cap;
     size_t pes_total_allocated;
     size_t pes_max_quota;
-    uint16_t pid_width[TS_PID_MAX];
-    uint16_t pid_height[TS_PID_MAX];
-    uint8_t pid_profile[TS_PID_MAX];
-    uint32_t pid_audio_sample_rate[TS_PID_MAX];
-    uint8_t pid_audio_channels[TS_PID_MAX];
-    uint8_t pid_log2_max_frame_num[TS_PID_MAX];
-    uint32_t pid_last_frame_num[TS_PID_MAX];
-    bool pid_frame_num_valid[TS_PID_MAX];
+    uint16_t* pid_width;
+    uint16_t* pid_height;
+    uint8_t* pid_profile;
+    uint32_t* pid_audio_sample_rate;
+    uint8_t* pid_audio_channels;
+    uint8_t* pid_log2_max_frame_num;
+    uint32_t* pid_last_frame_num;
+    bool* pid_frame_num_valid;
 
-    // GOP Tracking
-    uint32_t pid_gop_n[TS_PID_MAX];       // Current GOP frame count
-    uint32_t pid_last_gop_n[TS_PID_MAX];  // Result of last complete GOP
-    uint32_t pid_gop_min[TS_PID_MAX];
-    uint32_t pid_gop_max[TS_PID_MAX];
-    uint64_t pid_last_idr_ns[TS_PID_MAX];
-    uint32_t pid_gop_ms[TS_PID_MAX];
-    uint64_t pid_i_frames[TS_PID_MAX];
-    uint64_t pid_p_frames[TS_PID_MAX];
-    uint64_t pid_b_frames[TS_PID_MAX];
+    // GOP Tracking - Dynamic
+    uint32_t* pid_gop_n;
+    uint32_t* pid_last_gop_n;
+    uint32_t* pid_gop_min;
+    uint32_t* pid_gop_max;
+    uint64_t* pid_last_idr_ns;
+    uint32_t* pid_gop_ms;
+    uint64_t* pid_i_frames;
+    uint64_t* pid_p_frames;
+    uint64_t* pid_b_frames;
 
     alignas(64) struct {
         _Atomic uint32_t seq;
-        tsa_snapshot_full_t stats;
+        tsa_snapshot_full_t* stats; // Now a pointer to avoid MB-sized copy risks
     } snap_state;
 
     alignas(64) int128_t stc_slope_q64;

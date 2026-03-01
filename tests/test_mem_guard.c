@@ -19,7 +19,7 @@ void test_pes_quota() {
     for (int p = 0; p < 8192; p++) {
         pkt[1] = 0x40 | ((p >> 8) & 0x1F);
         pkt[2] = p & 0xFF;
-        h->live.pid_is_referenced[p] = true;
+        h->live->pid_is_referenced[p] = true;
         tsa_process_packet(h, pkt, now + p * 1000);
         if (h->pid_pes_buf[p]) allocated_count++;
     }
