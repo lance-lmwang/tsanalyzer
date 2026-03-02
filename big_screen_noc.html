@@ -107,9 +107,9 @@
 <body>
 
 <header>
-    <div class="logo">TSA<span style="color:#FFF">PRO</span> NOC — PLANE 1</div>
+    <div class="logo">TSA<span style="color:#FFF">PRO</span> NOC - PLANE 1</div>
     <div style="display:flex; gap:32px; align-items:center">
-        <div id="conn-status" style="font-size:0.7rem; font-weight:800">● LIVE DATA</div>
+        <div id="conn-status" style="font-size:0.7rem; font-weight:800">* LIVE DATA</div>
         <div class="clock" id="clock">00:00:00</div>
     </div>
 </header>
@@ -133,12 +133,16 @@
 
     async function tick() {
         try {
-            const res = await fetch('http://localhost:8088/metrics');
+            // Auto-align IP
+            const host = window.location.hostname || 'localhost';
+            const res = await fetch(`http://${host}:8088/metrics`);
             const text = await res.text();
             const data = parse(text);
             render(data);
+            document.getElementById('conn-status').innerText = '* LIVE DATA';
             document.getElementById('conn-status').style.color = 'var(--ok)';
         } catch (e) {
+            document.getElementById('conn-status').innerText = '* CONNECTION LOST';
             document.getElementById('conn-status').style.color = 'var(--crit)';
         }
     }
@@ -148,11 +152,21 @@
         const lines = text.split('\n');
         lines.forEach(line => {
             if (line.startsWith('#') || !line.includes('{')) return;
-            const match = line.match(/([a-z0-9_]+)\{stream_id="([^"]+)"(?:,.*)?\} ([\d.e+-]+)/);
+
+            // Improved Regex
+            const match = line.match(/^([a-z0-9_]+)\{[^}]*stream_id="([^"]+)"[^}]*\} ([\d.e+-]+)/);
             if (!match) return;
+
             const [_, name, id, val] = match;
-            if (!streams[id]) streams[id] = { id, health: 100, bitrate: 0, rtt: 0, fps: 0, gop: 0, sync: 0, rst: 999 };
+            if (!streams[id]) {
+                streams[id] = {
+                    id, health: 100, bitrate: 0, rtt: 0, fps: 0, gop: 0, sync: 0, rst: 999,
+                    sync_err: 0, pat_err: 0, pmt_err: 0, cc_err: 0
+                };
+            }
             const v = parseFloat(val);
+
+            // Align metric names
             if (name === 'tsa_physical_bitrate_bps') streams[id].bitrate = v;
             if (name === 'tsa_health_score') streams[id].health = v;
             if (name === 'tsa_srt_rtt_ms') streams[id].rtt = v;
@@ -161,15 +175,14 @@
             if (name === 'tsa_essence_av_sync_ms') streams[id].sync = v;
             if (name === 'tsa_rst_network_seconds') streams[id].rst = v;
 
-            // Compliance
-            if (name === 'tsa_tr101290_p1_sync_loss') streams[id].sync_err = v;
-            if (name === 'tsa_tr101290_p1_pat_error') streams[id].pat_err = v;
-            if (name === 'tsa_pmt_error_count') streams[id].pmt_err = v;
-            if (name === 'tsa_continuity_errors_total') streams[id].cc_err = v;
+            // ETR 290 P1 alignment
+            if (name === 'tsa_tr101290_p1_sync_loss' || name === 'tsa_sync_loss_errors') streams[id].sync_err += v;
+            if (name === 'tsa_tr101290_p1_pat_error' || name === 'tsa_pat_error_count') streams[id].pat_err += v;
+            if (name === 'tsa_pmt_error_count') streams[id].pmt_err += v;
+            if (name === 'tsa_tr101290_p1_cc_error' || name === 'tsa_continuity_errors_total') streams[id].cc_err += v;
         });
         return streams;
     }
-
     function render(streams) {
         const ids = Object.keys(streams).sort();
         let totalBw = 0;

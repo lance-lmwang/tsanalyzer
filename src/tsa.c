@@ -796,6 +796,9 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             ts_cc_status_t s =
                 cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
             if (s == TS_CC_LOSS) {
+                fprintf(stdout, "[%s] CC_ALARM: Detected on PID 0x%04x (Stream: %s)\n",
+                        tsa_get_pid_type_name(h, pid), pid, h->config.input_label);
+                fflush(stdout);
                 h->live->cc_error.count++;
                 h->live->cc_error.last_timestamp_ns = now;
                 h->live->cc_error.triggering_vstc = h->stc_ns;

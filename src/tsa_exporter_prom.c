@@ -68,10 +68,15 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_tr101290_p1_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid,
                     (unsigned long long)s->cc_error.count);
 
+        SAFE_APPEND("tsa_transport_error_count%s %llu\n", labels, (unsigned long long)s->transport_error.count);
+
         // Compatibility names
         SAFE_APPEND("tsa_continuity_errors_total%s %llu\n", labels, (unsigned long long)s->cc_error.count);
         SAFE_APPEND("tsa_sync_byte_errors_total%s %llu\n", labels, (unsigned long long)s->sync_byte_error.count);
         SAFE_APPEND("tsa_pcr_jitter_ms%s %.3f\n", labels, s->pcr_jitter_avg_ns / 1000000.0);
+        SAFE_APPEND("tsa_pcr_repetition_errors%s %llu\n", labels, (unsigned long long)s->pcr_repetition_error.count);
+        SAFE_APPEND("tsa_pcr_accuracy_errors%s %llu\n", labels, (unsigned long long)s->pcr_accuracy_error.count);
+        SAFE_APPEND("tsa_pcr_accuracy_ns%s %.2f\n", labels, (float)s->pcr_accuracy_ns);
 
         // Document Aligned & Inference Engine (L1 Factors)
         SAFE_APPEND("tsa_sync_loss_errors%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
