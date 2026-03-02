@@ -13,12 +13,12 @@
         "x": 0,
         "y": 0
       },
-      "title": "TIER 1: EXECUTIVE COMMAND BAR",
+      "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)",
       "type": "row",
       "collapsed": false
     },
     {
-      "title": "SIGNAL LOCK",
+      "title": "SIGNAL PRESENCE",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -78,7 +78,7 @@
       }
     },
     {
-      "title": "MASTER HEALTH",
+      "title": "SIGNAL FIDELITY",
       "type": "gauge",
       "gridPos": {
         "h": 4,
@@ -117,7 +117,7 @@
       }
     },
     {
-      "title": "DETERMINISM",
+      "title": "ENGINE DETERMINISM",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -156,7 +156,7 @@
         "x": 0,
         "y": 5
       },
-      "title": "TIER 2: TRANSPORT LAYER INTEGRITY (SRT/NETWORK)",
+      "title": "TIER 2: TRANSPORT & LINK INTEGRITY (SRT/MDI)",
       "type": "row",
       "collapsed": false
     },
@@ -245,7 +245,7 @@
       }
     },
     {
-      "title": "TIER 3: ETR 290 PRIORITY 1 COMPLIANCE (CRITICAL)",
+      "title": "TIER 3: ETR 290 P1 (CRITICAL COMPLIANCE)",
       "type": "row",
       "gridPos": {
         "h": 1,
@@ -550,7 +550,7 @@
         "x": 0,
         "y": 18
       },
-      "title": "TIER 5: MUX INVENTORY & BITRATE DISTRIBUTION",
+      "title": "TIER 5: SERVICE PAYLOAD DYNAMICS (MUX)",
       "type": "row",
       "collapsed": false
     },
@@ -561,12 +561,12 @@
         "x": 0,
         "y": 34
       },
-      "title": "TIER 6: ES QUALITY & TEMPORAL STABILITY",
+      "title": "TIER 6: ESSENCE QUALITY & TEMPORAL STABILITY",
       "type": "row",
       "collapsed": false
     },
     {
-      "title": "TEMPORAL STABILITY (FPS)",
+      "title": "FRAME RATE STABILITY (FPS)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -587,7 +587,7 @@
       }
     },
     {
-      "title": "GOP CADENCE (INTERVAL)",
+      "title": "GOP CADENCE (ms)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -608,7 +608,7 @@
       }
     },
     {
-      "title": "LIP-SYNC OFFSET (AV)",
+      "title": "LIP-SYNC OFFSET (ms)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -635,12 +635,12 @@
         "x": 0,
         "y": 44
       },
-      "title": "TIER 7: OPERATIONAL AUDIT TRAIL",
+      "title": "TIER 7: ALARM RECAP & FORENSIC AUDIT TRAIL",
       "type": "row",
       "collapsed": false
     },
     {
-      "title": "Event Log",
+      "title": "ALARM EVENT LOG (RECENT 1H)",
       "type": "table",
       "gridPos": {
         "h": 8,
@@ -651,7 +651,7 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "increase(tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}[1m]) > 0",
+          "expr": "increase(tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}[1h]) > 0",
           "format": "table",
           "instant": false,
           "refId": "A"
@@ -679,7 +679,7 @@
       }
     },
     {
-      "title": "MUX BITRATE DISTRIBUTION (STACKED)",
+      "title": "PID BITRATE REVENUE (STACKED DENSITY)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -874,7 +874,7 @@
       }
     },
     {
-      "title": "STUFFING RATIO",
+      "title": "NULL PACKET DENSITY (%)",
       "type": "gauge",
       "gridPos": {
         "h": 6,
@@ -911,7 +911,7 @@
       }
     },
     {
-      "title": "TIER 4: ETR 290 PRIORITY 2 COMPLIANCE (PERFORMANCE)",
+      "title": "TIER 4: ETR 290 P2 (CLOCK & TIMING)",
       "type": "row",
       "gridPos": {
         "h": 1,
