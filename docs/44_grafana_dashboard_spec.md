@@ -1,8 +1,8 @@
-# TsAnalyzer Pro NOC Dashboard Visual Spec (Ultimate v5.3 - Instrumented Cognitive Edition)
+# TsAnalyzer Pro NOC Dashboard Visual Spec (Ultimate v5.4 - Expert Ops Edition)
 
-This specification defines the visual and operational standards for the TsAnalyzer Pro NOC Dashboard. Designed as a **Broadcast-Grade Appliance NOC** with a hard limit of **128 concurrent streams**, it transforms standard monitoring into an **Instrumented Cognitive NOC**—a system where protocol truth directly drives operational decision-making. 
+This specification defines the visual and operational standards for the TsAnalyzer Pro NOC Dashboard. It transforms standard monitoring into an **Instrumented Cognitive NOC**—a system where protocol truth directly drives operational decision-making.
 
-The system prioritizes **TR 101 290 P1 Compliance**, **Hierarchical Forensic Drill-Down**, and **Automated Failure Domain Correlation** across a 4K UHD layout.
+The system treats **Operator Cognition** as a constrained system resource, optimizing for decision latency under stress across a 4K UHD layout.
 
 ---
 
@@ -16,33 +16,38 @@ To prevent visual failure during massive events, the dashboard implements a thre
 
 ### Level 1: Fleet Summary (Spatial Awareness Layer)
 - **Topology Modes**: Site Map (Geographic) or Rack/Network Mode (Infrastructure mapping).
-- **Fleet Instability Indicator**: A global gauge showing `Streams in LATCHED state (%)` per topological group. 
-  - *Actionable Metric*: 1 Amber = Investigate, 20 Amber in one Rack = Systemic Hardware Failure.
+- **Fleet Instability Indicator**: A global gauge showing `Latched Streams (%)` (Formula: `count(stream_error_latched_5m) / count(total_streams)`).
+  - *Actionable Metric*: Convert noise into trend awareness. High percentage indicates systemic failure.
 
 ### Level 2: Group Wall (The Active Viewport)
 - **Triage Matrix**: A high-density grid of micro-LEDs (up to 128).
-- **Failure Wave Propagation**: Matrix MUST visually animate cascades (e.g., ripple effects) to indicate blast radius origins.
+- **Failure Wave Propagation**: When multiple failures occur, the Matrix MUST visually animate the cascade (ripple effect). The animation MUST originate from the `first_error_timestamp(stream_group)` to prevent causality illusions.
 - **Anomaly Persistence**: Triage LEDs MUST remain AMBER for 5 minutes (LATCHED state) after recovery.
 
 ### Level 3: Stream Focus Mode (Deep Dive)
 - **Operational Context Switch**: Lock selected stream, freeze background noise, and anchor time.
-- **Cognitive Lock Indicator**: UI MUST display: `🔒 STREAM FOCUS LOCKED`, `Noise: FROZEN`, `Time: ANCHORED`.
+- **Cognitive Lock Indicators**: UI MUST prominently display:
+  - `🔒 STREAM FOCUS LOCKED`
+  - `Operator: <Operator_ID>` | `Duration: <Timer>`
+  - `Noise: FROZEN` | `Alerts Suppressed: <Counter>`
+- This ensures the operator remains in a forensic sandbox, isolated from live fleet refresh noise.
 
 ---
 
 ## 2. Tier 1: Failure Domain Banner & Signal Lock
-This top-level row provides the ultimate "Decision Shortcut" for the operator.
+This top-level row provide automated failure attribution to bypass manual operator deduction.
 - **Signal Lock LED**: 120x120px indicator (LOCKED #1C8C5E / LOST #C0392B).
-- **Failure Domain Banner**: A dynamic text banner that appears during active P1 alarms.
-  - *Logic*: Correlates P1.4 (CC Error) with SRT NAKs and RTT Variance.
-  - *Example Display*: `DOMINANT FAILURE DOMAIN: NETWORK (82%)` or `DOMINANT FAILURE DOMAIN: ENCODER (91%)`.
-- **Master Health Score**: 0-100 aggregate score with **Min-Hold logic** (30% opacity ghost value for 30m minimum).
-- **Determinism metrics**: Internal Drops and Worker Overruns.
+- **Failure Domain Banner**: A dynamic text banner using **Weighted Inference Correlation**.
+  - *Network Probability*: `(P1.4 * 0.4) + (SRT_NAK * 0.3) + (RTT_Var * 0.3)`
+  - *Encoder Probability*: `(P1.3 * 0.4) + (P1.5 * 0.4) + (FPS_Instability * 0.2)`
+  - *Display*: `DOMINANT FAILURE DOMAIN: <Type> (<Confidence_Score>%)`.
+- **Master Health Score**: 0-100 score with **Min-Hold logic** (30% opacity ghost value for 30m minimum).
 
 ---
 
-## 3. Tier 2: Hybrid Analytics Matrix (TR 101 290 P1 Diagnostic Core)
-Fixed 2x4 LED grid for instant pattern recognition. Clicking an error block opens the Forensic Log.
+## 3. Tier 2: Hybrid Analytics Matrix (Diagnostic Core)
+Fixed 2x4 LED grid. Clicking an error block opens the Forensic Log.
+- **Pattern Recognition Mode**: Specific error combinations (e.g., P1.4 + NAK spike) trigger an **AUTO TAG** overlay (e.g., `NETWORK IMPAIRMENT`) and a frame pulse instead of generating a new alert.
 
 | Slot | Left Group: SRT/Network | Right Group: TS Compliance (TR 101 290 P1) | Operator Implicit Action |
 | :--- | :--- | :--- | :--- |
@@ -54,45 +59,46 @@ Fixed 2x4 LED grid for instant pattern recognition. Clicking an error block open
 ---
 
 ## 4. Tier 3: Bitrate & Essence Vitals (Historical Timelines)
-Primary area for identifying fluctuations. All charts share a **Locked X-Axis**.
+All charts share a **Locked X-Axis** for forensic correlation.
 
-### 4.1 24-Hour Bitrate Envelope & Jitter
-- **Implementation**: Uses `max_over_time` and `min_over_time` to render a shaded envelope around the average.
-- **Dual-Trace**: Physical Bitrate (Cyan Solid) vs. PCR Bitrate (White Dashed). Gap = Packet Arrival Jitter (MDI).
+### 4.1 24-Hour Bitrate Envelope
+- **Visualization**: Average line with shaded Min/Max envelope.
+- **Volatility Encoding**: Envelope opacity MUST scale with volatility (wider envelope = higher opacity).
+- **Dual-Trace**: Physical Bitrate (Cyan Solid) vs. PCR Bitrate (White Dashed). Gap = Packet Arrival Jitter.
 
 ### 4.2 Content Quality Sparklines
-- **FPS Stability**: Line chart with 25/50/60 reference lines and a **Red Minimum-Value Trace**.
+- **FPS Stability**: Line chart with fixed reference lines and a **Red Minimum-Value Trace**.
 - **GOP Cadence**: Historical trend of I-frame intervals (ms).
 - **AV Sync / Lip-Sync**: Dual-polarity PTS offset history (+/- 200ms).
 
 ---
 
 ## 5. Tier 4: Predictive Horizon & PID Inventory
-- **RST Survival Timeline**: Visual history of buffer depletion safety margins.
-- **PID Time-Series**: 24-hour stacked area chart for component distribution (including Null Packet Stuffing).
+- **RST Survival Timeline**: Visual history of buffer safety margins.
+- **Time to Failure Estimate**: Dynamic countdown calculated as `Buffer_Margin / Depletion_Rate` (e.g., `⚠ Buffer Exhaustion ≈ 42s`).
+- **PID Time-Series**: 24-hour stacked area chart for component distribution.
 
 ---
 
 ## 6. Tier 5: Operational Audit Trail (Forensic Log)
-- **Point-in-Time Drill-Down**: Clicking any dip or error automatically scrolls the log to that millisecond.
-- **Micro-Capture Link**: Direct access to the 200ms raw TS snippet recorded during P1 triggers.
+- **Point-in-Time Drill-Down**: Clicking any dip or error scrolls the log to that millisecond.
+- **Micro-Capture Link**: Access to the 200ms raw TS snippet recorded during P1 triggers.
 
 ---
 
 ## 7. Visual Standards & Browser Guardrails
 - **Layout**: **Zero-Scroll** optimized for **3840x2160 (4K UHD)**.
-- **Performance**: Golden Line throttle $\le 20\text{Hz}$; Max 3000 data points per panel.
+- **Performance**: Golden Line throttle $\le 20\text{Hz}$ (Matches human analytical tracking limits); Max 3000 data points per panel.
 - **Palette**: Background `#020617`, Panels `#0F172A`, Accent `#38BDF8`.
 
 ---
 
 ## 8. Persistence & Data Contract
-- **Latching**: `max_over_time(stream_error_flag[5m])`.
-- **Counter Safety**: Use `increase()` with Grafana **Decimals = 0**.
 - **Time Authority**: **Prometheus Scrape Timestamp** is the single source of truth. All encoder PCR/PTS metadata MUST be normalized relative to scrape time.
-- **Temporal Sync**: URL Time Override Injection for absolute millisecond alignment across metrics and logs.
+- **Temporal Sync**: URL Time Override Injection for absolute millisecond alignment.
+- **Counter Safety**: Use `increase()` with Grafana **Decimals = 0**.
 
 ---
 
 ## 9. Industry Positioning
-`tsa_server_pro` moves beyond standard Dashboards. By bridging raw protocol truth with automated failure correlation and operational memory, it occupies the **Instrumented Cognitive NOC** tier, rivaling dedicated hardware metrology appliances.
+`tsa_server_pro` graduates to a **Cognitive Operating System for Broadcast**. It moves from passive monitoring to automated diagnostic assistance, rivaling dedicated hardware metrology appliances.
