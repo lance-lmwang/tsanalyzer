@@ -743,14 +743,13 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
     // Track every single PID seen for metrics
     tsa_update_pid_tracker(h, pid);
 
-    static uint64_t l_now = 0, off = 0;
-    if (now == l_now) {
+    if (now == h->metro_last_now) {
         uint64_t br = h->live->physical_bitrate_bps ? h->live->physical_bitrate_bps : 10000000;
-        off += (1504ULL * 1000000000ULL) / br;
-        now += off;
+        h->metro_offset += (1504ULL * 1000000000ULL) / br;
+        now += h->metro_offset;
     } else {
-        l_now = now;
-        off = 0;
+        h->metro_last_now = now;
+        h->metro_offset = 0;
     }
     if (h->live->pid_last_seen_ns[pid] > 0) {
         uint64_t dt = h->stc_ns - h->live->pid_last_seen_ns[pid];
@@ -829,13 +828,12 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
                                    ((uint64_t)payload[13] >> 1);
 
                     const char* st = tsa_get_pid_type_name(h, pid);
-                    static uint64_t last_v_pts = 0, last_a_pts = 0;
                     if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
-                        last_v_pts = pts;
-                        if (last_a_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)last_v_pts - (int64_t)last_a_pts) / 90;
+                        h->last_v_pts = pts;
+                        if (h->last_a_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
                     } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 || strcmp(st, "AC3") == 0) {
-                        last_a_pts = pts;
-                        if (last_v_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)last_v_pts - (int64_t)last_a_pts) / 90;
+                        h->last_a_pts = pts;
+                        if (h->last_v_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
                     }
                 }
             }
@@ -952,7 +950,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     if (n == 0) n = h->last_snap_ns;
     if (!h->stc_locked) h->stc_ns = n;
     uint64_t stc = h->stc_ns, dt = n - h->last_snap_ns;
-    if (dt == 0) dt = 1;
+    if (dt < 100000000ULL) return; // Ignore snapshots closer than 100ms
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
     if (dp > 0) h->live->physical_bitrate_bps = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
     h->live->mdi_mlr_pkts_s =

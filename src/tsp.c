@@ -180,7 +180,13 @@ tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
 }
 
 int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
-    uint64_t head = atomic_load_explicit(&h->head, memory_order_relaxed);
+    uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
+    uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
+    
+    size_t available = RING_BUFFER_SIZE - (size_t)(head - tail);
+    if (available == 0) return 0;
+    if (count > available) count = available;
+
     for (size_t i = 0; i < count; i++) {
         const uint8_t* pkt = ts_packets + (i * TS_PACKET_SIZE);
         memcpy(h->ring_buffer + ((head + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE, pkt, TS_PACKET_SIZE);
@@ -198,7 +204,7 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
         }
     }
     atomic_store_explicit(&h->head, head + count, memory_order_release);
-    return 0;
+    return (int)count;
 }
 
 int tsp_start(tsp_handle_t* h) {

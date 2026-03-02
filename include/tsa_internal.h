@@ -100,6 +100,12 @@ struct tsa_handle {
     tsa_tr101290_stats_t* prev_snap_base;
     tsa_srt_stats_t srt_live;
 
+    uint64_t last_v_pts;
+    uint64_t last_a_pts;
+    
+    uint64_t metro_last_now;
+    uint64_t metro_offset;
+
     q32_32 pcr_ema_alpha_q32;
     float last_health_score;
 

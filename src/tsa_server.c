@@ -22,6 +22,8 @@ typedef struct {
     int port;
     tsa_handle_t *tsa;
     pthread_t thread;
+    uint8_t remainder[188];
+    int remainder_len;
 } node_t;
 
 static node_t g_nodes[MAX_STREAMS];
@@ -46,13 +48,42 @@ static void *worker(void *arg) {
 
     uint8_t buf[1500 * 7];
     uint64_t last_commit = (uint64_t)ts_now_ns128();
+    s->remainder_len = 0;
 
     while (atomic_load(&g_run)) {
         ssize_t len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
         uint64_t now = (uint64_t)ts_now_ns128();
         if (len > 0) {
-            for (int i = 0; i < (int)len / 188; i++) {
-                tsa_process_packet(s->tsa, buf + (i * 188), now);
+            uint8_t *p = buf;
+            int remaining = (int)len;
+            
+            // 1. Handle previous remainder
+            if (s->remainder_len > 0) {
+                int needed = 188 - s->remainder_len;
+                if (remaining >= needed) {
+                    memcpy(s->remainder + s->remainder_len, p, needed);
+                    tsa_process_packet(s->tsa, s->remainder, now);
+                    p += needed;
+                    remaining -= needed;
+                    s->remainder_len = 0;
+                } else {
+                    memcpy(s->remainder + s->remainder_len, p, remaining);
+                    s->remainder_len += remaining;
+                    remaining = 0;
+                }
+            }
+            
+            // 2. Handle full packets
+            while (remaining >= 188) {
+                tsa_process_packet(s->tsa, p, now);
+                p += 188;
+                remaining -= 188;
+            }
+            
+            // 3. Store new remainder
+            if (remaining > 0) {
+                memcpy(s->remainder, p, remaining);
+                s->remainder_len = remaining;
             }
         }
         if (now - last_commit > 1000000000ULL) {
