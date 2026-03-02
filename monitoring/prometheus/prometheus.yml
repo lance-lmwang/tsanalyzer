@@ -4,4 +4,4 @@ global:
 scrape_configs:
   - job_name: 'tsanalyzer'
     static_configs:
-      - targets: ['host.docker.internal:8080'] # 指向 TSA 分析引擎
+      - targets: ['host.docker.internal:8081'] # 指向 TSA 分析引擎

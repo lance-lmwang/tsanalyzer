@@ -22,10 +22,10 @@
 #include "tsa.h"
 #include "tsa_internal.h"
 
-#define MAX_CONNS 1024
-#define HTTP_PORT "8080"
+#define MAX_CONNS 4096
+#define HTTP_PORT "8081"
 #define PACKET_BUF_SIZE 65536
-#define WORKER_THREADS 8
+#define WORKER_THREADS 16
 #define ANA_QUEUE_SIZE 512
 
 typedef enum { CONN_UDP, CONN_SRT_LISTENER, CONN_SRT_CLIENT } conn_type_t;
@@ -50,7 +50,66 @@ static _Atomic bool g_run = true;
 static pthread_mutex_t g_conn_lock = PTHREAD_MUTEX_INITIALIZER;
 static mpmc_queue_t* g_ready_queue;
 
+static int g_http_port = 8081;
+static int g_srt_port = 9000;
+
 extern void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
+
+static void load_config(const char* file) {
+    FILE* fp = fopen(file, "r");
+    if (!fp) return;
+    char line[512], id[64], url[256];
+    struct sockaddr_in sa = {0};
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = INADDR_ANY;
+
+    while (fgets(line, sizeof(line), fp) && atomic_load(&g_conn_count) < MAX_CONNS) {
+        if (line[0] == '#' || line[0] == '\n') continue;
+        if (strncmp(line, "GLOBAL", 6) == 0) {
+            char key[32];
+            int val;
+            if (sscanf(line + 7, "%s %d", key, &val) == 2) {
+                if (strcmp(key, "http_port") == 0) g_http_port = val;
+                else if (strcmp(key, "srt_port") == 0) g_srt_port = val;
+            }
+            continue;
+        }
+        if (sscanf(line, "%s %s", id, url) == 2) {
+            conn_t* c = calloc(1, sizeof(conn_t));
+            strncpy(c->id, id, 63);
+            tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.1};
+            strncpy(cfg.input_label, id, 31);
+
+            if (strncmp(url, "udp://", 6) == 0) {
+                char* p_str = strrchr(url, ':');
+                int port = p_str ? atoi(p_str + 1) : 19001;
+                int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+                sa.sin_port = htons(port);
+                if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
+                    int flags = fcntl(udp_fd, F_GETFL, 0);
+                    fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
+                    c->fd = udp_fd;
+                    c->type = CONN_UDP;
+                    c->tsa = tsa_create(&cfg);
+                    c->tx_q = spsc_queue_create(1024);
+                    c->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+                    atomic_init(&c->scheduled, false);
+                    pthread_mutex_lock(&g_conn_lock);
+                    int idx = atomic_fetch_add(&g_conn_count, 1);
+                    c->conn_idx = idx;
+                    g_conns[idx] = c;
+                    pthread_mutex_unlock(&g_conn_lock);
+                    printf("PRO: Configured UDP stream %s on port %d\n", id, port);
+                } else {
+                    free(c);
+                    close(udp_fd);
+                }
+            }
+            /* SRT Caller or other types can be added here */
+        }
+    }
+    fclose(fp);
+}
 
 static uint64_t g_cycles_per_us = 3000;
 
@@ -115,7 +174,7 @@ static void* worker_thread(void* arg) {
                     tsa_commit_snapshot(c->tsa, now);
                 }
             }
-            
+
             if (c) {
                 atomic_store_explicit(&c->scheduled, false, memory_order_release);
                 // Re-arm if still not empty
@@ -190,10 +249,10 @@ static void* io_thread(void* arg) {
                         nc->tx_q = spsc_queue_create(1024);
                         nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
                         atomic_init(&nc->scheduled, false);
-                        
+
                         int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
                         srt_epoll_add_usock(srt_eid, client, &events);
-                        
+
                         pthread_mutex_lock(&g_conn_lock);
                         int idx = atomic_fetch_add(&g_conn_count, 1);
                         nc->conn_idx = idx;
@@ -305,19 +364,22 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
 }
 
 int main(int argc, char** argv) {
-    int port = (argc > 1) ? atoi(argv[1]) : 9000;
+    const char* conf_file = (argc > 1) ? argv[1] : "tsa.conf";
     calibrate_tsc();
     g_ready_queue = mpmc_queue_create(16384);
     srt_startup();
     signal(SIGINT, sig_handler);
     signal(SIGPIPE, SIG_IGN);
 
+    load_config(conf_file);
+
+    /* Setup SRT Listener using configured port */
     SRTSOCKET sl = srt_create_socket();
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
+    sa.sin_port = htons(g_srt_port);
     sa.sin_addr.s_addr = INADDR_ANY;
-    
+
     int sync = 0; // Non-blocking listener
     srt_setsockopt(sl, 0, SRTO_RCVSYN, &sync, sizeof(sync));
     if (srt_bind(sl, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
@@ -330,30 +392,9 @@ int main(int argc, char** argv) {
         c->conn_idx = idx;
         g_conns[idx] = c;
         pthread_mutex_unlock(&g_conn_lock);
-        printf("PRO: Listening SRT on %d\n", port);
-    }
-
-    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    sa.sin_port = htons(19001);
-    if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
-        int flags = fcntl(udp_fd, F_GETFL, 0);
-        fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
-        conn_t* c = calloc(1, sizeof(conn_t));
-        c->fd = udp_fd;
-        c->type = CONN_UDP;
-        sprintf(c->id, "UDP-19001");
-        tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.1};
-        strncpy(cfg.input_label, c->id, 31);
-        c->tsa = tsa_create(&cfg);
-        c->tx_q = spsc_queue_create(1024);
-        c->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
-        atomic_init(&c->scheduled, false);
-        pthread_mutex_lock(&g_conn_lock);
-        int idx = atomic_fetch_add(&g_conn_count, 1);
-        c->conn_idx = idx;
-        g_conns[idx] = c;
-        pthread_mutex_unlock(&g_conn_lock);
-        printf("PRO: Listening UDP on 19001\n");
+        printf("PRO: Listening SRT on %d\n", g_srt_port);
+    } else {
+        fprintf(stderr, "PRO: Failed to bind SRT on %d\n", g_srt_port);
     }
 
     int srt_eid = srt_epoll_create();
@@ -366,7 +407,11 @@ int main(int argc, char** argv) {
 
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
-    mg_http_listen(&mgr, "http://0.0.0.0:" HTTP_PORT, http_fn, NULL);
+    char http_addr[64];
+    snprintf(http_addr, sizeof(http_addr), "http://0.0.0.0:%d", g_http_port);
+    mg_http_listen(&mgr, http_addr, http_fn, NULL);
+    printf("PRO: HTTP Metrics active on %s\n", http_addr);
+
     while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 50);
 
     mg_mgr_free(&mgr);

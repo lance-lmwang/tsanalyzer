@@ -147,6 +147,7 @@ typedef struct {
 
     int udp_port;
     char srt_url[256];
+    int http_port;
 } tsa_config_t;
 
 /* --- Core TSA API --- */

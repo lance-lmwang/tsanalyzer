@@ -131,6 +131,7 @@ struct tsa_handle {
     uint32_t* pid_pes_cap;
     size_t pes_total_allocated;
     size_t pes_max_quota;
+    uint32_t pes_pool_used;
     uint16_t* pid_width;
     uint16_t* pid_height;
     uint8_t* pid_profile;

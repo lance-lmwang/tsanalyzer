@@ -553,18 +553,20 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 32);
-    h->pool_size = 1024 * 1024 + TS_PID_MAX * 4096; /* 1MB + 32MB for PES buffers */
+    h->pool_size = 1024 * 1024 + 32 * 4096; /* 1MB + 32 slots * 4KB for PES */
     if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
     h->pool_offset = 0;
-    h->pes_total_allocated = TS_PID_MAX * 4096;
+    h->pes_total_allocated = 32 * 4096;
     h->pes_max_quota = 64 * 1024 * 1024;
     h->last_trigger_reason = -1;
     for (int i = 0; i < TS_PID_MAX; i++) {
         h->pid_to_active_idx[i] = -1;
         h->pid_gop_min[i] = 0xFFFFFFFF;
-        h->pid_pes_buf[i] = tsa_mem_pool_alloc(h, 4096);
-        h->pid_pes_cap[i] = 4096;
+        h->pid_pes_buf[i] = NULL;
+        h->pid_pes_cap[i] = 0;
     }
+    /* Assign first 32 potential PES buffers to a pool */
+    h->pes_pool_used = 0;
     return h;
 fail:
     tsa_destroy(h);
@@ -818,6 +820,13 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             if (h->pid_pes_len[pid] > 0)
                 tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
             h->pid_pes_len[pid] = 0;
+
+            /* If no buffer assigned yet, grab one from the pool */
+            if (h->pid_pes_buf[pid] == NULL && h->pes_pool_used < 32) {
+                h->pid_pes_buf[pid] = tsa_mem_pool_alloc(h, 4096);
+                h->pid_pes_cap[pid] = 4096;
+                h->pes_pool_used++;
+            }
         }
         if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + res->payload_len <= h->pid_pes_cap[pid]) {
             memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], pkt + 4 + res->af_len, res->payload_len);

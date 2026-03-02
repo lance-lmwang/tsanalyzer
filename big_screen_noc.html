@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TsAnalyzer Pro - BIG SCREEN NOC</title>
+    <style>
+        :root {
+            --bg: #020617;
+            --panel: #0F172A;
+            --accent: #38BDF8;
+            --ok: #22C55E;
+            --warn: #F59E0B;
+            --crit: #EF4444;
+            --text: #F8FAFC;
+            --text-dim: #94A3B8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: var(--bg); color: var(--text); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh; width: 100vw; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        header {
+            height: 60px; padding: 0 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #1E293B;
+            background: #020617;
+        }
+        .logo { font-size: 1.5rem; font-weight: 900; letter-spacing: -1px; color: var(--accent); }
+        .clock { font-family: monospace; font-size: 1.2rem; color: var(--text-dim); }
+        
+        main {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 15px;
+            padding: 15px;
+        }
+        
+        .stream-card {
+            background: var(--panel);
+            border: 1px solid #1E293B;
+            border-radius: 4px;
+            display: flex; flex-direction: column;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .stream-card.alarm { border-color: var(--crit); box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); }
+        
+        .card-header {
+            padding: 10px; border-bottom: 1px solid #1E293B;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .stream-id { font-weight: bold; font-size: 0.9rem; color: var(--accent); }
+        .health-badge { 
+            padding: 2px 8px; border-radius: 100px; font-size: 0.7rem; font-weight: 800;
+            background: var(--ok); color: #FFF;
+        }
+        
+        .card-body {
+            flex-grow: 1; padding: 15px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        }
+        
+        .metric-box { display: flex; flex-direction: column; }
+        .m-label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
+        .m-value { font-size: 1.4rem; font-weight: 700; font-family: monospace; }
+        .unit { font-size: 0.7rem; color: var(--text-dim); margin-left: 2px; }
+        
+        .card-footer {
+            height: 40px; padding: 0 10px;
+            display: flex; align-items: center; gap: 15px;
+            border-top: 1px solid #1E293B; background: rgba(0,0,0,0.2);
+            font-size: 0.7rem; color: var(--text-dim);
+        }
+        
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+        .blink { animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
+        .summary-bar {
+            height: 30px; background: #0F172A; border-top: 1px solid #1E293B;
+            display: flex; align-items: center; padding: 0 20px; gap: 30px;
+            font-size: 0.75rem; color: var(--text-dim);
+        }
+        .summary-item b { color: var(--text); }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">TSANALYZER <span style="color:#FFF">PRO</span> <span style="font-size:0.7rem; vertical-align:middle; opacity:0.5; font-weight:normal">v4.0 APPLIANCE</span></div>
+    <div style="display:flex; gap:20px; align-items:center">
+        <div id="connection-status" style="font-size:0.8rem; color:var(--ok)">● SERVER CONNECTED</div>
+        <div class="clock" id="clock">00:00:00</div>
+    </div>
+</header>
+
+<main id="dashboard-grid">
+    <!-- Stream cards will be injected here -->
+</main>
+
+<div class="summary-bar">
+    <div class="summary-item">TOTAL STREAMS: <b id="total-streams">0</b></div>
+    <div class="summary-item">AGGREGATE BITRATE: <b id="total-bitrate">0 Mbps</b></div>
+    <div class="summary-item">INTERNAL DROPS: <b id="total-drops">0</b></div>
+    <div class="summary-item">WORKER LOAD: <b id="avg-load">LOW</b></div>
+</div>
+
+<script>
+    const GRID = document.getElementById('dashboard-grid');
+    let streams = {};
+
+    function updateClock() {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+
+    async function fetchMetrics() {
+        try {
+            const response = await fetch('http://localhost:8080/metrics');
+            const text = await response.text();
+            parseMetrics(text);
+            document.getElementById('connection-status').style.color = 'var(--ok)';
+            document.getElementById('connection-status').innerText = '● SERVER CONNECTED';
+        } catch (e) {
+            document.getElementById('connection-status').style.color = 'var(--crit)';
+            document.getElementById('connection-status').innerText = '○ SERVER OFFLINE';
+        }
+    }
+
+    function parseMetrics(text) {
+        const lines = text.split('
+');
+        const newStreams = {};
+        let totalBitrate = 0;
+        let totalDrops = 0;
+
+        lines.forEach(line => {
+            if (line.startsWith('#') || !line.includes('{')) return;
+            
+            const match = line.match(/([a-z_]+)\{stream_id="([^"]+)"\} ([\d.]+)/);
+            if (!match) return;
+
+            const [_, name, id, val] = match;
+            if (!newStreams[id]) newStreams[id] = { id };
+            
+            if (name === 'tsa_physical_bitrate_bps') {
+                newStreams[id].bitrate = parseFloat(val);
+                totalBitrate += newStreams[id].bitrate;
+            }
+            if (name === 'tsa_health_score') newStreams[id].health = parseFloat(val);
+            if (name === 'tsa_srt_rtt_ms') newStreams[id].rtt = parseFloat(val);
+            if (name === 'tsa_internal_analyzer_drop') {
+                newStreams[id].drops = parseFloat(val);
+                totalDrops += newStreams[id].drops;
+            }
+            if (name === 'tsa_worker_slice_overruns') newStreams[id].overruns = parseFloat(val);
+        });
+
+        renderDashboard(newStreams);
+        document.getElementById('total-streams').innerText = Object.keys(newStreams).length;
+        document.getElementById('total-bitrate').innerText = (totalBitrate / 1000000).toFixed(2) + ' Mbps';
+        document.getElementById('total-drops').innerText = totalDrops;
+    }
+
+    function renderDashboard(newStreams) {
+        // Sort IDs to keep cards stable
+        const ids = Object.keys(newStreams).sort();
+        
+        ids.forEach(id => {
+            const s = newStreams[id];
+            let el = document.getElementById(`card-${id}`);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = `card-${id}`;
+                el.className = 'stream-card';
+                GRID.appendChild(el);
+            }
+
+            const healthColor = s.health > 90 ? 'var(--ok)' : (s.health > 70 ? 'var(--warn)' : 'var(--crit)');
+            const bitrateMbps = (s.bitrate / 1000000).toFixed(2);
+            
+            el.className = `stream-card ${s.health < 80 ? 'alarm' : ''}`;
+            el.innerHTML = `
+                <div class="card-header">
+                    <span class="stream-id">${id}</span>
+                    <span class="health-badge" style="background:${healthColor}">${s.health?.toFixed(0) || 0}%</span>
+                </div>
+                <div class="card-body">
+                    <div class="metric-box">
+                        <span class="m-label">Bitrate</span>
+                        <span class="m-value">${bitrateMbps}<span class="unit">M</span></span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">RTT / Link</span>
+                        <span class="m-value">${s.rtt || 0}<span class="unit">ms</span></span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">Int. Drops</span>
+                        <span class="m-value" style="color:${s.drops > 0 ? 'var(--crit)' : 'var(--text)'}">${s.drops || 0}</span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">Overruns</span>
+                        <span class="m-value" style="color:${s.overruns > 0 ? 'var(--warn)' : 'var(--text)'}">${s.overruns || 0}</span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="status-dot ${s.bitrate > 0 ? 'blink' : ''}"></div>
+                    <span>LIVE ANALYSIS</span>
+                    <span style="margin-left:auto; opacity:0.5">TR 101 290 OK</span>
+                </div>
+            `;
+        });
+
+        // Cleanup stale cards
+        Array.from(GRID.children).forEach(child => {
+            const id = child.id.replace('card-', '');
+            if (!newStreams[id]) GRID.removeChild(child);
+        });
+    }
+
+    setInterval(fetchMetrics, 1000);
+</script>
+</body>
+</html>
