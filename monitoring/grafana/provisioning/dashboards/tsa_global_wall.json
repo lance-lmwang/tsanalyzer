@@ -1,0 +1,133 @@
+{
+  "uid": "global-wall",
+  "title": "TsAnalyzer Pro - GLOBAL STREAM WALL",
+  "refresh": "5s",
+  "schemaVersion": 36,
+  "version": 1,
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "FLEET INSTABILITY",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum(tsa_health_score > 0) / count(tsa_health_score) * 100",
+          "legendFormat": "Instability %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "",
+      "gridPos": {
+        "h": 3,
+        "w": 1,
+        "x": 0,
+        "y": 0
+      },
+      "repeat": "stream_id",
+      "repeatDirection": "h",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "max_over_time(tsa_health_score[5m])",
+          "legendFormat": "{{stream_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "\ud83d\udfe2",
+                  "color": "green",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "\ud83d\udfe1",
+                  "color": "yellow",
+                  "index": 1
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "\ud83d\udd34",
+                  "color": "red",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "3": {
+                  "text": "\ud83d\udea8",
+                  "color": "dark-red",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "transparent"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "justifyMode": "center",
+        "textMode": "name"
+      },
+      "links": [
+        {
+          "title": "Focus View",
+          "url": "/d/stream-focus?var-stream=${__value.text}&from=${__from}&to=${__to}",
+          "targetBlank": false
+        }
+      ]
+    }
+  ],
+  "editable": true
+}
