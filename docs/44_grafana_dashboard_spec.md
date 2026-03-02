@@ -1,4 +1,4 @@
-# TsAnalyzer Pro NOC Dashboard Visual Spec (Ultimate v4.5 - Cloud-Native Operational Memory)
+# TsAnalyzer Pro NOC Dashboard Visual Spec (Ultimate v4.6 - Temporal Replay Edition)
 
 This specification defines the visual and operational standards for the TsAnalyzer Pro NOC Dashboard. It transforms standard monitoring into an **Operational Memory System**, ensuring that transient failures are captured, persisted, and made forensic-ready for asynchronous operator inspections across a 4K UHD layout.
 
@@ -69,7 +69,7 @@ Historical persistence MUST NOT rely on visual illusion alone. All persistence b
 ### 8.1 Latching State Model (Performance-Optimized)
 - **NORMAL → ERROR → LATCHED → NORMAL**
 - **Logic**: `max_over_time(stream_error_flag[5m])`.
-- **Implementation Mandate**: At 1000+ streams, this MUST be implemented as a **Prometheus Recording Rule** (`record: stream_error_latched_5m`) to avoid dashboard CPU spikes.
+- **Hyperscale Mandate (Shard Recording Rules)**: At 10,000+ streams, monolithic recording rules will cause CPU explosion. This MUST be implemented as **Shard Recording Rules** (e.g., grouped by `job="encoder-a*"` or delegated to Thanos/Mimir) to distribute rule evaluation overhead safely.
 
 ### 8.2 Minimum-Hold Metric Contract
 - **Tier-1 Ghost Value**: `min_over_time(health_score[30m])`.
@@ -77,7 +77,7 @@ Historical persistence MUST NOT rely on visual illusion alone. All persistence b
 
 ### 8.3 Precision Counter Queries
 Prometheus `increase()` inherently handles counter resets and extrapolates data (often returning floating-point values).
-- **Mandate**: Use `increase(error_counter[$__interval])` and strictly set the Grafana panel **Decimals = 0** to hide extrapolation artifacts from operators.
+- **Mandate**: Use `clamp_min(increase(error_counter[60m]), 0)` or natively handle it via Grafana panel **Decimals = 0** to hide extrapolation artifacts from operators.
 - **Alternative**: For exact discrete event mapping over short windows, `sum_over_time(idelta(error_counter[$__interval]))` may be utilized.
 
 ---
@@ -127,10 +127,15 @@ The system SHALL guarantee visibility for the following failures, even if the du
 
 ---
 
-## 14. Temporal Drift Protection
-To ensure the **Golden Line** remains synchronized across all tiers across vast time horizons (e.g., 7 days):
-- Queries MUST utilize Grafana's dynamic `$__interval` variable to auto-scale data points and prevent browser memory exhaustion.
-- A **Min Step** (e.g., `15s`) MUST be configured at the panel level to guarantee baseline forensic resolution without crashing the UI.
+## 14. Temporal Drift Protection & Forensic Precision
+### 14.1 Dual-Track Query Model
+Relying solely on `$__interval` for long time ranges (e.g., 7 days) will average out and swallow <1s micro-failures, directly violating the visibility SLA.
+- **Operational Query**: Uses `$__interval` for rendering smooth historical envelopes.
+- **Forensic Overlay**: Injects a fixed short-window trace (e.g., `min_over_time(fps[15s])`) overlaid on top of the operational query to guarantee sub-second drops remain visible regardless of zoom level.
+
+### 14.2 Absolute Golden Line Sync
+Grafana's default "Shared Crosshair" relies on pixel-time interpolation, which causes drift (± step/2) when querying across multiple datasources (e.g., Prometheus metrics vs. Loki logs).
+- **Solution**: The dashboard MUST employ **Dashboard Time Override Injection**. Clicking the forensic timeline forces a URL parameter update (`&from=...&to=...`), coercing absolute millisecond synchronization across all backend queries.
 
 ---
 
