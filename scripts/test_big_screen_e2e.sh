@@ -23,7 +23,7 @@ echo "WAIT: Waiting 10s for metrology baseline..."
 sleep 10
 
 # 4. Audit
-METRICS=$(curl -s http://localhost:8080/metrics)
+METRICS=$(curl -s http://localhost:8082/metrics)
 FAILED=0
 for i in {1..4}; do
     STR="STR-$i"

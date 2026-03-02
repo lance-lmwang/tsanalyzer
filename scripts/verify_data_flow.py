@@ -17,7 +17,7 @@ def check_pipeline():
     # 1. 检查后端指标产出
     print("[1/4] Checking TSA Server Metrics (/metrics)...")
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8080/metrics", timeout=2) as r:
+        with urllib.request.urlopen("http://127.0.0.1:8082/metrics", timeout=2) as r:
             content = r.read().decode()
             if 'stream_id="STR-1"' in content:
                 print("  - [OK] STR-1 metrics found in raw output.")
@@ -25,7 +25,7 @@ def check_pipeline():
                 print("  - [FAIL] STR-1 NOT FOUND.")
                 return False
     except:
-        print("  - [FAIL] Cannot connect to port 8080.")
+        print("  - [FAIL] Cannot connect to port 8082.")
         return False
 
     # 2. 检查 Prometheus 采集状态

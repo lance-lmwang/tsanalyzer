@@ -13,7 +13,7 @@ function cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== [1/2] 启动监控服务器 (Port 8080) ==="
+echo "=== [1/2] 启动监控服务器 (Port 8082) ==="
 ./build/tsa_server > server.log 2>&1 &
 sleep 2
 
@@ -24,13 +24,13 @@ for i in {1..8}; do
 done
 
 echo "----------------------------------------------------"
-echo "监控已开启! 你可以访问: http://localhost:8080/metrics"
+echo "监控已开启! 你可以访问: http://localhost:8082/metrics"
 echo "正在模拟大屏抓取数据 (持续 30 秒)..."
 echo "----------------------------------------------------"
 
 for i in {1..15}; do
     echo "[$(date +%H:%M:%S)] 抓取测试..."
-    curl -s http://localhost:8080/metrics | grep "tsa_total_packets" | head -n 4
+    curl -s http://localhost:8082/metrics | grep "tsa_total_packets" | head -n 4
     sleep 2
 done
 

@@ -6,7 +6,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 echo -e "${BLUE}=== Starting Production-Grade Bridge Test ===${NC}"
 
-# 1. Start TSA Server (Metrics at 8080)
+# 1. Start TSA Server (Metrics at 8082)
 pkill tsa_server; pkill srt-live-transmit; pkill -f "tsp"
 echo "CCTV5 udp://127.0.0.1:19001" > tsa.conf
 ./build/tsa_server tsa.conf > server_prod.log 2>&1 &
@@ -29,7 +29,7 @@ sleep 15
 
 # 4. Final Audit
 echo -e "${BLUE}=== Analyzing Live Telemetry ===${NC}"
-METRICS=$(curl -s http://localhost:8080/metrics)
+METRICS=$(curl -s http://localhost:8082/metrics)
 HEALTH=$(echo "$METRICS" | grep 'tsa_health_score{stream_id="CCTV5"}' | awk '{print $2}')
 BITRATE=$(echo "$METRICS" | grep 'tsa_physical_bitrate_bps{stream_id="CCTV5"}' | awk '{print $2}')
 

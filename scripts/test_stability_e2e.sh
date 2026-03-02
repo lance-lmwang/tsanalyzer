@@ -5,14 +5,14 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-PORT_API=8080
+PORT_API=8082
 PORT_UDP=12345
 SAMPLE="/home/lmwang/dev/sample/cctvhd.ts"
 DURATION=300
 
 echo "--- STEP 1: Industrial Setup ---"
 ./build.sh > /dev/null
-fuser -k 8080/tcp 12345/udp || true
+fuser -k 8082/tcp 12345/udp || true
 sleep 1
 
 echo "--- STEP 2: Launch Analyzer ---"
@@ -39,7 +39,7 @@ while true; do
         break
     fi
 
-    METRICS=$(curl -s http://localhost:8080/metrics || echo "")
+    METRICS=$(curl -s http://localhost:8082/metrics || echo "")
     if [ -n "$METRICS" ]; then
         HEALTH=$(echo "$METRICS" | grep "tsa_health_score" | awk '{print $2}')
         CC=$(echo "$METRICS" | grep "tsa_cc_errors_total" | awk '{print $2}')

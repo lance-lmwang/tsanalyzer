@@ -1,7 +1,9 @@
-# PRD: Commercial-Grade TsAnalyzer (Phase 2)
+# PRD: Commercial-Grade TsAnalyzer
 
 ## 1. Product Mission
 TsAnalyzer is a **Broadcast-Grade Deterministic Monitoring System**. It provides absolute metrology, stateful alarm lifecycle management, and long-term compliance (SLA) auditing.
+
+The operational interface is driven by a **Three-Plane Appliance Architecture** (see `docs/44_grafana_dashboard_spec.md`) and a real-time **Inference Engine** (see `docs/46_inference_engine_implementation.md`).
 
 ---
 
@@ -65,9 +67,7 @@ TsAnalyzer is designed to minimize the **MTTR (Mean Time To Repair)** by providi
 When a P1/P2 error is detected or RST falls below the `EMERGENCY` threshold, TsAnalyzer MUST:
 - **Automatic Capture**: Trigger a rolling buffer dump of the raw TS data.
 - **Pre/Post Buffer**: The capture must include **5 seconds of pre-fault data** and **5 seconds of post-fault data**.
-- **Evidence Binding**: The resulting forensic bundle is uniquely linked to the Alarm ID for offline reproduction.
+- **Evidence Binding**: The resulting forensic bundle is uniquely linked to the Alarm ID for Plane 3 (Forensic Replay) analysis.
 
-### 6.2 Deterministic Diagnostic Chain
-- **Bit-Exact Reproducibility**: Replaying the same PCAP through the same `engine_version` MUST yield the identical `forensic_report.json`.
-- **Clock Immunity**: Uses `CLOCK_MONOTONIC_RAW` to prevent NTP manipulation.
-- **MTTR Target**: Reduce fault isolation and verification time from hours to **under 5 minutes**.
+## 7. Deployment & Orchestration
+The NOC surface is automatically deployed via `scripts/deploy_dashboard.py`, ensuring that Plane 1 (Wall), Plane 2 (Focus), and Plane 3 (Forensic) are instantiated with correct UIDs, PromQL inference rules, and 4K grid coordinates.

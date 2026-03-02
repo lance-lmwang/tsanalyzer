@@ -24,7 +24,7 @@ CLOUD-3  srt://47.92.1.1:9000?mode=caller
 ## 3. 运行与监控
 - **启动服务器**: `./build/tsa_server tsa.conf`
 - **远程大屏 (Grafana)**: `http://<IP>:3000`
-- **原始数据接口**: `http://<IP>:8080/metrics`
+- **原始数据接口**: `http://<IP>:8082/metrics`
 
 ## 4. 自动化测试与验证
 本项目提供全自动的 E2E 验证链路，无需人工干预即可校验引擎逻辑。

@@ -46,7 +46,7 @@ function verify() {
     echo "-------------------------------------------------------"
     echo "重启完成！检查结果："
     echo "- Grafana: http://localhost:3000"
-    echo "- Metrics: http://localhost:8080/metrics"
+    echo "- Metrics: http://localhost:8082/metrics"
     echo "- 看板状态: $(curl -s http://localhost:3000/api/search?type=dash-db | grep -o '"title":"[^"]*"' | head -n 1)"
     echo "- 采集状态: $(curl -s http://localhost:9090/api/v1/targets | grep -o '"health":"up"' | head -n 1)"
     echo "-------------------------------------------------------"

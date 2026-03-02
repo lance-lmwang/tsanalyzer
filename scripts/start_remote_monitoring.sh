@@ -37,7 +37,7 @@ done
 
 echo -e "${GREEN}=== System is LIVE ===${RESET}"
 echo -e "NOC Dashboard: ${BLUE}http://$IP:3000${RESET}"
-echo -e "Metrics API:   ${BLUE}http://$IP:8080/metrics${RESET}"
+echo -e "Metrics API:   ${BLUE}http://$IP:8082/metrics${RESET}"
 echo ""
 echo "TO SIMULATE FAULTS:"
 echo "Run: 'python3 scripts/chaos_proxy.py' and type 'drop STR-2 0.1'"

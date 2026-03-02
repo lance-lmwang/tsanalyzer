@@ -1,5 +1,5 @@
 #!/bin/bash
-PORT=8080
+PORT=8082
 DEPLOY_DIR=".tmp_dashboard"
 SOURCE_FILE="mock_noc_dashboard.html"
 

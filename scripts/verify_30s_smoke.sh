@@ -1,7 +1,7 @@
 #!/bin/bash
 # TsAnalyzer Pro: 30s Smoke Test (Single Stream)
 set -e
-PORT_API=8080
+PORT_API=8082
 PORT_UDP=19001
 SAMPLE="test.ts"
 

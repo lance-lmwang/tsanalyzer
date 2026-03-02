@@ -3,9 +3,9 @@
 TsAnalyzer Pro follows an **API-First** architecture. The embedded Web UI is a consumer of these APIs, ensuring that any action performed in the UI can be fully automated by customers.
 
 ## 1. Global Standards
-- **TsAnalyzer API Port**: `8080` (Default)
+- **TsAnalyzer API Port**: `8082` (Default)
 - **Grafana UI Port**: `3000` (Standard)
-- **Base URL**: `http://<device-ip>:8080/api/v1`
+- **Base URL**: `http://<device-ip>:8082/api/v1`
 - **Content-Type**: `application/json`
 
 ## 2. Telemetry API (Data Plane)
@@ -66,12 +66,12 @@ Restarts the analyzer process.
 ## 6. Integration Example (cURL)
 ```bash
 # Add a new SRT stream for monitoring
-curl -X POST http://192.168.7.2:8080/api/v1/config/streams \
+curl -X POST http://192.168.7.2:8082/api/v1/config/streams \
      -H "Content-Type: application/json" \
      -d '{"stream_id": "HK-PROD", "url": "srt://0.0.0.0:9001", "latency_ms": 400}'
 
 # Delete a stream and free resources
-curl -X DELETE http://192.168.7.2:8080/api/v1/config/streams/HK-PROD
+curl -X DELETE http://192.168.7.2:8082/api/v1/config/streams/HK-PROD
 ```
 
 ## 7. Static Assets

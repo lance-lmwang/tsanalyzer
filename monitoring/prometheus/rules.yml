@@ -1,0 +1,37 @@
+groups:
+  - name: tsa_inference_l1_factors
+    rules:
+      - record: tsa_factor_net_loss
+        expr: clamp_max(mdi_mlr > bool 0, 1.0)
+      - record: tsa_factor_net_retransmit
+        expr: clamp_max(srt_retransmit_rate / 0.20, 1.0)
+      - record: tsa_factor_net_jitter
+        expr: clamp_max(mdi_df / 50, 1.0)
+      - record: tsa_factor_enc_pcr_jitter
+        expr: clamp_max(tsa_pcr_jitter_ms / 5.0, 1.0)
+      - record: tsa_factor_enc_buffer_overflow
+        expr: clamp_max(tsa_tstd_overflow_count, 1.0)
+
+  - name: tsa_inference_l2_domains
+    rules:
+      - record: tsa_score_network
+        expr: >
+          (tsa_factor_net_loss * 0.5) + 
+          (tsa_factor_net_retransmit * 0.3) + 
+          (tsa_factor_net_jitter * 0.2)
+      - record: tsa_score_encoder
+        expr: >
+          (tsa_factor_enc_pcr_jitter * 0.6) + 
+          (tsa_factor_enc_buffer_overflow * 0.4)
+
+  - name: tsa_inference_l3_decision
+    rules:
+      # 采用 bool 算术逻辑：(条件A) * 1 + (条件B) * 2 + (条件C) * 3
+      # 这样结果永远是向量，且互斥
+      - record: dominant_failure_domain
+        expr: >
+          ((tsa_score_network > bool 0.6) * (tsa_score_encoder < bool 0.2) * 1)
+          +
+          ((tsa_score_encoder > bool 0.6) * (tsa_score_network < bool 0.2) * 2)
+          +
+          ((tsa_score_network > bool 0.4) * (tsa_score_encoder > bool 0.4) * 3)

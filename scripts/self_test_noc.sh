@@ -1,7 +1,7 @@
 #!/bin/bash
 # TsAnalyzer Pro NOC Self-Test Script (v2)
 
-PORT=8080
+PORT=8082
 LAN_IP="192.168.7.2"
 SUCCESS=0
 

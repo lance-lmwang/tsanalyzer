@@ -2,7 +2,7 @@
 # TsAnalyzer: Stable Release & Real-time Stress Test
 set -u
 
-PORT_API=8080
+PORT_API=8082
 SAMPLE_TS="/home/lmwang/dev/sample/cctvhd.ts"
 STREAMS=4
 

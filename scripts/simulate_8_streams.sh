@@ -1,7 +1,7 @@
 #!/bin/bash
 # TsAnalyzer Pro - 8-Stream Simulation (2Mbps) for Grafana
 
-PORT=8080
+PORT=8082
 BASE_UDP_PORT=19001
 SAMPLE_FILE="/home/lmwang/sample/cctvhd.ts"
 
@@ -36,7 +36,7 @@ done
 
 echo "===================================================="
 echo "SIMULATION ACTIVE @ 2MBPS"
-echo "Prometheus Target: http://192.168.7.2:8080/metrics"
+echo "Prometheus Target: http://192.168.7.2:8082/metrics"
 echo "===================================================="
 
 while true; do

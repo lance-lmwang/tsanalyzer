@@ -30,7 +30,7 @@ echo "WAIT: Waiting 15s for analysis lock..."
 sleep 15
 
 # 4. Audit Logic
-METRICS=$(curl -s http://localhost:8080/metrics)
+METRICS=$(curl -s http://localhost:8082/metrics)
 STR="STR-1"
 HEALTH=$(echo "$METRICS" | grep "tsa_health_score{stream_id="$STR"}" | awk '{print $2}')
 BITRATE=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps{stream_id="$STR"}" | awk '{print $2}')

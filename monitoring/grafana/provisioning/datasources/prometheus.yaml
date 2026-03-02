@@ -4,13 +4,13 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://tsa-prometheus:9090
+    url: http://localhost:9090
     isDefault: true
     uid: PBFA97CFB590B2093
     editable: false
   - name: Loki
     type: loki
     access: proxy
-    url: http://tsa-loki:3100
+    url: http://localhost:3100
     uid: LOKI_TSA_PRO
     editable: false

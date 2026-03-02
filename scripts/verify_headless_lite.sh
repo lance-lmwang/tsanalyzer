@@ -32,7 +32,7 @@ echo "WAIT: Validating engine internal state..."
 sleep 15
 
 # 3. Final Quantitative Check
-METRICS=$(curl -s http://127.0.0.1:8080/metrics)
+METRICS=$(curl -s http://127.0.0.1:8082/metrics)
 HEALTH=$(echo "$METRICS" | grep 'tsa_health_score{stream_id="STR-1"}' | awk '{print $2}')
 
 # Clean up

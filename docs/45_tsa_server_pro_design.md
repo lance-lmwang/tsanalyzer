@@ -97,11 +97,11 @@ To compete with FPGA/ASIC-based hardware analyzers using purely Commercial Off-T
 
 ## 7. Appliance-Grade Observability & Telemetry
 
-A broadcast appliance must provide predictable execution visibility. Beyond standard protocol metrics, `tsa_server_pro` exposes internal telemetry to prove its deterministic behavior:
+A broadcast appliance must provide predictable execution visibility. Beyond standard protocol metrics, `tsa_server_pro` exposes internal telemetry to drive the **Failure Domain Inference Engine** (see `docs/46_inference_engine_implementation.md`):
 
-*   **Predictability Telemetry**: Exposes ANA queue fill ratio histograms, MPSC Ready Queue occupancy percentiles, and Worker slice overrun counters. This allows NOC engineers to verify internal execution jitter mathematically.
-*   **Differentiated Drop Metrics**: By incrementing `internal_drop` during Analysis Queue overflows, the system explicitly excludes internal bottlenecks from TR 101 290 CC Error and PCR Jitter calculations, preventing false-positive network alarms.
-*   **Link Metric Correlation**: Native integration with `srt_bstats` provides real-time RTT and retransmission rates.
+*   **Predictability Telemetry**: Exposes ANA queue fill ratio histograms, MPSC Ready Queue occupancy percentiles, and `worker_overrun` counters. This allows the Inference Engine to detect if the appliance is violating its deterministic budget.
+*   **Differentiated Drop Metrics**: By incrementing `internal_drop` during Analysis Queue overflows, the system provides the "Banner Truth" required to trigger the **Analysis Dropped (Blue)** operational state on the Global Wall. This explicitly excludes internal bottlenecks from TR 101 290 CC Error and PCR Jitter calculations, preventing false-positive network alarms.
+*   **Link Metric Correlation**: Native integration with `srt_bstats` provides real-time RTT and retransmission rates, feeding the `tsa_score_network` inference layer.
 
 ## 8. Deterministic Capacity Modeling
 
@@ -128,3 +128,22 @@ On a standard dual-socket 64-core server with 25Gbps NICs, the architecture poss
 
 ### 8.4 Operating System Tuning Requirements
 To truly match hardware appliances, the non-deterministic nature of the Linux kernel must be neutralized. Production deployments require strict boot parameters (`isolcpus`, `nohz_full`, `intel_pstate=disable`, `processor.max_cstate=1`) to prevent System Management Interrupts (SMI), IRQ balancing, and power-saving sleep states from violating the appliance's sub-millisecond latency budget.
+
+---
+
+## 9. Appliance UI Integration: The Three-Plane Model
+
+To match the deterministic capabilities of the `tsa_server_pro` engine, the operational interface follows a **Three-Plane Architecture** (defined in `docs/44_grafana_dashboard_spec.md`).
+
+1.  **Plane 1: Global Mosaic Wall**: A high-density situational awareness field representing the entire fleet state.
+2.  **Plane 2: Focus View (Tiers 1–5)**: A diagnostic dashboard providing drill-down visibility into the engine's real-time metrology and predictive horizons.
+3.  **Plane 3: Forensic Replay**: A bit-exact evidence audit layer using the server's forensic capture capability.
+
+This isolation ensures that high-density fleet visualization does not compromise the millisecond-accurate display of diagnostic metrics.
+
+---
+
+## 10. Operational Documentation Linkage
+- **Visualization Spec**: `docs/44_grafana_dashboard_spec.md`
+- **Inference Rules**: `docs/46_inference_engine_implementation.md`
+- **Metrology Spec**: `docs/15_tr101290_analysis_spec.md`

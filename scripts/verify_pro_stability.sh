@@ -5,7 +5,7 @@
 # Configuration
 DURATION_SEC=${1:-300}  # Default 5 minutes
 STREAMS=16
-PORT=8080
+PORT=8082
 METRICS_URL="http://127.0.0.1:$PORT/metrics"
 SNAPSHOT_URL="http://127.0.0.1:$PORT/api/v1/snapshot"
 LOG_FILE="stability_report.log"

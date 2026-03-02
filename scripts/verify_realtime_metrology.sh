@@ -2,7 +2,7 @@
 # TsAnalyzer: Real-time Metrology Dual-Bitrate Verification
 set -u
 
-PORT_API=8080
+PORT_API=8082
 PORT_UDP=19001
 SAMPLE_TS="/home/lmwang/dev/sample/cctvhd.ts"
 

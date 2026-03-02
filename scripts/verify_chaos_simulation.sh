@@ -50,7 +50,7 @@ echo '{"drop_rates": {"19002": 0.30}}' > chaos_config.json
 sleep 15
 
 # 6. Analysis
-METRICS=$(curl -s http://localhost:8080/metrics)
+METRICS=$(curl -s http://localhost:8082/metrics)
 CC_ERR=$(echo "$METRICS" | grep 'tsa_tr101290_p1_cc_error{stream_id="STR-2"}' | awk '{print $2}')
 HEALTH=$(echo "$METRICS" | grep 'tsa_health_score{stream_id="STR-2"}' | awk '{print $2}')
 

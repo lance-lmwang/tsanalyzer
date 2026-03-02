@@ -5,7 +5,7 @@ from collections import defaultdict
 def verify():
     print("=== 指标唯一性与完整性自动审计 ===")
     try:
-        response = urllib.request.urlopen("http://localhost:8080/metrics")
+        response = urllib.request.urlopen("http://localhost:8082/metrics")
         content = response.read().decode('utf-8')
     except Exception as e:
         print(f"FAILED: 无法访问 metrics 接口: {e}")
