@@ -11,12 +11,7 @@ echo "=== TsPacer CBR 60s Benchmark ==="
 
 # 1. Attempt to grant RT permissions
 echo "1. Requesting RT permissions (setcap)..."
-sudo setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
-
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to set permissions. Please run with sudo access."
-    exit 1
-fi
+setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
 
 # 2. Launch real-time streaming
 echo "2. Running benchmark for $DURATION..."

@@ -50,13 +50,9 @@ pkill -9 tsp || true
 fuser -k 8082/tcp || true
 docker compose -f monitoring/docker-compose.yml down -v
 
-echo "--- [2/5] NETWORK, INFERENCE & FIREWALL ALIGNMENT ---"
+# Network, Inference & Alignment
 # Aligned with network_mode: host. Prometheus probes 127.0.0.1:8082 directly.
 sed -i "s/targets: .*/targets: ['127.0.0.1:8082']/g" monitoring/prometheus/prometheus.yml
-
-# Punch through UFW if available
-sudo ufw allow 3000/tcp > /dev/null 2>&1 || true
-sudo ufw allow 8082/tcp > /dev/null 2>&1 || true
 
 echo "--- [3/5] UI BRANDING & DASHBOARD DEPLOY ---"
 python3 scripts/deploy_dashboard.py

@@ -23,7 +23,7 @@ fi
 
 # 1. Request RT permissions
 echo "1. Setting RT permissions..."
-sudo setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
+setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
 
 # 2. Run tsp in PCR Mode (-P)
 echo "2. Running tsp in PCR mode for $DURATION seconds..."

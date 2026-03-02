@@ -15,7 +15,7 @@ if [ ! -f "$BIN" ]; then
 fi
 
 # 1. Setup Environment
-sudo setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
+setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
 
 # 2. Run TsPacer
 echo "2. Running TsPacer (PCR Mode + Loop)..."

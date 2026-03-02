@@ -34,7 +34,7 @@ def run_rca_precision_test():
 def run_high_throughput_audit():
     print("Testing 10Gbps Aggregate Throughput...")
     # Run tsb with 4 threads
-    res = subprocess.run(["sudo", "./build/tsb"], capture_output=True, text=True)
+    res = subprocess.run(["./build/tsb"], capture_output=True, text=True)
     print(res.stdout)
     if "PASSED" in res.stdout:
         print("10Gbps Aggregate Throughput: PASSED")
