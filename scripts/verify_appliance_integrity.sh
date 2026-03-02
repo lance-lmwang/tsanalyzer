@@ -31,7 +31,13 @@ if [ "$HTTP_STATUS" == "200" ]; then
     fi
 else
     echo "❌ FAIL (Server is DOWN at :8082. Error Code: $HTTP_STATUS)"
-    echo "    Check server.log for bind errors."
+    # Check if someone else is on the port
+    if lsof -Pi :8082 -sTCP:LISTEN -t >/dev/null ; then
+        CONFLICT_PROC=$(ps -p $(lsof -t -i:8082) -o comm=)
+        echo "    CONFLICT DETECTED: Port 8082 is occupied by process: '$CONFLICT_PROC'"
+    else
+        echo "    Check server.log for bind errors."
+    fi
     exit 1
 fi
 

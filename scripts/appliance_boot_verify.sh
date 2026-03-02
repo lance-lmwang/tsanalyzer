@@ -36,7 +36,15 @@ echo "🛡️  TsAnalyzer Pro Appliance - SYSTEM INITIALIZATION"
 echo "================================================================================"
 
 
-echo "--- [1/5] CLEANING ENVIRONMENT ---"
+echo "--- [1/5] CLEANING ENVIRONMENT & PORT CHECK ---"
+# Check if port 8082 is occupied by another process (excluding our own cleanup target)
+if lsof -Pi :8082 -sTCP:LISTEN -t >/dev/null ; then
+    OCCUPYING_PROCESS=$(ps -p $(lsof -t -i:8082) -o comm= || echo "unknown")
+    echo "⚠️  WARNING: Port 8082 is already in use by process: $OCCUPYING_PROCESS"
+    echo "Please free port 8082 or modify 'tsa.conf' and scripts before proceeding."
+    exit 1
+fi
+
 pkill -9 tsa_server || true
 pkill -9 tsp || true
 fuser -k 8082/tcp || true
