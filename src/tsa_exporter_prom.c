@@ -73,11 +73,17 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_sync_byte_errors_total%s %llu\n", labels, (unsigned long long)s->sync_byte_error.count);
         SAFE_APPEND("tsa_pcr_jitter_ms%s %.3f\n", labels, s->pcr_jitter_avg_ns / 1000000.0);
 
-        // Document Aligned
+        // Document Aligned & Inference Engine (L1 Factors)
         SAFE_APPEND("tsa_sync_loss_errors%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
         SAFE_APPEND("tsa_pat_error_count%s %llu\n", labels, (unsigned long long)s->pat_error.count);
         SAFE_APPEND("tsa_pmt_error_count%s %llu\n", labels, (unsigned long long)s->pmt_error.count);
         SAFE_APPEND("tsa_srt_rtt_ms%s %lld\n", labels, (long long)snap->srt.rtt_ms);
+
+        // Canonical Inference Metrics (Mapping to rules.yml)
+        SAFE_APPEND("mdi_mlr%s %.2f\n", labels, (float)s->mdi_mlr_pkts_s);
+        SAFE_APPEND("mdi_df%s %.2f\n", labels, (float)s->mdi_df_ms);
+        SAFE_APPEND("srt_retransmit_rate%s %.4f\n", labels, (float)snap->srt.retransmit_tax);
+        SAFE_APPEND("tsa_tstd_overflow_count%s %d\n", labels, 0); // Placeholder for future T-STD engine
 
         // Tier 3: Analytics
         SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);

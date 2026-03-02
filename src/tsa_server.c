@@ -15,7 +15,7 @@
 extern void tsa_exporter_prom_v2(tsa_handle_t **handles, int count, char *buf, size_t sz);
 
 #define MAX_STREAMS 16
-#define HTTP_PORT "8080"
+static int g_http_port = 8088;
 
 typedef struct {
     char id[32];
@@ -68,9 +68,15 @@ static void *worker(void *arg) {
 static void load_config(const char *file) {
     FILE *fp = fopen(file, "r");
     if (!fp) return;
-    char line[512], id[32], url[256];
-    while (fgets(line, sizeof(line), fp) && g_node_count < MAX_STREAMS) {
+    char line[512], key[32], val_str[256];
+    while (fgets(line, sizeof(line), fp)) {
         if (line[0] == '#' || line[0] == '\n') continue;
+        if (sscanf(line, "GLOBAL %s %s", key, val_str) == 2) {
+            if (strcmp(key, "http_port") == 0) g_http_port = atoi(val_str);
+            continue;
+        }
+        if (g_node_count >= MAX_STREAMS) continue;
+        char id[32], url[256];
         if (sscanf(line, "%s %s", id, url) == 2) {
             node_t *n = &g_nodes[g_node_count++];
             strncpy(n->id, id, 31);
@@ -99,13 +105,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 
 int main(int argc, char **argv) {
     load_config((argc > 1) ? argv[1] : "tsa.conf");
-    printf("SRV: TsAnalyzer Engine starting with %d nodes...\n", g_node_count);
+    printf("SRV: TsAnalyzer Engine starting on port %d with %d nodes...\n", g_http_port, g_node_count);
     for (int i = 0; i < g_node_count; i++) {
         pthread_create(&g_nodes[i].thread, NULL, worker, &g_nodes[i]);
     }
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
-    mg_http_listen(&mgr, "http://0.0.0.0:" HTTP_PORT, fn, NULL);
+    char addr[128];
+    snprintf(addr, sizeof(addr), "http://0.0.0.0:%d", g_http_port);
+    mg_http_listen(&mgr, addr, fn, NULL);
     while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 100);
     mg_mgr_free(&mgr);
     return 0;

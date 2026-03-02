@@ -8,6 +8,6 @@ rule_files:
 scrape_configs:
   - job_name: 'tsanalyzer'
     static_configs:
-      - targets: ['127.0.0.1:8082']
+      - targets: ['127.0.0.1:8088']
         labels:
           instance: 'tsa-appliance'
