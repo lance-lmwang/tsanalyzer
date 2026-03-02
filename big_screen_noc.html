@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TsAnalyzer Pro - BIG SCREEN NOC (Plane 1)</title>
+    <title>TsAnalyzer Pro - GLOBAL NOC MATRIX</title>
     <style>
         :root {
             --bg: #020617;
@@ -12,10 +12,11 @@
             --ok: #22C55E;
             --warn: #F59E0B;
             --crit: #EF4444;
-            --latch: #F97316; /* Orange for Latched */
-            --drop: #3B82F6;  /* Blue for Internal Drop */
+            --latch: #F97316;
             --text: #F8FAFC;
             --text-dim: #94A3B8;
+            --header-h: 60px;
+            --footer-h: 36px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -25,302 +26,208 @@
             display: flex; flex-direction: column;
         }
         header {
-            height: 64px; padding: 0 32px;
+            height: var(--header-h); padding: 0 32px;
             display: flex; align-items: center; justify-content: space-between;
             border-bottom: 1px solid #1E293B;
-            background: rgba(2, 6, 23, 0.8); backdrop-filter: blur(8px);
+            background: rgba(2, 6, 23, 0.9); backdrop-filter: blur(12px);
             z-index: 100;
         }
-        .logo { font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px; color: var(--accent); }
-        .clock { font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; color: var(--text-dim); }
+        .logo { font-size: 1.2rem; font-weight: 900; letter-spacing: 1px; color: var(--accent); }
+        .clock { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; color: var(--text-dim); }
 
         main {
-            flex-grow: 1;
-            padding: 24px;
-            display: grid;
-            gap: 16px;
-            align-content: center;
-            justify-content: center;
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-grow: 1; padding: 16px;
+            display: grid; gap: 12px;
+            align-content: start; justify-content: center;
+            overflow-y: auto;
         }
 
         .stream-card {
             background: var(--panel);
             border: 1px solid #1E293B;
-            border-radius: 6px;
+            border-radius: 4px;
+            width: 320px;
             display: flex; flex-direction: column;
-            position: relative;
-            overflow: hidden;
-            min-width: 240px;
-            transition: transform 0.2s ease, border-color 0.3s ease;
+            transition: all 0.2s ease;
         }
-        .stream-card:hover { transform: scale(1.02); z-index: 10; border-color: var(--accent); }
 
-        /* State Coloring */
-        .stream-card.stable { border-left: 4px solid var(--ok); }
-        .stream-card.degraded { border-left: 4px solid var(--warn); }
-        .stream-card.failure { border-left: 4px solid var(--crit); animation: border-pulse 2s infinite; }
-        .stream-card.latched { border-left: 4px solid var(--latch); }
-        .stream-card.dropped { border-left: 4px solid var(--drop); }
-        .stream-card.nosignal { border-left: 4px solid #475569; opacity: 0.7; }
+        /* Tiered Section Headers */
+        .tier-label {
+            font-size: 0.55rem; font-weight: 800; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px;
+            padding: 4px 12px; background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid #1E293B;
+        }
 
-        @keyframes border-pulse { 0% { border-left-color: var(--crit); } 50% { border-left-color: #7f1d1d; } 100% { border-left-color: var(--crit); } }
+        /* Card States */
+        .stream-card.stable { border-top: 3px solid var(--ok); }
+        .stream-card.degraded { border-top: 3px solid var(--warn); }
+        .stream-card.failure { border-top: 3px solid var(--crit); animation: card-pulse 2s infinite; }
+        @keyframes card-pulse { 0% { border-top-color: var(--crit); } 50% { border-top-color: #7f1d1d; } 100% { border-top-color: var(--crit); } }
 
         .card-header {
-            padding: 12px 16px; border-bottom: 1px solid #1E293B;
-            display: flex; justify-content: space-between; align-items: center;
-            background: rgba(255,255,255,0.02);
+            padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;
         }
-        .stream-id { font-weight: 800; font-size: 0.85rem; color: var(--text); letter-spacing: 0.5px; }
-        .health-badge {
-            padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 900;
-            font-family: monospace;
+        .stream-id { font-weight: 900; font-size: 0.8rem; }
+        .health-score { font-family: monospace; font-weight: 900; font-size: 0.8rem; }
+
+        /* Tables */
+        .metrics-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.7rem;
         }
+        .metrics-table td { padding: 4px 12px; border-bottom: 1px solid #1E293B; }
+        .m-key { color: var(--text-dim); font-weight: 500; }
+        .m-val { text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #FFF; }
+        .m-unit { font-size: 0.6rem; color: var(--text-dim); margin-left: 2px; font-weight: normal; }
 
-        .card-body {
-            flex-grow: 1; padding: 12px 16px;
-            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-        }
-
-        .metric-box { display: flex; flex-direction: column; }
-        .m-label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; font-weight: 600; }
-        .m-value { font-size: 1.2rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #FFF; }
-        .unit { font-size: 0.65rem; color: var(--text-dim); margin-left: 1px; font-weight: normal; }
-
-        .diag-matrix {
-            grid-column: span 2;
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
-            margin-top: 8px; padding-top: 8px; border-top: 1px dashed #1E293B;
+        /* LED Panel */
+        .led-panel {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 2px; padding: 8px 12px;
         }
         .led {
-            height: 18px; border-radius: 2px;
-            font-size: 0.55rem; font-weight: 800;
+            height: 16px; border-radius: 1px;
+            font-size: 0.5rem; font-weight: 900;
             display: flex; align-items: center; justify-content: center;
             background: #1E293B; color: #334155;
         }
-        .led.active { background: var(--ok); color: #FFF; }
+        .led.active { background: #064e3b; color: var(--ok); }
         .led.error { background: var(--crit); color: #FFF; animation: led-blink 0.5s infinite; }
         @keyframes led-blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        .card-footer {
-            height: 32px; padding: 0 16px;
-            display: flex; align-items: center; gap: 12px;
-            border-top: 1px solid #1E293B; background: rgba(0,0,0,0.3);
-            font-size: 0.65rem; color: var(--text-dim);
-        }
-
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #334155; }
-        .status-dot.active { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
-
         .summary-bar {
-            height: 36px; background: #0F172A; border-top: 1px solid #1E293B;
+            height: var(--footer-h); background: #0F172A; border-top: 1px solid #1E293B;
             display: flex; align-items: center; padding: 0 32px; gap: 40px;
-            font-size: 0.75rem; color: var(--text-dim);
-            z-index: 100;
+            font-size: 0.7rem; color: var(--text-dim);
         }
-        .summary-item b { color: var(--accent); font-family: monospace; font-size: 0.85rem; }
+        .summary-bar b { color: var(--accent); }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="logo">TSA<span style="color:#FFF">PRO</span> <span style="font-size:0.7rem; opacity:0.6; font-weight:400; margin-left:8px">PLANE 1 — GLOBAL STREAM WALL</span></div>
+    <div class="logo">TSA<span style="color:#FFF">PRO</span> NOC — PLANE 1</div>
     <div style="display:flex; gap:32px; align-items:center">
-        <div id="connection-status" style="font-size:0.75rem; font-weight:700">● SERVER CONNECTED</div>
+        <div id="conn-status" style="font-size:0.7rem; font-weight:800">● LIVE DATA</div>
         <div class="clock" id="clock">00:00:00</div>
     </div>
 </header>
 
-<main id="dashboard-grid">
-    <!-- Stream cards will be injected here -->
-</main>
+<main id="dashboard-grid"></main>
 
 <div class="summary-bar">
-    <div class="summary-item">STREAMS: <b id="total-streams">0</b></div>
-    <div class="summary-item">AGGREGATE BW: <b id="total-bitrate">0.00 Mbps</b></div>
-    <div class="summary-item">LATCHED FAULTS: <b id="latched-count" style="color:var(--latch)">0</b></div>
-    <div class="summary-item" style="margin-left:auto">ENGINE LOAD: <b id="avg-load">0.0%</b></div>
+    <div>STREAMS: <b id="s-count">0</b></div>
+    <div>AGGREGATE: <b id="s-bw">0.00 Mbps</b></div>
+    <div style="margin-left:auto">SYSTEM STATUS: <b style="color:var(--ok)">OPTIMAL</b></div>
 </div>
 
 <script>
     const GRID = document.getElementById('dashboard-grid');
-    const LATCH_WINDOW_MS = 300000; // 5 Minutes memory
-    let streams = {};
-    let errorHistory = {}; // streamId -> { lastErrorTime, lastErrorType }
+    const REFRESH_MS = 1000;
 
     function updateClock() {
         document.getElementById('clock').innerText = new Date().toLocaleTimeString('en-GB');
     }
     setInterval(updateClock, 1000);
 
-    // Mosaic Packing Algorithm (Spec 1.1)
-    function updateGridLayout(n) {
-        if (n === 0) return;
-        const A = 1.78; // 16:9 Aspect Ratio
-        const cols = Math.ceil(Math.sqrt(n * A));
-        const rows = Math.ceil(n / cols);
-
-        GRID.style.gridTemplateColumns = `repeat(${cols}, min-content)`;
-        GRID.style.gridTemplateRows = `repeat(${rows}, min-content)`;
-
-        // Handle last row centering (Spec 1.2) via justify-content
-        GRID.style.justifyContent = 'center';
-    }
-
-    async function fetchMetrics() {
+    async function tick() {
         try {
-            const response = await fetch('http://localhost:8080/metrics');
-            const text = await response.text();
-            parseMetrics(text);
-            document.getElementById('connection-status').style.color = 'var(--ok)';
-            document.getElementById('connection-status').innerText = '● SERVER CONNECTED';
+            const res = await fetch('http://localhost:8088/metrics');
+            const text = await res.text();
+            const data = parse(text);
+            render(data);
+            document.getElementById('conn-status').style.color = 'var(--ok)';
         } catch (e) {
-            document.getElementById('connection-status').style.color = 'var(--crit)';
-            document.getElementById('connection-status').innerText = '○ SERVER OFFLINE';
+            document.getElementById('conn-status').style.color = 'var(--crit)';
         }
     }
 
-    function parseMetrics(text) {
+    function parse(text) {
+        const streams = {};
         const lines = text.split('\n');
-        const now = Date.now();
-        const newStreams = {};
-        let totalBitrate = 0;
-        let totalOverruns = 0;
-        let latchedCount = 0;
-
         lines.forEach(line => {
             if (line.startsWith('#') || !line.includes('{')) return;
-
-            const match = line.match(/([a-z0-9_]+)\{stream_id="([^"]+)"(?:,error_type="([^"]+)")?\} ([\d.e+-]+)/);
+            const match = line.match(/([a-z0-9_]+)\{stream_id="([^"]+)"(?:,.*)?\} ([\d.e+-]+)/);
             if (!match) return;
+            const [_, name, id, val] = match;
+            if (!streams[id]) streams[id] = { id, health: 100, bitrate: 0, rtt: 0, fps: 0, gop: 0, sync: 0, rst: 999 };
+            const v = parseFloat(val);
+            if (name === 'tsa_physical_bitrate_bps') streams[id].bitrate = v;
+            if (name === 'tsa_health_score') streams[id].health = v;
+            if (name === 'tsa_srt_rtt_ms') streams[id].rtt = v;
+            if (name === 'tsa_essence_video_fps') streams[id].fps = v;
+            if (name === 'tsa_gop_ms') streams[id].gop = v;
+            if (name === 'tsa_essence_av_sync_ms') streams[id].sync = v;
+            if (name === 'tsa_rst_network_seconds') streams[id].rst = v;
 
-            const [_, name, id, errType, valStr] = match;
-            const val = parseFloat(valStr);
-            if (!newStreams[id]) {
-                newStreams[id] = {
-                    id, health: 100, bitrate: 0, rtt: 0, drops: 0, overruns: 0,
-                    sync_loss: 0, pat_err: 0, pmt_err: 0, cc_err: 0,
-                    fps: 0, av_sync: 0, locked: 0
-                };
-            }
-
-            const s = newStreams[id];
-            if (name === 'tsa_physical_bitrate_bps') { s.bitrate = val; totalBitrate += val; }
-            if (name === 'tsa_health_score') s.health = val;
-            if (name === 'tsa_srt_rtt_ms') s.rtt = val;
-            if (name === 'tsa_internal_analyzer_drop') s.drops = val;
-            if (name === 'tsa_worker_slice_overruns') { s.overruns = val; totalOverruns += val; }
-            if (name === 'tsa_signal_lock_status') s.locked = val > 0;
-            if (name === 'tsa_essence_video_fps') s.fps = val;
-            if (name === 'tsa_essence_av_sync_ms') s.av_sync = val;
-
-            // TR 101 290 P1 (Spec 4.0 / Tier 2)
-            if (name === 'tsa_tr101290_p1_sync_loss') s.sync_loss = val;
-            if (name === 'tsa_tr101290_p1_pat_error') s.pat_err = val;
-            if (name === 'tsa_pmt_error_count') s.pmt_err = val;
-            if (name === 'tsa_tr101290_p1_cc_error' || name === 'tsa_continuity_errors_total') s.cc_err = val;
+            // Compliance
+            if (name === 'tsa_tr101290_p1_sync_loss') streams[id].sync_err = v;
+            if (name === 'tsa_tr101290_p1_pat_error') streams[id].pat_err = v;
+            if (name === 'tsa_pmt_error_count') streams[id].pmt_err = v;
+            if (name === 'tsa_continuity_errors_total') streams[id].cc_err = v;
         });
-
-        // Latching Logic (Spec 1.4)
-        Object.keys(newStreams).forEach(id => {
-            const s = newStreams[id];
-            const hasActiveError = s.health < 80 || !s.locked || s.drops > 0;
-
-            if (hasActiveError) {
-                errorHistory[id] = { time: now };
-            } else if (errorHistory[id]) {
-                if (now - errorHistory[id].time < LATCH_WINDOW_MS) {
-                    s.isLatched = true;
-                    latchedCount++;
-                } else {
-                    delete errorHistory[id];
-                }
-            }
-        });
-
-        renderDashboard(newStreams);
-        document.getElementById('total-streams').innerText = Object.keys(newStreams).length;
-        document.getElementById('total-bitrate').innerText = (totalBitrate / 1000000).toFixed(2) + ' Mbps';
-        document.getElementById('latched-count').innerText = latchedCount;
-        document.getElementById('avg-load').innerText = (Math.min(100, (totalOverruns / 10))).toFixed(1) + '%';
-
-        updateGridLayout(Object.keys(newStreams).length);
+        return streams;
     }
 
-    function renderDashboard(newStreams) {
-        const ids = Object.keys(newStreams).sort();
+    function render(streams) {
+        const ids = Object.keys(streams).sort();
+        let totalBw = 0;
 
         ids.forEach(id => {
-            const s = newStreams[id];
-            let el = document.getElementById(`card-${id}`);
-            if (!el) {
-                el = document.createElement('div');
-                el.id = `card-${id}`;
-                GRID.appendChild(el);
+            const s = streams[id];
+            totalBw += s.bitrate;
+            let card = document.getElementById(`card-${id}`);
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `card-${id}`;
+                GRID.appendChild(card);
             }
 
-            // State Semantics (Spec 1.3)
-            let stateClass = 'stable';
-            if (!s.locked || s.bitrate === 0) stateClass = 'nosignal';
-            else if (s.health < 70) stateClass = 'failure';
-            else if (s.drops > 0) stateClass = 'dropped';
-            else if (s.health < 90) stateClass = 'degraded';
-            else if (s.isLatched) stateClass = 'latched';
+            let status = 'stable';
+            if (s.health < 70 || s.bitrate === 0) status = 'failure';
+            else if (s.health < 90) status = 'degraded';
 
-            const healthColor = s.health > 90 ? 'var(--ok)' : (s.health > 70 ? 'var(--warn)' : 'var(--crit)');
-            const bitrateMbps = (s.bitrate / 1000000).toFixed(1);
-
-            el.className = `stream-card ${stateClass}`;
-            el.innerHTML = `
+            card.className = `stream-card ${status}`;
+            card.innerHTML = `
                 <div class="card-header">
-                    <span class="stream-id">${id.toUpperCase()}</span>
-                    <span class="health-badge" style="background:${s.isLatched ? 'var(--latch)' : healthColor}; color:#000">
-                        ${s.isLatched ? 'LATCH' : s.health.toFixed(0) + '%'}
-                    </span>
+                    <span class="stream-id">${id}</span>
+                    <span class="health-score" style="color:${s.health > 90 ? 'var(--ok)' : 'var(--crit)'}">${s.health.toFixed(0)}%</span>
                 </div>
-                <div class="card-body">
-                    <div class="metric-box">
-                        <span class="m-label">Bitrate</span>
-                        <span class="m-value">${bitrateMbps}<span class="unit">M</span></span>
-                    </div>
-                    <div class="metric-box">
-                        <span class="m-label">FPS / GOP</span>
-                        <span class="m-value">${s.fps.toFixed(1)}</span>
-                    </div>
-                    <div class="metric-box">
-                        <span class="m-label">RTT</span>
-                        <span class="m-value">${s.rtt}<span class="unit">ms</span></span>
-                    </div>
-                    <div class="metric-box">
-                        <span class="m-label">AV Sync</span>
-                        <span class="m-value" style="color:${Math.abs(s.av_sync) > 100 ? 'var(--warn)' : 'inherit'}">
-                            ${s.av_sync}<span class="unit">ms</span>
-                        </span>
-                    </div>
-                    <div class="diag-matrix">
-                        <div class="led ${s.sync_loss > 0 ? 'error' : (s.locked ? 'active' : '')}">SYNC</div>
-                        <div class="led ${s.pat_err > 0 ? 'error' : (s.locked ? 'active' : '')}">PAT</div>
-                        <div class="led ${s.pmt_err > 0 ? 'error' : (s.locked ? 'active' : '')}">PMT</div>
-                        <div class="led ${s.cc_err > 0 ? 'error' : (s.locked ? 'active' : '')}">CC</div>
-                    </div>
+
+                <div class="tier-label">Tier 1: Link & Physical</div>
+                <table class="metrics-table">
+                    <tr><td class="m-key">Throughput</td><td class="m-val">${(s.bitrate/1000000).toFixed(2)}<span class="m-unit">Mbps</span></td></tr>
+                    <tr><td class="m-key">SRT RTT</td><td class="m-val">${s.rtt}<span class="m-unit">ms</span></td></tr>
+                    <tr><td class="m-key">RST Survival</td><td class="m-val" style="color:${s.rst < 10 ? 'var(--crit)' : 'inherit'}">${s.rst > 3600 ? '>1h' : s.rst.toFixed(1) + 's'}</td></tr>
+                </table>
+
+                <div class="tier-label">Tier 2: ETR 290 Compliance</div>
+                <div class="led-panel">
+                    <div class="led ${s.sync_err > 0 ? 'error' : 'active'}">SYNC</div>
+                    <div class="led ${s.pat_err > 0 ? 'error' : 'active'}">PAT</div>
+                    <div class="led ${s.pmt_err > 0 ? 'error' : 'active'}">PMT</div>
+                    <div class="led ${s.cc_err > 0 ? 'error' : 'active'}">CC</div>
                 </div>
-                <div class="card-footer">
-                    <div class="status-dot ${s.locked ? 'active' : ''}"></div>
-                    <span>${s.locked ? 'SIGNAL LOCKED' : 'SEARCHING...'}</span>
-                    <span style="margin-left:auto; opacity:0.8; font-family:monospace">
-                        ${s.drops > 0 ? '⚠️ DROP:' + s.drops : 'TS OK'}
-                    </span>
-                </div>
+
+                <div class="tier-label">Tier 3: Essence & Payload</div>
+                <table class="metrics-table" style="border-bottom:none">
+                    <tr><td class="m-key">Video FPS</td><td class="m-val">${s.fps.toFixed(1)}</td></tr>
+                    <tr><td class="m-key">GOP Size</td><td class="m-val">${s.gop}<span class="m-unit">ms</span></td></tr>
+                    <tr><td class="m-key">A/V Sync</td><td class="m-val" style="color:${Math.abs(s.sync) > 100 ? 'var(--warn)' : 'inherit'}">${s.sync}<span class="m-unit">ms</span></td></tr>
+                </table>
             `;
         });
 
-        Array.from(GRID.children).forEach(child => {
-            const id = child.id.replace('card-', '');
-            if (!newStreams[id]) GRID.removeChild(child);
-        });
+        document.getElementById('s-count').innerText = ids.length;
+        document.getElementById('s-bw').innerText = (totalBw / 1000000).toFixed(2) + ' Mbps';
+
+        // Layout logic
+        const cols = ids.length > 4 ? Math.ceil(ids.length / 2) : ids.length;
+        GRID.style.gridTemplateColumns = `repeat(${cols}, min-content)`;
     }
 
-    setInterval(fetchMetrics, 1000);
+    setInterval(tick, REFRESH_MS);
 </script>
 </body>
 </html>

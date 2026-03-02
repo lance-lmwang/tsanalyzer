@@ -113,7 +113,11 @@ int main(int argc, char **argv) {
     mg_mgr_init(&mgr);
     char addr[128];
     snprintf(addr, sizeof(addr), "http://0.0.0.0:%d", g_http_port);
-    mg_http_listen(&mgr, addr, fn, NULL);
+    if (mg_http_listen(&mgr, addr, fn, NULL) == NULL) {
+        fprintf(stderr, "❌ FATAL: Cannot listen on %s. Port already in use?\n", addr);
+        return 1;
+    }
+    printf("✅ HTTP Server is now active at %s/metrics\n", addr);
     while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 100);
     mg_mgr_free(&mgr);
     return 0;

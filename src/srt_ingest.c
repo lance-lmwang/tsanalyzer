@@ -2,6 +2,8 @@
 #include <srt.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #include "tsa.h"
 #include "tsp.h"
@@ -18,17 +20,10 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
 
     srt_startup();
     SRTSOCKET s = srt_create_socket();
+    if (s == SRT_INVALID_SOCK) return NULL;
 
     int transtype = SRTT_LIVE;
     srt_setsockopt(s, 0, SRTO_TRANSTYPE, &transtype, sizeof(transtype));
-
-    int timeout_ms = 500;
-    srt_setsockopt(s, 0, SRTO_SNDTIMEO, &timeout_ms, sizeof(timeout_ms));
-    srt_setsockopt(s, 0, SRTO_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
-
-    int sync = 0;
-    srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
-    srt_setsockopt(s, 0, SRTO_SNDSYN, &sync, sizeof(sync));
 
     if (passphrase[0]) {
         srt_setsockopt(s, 0, SRTO_PASSPHRASE, passphrase, (int)strlen(passphrase));
@@ -42,14 +37,44 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
     inet_pton(AF_INET, host[0] ? host : "0.0.0.0", &sa.sin_addr.s_addr);
 
     if (is_listener) {
-        srt_bind(s, (struct sockaddr*)&sa, sizeof(sa));
+        // For listener, we MUST wait for the caller to connect.
+        // Temporarily enable blocking for accept.
+        int sync = 1;
+        srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
+
+        if (srt_bind(s, (struct sockaddr*)&sa, sizeof(sa)) == SRT_ERROR) {
+            fprintf(stderr, "SRT Listener: Bind failed: %s\n", srt_getlasterror_str());
+            srt_close(s);
+            return NULL;
+        }
+
         srt_listen(s, 1);
+        printf("SRT Listener: Waiting for caller on %d...\n", port);
+
         SRTSOCKET client = srt_accept(s, NULL, NULL);
+        if (client == SRT_INVALID_SOCK) {
+            fprintf(stderr, "SRT Listener: Accept failed: %s\n", srt_getlasterror_str());
+            srt_close(s);
+            return NULL;
+        }
+
         srt_close(s);
         s = client;
     } else {
-        srt_connect(s, (struct sockaddr*)&sa, sizeof(sa));
+        // Caller mode
+        int sync = 1;
+        srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
+        if (srt_connect(s, (struct sockaddr*)&sa, sizeof(sa)) == SRT_ERROR) {
+            fprintf(stderr, "SRT Caller: Connect failed: %s\n", srt_getlasterror_str());
+            srt_close(s);
+            return NULL;
+        }
     }
+
+    // After connection, set to non-blocking for processing
+    int sync = 0;
+    srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
+    srt_setsockopt(s, 0, SRTO_SNDSYN, &sync, sizeof(sync));
 
     ts_ingest_srt_t* ingest = malloc(sizeof(ts_ingest_srt_t));
     ingest->sock = s;

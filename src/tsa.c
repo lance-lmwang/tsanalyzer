@@ -815,9 +815,32 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         }
     }
     h->last_cc[pid] = res->cc;
-    if (res->payload_len > 0 && h->live->pid_is_referenced[pid]) {
+    if (res->payload_len > 0) {
         if (res->pusi) {
-            if (h->pid_pes_len[pid] > 0)
+            // Check for PES header and PTS
+            const uint8_t* payload = pkt + 4 + res->af_len;
+            if (res->payload_len >= 14 && payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01) {
+                uint8_t flags = payload[7];
+                if (flags & 0x80) { // PTS present
+                    uint64_t pts = ((uint64_t)(payload[9] & 0x0E) << 29) |
+                                   ((uint64_t)payload[10] << 22) |
+                                   ((uint64_t)(payload[11] & 0xFE) << 14) |
+                                   ((uint64_t)payload[12] << 7) |
+                                   ((uint64_t)payload[13] >> 1);
+
+                    const char* st = tsa_get_pid_type_name(h, pid);
+                    static uint64_t last_v_pts = 0, last_a_pts = 0;
+                    if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
+                        last_v_pts = pts;
+                        if (last_a_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)last_v_pts - (int64_t)last_a_pts) / 90;
+                    } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 || strcmp(st, "AC3") == 0) {
+                        last_a_pts = pts;
+                        if (last_v_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)last_v_pts - (int64_t)last_a_pts) / 90;
+                    }
+                }
+            }
+
+            if (h->live->pid_is_referenced[pid] && h->pid_pes_len[pid] > 0)
                 tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
             h->pid_pes_len[pid] = 0;
 
@@ -967,6 +990,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     double dr = fabs(sl - 1.0);
     if (dr > 0.000001) re = (float)((100.0 - h->live->pcr_accuracy_ns / 1000000.0) / dr / 1000.0);
     double cn = 0, ce = 0;
+    h->snap_state.stats->predictive.rst_network_s = rn;
+    h->snap_state.stats->predictive.rst_encoder_s = re;
     if (h->live->mdi_mlr_pkts_s > 0) cn += 0.8;
     if (rn < 5.0) cn += (5.0 - rn) / 5.0;
     if (h->live->pcr_jitter_max_ns > 10000000ULL)
@@ -974,6 +999,31 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     else if (h->live->pcr_jitter_max_ns > 500000ULL)
         ce += 0.5;
     if (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count) ce += 0.4;
+
+    // Aggregate Video/Audio Metrics for Global Dashboard
+    h->live->video_fps = 0;
+    h->live->gop_ms = 0;
+
+    uint32_t ptc = h->pid_tracker_count;
+    if (ptc > MAX_ACTIVE_PIDS) ptc = MAX_ACTIVE_PIDS;
+
+    for (uint32_t i = 0; i < ptc; i++) {
+        uint16_t p = h->pid_active_list[i];
+        if (p >= TS_PID_MAX) continue;
+        const char* st = tsa_get_pid_type_name(h, p);
+        if (!st) continue;
+
+        // Priority 1: Direct Video Codec Match
+        if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
+            if (h->pid_gop_ms[p] > 0 && h->pid_last_gop_n[p] > 0) {
+                h->live->video_fps = (float)h->pid_last_gop_n[p] * 1000.0f / h->pid_gop_ms[p];
+                h->live->gop_ms = h->pid_gop_ms[p];
+            }
+            // If we found a valid video PID with metrics, we can stop searching
+            if (h->live->video_fps > 0) break;
+        }
+    }
+
     for (int p = 0; p < TS_PID_MAX; p++)
         if (h->pid_seen[p] && h->pid_eb_fill_q64[p] == 0 && h->live->pid_is_referenced[p]) ce += 0.9;
     h->snap_state.stats->predictive.fault_domain =
@@ -1073,6 +1123,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 }
 
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
+    if (p >= TS_PID_MAX) return "Unknown";
     if (p == 0) return "PAT";
     if (p == 0x1FFF) return "Stuffing";
     if (h->pid_is_pmt[p]) return "PMT";

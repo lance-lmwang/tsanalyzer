@@ -43,6 +43,11 @@ static int setup_srt(tsp_handle_t* h, const char* url) {
     int tlpktdrop = 1;
     int tsbpd = 0;
 
+    if (pass[0]) {
+        srt_setsockopt(h->srt_sock, 0, SRTO_PASSPHRASE, pass, strlen(pass));
+        srt_setsockopt(h->srt_sock, 0, SRTO_PBKEYLEN, &pb, sizeof(pb));
+    }
+
     srt_setsockopt(h->srt_sock, 0, SRTO_TRANSTYPE, &transtype, sizeof(transtype));
     srt_setsockopt(h->srt_sock, 0, SRTO_LATENCY, &lat, sizeof(lat));
     srt_setsockopt(h->srt_sock, 0, SRTO_SNDBUF, &buf_size, sizeof(buf_size));
