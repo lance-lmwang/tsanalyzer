@@ -114,6 +114,7 @@ struct tsa_handle {
     uint64_t* pid_bitrate_min;
     uint64_t* pid_bitrate_max;
     uint8_t* last_cc;
+    bool* ignore_next_cc;
     bool* pid_seen;
     bool* pid_is_pmt;
     uint8_t* pid_stream_type;

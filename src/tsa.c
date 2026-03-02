@@ -520,6 +520,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_bitrate_min, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_bitrate_max, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->last_cc, uint8_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->ignore_next_cc, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_seen, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_is_pmt, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_stream_type, uint8_t, TS_PID_MAX);
@@ -552,15 +553,17 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 32);
-    h->pool_size = 1024 * 1024;
+    h->pool_size = 1024 * 1024 + TS_PID_MAX * 4096; /* 1MB + 32MB for PES buffers */
     if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
     h->pool_offset = 0;
-    h->pes_total_allocated = 0;
+    h->pes_total_allocated = TS_PID_MAX * 4096;
     h->pes_max_quota = 64 * 1024 * 1024;
     h->last_trigger_reason = -1;
     for (int i = 0; i < TS_PID_MAX; i++) {
         h->pid_to_active_idx[i] = -1;
         h->pid_gop_min[i] = 0xFFFFFFFF;
+        h->pid_pes_buf[i] = tsa_mem_pool_alloc(h, 4096);
+        h->pid_pes_cap[i] = 4096;
     }
     return h;
 fail:
@@ -572,11 +575,7 @@ void tsa_destroy(tsa_handle_t* h) {
     if (!h) return;
     ts_pcr_window_destroy(&h->pcr_window);
     if (h->pool_base) free(h->pool_base);
-    if (h->pid_pes_buf) {
-        for (int i = 0; i < TS_PID_MAX; i++)
-            if (h->pid_pes_buf[i]) free(h->pid_pes_buf[i]);
-        free(h->pid_pes_buf);
-    }
+    FREE_IF(h->pid_pes_buf);
     FREE_IF(h->pid_status);
     FREE_IF(h->pid_eb_fill_q64);
     FREE_IF(h->pid_tb_fill_q64);
@@ -586,6 +585,7 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_bitrate_min);
     FREE_IF(h->pid_bitrate_max);
     FREE_IF(h->last_cc);
+    FREE_IF(h->ignore_next_cc);
     FREE_IF(h->pid_seen);
     FREE_IF(h->pid_is_pmt);
     FREE_IF(h->pid_stream_type);
@@ -622,6 +622,7 @@ static void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->live->pid_cc_errors[pid] = 0;
     h->pid_bitrate_min[pid] = 0;
     h->pid_bitrate_max[pid] = 0;
+    h->ignore_next_cc[pid] = false;
     h->pid_width[pid] = 0;
     h->pid_height[pid] = 0;
     h->pid_profile[pid] = 0;
@@ -722,6 +723,16 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
     }
 }
 
+void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count) {
+    if (!h) return;
+    h->live->internal_analyzer_drop += drop_count;
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        if (h->pid_seen[i]) {
+            h->ignore_next_cc[i] = true;
+        }
+    }
+}
+
 void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, const ts_decode_result_t* res) {
     if (!h || !pkt || !res) return;
     uint16_t pid = res->pid;
@@ -778,23 +789,27 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->live->transport_error.last_timestamp_ns = now;
     }
     if (h->live->pid_packet_count[pid] > 1 && !res->has_discontinuity) {
-        ts_cc_status_t s =
-            cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
-        if (s == TS_CC_LOSS) {
-            h->live->cc_error.count++;
-            h->live->cc_error.last_timestamp_ns = now;
-            h->live->cc_error.triggering_vstc = h->stc_ns;
-            h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
-            h->live->pid_cc_errors[pid]++;
-            h->live->latched_cc_error = 1;
-            h->pid_status[pid] = TSA_STATUS_DEGRADED;
-            h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
-        } else if (s == TS_CC_DUPLICATE)
-            h->live->cc_duplicate_count++;
-        else if (s == TS_CC_OUT_OF_ORDER) {
-            h->live->cc_error.count++;
-            h->live->cc_error.last_timestamp_ns = now;
-            h->pid_status[pid] = TSA_STATUS_DEGRADED;
+        if (h->ignore_next_cc[pid]) {
+            h->ignore_next_cc[pid] = false;
+        } else {
+            ts_cc_status_t s =
+                cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
+            if (s == TS_CC_LOSS) {
+                h->live->cc_error.count++;
+                h->live->cc_error.last_timestamp_ns = now;
+                h->live->cc_error.triggering_vstc = h->stc_ns;
+                h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
+                h->live->pid_cc_errors[pid]++;
+                h->live->latched_cc_error = 1;
+                h->pid_status[pid] = TSA_STATUS_DEGRADED;
+                h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
+            } else if (s == TS_CC_DUPLICATE)
+                h->live->cc_duplicate_count++;
+            else if (s == TS_CC_OUT_OF_ORDER) {
+                h->live->cc_error.count++;
+                h->live->cc_error.last_timestamp_ns = now;
+                h->pid_status[pid] = TSA_STATUS_DEGRADED;
+            }
         }
     }
     h->last_cc[pid] = res->cc;
@@ -803,11 +818,6 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             if (h->pid_pes_len[pid] > 0)
                 tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
             h->pid_pes_len[pid] = 0;
-            if (!h->pid_pes_buf[pid] && h->pes_total_allocated + 4096 <= h->pes_max_quota) {
-                h->pid_pes_cap[pid] = 4096;
-                h->pid_pes_buf[pid] = malloc(4096);
-                if (h->pid_pes_buf[pid]) h->pes_total_allocated += 4096;
-            }
         }
         if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + res->payload_len <= h->pid_pes_cap[pid]) {
             memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], pkt + 4 + res->af_len, res->payload_len);

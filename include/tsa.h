@@ -60,6 +60,7 @@ typedef struct {
     uint64_t pid_last_seen_ns[TS_PID_MAX];
     uint64_t total_ts_packets;
     uint64_t engine_processing_latency_ns;
+    uint64_t internal_analyzer_drop;
 } tsa_tr101290_stats_t;
 
 typedef struct tsa_srt_stats {
@@ -151,6 +152,7 @@ typedef struct {
 tsa_handle_t* tsa_create(const tsa_config_t* cfg);
 void tsa_destroy(tsa_handle_t* h);
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t timestamp_ns);
+void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count);
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t timestamp_ns);
 int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s);
 int tsa_take_snapshot_lite(tsa_handle_t* h, tsa_snapshot_lite_t* s);

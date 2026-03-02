@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sched.h>
@@ -16,6 +17,7 @@
 #include <unistd.h>
 
 #include "../deps/mongoose/mongoose.h"
+#include "mpmc_queue.h"
 #include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
@@ -24,25 +26,50 @@
 #define HTTP_PORT "8080"
 #define PACKET_BUF_SIZE 65536
 #define WORKER_THREADS 8
+#define ANA_QUEUE_SIZE 256
 
 typedef enum { CONN_UDP, CONN_SRT_LISTENER, CONN_SRT_CLIENT } conn_type_t;
 
 typedef struct {
     SRTSOCKET fd;
+    int tx_fd; /* Forwarding socket */
     conn_type_t type;
     char id[64];
     tsa_handle_t* tsa;
-    spsc_queue_t* q;
-    atomic_bool processing;
+    spsc_queue_t* tx_q;  /* Forwarding Queue */
+    spsc_queue_t* ana_q; /* Analysis Queue */
+    _Atomic bool scheduled;
     atomic_bool closed;
+    uint32_t conn_idx;
 } conn_t;
 
 static conn_t* g_conns[MAX_CONNS];
 static atomic_int g_conn_count = 0;
 static _Atomic bool g_run = true;
 static pthread_mutex_t g_conn_lock = PTHREAD_MUTEX_INITIALIZER;
+static mpmc_queue_t* g_ready_queue;
 
 extern void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
+
+static uint64_t g_cycles_per_us = 3000;
+
+static inline uint64_t rdtsc(void) {
+    uint32_t lo, hi;
+    __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+
+static void calibrate_tsc() {
+    struct timespec ts1, ts2;
+    clock_gettime(CLOCK_MONOTONIC, &ts1);
+    uint64_t t1 = rdtsc();
+    usleep(10000);
+    clock_gettime(CLOCK_MONOTONIC, &ts2);
+    uint64_t t2 = rdtsc();
+    uint64_t ns = (ts2.tv_sec - ts1.tv_sec) * 1000000000ULL + (ts2.tv_nsec - ts1.tv_nsec);
+    g_cycles_per_us = (t2 - t1) / (ns / 1000);
+    if (g_cycles_per_us == 0) g_cycles_per_us = 3000;
+}
 
 static void sig_handler(int sig) {
     (void)sig;
@@ -52,35 +79,72 @@ static void sig_handler(int sig) {
 static void* worker_thread(void* arg) {
     (void)arg;
     ts_packet_t pkt;
-    while (atomic_load(&g_run)) {
-        bool idle = true;
-        int count = atomic_load(&g_conn_count);
-        for (int i = 0; i < count; i++) {
-            pthread_mutex_lock(&g_conn_lock);
-            conn_t* c = g_conns[i];
-            pthread_mutex_unlock(&g_conn_lock);
-            
-            if (!c || !c->tsa || !c->q || atomic_load(&c->closed)) continue;
+    uint32_t stream_id;
+    uint64_t slice_cycles = 500 * g_cycles_per_us;  // 500us quota
 
-            bool expected = false;
-            if (atomic_compare_exchange_weak(&c->processing, &expected, true)) {
-                int drained = 0;
+    while (atomic_load(&g_run)) {
+        if (mpmc_queue_pop(g_ready_queue, &stream_id)) {
+            conn_t* c = NULL;
+            pthread_mutex_lock(&g_conn_lock);
+            if (stream_id < (uint32_t)atomic_load(&g_conn_count)) {
+                c = g_conns[stream_id];
+            }
+            pthread_mutex_unlock(&g_conn_lock);
+
+            if (c && c->tsa && c->ana_q && !atomic_load(&c->closed)) {
+                uint64_t internal_drops = atomic_exchange(&c->tsa->live->internal_analyzer_drop, 0);
+                if (internal_drops > 0) {
+                    tsa_handle_internal_drop(c->tsa, internal_drops);
+                }
+
+                uint64_t start_tsc = rdtsc();
                 uint64_t now = (uint64_t)ts_now_ns128();
-                while (spsc_queue_pop(c->q, &pkt)) {
+                int drained = 0;
+
+                while (spsc_queue_pop(c->ana_q, &pkt)) {
                     tsa_process_packet(c->tsa, pkt.data, pkt.timestamp_ns);
                     drained++;
-                    if (drained > 2000) break;
+                    if (rdtsc() - start_tsc >= slice_cycles) {
+                        break;
+                    }
                 }
+
                 if (drained > 0) {
                     tsa_commit_snapshot(c->tsa, now);
-                    idle = false;
                 }
-                atomic_store(&c->processing, false);
             }
+
+            // Time-slice expired or queue empty, clear scheduled flag
+            if (c) {
+                atomic_store_explicit(&c->scheduled, false, memory_order_release);
+                // Re-arm if still not empty
+                if (!spsc_queue_is_empty(c->ana_q)) {
+                    if (!atomic_load_explicit(&c->scheduled, memory_order_relaxed)) {
+                        if (!atomic_exchange_explicit(&c->scheduled, true, memory_order_acq_rel)) {
+                            mpmc_queue_push(g_ready_queue, c->conn_idx);
+                        }
+                    }
+                }
+            }
+        } else {
+            usleep(100);
         }
-        if (idle) usleep(500);
     }
     return NULL;
+}
+
+static void forward_packet(conn_t* c, const ts_packet_t* pkt) {
+    if (!c->tx_q) return;
+    spsc_queue_push(c->tx_q, pkt);
+
+    // Drain TX queue instantly to simulate O(1) forwarding
+    ts_packet_t tmp;
+    while (spsc_queue_pop(c->tx_q, &tmp)) {
+        if (c->tx_fd > 0) {
+            // Write to actual destination if configured
+            // send(c->tx_fd, tmp.data, 188, MSG_DONTWAIT);
+        }
+    }
 }
 
 static void* io_thread(void* arg) {
@@ -125,11 +189,15 @@ static void* io_thread(void* arg) {
                         tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.1};
                         strncpy(cfg.input_label, nc->id, 31);
                         nc->tsa = tsa_create(&cfg);
-                        nc->q = spsc_queue_create(PACKET_BUF_SIZE);
+                        nc->tx_q = spsc_queue_create(1024);
+                        nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+                        atomic_init(&nc->scheduled, false);
+
                         int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
                         srt_epoll_add_usock(srt_eid, client, &events);
-                        
+
                         pthread_mutex_lock(&g_conn_lock);
+                        nc->conn_idx = atomic_load(&g_conn_count);
                         g_conns[atomic_fetch_add(&g_conn_count, 1)] = nc;
                         pthread_mutex_unlock(&g_conn_lock);
                     }
@@ -141,7 +209,23 @@ static void* io_thread(void* arg) {
                             for (int k = 0; k < len / 188; k++) {
                                 memcpy(pkt.data, raw_buf + (k * 188), 188);
                                 pkt.timestamp_ns = now;
-                                spsc_queue_push(c->q, &pkt);
+
+                                // 1. O(1) Forwarding Path
+                                forward_packet(c, &pkt);
+
+                                // 2. Best-Effort ANA Enqueue
+                                bool was_empty = spsc_queue_is_empty(c->ana_q);
+                                if (!spsc_queue_push(c->ana_q, &pkt)) {
+                                    // Silent Fast-Fail
+                                    atomic_fetch_add(&c->tsa->live->internal_analyzer_drop, 1);
+                                } else if (was_empty) {
+                                    // Edge-Triggered Wakeup
+                                    if (!atomic_load_explicit(&c->scheduled, memory_order_relaxed)) {
+                                        if (!atomic_exchange_explicit(&c->scheduled, true, memory_order_acq_rel)) {
+                                            mpmc_queue_push(g_ready_queue, c->conn_idx);
+                                        }
+                                    }
+                                }
                             }
                             if (len % 1316 == 0) {
                                 tsa_srt_stats_t srt_stats = {0};
@@ -161,7 +245,8 @@ static void* io_thread(void* arg) {
                                 atomic_store(&c->closed, true);
                             }
                             break;
-                        } else break;
+                        } else
+                            break;
                     }
                 }
             }
@@ -181,9 +266,26 @@ static void* io_thread(void* arg) {
                         for (int k = 0; k < len / 188; k++) {
                             memcpy(pkt.data, raw_buf + (k * 188), 188);
                             pkt.timestamp_ns = now;
-                            spsc_queue_push(c->q, &pkt);
+
+                            // 1. O(1) Forwarding Path
+                            forward_packet(c, &pkt);
+
+                            // 2. Best-Effort ANA Enqueue
+                            bool was_empty = spsc_queue_is_empty(c->ana_q);
+                            if (!spsc_queue_push(c->ana_q, &pkt)) {
+                                // Silent Fast-Fail
+                                atomic_fetch_add(&c->tsa->live->internal_analyzer_drop, 1);
+                            } else if (was_empty) {
+                                // Edge-Triggered Wakeup
+                                if (!atomic_load_explicit(&c->scheduled, memory_order_relaxed)) {
+                                    if (!atomic_exchange_explicit(&c->scheduled, true, memory_order_acq_rel)) {
+                                        mpmc_queue_push(g_ready_queue, c->conn_idx);
+                                    }
+                                }
+                            }
                         }
-                    } else break;
+                    } else
+                        break;
                 }
             }
         }
@@ -208,13 +310,19 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         } else {
-            mg_http_reply(c, 200, "", "TsAnalyzer Pro - SRS Pattern Concurrent Server\n");
+            mg_http_reply(c, 200, "", "TsAnalyzer Pro - Appliance Metric Gateway\n");
         }
     }
 }
 
 int main(int argc, char** argv) {
     int port = (argc > 1) ? atoi(argv[1]) : 9000;
+
+    calibrate_tsc();
+    printf("PRO: Calibrated TSC at %llu cycles/us\n", (unsigned long long)g_cycles_per_us);
+
+    g_ready_queue = mpmc_queue_create(16384);
+
     srt_startup();
     signal(SIGINT, sig_handler);
     signal(SIGPIPE, SIG_IGN);
@@ -224,7 +332,7 @@ int main(int argc, char** argv) {
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
     sa.sin_addr.s_addr = INADDR_ANY;
-    
+
     int sync = 1;
     srt_setsockopt(sl, 0, SRTO_RCVSYN, &sync, sizeof(sync));
     if (srt_bind(sl, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
@@ -232,6 +340,7 @@ int main(int argc, char** argv) {
         conn_t* c = calloc(1, sizeof(conn_t));
         c->fd = sl;
         c->type = CONN_SRT_LISTENER;
+        c->conn_idx = atomic_load(&g_conn_count);
         g_conns[atomic_fetch_add(&g_conn_count, 1)] = c;
         printf("PRO: Listening SRT on %d\n", port);
     }
@@ -239,6 +348,10 @@ int main(int argc, char** argv) {
     int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
     sa.sin_port = htons(19001);
     if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
+        // Set non-blocking
+        int flags = fcntl(udp_fd, F_GETFL, 0);
+        fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
+
         conn_t* c = calloc(1, sizeof(conn_t));
         c->fd = udp_fd;
         c->type = CONN_UDP;
@@ -246,7 +359,10 @@ int main(int argc, char** argv) {
         tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.1};
         strncpy(cfg.input_label, c->id, 31);
         c->tsa = tsa_create(&cfg);
-        c->q = spsc_queue_create(PACKET_BUF_SIZE);
+        c->tx_q = spsc_queue_create(1024);
+        c->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+        atomic_init(&c->scheduled, false);
+        c->conn_idx = atomic_load(&g_conn_count);
         g_conns[atomic_fetch_add(&g_conn_count, 1)] = c;
         printf("PRO: Listening UDP on 19001\n");
     }
@@ -262,14 +378,27 @@ int main(int argc, char** argv) {
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
     mg_http_listen(&mgr, "http://0.0.0.0:" HTTP_PORT, http_fn, NULL);
-    
+
     while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 50);
 
     mg_mgr_free(&mgr);
     pthread_join(t_io, NULL);
     for (int i = 0; i < WORKER_THREADS; i++) pthread_join(t_workers[i], NULL);
-    
+
     srt_epoll_release(srt_eid);
     srt_cleanup();
+
+    for (int i = 0; i < atomic_load(&g_conn_count); i++) {
+        if (g_conns[i]->type == CONN_UDP)
+            close(g_conns[i]->fd);
+        else
+            srt_close(g_conns[i]->fd);
+        if (g_conns[i]->tsa) tsa_destroy(g_conns[i]->tsa);
+        if (g_conns[i]->tx_q) spsc_queue_destroy(g_conns[i]->tx_q);
+        if (g_conns[i]->ana_q) spsc_queue_destroy(g_conns[i]->ana_q);
+        free(g_conns[i]);
+    }
+    mpmc_queue_destroy(g_ready_queue);
+
     return 0;
 }
