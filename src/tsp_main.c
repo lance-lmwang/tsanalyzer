@@ -116,9 +116,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+    /* if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
         perror("Warning: mlockall failed. Run with CAP_IPC_LOCK for strict RT compliance");
-    }
+    } */
 
     FILE* in = stdin;
     if (input_file) {
@@ -134,8 +134,9 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "tsp_create failed\n");
         return 1;
     }
-    if (tsp_start(h) != 0) {
-        fprintf(stderr, "tsp_start failed\n");
+    int start_err = tsp_start(h);
+    if (start_err != 0) {
+        fprintf(stderr, "tsp_start failed: %d (%s)\n", start_err, strerror(start_err));
         return 1;
     }
 

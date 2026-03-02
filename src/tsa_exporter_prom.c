@@ -82,6 +82,8 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         // Tier 3: Analytics
         SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
         SAFE_APPEND("tsa_pcr_bitrate_bps%s %llu\n", labels, (unsigned long long)s->pcr_bitrate_bps);
+        SAFE_APPEND("tsa_internal_analyzer_drop%s %llu\n", labels, (unsigned long long)s->internal_analyzer_drop);
+        SAFE_APPEND("tsa_worker_slice_overruns%s %llu\n", labels, (unsigned long long)s->worker_slice_overruns);
         SAFE_APPEND("tsa_mdi_delay_factor_ms%s %.2f\n", labels, (float)s->mdi_df_ms);
         SAFE_APPEND("tsa_essence_video_fps%s %.2f\n", labels, (float)s->video_fps);
         SAFE_APPEND("tsa_essence_av_sync_ms%s %d\n", labels, s->av_sync_ms);

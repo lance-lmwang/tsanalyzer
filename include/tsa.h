@@ -61,6 +61,7 @@ typedef struct {
     uint64_t total_ts_packets;
     uint64_t engine_processing_latency_ns;
     uint64_t internal_analyzer_drop;
+    uint64_t worker_slice_overruns;
 } tsa_tr101290_stats_t;
 
 typedef struct tsa_srt_stats {
