@@ -1,6 +1,6 @@
-# TsAnalyzer Pro NOC Dashboard Visual Spec (Ultimate v4.4 - Resilience Edition)
+# TsAnalyzer Pro NOC Dashboard Visual Spec (Ultimate v4.5 - Cloud-Native Operational Memory)
 
-This specification defines the visual and operational standards for the TsAnalyzer Pro NOC Dashboard. It transforms standard monitoring into an **Operational Memory System**, ensuring that transient failures are captured, persisted, and made forensic-ready for asynchronous operator inspections.
+This specification defines the visual and operational standards for the TsAnalyzer Pro NOC Dashboard. It transforms standard monitoring into an **Operational Memory System**, ensuring that transient failures are captured, persisted, and made forensic-ready for asynchronous operator inspections across a 4K UHD layout.
 
 ---
 
@@ -11,8 +11,13 @@ Instantaneous identification of failures among thousands of streams.
 ---
 
 ## 1. Layout Philosophy: The "Fixed Glass" Rule
-- **Zero-Scroll**: Single-page interface optimized for 1920x1080.
-- **Proportions**: Tier 1 (12%) / Tier 2 (18%) / Tier 3 (20%) / Tier 4 (32%) / Tier 5 (18%).
+- **Zero-Scroll**: Single-page interface optimized for **3840x2160 (4K UHD)** viewports to accommodate hyperscale density.
+- **Proportions**:
+  - **Tier 1 (Infrastructure & Survival)**: 12%
+  - **Tier 2 (Hybrid Diagnostic Matrix)**: 18%
+  - **Tier 3 (Essence Stability Timelines)**: 20%
+  - **Tier 4 (Predictive & PID Analysis)**: 32%
+  - **Tier 5 (Forensic Audit Trail)**: 18% (Positioned dynamically: Either bottom row or a dedicated Right-Hand Drawer/Sidebar depending on aspect ratio to guarantee readability of full error traces).
 - **Forensic Time-Sync**: Clicking any point in history synchronizes ALL Tier 1-5 charts to that precise millisecond.
 
 ---
@@ -23,7 +28,7 @@ Instantaneous identification of failures among thousands of streams.
 ---
 
 ## 3. Tier 2: Hybrid Analytics Matrix (Diagnostic Core)
-- **Latching Error Counters**: Error blocks (CC, PAT, PMT) show total error counts over a 60-minute sliding window via `increase()` or `sum_over_time()` functions.
+- **Latching Error Counters**: Error blocks (CC, PAT, PMT) show total error counts over a 60-minute sliding window via PromQL.
 
 ---
 
@@ -31,12 +36,10 @@ Instantaneous identification of failures among thousands of streams.
 Designed to expose spikes and dips that occurred while the operator was away.
 
 ### 4.1 24-Hour Bitrate Envelope
-- **Implementation**: Uses `max_over_time(bitrate[1m])` and `min_over_time(bitrate[1m])` to render a shaded envelope around the average line.
+- **Implementation**: Uses `max_over_time(bitrate[$__interval])` and `min_over_time(bitrate[$__interval])` to render a shaded envelope around the average line, automatically scaling with the global time range.
 
 ### 4.2 Content Quality Timelines (With Anomaly Highlighting)
-- **FPS Stability**: 
-    - **Visualization**: Line chart with fixed 25/50/60 reference lines.
-    - **Persistence**: Employs a **"Minimum-Value Trace"** (Red line) that tracks the lowest FPS seen in the window. If FPS dropped to 5 and recovered, the Red Trace remains at the bottom of the dip for visibility.
+- **FPS Stability**: Line chart with fixed 25/50/60 reference lines. Employs a **"Minimum-Value Trace"** (Red line) tracking the lowest FPS in the window via `min_over_time(fps[$__interval])`.
 - **GOP Cadence**: Historical trend of I-frame intervals. Spikes in the trend line indicate encoder stalls or scene-change resets.
 - **AV Sync / Lip-Sync**: Dual-polarity PTS offset history (+/- 200ms). Deviations from the 0ms center line are permanently recorded in the timeline.
 
@@ -72,9 +75,10 @@ Historical persistence MUST NOT rely on visual illusion alone. All persistence b
 - **Tier-1 Ghost Value**: `min_over_time(health_score[30m])`.
 - **Rendering**: Current (Solid) vs. Ghost (30% Opacity) using the same semantic color.
 
-### 8.3 Safer Query Patterns (Counter Reset Protection)
-To prevent false spikes caused by container/exporter restarts, all `increase()` functions SHALL be protected:
-- `clamp_min(increase(error_counter[60m]), 0)`
+### 8.3 Precision Counter Queries
+Prometheus `increase()` inherently handles counter resets and extrapolates data (often returning floating-point values).
+- **Mandate**: Use `increase(error_counter[$__interval])` and strictly set the Grafana panel **Decimals = 0** to hide extrapolation artifacts from operators.
+- **Alternative**: For exact discrete event mapping over short windows, `sum_over_time(idelta(error_counter[$__interval]))` may be utilized.
 
 ---
 
@@ -91,8 +95,8 @@ To prevent false spikes caused by container/exporter restarts, all `increase()` 
 
 ## 10. Historical Envelope Rendering Model
 ### 10.1 Bitrate Envelope Query
-- `max_over_time(bitrate[1m])` (Upper Bound)
-- `min_over_time(bitrate[1m])` (Lower Bound)
+- `max_over_time(bitrate[$__interval])` (Upper Bound)
+- `min_over_time(bitrate[$__interval])` (Lower Bound)
 - **Interpretation**: A "Collapse" indicates a stream outage; a "Narrowing" indicates encoder starvation.
 
 ---
@@ -100,9 +104,9 @@ To prevent false spikes caused by container/exporter restarts, all `increase()` 
 ## 11. Anomaly Highlight Persistence Engine
 Transient anomalies SHALL generate persistent markers via **Loki annotations** or the **Grafana Annotation API**.
 
-### 11.1 Anomaly Debouncing
-To prevent "annotation storms" at scale, the injection engine MUST enforce a debounce period:
-- Inject annotation ONLY IF `last_annotation_type_timestamp > 120s`.
+### 11.1 Context-Aware Anomaly Debouncing
+To prevent "annotation storms" at scale without masking concurrent independent failures, the injection engine MUST enforce a multi-dimensional debounce:
+- Inject annotation ONLY IF `(now() - last_annotation_time{stream_id, error_type}) > 120s`.
 
 ---
 
@@ -124,13 +128,13 @@ The system SHALL guarantee visibility for the following failures, even if the du
 ---
 
 ## 14. Temporal Drift Protection
-To ensure the **Golden Line** remains synchronized across all tiers:
-- All queries MUST share a standardized `$__fleet_global_interval` step.
-- All panels MUST enforce identical time range alignment.
+To ensure the **Golden Line** remains synchronized across all tiers across vast time horizons (e.g., 7 days):
+- Queries MUST utilize Grafana's dynamic `$__interval` variable to auto-scale data points and prevent browser memory exhaustion.
+- A **Min Step** (e.g., `15s`) MUST be configured at the panel level to guarantee baseline forensic resolution without crashing the UI.
 
 ---
 
-## 15. Predictive Maintenance (Future V5)
+## 15. Predictive Maintenance
 ### 15.1 Incident Density Heatmap
 A grid heatmap displaying `sum_over_time(stream_error_flag[24h])`.
 - Purpose: Identify encoders or network segments that are statistically unstable, even if currently "Green."
