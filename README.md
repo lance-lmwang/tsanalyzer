@@ -69,9 +69,16 @@ Metrics are exported via Prometheus (default `tsa` port: `12345`, `tsa_server` p
 
 ---
 
-## 🧪 Stream Simulation (tsp)
+## 🧪 Stream Simulation & Testing
 
-Use the integrated `tsp` (TS Pacer) to simulate broadcast sources:
+To quickly verify the system, use the integrated real-time monitor demo:
+```bash
+make tsa_cli_monitor
+```
+*This command automates: `tsp` (streaming) -> `tsa` (analysis) -> `tsa_monitor.py` (CLI UI).*
+
+### Manual Simulation (tsp)
+Use the `tsp` (TS Pacer) tool to simulate custom broadcast sources:
 ```bash
 # Send file at 5 Mbps to local analyzer
 ./build/tsp -i 127.0.0.1 -p 19001 -b 5000000 -l -f sample.ts

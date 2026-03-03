@@ -929,54 +929,40 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->live->pid_is_referenced[pid] = true;
         tsa_update_pid_tracker(h, pid);
         uint64_t pt = extract_pcr(pkt), pn = pt * 1000 / 27;
+
+        if (h->config.op_mode == TSA_MODE_REPLAY || !h->stc_locked) {
+            h->stc_ns = pn;
+            h->stc_locked = true;
+        }
+
         ts_pcr_window_add(&h->pcr_window, now, pn, 0);
+
         if (h->last_pcr_arrival_ns > 0) {
-            uint64_t ds = now - h->last_pcr_arrival_ns;
-            if (ds / 1000000ULL > 40) {
-                h->live->pcr_repetition_error.count++;
-                h->live->pcr_repetition_error.last_timestamp_ns = now;
-            }
-            if (ds / 1000000ULL > h->live->pcr_repetition_max_ms) h->live->pcr_repetition_max_ms = ds / 1000000ULL;
             int64_t dp = (int64_t)pt - (int64_t)h->last_pcr_ticks;
-            if (dp < -((int64_t)1 << 41))
-                dp += ((int64_t)1 << 42);
-            else if (dp > ((int64_t)1 << 41))
-                dp -= ((int64_t)1 << 42);
-            int64_t ij = (int64_t)ds - dp * 1000 / 27;
-            if ((uint64_t)abs((int)ij) > h->live->pcr_jitter_max_ns)
-                h->live->pcr_jitter_max_ns = (uint64_t)abs((int)ij);
-            int128_t sq;
-            int64_t ra = 0;
-            int rr = ts_pcr_window_regress(&h->pcr_window, &sq, NULL, &ra);
-            h->live->pcr_accuracy_ns = (double)ra;
+            if (dp < -((int64_t)1 << 41)) dp += ((int64_t)1 << 42);
+            else if (dp > ((int64_t)1 << 41)) dp -= ((int64_t)1 << 42);
+
             if (dp > 0) {
-                unsigned __int128 b128 = (unsigned __int128)h->pkts_since_pcr * 1504 * 27000000;
+                // VSTC PCR Bitrate
+                unsigned __int128 b128 = (unsigned __int128)(h->pkts_since_pcr) * 1504 * 27000000;
                 uint64_t br = (uint64_t)(b128 / dp);
                 uint64_t al = (uint64_t)h->pcr_ema_alpha_q32;
                 if (h->live->pcr_bitrate_bps == 0)
                     h->live->pcr_bitrate_bps = br;
                 else
                     h->live->pcr_bitrate_bps = ((unsigned __int128)br * al +
-                                                (unsigned __int128)h->live->pcr_bitrate_bps * ((1ULL << 32) - al)) >>
-                                               32;
+                                                (unsigned __int128)h->live->pcr_bitrate_bps * ((1ULL << 32) - al)) >> 32;
             }
-            if (rr == 0) {
-                h->stc_locked = true;
-                h->stc_slope_q64 = sq;
-                if (ra > 500) {
-                    h->live->pcr_accuracy_error.count++;
-                    h->live->pcr_accuracy_error.last_timestamp_ns = now;
-                }
-                h->pcr_jitter_sq_sum_ns += (int128_t)ij * ij;
-                h->pcr_jitter_count++;
-                h->live->pcr_jitter_avg_ns = sqrt((double)h->pcr_jitter_sq_sum_ns / h->pcr_jitter_count);
-            } else
-                h->stc_locked = false;
-        } else
+        } else {
             h->stc_ns = pn;
+        }
         h->last_pcr_ticks = pt;
         h->last_pcr_arrival_ns = now;
         h->pkts_since_pcr = 0;
+    } else {
+        if (h->stc_locked && h->live->pcr_bitrate_bps > 0) {
+            h->stc_ns += (1504ULL * 1000000000ULL) / h->live->pcr_bitrate_bps;
+        }
     }
 }
 
@@ -1021,7 +1007,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     if (!h) return;
     if (n == 0) n = h->last_snap_ns;
     if (!h->stc_locked) h->stc_ns = n;
-    
+
     uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
     uint8_t inactive_idx = a ^ 1;
     tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
@@ -1031,15 +1017,17 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         tsa_tstd_drain(h, h->pid_active_list[i]);
     }
 
-    uint64_t stc = h->stc_ns, dt = n - h->last_snap_ns;
-    if (dt < 100000000ULL) return; // Ignore snapshots closer than 100ms
+    uint64_t stc = h->stc_ns, dt = stc - h->last_snap_ns;
+    if (dt == 0) dt = 100000000ULL;
+    if (dt < 1000ULL) dt = 1000ULL;
+
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0 && dt > 0) {
+    if (dp > 0) {
         uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
         // EMA smoothing: new = 0.3 * instant + 0.7 * old
         if (h->live->physical_bitrate_bps == 0) h->live->physical_bitrate_bps = instant_br;
         else h->live->physical_bitrate_bps = (uint64_t)(0.3 * instant_br + 0.7 * h->live->physical_bitrate_bps);
-        
+
         // Safety cap: nobody is sending 100Gbps TS over loopback
         if (h->live->physical_bitrate_bps > 10000000000ULL) h->live->physical_bitrate_bps = 10000000000ULL;
     }
@@ -1212,7 +1200,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->active_pid_count = ai;
     atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
     *h->prev_snap_base = *h->live;
-    h->last_snap_ns = n;
+    h->last_snap_ns = stc;
     h->live->pcr_jitter_max_ns = 0;
 }
 
@@ -1579,6 +1567,79 @@ void tsa_render_dashboard(tsa_handle_t* h) {
     if (!h) return;
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
-    printf("NOC Dashboard: Health %.1f%%, Bitrate %llu bps\n", snap.summary.master_health,
-           (unsigned long long)snap.summary.physical_bitrate_bps);
+    time_t now_t = time(NULL);
+    char* ct = ctime(&now_t);
+    if (ct) ct[strlen(ct)-1] = '\0';
+    printf("\n================================================================================\n");
+    printf(" TSA PROFESSIONAL METROLOGY REPORT                                %s\n", ct);
+    printf("================================================================================\n");
+    printf(" Signal Status:  %s\n", snap.summary.signal_lock ? "LOCKED" : "LOSS");
+    printf(" Total Packets:  %llu\n", (unsigned long long)snap.summary.total_packets);
+    printf(" PCR Bitrate:    %.2f Mbps\n", (double)snap.stats.pcr_bitrate_bps / 1e6);
+    printf("--------------------------------------------------------------------------------\n");
+    printf(" PID      | TYPE       | BITRATE (Mbps) | EB FILL \n");
+    printf("--------------------------------------------------------------------------------\n");
+    for (uint32_t i = 0; i < snap.active_pid_count; i++) {
+        tsa_pid_info_t* p = &snap.pids[i];
+        printf(" 0x%04x   | %-10s | %15.3f | %5.1f%%\n",
+               p->pid, p->type_str, (double)(p->bitrate_q16_16 >> 16) / 1e6, p->eb_fill_pct);
+    }
+    printf("================================================================================\n\n");
+}
+
+/*
+ * libeasyice-style Stream Sync Lock Implementation
+ */
+void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t now_ns) {
+    if (!h || !data || len == 0) return;
+    size_t processed = 0;
+    while (processed < len) {
+        if (h->sync_buffer_len > 0) {
+            size_t needed = 188 - h->sync_buffer_len;
+            size_t to_copy = (len - processed < needed) ? (len - processed) : needed;
+            memcpy(h->sync_buffer + h->sync_buffer_len, data + processed, to_copy);
+            h->sync_buffer_len += to_copy;
+            processed += to_copy;
+            if (h->sync_buffer_len < 188) return;
+            if (h->sync_buffer[0] == 0x47) {
+                if (h->sync_state == TS_SYNC_LOCKED) {
+                    tsa_process_packet(h, h->sync_buffer, now_ns);
+                } else if (++h->sync_confirm_count >= 5) {
+                    h->sync_state = TS_SYNC_LOCKED;
+                    h->signal_lock = true;
+                }
+                h->sync_buffer_len = 0;
+            } else {
+                h->sync_state = TS_SYNC_HUNTING;
+                h->signal_lock = false;
+                memmove(h->sync_buffer, h->sync_buffer + 1, h->sync_buffer_len - 1);
+                h->sync_buffer_len--;
+                continue;
+            }
+        }
+        while (processed + 188 <= len) {
+            const uint8_t* p = data + processed;
+            if (p[0] == 0x47) {
+                if (h->sync_state == TS_SYNC_LOCKED) {
+                    tsa_process_packet(h, p, now_ns);
+                    processed += 188;
+                } else {
+                    memcpy(h->sync_buffer, p, 188);
+                    h->sync_buffer_len = 188;
+                    processed += 188;
+                    break;
+                }
+            } else {
+                processed++;
+                h->sync_state = TS_SYNC_HUNTING;
+                h->signal_lock = false;
+            }
+        }
+        if (processed < len) {
+            size_t rem = len - processed;
+            memcpy(h->sync_buffer + h->sync_buffer_len, data + processed, rem);
+            h->sync_buffer_len += rem;
+            processed += rem;
+        }
+    }
 }

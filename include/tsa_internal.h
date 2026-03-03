@@ -69,8 +69,42 @@ typedef struct {
 
 typedef enum { TSA_STATUS_VALID = 0, TSA_STATUS_DEGRADED = 1, TSA_STATUS_INVALID = 2 } tsa_measurement_status_t;
 
+
+typedef struct {
+    _Atomic uint64_t total_packets;
+    _Atomic uint64_t pid_packet_count[8192];
+    _Atomic uint64_t cc_error_count;
+    _Atomic uint64_t cc_loss_count;
+    _Atomic uint64_t crc_error_count;
+    _Atomic uint64_t transport_error_count;
+} tsa_sensors_t;
+
+typedef struct {
+    uint64_t timestamp_ns;
+    uint64_t total_packets;
+    uint64_t pid_packet_count[8192];
+    uint64_t cc_loss_count;
+} tsa_sampling_point_t;
+
+typedef enum {
+    TS_SYNC_HUNTING = 0,
+    TS_SYNC_CONFIRMING,
+    TS_SYNC_LOCKED
+} tsa_sync_state_t;
+
 struct tsa_handle {
+
     tsa_config_t config;
+
+    tsa_sync_state_t sync_state;
+    uint32_t sync_confirm_count;
+    uint8_t  sync_buffer[188 * 2];
+    uint32_t sync_buffer_len;
+
+    tsa_sensors_t sensors;
+    tsa_sampling_point_t last_sampling_point;
+    uint64_t last_pcr_total_pkts;
+
 
     alignas(64) uint64_t start_ns;
     bool engine_started;
@@ -253,4 +287,6 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
 const char* tsa_stream_type_to_str(uint8_t type);
 void tsa_export_pid_labels(tsa_metric_buffer_t* buf, tsa_handle_t* h, uint16_t pid);
 
+void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t now_ns);
+void tsa_render_dashboard(tsa_handle_t* h);
 #endif

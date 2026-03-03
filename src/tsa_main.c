@@ -173,6 +173,7 @@ static void* decode_thread(void* arg) {
     while (1) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
+            tsa_feed_data(g_h, pkt.data, 188, pkt.timestamp_ns);
             while (g_keep_running && !spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(backoff_cnt++);
             backoff_cnt = 0;
         } else {
@@ -181,7 +182,7 @@ static void* decode_thread(void* arg) {
     }
     pkt.timestamp_ns = 0;
     while (!spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(100);
-    printf("CLI: Decode finished.\n");
+    printf("CLI: Decode/Sync finished.\n");
     return NULL;
 }
 
@@ -191,25 +192,21 @@ static void* metrology_thread(void* arg) {
     set_thread_affinity(2);
     ts_packet_t pkt;
     int backoff_cnt = 0;
-    uint64_t last_ts = 0;
     uint64_t last_snap_ts = 0;
     while (1) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
-            tsa_process_packet(g_h, pkt.data, pkt.timestamp_ns);
-            last_ts = pkt.timestamp_ns;
             
-            // Periodically commit snapshot (every 100ms)
-            if (last_ts - last_snap_ts > 100000000ULL) {
-                tsa_commit_snapshot(g_h, last_ts);
-                last_snap_ts = last_ts;
+            if (g_h->stc_ns - last_snap_ts > 100000000ULL) {
+                tsa_commit_snapshot(g_h, g_h->stc_ns);
+                last_snap_ts = g_h->stc_ns;
             }
             backoff_cnt = 0;
         } else {
             backoff_sleep(backoff_cnt++);
         }
     }
-    if (last_ts > 0) tsa_commit_snapshot(g_h, last_ts);
+    tsa_commit_snapshot(g_h, g_h->stc_ns);
     printf("CLI: Metrology finished.\n");
     g_keep_running = 0;
     return NULL;
@@ -357,6 +354,7 @@ int main(int argc, char** argv) {
 
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);
+    tsa_render_dashboard(g_h);
     tsa_destroy(g_h);
     printf("CLI: Shutdown Complete.\n");
     return 0;

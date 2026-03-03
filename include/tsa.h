@@ -1,6 +1,7 @@
 #ifndef TSANALYZER_H
 #define TSANALYZER_H
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

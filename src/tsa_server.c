@@ -139,6 +139,19 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 tsa_exporter_prom_v2(h_list, g_node_count, resp, sizeof(resp));
             }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+        } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
+            static char resp[2 * 1024 * 1024]; // 2MB for multi-stream JSON
+            int off = 0;
+            off += snprintf(resp + off, sizeof(resp) - off, "[");
+            for (int i = 0; i < g_node_count; i++) {
+                tsa_snapshot_full_t snap;
+                if (tsa_take_snapshot_full(g_nodes[i].tsa, &snap) == 0) {
+                    if (i > 0) off += snprintf(resp + off, sizeof(resp) - off, ",");
+                    off += tsa_snapshot_to_json(&snap, resp + off, sizeof(resp) - off);
+                }
+            }
+            off += snprintf(resp + off, sizeof(resp) - off, "]");
+            mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         }
     }
 }

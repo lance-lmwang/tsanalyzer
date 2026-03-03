@@ -4,7 +4,7 @@ set -u
 
 PORT_API=8082
 PORT_UDP=19001
-SAMPLE_TS="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE_TS="./sample/cctvhd.ts"
 
 echo ">>> TsAnalyzer: Professional Metrology Test (Dual-Rate Monitor)"
 echo ">>> Phase 1: Starting Metrology Engine..."
