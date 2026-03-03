@@ -26,7 +26,7 @@
         /* Side Fleet (18%) */
         .fleet-wall { width: 18%; height: 100vh; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 10px; flex-shrink: 0; }
         .wall-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; overflow-y: auto; flex-grow: 1; }
-        .fleet-tile { background: #1E293B; padding: 4px; display: flex; align-items: center; gap: 4px; font-size: 0.6rem; border-radius: 2px; }
+        .fleet-tile { background: #1E293B; padding: 4px; display: flex; align-items: center; gap: 4px; font-size: 0.6rem; border-radius: 2px; cursor: pointer; }
         .fleet-tile.selected { border: 1px solid var(--link-cyan); background: #0F172A; }
         .led-small { width: 10px; height: 10px; border-radius: 2px; }
 
@@ -142,7 +142,7 @@
 <script>
     const COLORS = { OK: '#1C8C5E', WARN: '#F5A623', ALARM: '#C0392B', CYAN: '#06B6D4' };
     let history = { fps:[], gop:[], av:[], br:[], mdi:[] };
-    let lastCounters = {}; // To detect new errors for logging
+    let lastCounters = {}; 
     const MAX_DATA = 60;
     let selectedID = "";
     let streams = {};
@@ -151,12 +151,18 @@
         try {
             const host = window.location.hostname || 'localhost';
             const port = window.location.port || '12345';
-            const res = await fetch(`http://${host}:${port}/metrics`);
-            const text = await res.text();
-            parsePrometheus(text);
+            
+            // 1. TIERED FETCH: Core metrics for the Fleet Wall (Low bandwidth)
+            const resCore = await fetch(`http://${host}:${port}/metrics/core`);
+            const textCore = await resCore.text();
+            parseCorePrometheus(textCore);
             updateFleetWall();
-            if (selectedID && streams[selectedID]) {
-                renderFocus(streams[selectedID]);
+
+            // 2. FOCUS FETCH: Full detail only for the selected stream via JSON API
+            if (selectedID) {
+                const resFull = await fetch(`http://${host}:${port}/api/v1/snapshot?id=${selectedID}`);
+                const snap = await resFull.json();
+                renderFocus(snap);
             }
         } catch(e) {
             console.warn("NOC Sync Error:", e);
@@ -164,7 +170,7 @@
         }
     }
 
-    function parsePrometheus(text) {
+    function parseCorePrometheus(text) {
         const lines = text.split('\n');
         const newStreams = {};
 
@@ -175,33 +181,22 @@
 
             const [_, name, id, val] = match;
             if (!newStreams[id]) {
-                newStreams[id] = { id, p1: {}, p2: {}, metrics: {}, inventory: [] };
+                newStreams[id] = { id, p1: {}, health: 0, lock: false };
             }
             const v = parseFloat(val);
             const s = newStreams[id];
 
-            // Mapping logic
             if (name === 'tsa_health_score') s.health = v;
             if (name === 'tsa_signal_lock_status') s.lock = v > 0;
-            if (name === 'tsa_srt_rtt_ms') s.rtt = v;
-            if (name === 'tsa_physical_bitrate_bps') s.bitrate = v;
-            if (name === 'tsa_essence_video_fps') s.fps = v;
-            if (name === 'tsa_gop_ms') s.gop = v;
-            if (name === 'tsa_essence_av_sync_ms') s.av = v;
-            if (name === 'mdi_df') s.mdi_df = v;
-            if (name === 'mdi_mlr') s.mdi_mlr = v;
-            if (name === 'tsa_rst_network_seconds') s.rst_n = v;
 
-            // TR 101 290 Error Counters
             if (name === 'tsa_tr101290_errors') {
                 const typeMatch = line.match(/error_type="([^"]+)"/);
                 if (typeMatch) {
                     const type = typeMatch[1];
                     s.p1[type] = v;
-                    // Detect changes for Logging
                     const key = `${id}_${type}`;
                     if (lastCounters[key] !== undefined && v > lastCounters[key]) {
-                        logEvent(id, `Detected ${type.toUpperCase()} Violation (P1/P2)`);
+                        logEvent(id, `Detected ${type.toUpperCase()} Violation`);
                     }
                     lastCounters[key] = v;
                 }
@@ -243,42 +238,59 @@
         });
     }
 
-    function renderFocus(s) {
-        document.getElementById('cur-id').innerText = s.id;
-        document.getElementById('lock-led').style.background = s.lock ? COLORS.OK : COLORS.ALARM;
-        document.getElementById('lock-status').innerText = s.lock ? "LOCKED" : "LOST";
-        document.getElementById('v-score').innerText = (s.health || 0).toFixed(0);
-        document.getElementById('v-score').style.color = s.health < 70 ? COLORS.ALARM : COLORS.OK;
+    function renderFocus(snap) {
+        // Mapping from JSON API structure
+        const status = snap.status || {};
+        const compliance = snap.tier2_compliance || { p1: {}, p2: {} };
+        const link = snap.tier1_link || {};
+        const essence = snap.tier3_essence || {};
+        const predictive = snap.tier4_predictive || {};
 
-        document.getElementById('v-rtt').innerText = s.rtt || 0;
-        document.getElementById('v-phys-br').innerText = ((s.bitrate || 0)/1e6).toFixed(1) + "M";
+        document.getElementById('cur-id').innerText = selectedID;
+        document.getElementById('lock-led').style.background = status.signal_lock ? COLORS.OK : COLORS.ALARM;
+        document.getElementById('lock-status').innerText = status.signal_lock ? "LOCKED" : "LOST";
+        document.getElementById('v-score').innerText = (status.master_health || 0).toFixed(0);
+        document.getElementById('v-score').style.color = status.master_health < 70 ? COLORS.ALARM : COLORS.OK;
+
+        document.getElementById('v-rtt').innerText = link.srt_rtt_ms || 0;
+        document.getElementById('v-phys-br').innerText = ((link.physical_bitrate_bps || 0)/1e6).toFixed(1) + "M";
 
         // Matrix Mapping
         const m = {
-            'm-sync': s.p1.sync_loss, 'm-pat': s.p1.pat_error,
-            'm-pmt': s.p1.pmt_error, 'm-cc': s.p1.cc_error,
-            'm-tei': s.p1.transport_error, 'm-crc': s.p1.crc_error,
-            'm-pcrj': s.mdi_df > 50, 'm-pcrr': s.p1.pts_error
+            'm-sync': compliance.p1.sync_loss, 'm-pat': compliance.p1.pat_error,
+            'm-pmt': compliance.p1.pmt_error, 'm-cc': compliance.p1.cc_error,
+            'm-tei': compliance.p2.transport_error, 'm-crc': compliance.p2.crc_error,
+            'm-pcrj': compliance.p2.pcr_jitter_ms > 50, 'm-pcrr': compliance.p2.pcr_repetition
         };
         for(let id in m) {
             const el = document.getElementById(id);
             if (el) el.style.background = m[id] > 0 ? COLORS.ALARM : COLORS.OK;
         }
 
-        document.getElementById('v-fps').innerText = (s.fps || 0).toFixed(2);
-        document.getElementById('v-gop').innerText = (s.gop || 0) + "ms";
-        document.getElementById('v-av').innerText = (s.av >= 0 ? "+" : "") + (s.av || 0) + "ms";
-        document.getElementById('v-br').innerText = ((s.bitrate || 0)/1e6).toFixed(1) + "M";
+        document.getElementById('v-fps').innerText = (essence.video_fps || 0).toFixed(2);
+        document.getElementById('v-gop').innerText = (essence.gop_ms || 0) + "ms";
+        document.getElementById('v-av').innerText = (essence.av_sync_offset_ms >= 0 ? "+" : "") + (essence.av_sync_offset_ms || 0) + "ms";
+        document.getElementById('v-br').innerText = ((link.physical_bitrate_bps || 0)/1e6).toFixed(1) + "M";
 
-        document.getElementById('v-rst-n').innerText = (s.rst_n || 0).toFixed(1) + "s";
-        document.getElementById('v-rst-e').innerText = "CALC...";
+        document.getElementById('v-rst-n').innerText = (predictive.rst_network_s || 0).toFixed(1) + "s";
+        document.getElementById('v-rst-e').innerText = (predictive.rst_encoder_s || 0).toFixed(1) + "s";
+
+        // PID Inventory
+        const invList = document.getElementById('inv-list');
+        invList.innerHTML = (snap.pids || []).map(p => `
+            <tr>
+                <td>${p.pid}</td>
+                <td style="color:var(--link-cyan)">${p.type}</td>
+                <td style="text-align:right">${(p.bitrate_bps/1e6).toFixed(2)}M</td>
+            </tr>
+        `).join('');
 
         // Update Charts
-        history.fps.push(s.fps || 0);
-        history.gop.push(s.gop || 0);
-        history.av.push(s.av || 0);
-        history.br.push((s.bitrate || 0)/1e6);
-        history.mdi.push(s.mdi_df || 0);
+        history.fps.push(essence.video_fps || 0);
+        history.gop.push(essence.gop_ms || 0);
+        history.av.push(essence.av_sync_offset_ms || 0);
+        history.br.push((link.physical_bitrate_bps || 0)/1e6);
+        history.mdi.push(link.mdi_df_ms || 0);
         if(history.fps.length > MAX_DATA) Object.values(history).forEach(a => a.shift());
 
         drawSeries('c-fps', [{data:history.fps, color:COLORS.OK}], 60);
