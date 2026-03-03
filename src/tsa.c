@@ -1034,7 +1034,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     uint64_t stc = h->stc_ns, dt = n - h->last_snap_ns;
     if (dt < 100000000ULL) return; // Ignore snapshots closer than 100ms
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0) h->live->physical_bitrate_bps = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
+    if (dp > 0 && dt > 0) {
+        uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
+        // EMA smoothing: new = 0.3 * instant + 0.7 * old
+        if (h->live->physical_bitrate_bps == 0) h->live->physical_bitrate_bps = instant_br;
+        else h->live->physical_bitrate_bps = (uint64_t)(0.3 * instant_br + 0.7 * h->live->physical_bitrate_bps);
+        
+        // Safety cap: nobody is sending 100Gbps TS over loopback
+        if (h->live->physical_bitrate_bps > 10000000000ULL) h->live->physical_bitrate_bps = 10000000000ULL;
+    }
     h->live->mdi_mlr_pkts_s =
         (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * 1000000000ULL) / dt;
     h->live->mdi_df_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
@@ -1091,10 +1099,12 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         uint16_t p = h->pid_active_list[i];
         if (p >= TS_PID_MAX) continue;
 
-        // Calculate PID-level bitrate
+        // Calculate PID-level bitrate with EMA smoothing
         uint64_t p_dp = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
         if (dt > 0) {
-            h->live->pid_bitrate_bps[p] = (uint64_t)(((unsigned __int128)p_dp * 1504 * 1000000000ULL) / dt);
+            uint64_t p_instant_br = (uint64_t)(((unsigned __int128)p_dp * 1504 * 1000000000ULL) / dt);
+            if (h->live->pid_bitrate_bps[p] == 0) h->live->pid_bitrate_bps[p] = p_instant_br;
+            else h->live->pid_bitrate_bps[p] = (uint64_t)(0.3 * p_instant_br + 0.7 * h->live->pid_bitrate_bps[p]);
         }
 
         const char* st = tsa_get_pid_type_name(h, p);
