@@ -26,12 +26,15 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     // Allocate required stats structures to avoid NULL pointer dereference
     h->live = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->prev_snap_base = calloc(1, sizeof(tsa_tr101290_stats_t));
-    h->snap_state.stats = calloc(1, sizeof(tsa_snapshot_full_t));
+    h->double_buffer.buffers[0] = calloc(1, sizeof(tsa_snapshot_full_t));
+    h->double_buffer.buffers[1] = calloc(1, sizeof(tsa_snapshot_full_t));
+    atomic_init(&h->double_buffer.active_idx, 0);
 
-    if (!h->live || !h->prev_snap_base || !h->snap_state.stats) {
+    if (!h->live || !h->prev_snap_base || !h->double_buffer.buffers[0] || !h->double_buffer.buffers[1]) {
         free(h->live);
         free(h->prev_snap_base);
-        free(h->snap_state.stats);
+        free(h->double_buffer.buffers[0]);
+        free(h->double_buffer.buffers[1]);
         free(h);
         return NULL;
     }
@@ -43,7 +46,8 @@ void tsa_destroy(tsa_handle_t* h) {
     if (!h) return;
     free(h->live);
     free(h->prev_snap_base);
-    free(h->snap_state.stats);
+    free(h->double_buffer.buffers[0]);
+    free(h->double_buffer.buffers[1]);
     free(h);
 }
 
@@ -65,12 +69,18 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now) {
     uint64_t cur_br = (uint64_t)((dp * 188.0 * 8.0) / ds_sec);
     h->live->physical_bitrate_bps = (uint64_t)(cur_br * 0.2 + h->live->physical_bitrate_bps * 0.8);
 
+    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
+    uint8_t inactive_idx = a ^ 1;
+    tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
+
     // Update shared snapshot state
-    h->snap_state.stats->summary.master_health = 100.0f;
-    h->snap_state.stats->summary.total_packets = h->live->total_ts_packets;
-    h->snap_state.stats->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
-    h->snap_state.stats->stats.total_ts_packets = h->live->total_ts_packets;
-    h->snap_state.stats->stats.physical_bitrate_bps = h->live->physical_bitrate_bps;
+    sn->summary.master_health = 100.0f;
+    sn->summary.total_packets = h->live->total_ts_packets;
+    sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
+    sn->stats.total_ts_packets = h->live->total_ts_packets;
+    sn->stats.physical_bitrate_bps = h->live->physical_bitrate_bps;
+
+    atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
 
     h->prev_snap_base->total_ts_packets = h->live->total_ts_packets;
     h->last_snap_ns = now;
@@ -78,7 +88,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t now) {
 
 int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s) {
     if (!h || !s) return -1;
-    *s = *(h->snap_state.stats);
+    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
+    *s = *(h->double_buffer.buffers[a]);
     return 0;
 }
 

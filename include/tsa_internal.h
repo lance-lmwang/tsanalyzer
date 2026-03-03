@@ -159,9 +159,9 @@ struct tsa_handle {
     uint64_t* pid_b_frames;
 
     alignas(64) struct {
-        _Atomic uint32_t seq;
-        tsa_snapshot_full_t* stats;  // Now a pointer to avoid MB-sized copy risks
-    } snap_state;
+        _Atomic uint8_t active_idx;
+        tsa_snapshot_full_t* buffers[2];
+    } double_buffer;
 
     alignas(64) int128_t stc_slope_q64;
     int128_t stc_intercept_q64;

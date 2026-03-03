@@ -547,8 +547,10 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_b_frames, uint64_t, TS_PID_MAX);
     h->live = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->prev_snap_base = calloc(1, sizeof(tsa_tr101290_stats_t));
-    h->snap_state.stats = calloc(1, sizeof(tsa_snapshot_full_t));
-    if (!h->live || !h->prev_snap_base || !h->snap_state.stats) goto fail;
+    h->double_buffer.buffers[0] = calloc(1, sizeof(tsa_snapshot_full_t));
+    h->double_buffer.buffers[1] = calloc(1, sizeof(tsa_snapshot_full_t));
+    atomic_init(&h->double_buffer.active_idx, 0);
+    if (!h->live || !h->prev_snap_base || !h->double_buffer.buffers[0] || !h->double_buffer.buffers[1]) goto fail;
     if (cfg) h->config = *cfg;
     if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
@@ -613,7 +615,8 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_b_frames);
     FREE_IF(h->live);
     FREE_IF(h->prev_snap_base);
-    FREE_IF(h->snap_state.stats);
+    FREE_IF(h->double_buffer.buffers[0]);
+    FREE_IF(h->double_buffer.buffers[1]);
     free(h);
 }
 
@@ -1079,14 +1082,16 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     }
     float he = h->last_health_score;
 
-    uint32_t s = atomic_load(&h->snap_state.seq);
-    atomic_store(&h->snap_state.seq, s + 1);
-    h->snap_state.stats->predictive.master_health = he;
-    h->snap_state.stats->summary.master_health = he;
-    h->snap_state.stats->summary.total_packets = h->live->total_ts_packets;
-    h->snap_state.stats->summary.signal_lock = h->signal_lock;
-    h->snap_state.stats->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
-    h->snap_state.stats->stats = *h->live;
+    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
+    uint8_t inactive_idx = a ^ 1;
+    tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
+
+    sn->predictive.master_health = he;
+    sn->summary.master_health = he;
+    sn->summary.total_packets = h->live->total_ts_packets;
+    sn->summary.signal_lock = h->signal_lock;
+    sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
+    sn->stats = *h->live;
     uint32_t ai = 0;
     for (uint32_t i = 0; i < h->pid_tracker_count && ai < MAX_ACTIVE_PIDS; i++) {
         uint16_t p = h->pid_active_list[i];
@@ -1105,7 +1110,6 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
                 if (cb > h->pid_bitrate_max[p]) h->pid_bitrate_max[p] = cb;
             }
         }
-        tsa_snapshot_full_t* sn = h->snap_state.stats;
         sn->pids[ai].pid = p;
         strncpy(sn->pids[ai].type_str, tsa_get_pid_type_name(h, p), 15);
         sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16;
@@ -1116,8 +1120,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].eb_fill_pct = (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0);
         ai++;
     }
-    h->snap_state.stats->active_pid_count = ai;
-    atomic_store(&h->snap_state.seq, s + 2);
+    sn->active_pid_count = ai;
+    atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
     *h->prev_snap_base = *h->live;
     h->last_snap_ns = n;
     h->live->pcr_jitter_max_ns = 0;
@@ -1241,17 +1245,14 @@ int tsa_take_snapshot_lite(tsa_handle_t* h, tsa_snapshot_lite_t* s) {
     s->physical_bitrate_bps = h->live->physical_bitrate_bps;
     s->active_pid_count = h->pid_tracker_count;
     s->signal_lock = h->signal_lock;
-    s->master_health = h->snap_state.stats->summary.master_health;
+    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
+    s->master_health = h->double_buffer.buffers[a]->summary.master_health;
     return 0;
 }
 int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s) {
     if (!h || !s) return -1;
-    uint32_t s1, s2;
-    do {
-        s1 = atomic_load(&h->snap_state.seq);
-        *s = *h->snap_state.stats;
-        s2 = atomic_load(&h->snap_state.seq);
-    } while (s1 != s2 || (s1 & 1));
+    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
+    *s = *h->double_buffer.buffers[a];
     return 0;
 }
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* s) {
