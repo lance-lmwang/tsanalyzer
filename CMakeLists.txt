@@ -293,6 +293,10 @@ add_executable(test_tstd_underflow tests/test_tstd_underflow.c)
 target_link_libraries(test_tstd_underflow tsp_core pthread m)
 add_test(NAME test_tstd_underflow COMMAND test_tstd_underflow)
 
+add_executable(test_tstd_expert tests/test_tstd_expert.c)
+target_link_libraries(test_tstd_expert tsp_core pthread m)
+add_test(NAME test_tstd_expert COMMAND test_tstd_expert)
+
 add_executable(test_stc_stability tests/test_stc_stability.c)
 target_link_libraries(test_stc_stability tsp_core pthread m)
 add_test(NAME test_stc_stability COMMAND test_stc_stability)

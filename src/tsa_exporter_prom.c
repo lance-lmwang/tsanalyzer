@@ -70,6 +70,28 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_tr101290_p1_pat_error%s %llu\n", labels, (unsigned long long)s->pat_error.count);
         SAFE_APPEND("tsa_tr101290_p1_pmt_error%s %llu\n", labels, (unsigned long long)s->pmt_error.count);
         SAFE_APPEND("tsa_tr101290_p1_cc_error%s %llu\n", labels, (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_tr101290_p1_pid_error%s %llu\n", labels, (unsigned long long)s->pid_error.count);
+        SAFE_APPEND("tsa_tr101290_p2_pts_error%s %llu\n", labels, (unsigned long long)s->pts_error.count);
+        SAFE_APPEND("tsa_tr101290_p2_crc_error%s %llu\n", labels, (unsigned long long)s->crc_error.count);
+        SAFE_APPEND("tsa_tr101290_p2_transport_error%s %llu\n", labels, (unsigned long long)s->transport_error.count);
+
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
+                    (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid,
+                    (unsigned long long)s->pat_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid,
+                    (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pmt_error\"} %llu\n", sid,
+                    (unsigned long long)s->pmt_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pid_error\"} %llu\n", sid,
+                    (unsigned long long)s->pid_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pts_error\"} %llu\n", sid,
+                    (unsigned long long)s->pts_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"crc_error\"} %llu\n", sid,
+                    (unsigned long long)s->crc_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"transport_error\"} %llu\n", sid,
+                    (unsigned long long)s->transport_error.count);
+
         SAFE_APPEND("tsa_transport_error_count%s %llu\n", labels, (unsigned long long)s->transport_error.count);
         
         // Tier 4: ETR 290 P2 (CLOCK & TIMING)

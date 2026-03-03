@@ -31,6 +31,22 @@ void test_pcr_jitter() {
 int main() {
     test_cc_logic();
     test_pcr_jitter();
+
+    printf("\n=== PROMETHEUS EXPORT PREVIEW ===\n");
+    tsa_config_t cfg = {0};
+    strncpy(cfg.input_label, "VERIFY-STREAM", 31);
+    tsa_handle_t* h = tsa_create(&cfg);
+    h->live->pts_error.count = 5;
+    h->live->pid_error.count = 2;
+    h->live->transport_error.count = 1;
+    h->live->mdi_df_ms = 12.5;
+    h->live->mdi_mlr_pkts_s = 0.5;
+
+    static char buf[16384];
+    tsa_exporter_prom_v2(&h, 1, buf, sizeof(buf));
+    printf("%s\n", buf);
+    tsa_destroy(h);
+
     printf("TR 101 290 core tests passed!\n");
     return 0;
 }

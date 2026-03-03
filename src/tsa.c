@@ -1291,10 +1291,12 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* sn, char* b, size_t s) {
               (unsigned long long)sn->srt.bytes_lost, sn->srt.retransmit_tax * 100.0, (float)st->mdi_df_ms);
 
     // Tier 3/4: ETR 290 P1 & P2
-    SAFE_JSON("\"tier2_compliance\":{\"p1\":{\"sync_loss\":%llu,\"pat_error\":%llu,\"cc_error\":%llu},\"p2\":{\"pcr_jitter_ms\":%.3f,\"pcr_repetition\":%llu}},",
+    SAFE_JSON("\"tier2_compliance\":{\"p1\":{\"sync_loss\":%llu,\"pat_error\":%llu,\"cc_error\":%llu,\"pmt_error\":%llu,\"pid_error\":%llu},\"p2\":{\"pcr_jitter_ms\":%.3f,\"pcr_repetition\":%llu,\"pts_error\":%llu,\"crc_error\":%llu,\"transport_error\":%llu}},",
               (unsigned long long)st->sync_loss.count, (unsigned long long)st->pat_error.count,
-              (unsigned long long)st->cc_error.count, st->pcr_jitter_avg_ns / 1000000.0,
-              (unsigned long long)st->pcr_repetition_error.count);
+              (unsigned long long)st->cc_error.count, (unsigned long long)st->pmt_error.count,
+              (unsigned long long)st->pid_error.count, st->pcr_jitter_avg_ns / 1000000.0,
+              (unsigned long long)st->pcr_repetition_error.count, (unsigned long long)st->pts_error.count,
+              (unsigned long long)st->crc_error.count, (unsigned long long)st->transport_error.count);
 
     // Tier 5/6: Essence & Payload Dynamics
     SAFE_JSON("\"tier3_essence\":{\"total_bitrate_bps\":%llu,\"video_fps\":%.2f,\"gop_ms\":%u,\"av_sync_offset_ms\":%d},",

@@ -405,8 +405,35 @@
       },
       "targets": [
         {
-          "expr": "increase(tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}[1h]) > 0",
-          "format": "table"
+          "expr": "increase(tsa_tr101290_errors{stream_id=\"$stream\"}[1h]) > 0",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "color-background"
+          }
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "stream_id": true
+            },
+            "renameByName": {
+              "error_type": "Alarm Type",
+              "Value": "Occurrences (Last 1H)"
+            }
+          }
         }
       ]
     }
