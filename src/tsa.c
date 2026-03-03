@@ -547,6 +547,10 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_p_frames, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_b_frames, uint64_t, TS_PID_MAX);
     h->pid_labels = calloc(TS_PID_MAX, 128);
+    h->pid_au_q = calloc(TS_PID_MAX, sizeof(*h->pid_au_q));
+    h->pid_au_head = calloc(TS_PID_MAX, 1);
+    h->pid_au_tail = calloc(TS_PID_MAX, 1);
+    h->pid_pending_dts = calloc(TS_PID_MAX, sizeof(uint64_t));
     h->live = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->prev_snap_base = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->double_buffer.buffers[0] = calloc(1, sizeof(tsa_snapshot_full_t));
@@ -616,6 +620,10 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_p_frames);
     FREE_IF(h->pid_b_frames);
     FREE_IF(h->pid_labels);
+    FREE_IF(h->pid_au_q);
+    FREE_IF(h->pid_au_head);
+    FREE_IF(h->pid_au_tail);
+    FREE_IF(h->pid_pending_dts);
     FREE_IF(h->live);
     FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]);
@@ -755,6 +763,22 @@ void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count) {
     }
 }
 
+static void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid) {
+    if (!h || h->stc_ns == 0) return;
+    uint8_t head = h->pid_au_head[pid];
+    while (head != h->pid_au_tail[pid]) {
+        if (h->stc_ns >= h->pid_au_q[pid][head].dts_ns) {
+            h->pid_eb_fill_q64[pid] -= INT_TO_Q64_64(h->pid_au_q[pid][head].size);
+            if (h->pid_eb_fill_q64[pid] < 0) h->pid_eb_fill_q64[pid] = 0;
+            head = (head + 1) % 32;
+        } else {
+            break;
+        }
+    }
+    h->pid_au_head[pid] = head;
+    h->live->pid_eb_fill_bytes[pid] = (uint32_t)(h->pid_eb_fill_q64[pid] >> 64);
+}
+
 void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, const ts_decode_result_t* res) {
     if (!h || !pkt || !res) return;
     uint16_t pid = res->pid;
@@ -799,11 +823,10 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->pid_mb_fill_q64[pid] += INT_TO_Q64_64(res->payload_len);
         if (h->live->pid_is_referenced[pid]) h->pid_eb_fill_q64[pid] += INT_TO_Q64_64(res->payload_len);
     }
-    if (res->pusi && h->live->pid_is_referenced[pid]) {
-        h->pid_eb_fill_q64[pid] -= INT_TO_Q64_64(100000);
-        if (h->pid_eb_fill_q64[pid] < 0) h->pid_eb_fill_q64[pid] = 0;
-    }
-    h->live->pid_eb_fill_bytes[pid] = (uint32_t)(h->pid_eb_fill_q64[pid] >> 64);
+
+    /* Drain EB based on DTS arrival */
+    tsa_tstd_drain(h, pid);
+
     h->live->pid_last_seen_ns[pid] = h->stc_ns;
     if (pkt[1] & 0x80) {
         h->live->transport_error.count++;
@@ -839,6 +862,18 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
     h->last_cc[pid] = res->cc;
     if (res->payload_len > 0) {
         if (res->pusi) {
+            if (h->live->pid_is_referenced[pid] && h->pid_pes_len[pid] > 0) {
+                uint8_t tail = h->pid_au_tail[pid];
+                uint8_t next_tail = (tail + 1) % 32;
+                if (next_tail != h->pid_au_head[pid]) {
+                    h->pid_au_q[pid][tail].dts_ns = h->pid_pending_dts[pid];
+                    h->pid_au_q[pid][tail].size = h->pid_pes_len[pid];
+                    h->pid_au_tail[pid] = next_tail;
+                }
+                tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
+            }
+            h->pid_pes_len[pid] = 0;
+
             // Check for PES header and PTS
             const uint8_t* payload = pkt + 4 + res->af_len;
             if (res->payload_len >= 14 && payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01) {
@@ -849,21 +884,29 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
                                    ((uint64_t)(payload[11] & 0xFE) << 14) |
                                    ((uint64_t)payload[12] << 7) |
                                    ((uint64_t)payload[13] >> 1);
+                    uint64_t dts = pts;
+                    if (flags & 0x40 && res->payload_len >= 19) {
+                        dts = ((uint64_t)(payload[14] & 0x0E) << 29) |
+                              ((uint64_t)payload[15] << 22) |
+                              ((uint64_t)(payload[16] & 0xFE) << 14) |
+                              ((uint64_t)payload[17] << 7) |
+                              ((uint64_t)payload[18] >> 1);
+                    }
+                    h->pid_pending_dts[pid] = (dts * 1000000ULL) / 90;
 
                     const char* st = tsa_get_pid_type_name(h, pid);
                     if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
                         h->last_v_pts = pts;
-                        if (h->last_a_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
-                    } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 || strcmp(st, "AC3") == 0) {
+                        if (h->last_a_pts > 0)
+                            h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
+                    } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 ||
+                               strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0) {
                         h->last_a_pts = pts;
-                        if (h->last_v_pts > 0) h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
+                        if (h->last_v_pts > 0)
+                            h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
                     }
                 }
             }
-
-            if (h->live->pid_is_referenced[pid] && h->pid_pes_len[pid] > 0)
-                tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
-            h->pid_pes_len[pid] = 0;
 
             /* If no buffer assigned yet, grab one from the pool */
             if (h->pid_pes_buf[pid] == NULL && h->pes_pool_used < 32) {
@@ -972,6 +1015,12 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     if (!h) return;
     if (n == 0) n = h->last_snap_ns;
     if (!h->stc_locked) h->stc_ns = n;
+    
+    // Drain all active PIDs based on new STC
+    for (uint32_t i = 0; i < h->pid_tracker_count; i++) {
+        tsa_tstd_drain(h, h->pid_active_list[i]);
+    }
+
     uint64_t stc = h->stc_ns, dt = n - h->last_snap_ns;
     if (dt < 100000000ULL) return; // Ignore snapshots closer than 100ms
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;

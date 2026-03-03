@@ -102,6 +102,16 @@ struct tsa_handle {
     char (*pid_labels)[128]; // [TS_PID_MAX] Pre-compiled prometheus labels
     tsa_srt_stats_t srt_live;
 
+    /* T-STD AU Queue */
+    struct {
+        uint64_t dts_ns;
+        uint32_t size;
+    } (*pid_au_q)[32]; // [TS_PID_MAX][32]
+    uint8_t* pid_au_head;
+    uint8_t* pid_au_tail;
+
+    uint64_t* pid_pending_dts;
+
     uint64_t last_v_pts;
     uint64_t last_a_pts;
     

@@ -11,9 +11,9 @@
 - [x] Export `width`, `height`, `fps`, and `gop_n` to the JSON API.
 
 ## Phase 3: T-STD Buffer Simulator (The Muscle)
-- [ ] Implement the leaky bucket algorithm for TB and MB stages.
-- [ ] Map DTS (Decoding Time Stamp) to EB removal events.
-- [ ] Calculate real-time `buffer_fullness_pct`.
+- [x] Implement the leaky bucket algorithm for TB and MB stages.
+- [x] Map DTS (Decoding Time Stamp) to EB removal events.
+- [x] Calculate real-time `buffer_fullness_pct`.
 
 ## Phase 4: Full API & Verification (The Delivery)
 - [ ] Update `/api/v1/metrology/full` to include the `buffer_status` and `video_metadata` objects.
