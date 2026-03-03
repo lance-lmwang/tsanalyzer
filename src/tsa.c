@@ -1,6 +1,10 @@
 #define _GNU_SOURCE
 #include <math.h>
 #include <pthread.h>
+#include <stdatomic.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +26,7 @@
     } while (0)
 
 /* --- Forward Declarations --- */
+static void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid);
 static void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
 static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid);
 
@@ -1002,10 +1007,11 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
         h->consecutive_sync_errors = 0;
         if (h->consecutive_good_syncs >= 2) h->signal_lock = true;
     }
-    if (h->stc_locked)
+    if (h->stc_locked) {
         h->stc_ns = (uint64_t)((h->stc_intercept_q64 + (int128_t)n * h->stc_slope_q64) >> 64);
-    else
+    } else {
         h->stc_ns = n;
+    }
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
     tsa_metrology_process(h, p, n, &r);
