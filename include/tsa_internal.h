@@ -98,6 +98,8 @@ struct tsa_handle {
     // Statistical Snapshots (Now Pointers)
     tsa_tr101290_stats_t* live;
     tsa_tr101290_stats_t* prev_snap_base;
+
+    char (*pid_labels)[128]; // [TS_PID_MAX] Pre-compiled prometheus labels
     tsa_srt_stats_t srt_live;
 
     uint64_t last_v_pts;

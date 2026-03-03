@@ -117,9 +117,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         // PID Details & T-STD Buffer Metrics
         for (uint32_t j = 0; j < snap->active_pid_count; j++) {
             uint16_t p = snap->pids[j].pid;
-            const char* t = snap->pids[j].type_str[0] ? snap->pids[j].type_str : "Unknown";
-            char pid_labels[256];
-            snprintf(pid_labels, sizeof(pid_labels), "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"}", sid, p, t);
+            const char* pid_labels = h->pid_labels[p];
 
             SAFE_APPEND("tsa_pid_bitrate_bps%s %llu\n", pid_labels, (unsigned long long)s->pid_bitrate_bps[p]);
             
@@ -217,9 +215,7 @@ void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t
 
         for (uint32_t j = 0; j < snap->active_pid_count; j++) {
             uint16_t p = snap->pids[j].pid;
-            const char* t = snap->pids[j].type_str[0] ? snap->pids[j].type_str : "Unknown";
-            char pid_labels[256];
-            snprintf(pid_labels, sizeof(pid_labels), "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"}", sid, p, t);
+            const char* pid_labels = h->pid_labels[p];
 
             SAFE_APPEND("tsa_pid_bitrate_bps%s %llu\n", pid_labels, (unsigned long long)s->pid_bitrate_bps[p]);
             if (snap->pids[j].eb_fill_pct > 0 || snap->pids[j].tb_fill_pct > 0) {

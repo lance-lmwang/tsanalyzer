@@ -497,6 +497,7 @@ static void process_pmt(tsa_handle_t* h, uint16_t pmt, const uint8_t* pkt, uint6
         uint16_t pid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
         int es = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
         h->pid_stream_type[pid] = ty;
+        tsa_precompile_pid_labels(h, pid);
         if (pr && pr->stream_count < MAX_STREAMS_PER_PROG) {
             pr->streams[pr->stream_count].pid = pid;
             pr->streams[pr->stream_count].stream_type = ty;
@@ -545,6 +546,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_i_frames, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_p_frames, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_b_frames, uint64_t, TS_PID_MAX);
+    h->pid_labels = calloc(TS_PID_MAX, 128);
     h->live = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->prev_snap_base = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->double_buffer.buffers[0] = calloc(1, sizeof(tsa_snapshot_full_t));
@@ -613,11 +615,26 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_i_frames);
     FREE_IF(h->pid_p_frames);
     FREE_IF(h->pid_b_frames);
+    FREE_IF(h->pid_labels);
     FREE_IF(h->live);
     FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]);
     FREE_IF(h->double_buffer.buffers[1]);
     free(h);
+}
+
+static void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
+    if (!h || pid >= TS_PID_MAX) return;
+    const char* codec = tsa_get_pid_type_name(h, pid);
+    const char* type = "Other";
+    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0) {
+        type = "Video";
+    } else if (strcmp(codec, "AAC") == 0 || strcmp(codec, "ADTS-AAC") == 0 || strcmp(codec, "MPEG1-A") == 0 ||
+               strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0) {
+        type = "Audio";
+    }
+    snprintf(h->pid_labels[pid], 128, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\",codec=\"%s\"}",
+             h->config.input_label[0] ? h->config.input_label : "unknown", pid, type, codec);
 }
 
 static void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
