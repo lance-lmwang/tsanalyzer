@@ -212,9 +212,17 @@ static void* metrology_thread(void* arg) {
 static void fn(struct mg_connection* c, int ev, void* ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
-        if (mg_match(hm->uri, mg_str("/metrics"), NULL)) {
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL) ||
+            mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
+            mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[128 * 1024];
-            tsa_exporter_prom_v2(&g_h, 1, resp, sizeof(resp));
+            if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {
+                tsa_exporter_prom_core(&g_h, 1, resp, sizeof(resp));
+            } else if (mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
+                tsa_exporter_prom_pids(&g_h, 1, resp, sizeof(resp));
+            } else {
+                tsa_exporter_prom_v2(&g_h, 1, resp, sizeof(resp));
+            }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
             static char resp[512 * 1024];

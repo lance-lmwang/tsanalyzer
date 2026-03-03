@@ -163,6 +163,8 @@ int tsa_take_snapshot_lite(tsa_handle_t* h, tsa_snapshot_lite_t* s);
 size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t sz);
 void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz);
 void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
+void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz);
+void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t sz);
 void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t size);
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt);
 bool tsa_forensic_trigger(tsa_handle_t* h, int reason);

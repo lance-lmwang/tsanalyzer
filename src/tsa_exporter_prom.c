@@ -150,6 +150,88 @@ void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz) {
     tsa_exporter_prom_v2(&h, 1, buf, sz);
 }
 
+void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz) {
+    if (!handles || !buf || sz < 4096) return;
+    int off = 0;
+    int n;
+
+#define SAFE_APPEND(...)                                                           \
+    {                                                                              \
+        n = snprintf(buf + off, (sz > (size_t)off) ? (sz - off) : 0, __VA_ARGS__); \
+        if (n > 0) off += (off + n < (int)sz) ? n : (int)(sz - off - 1);           \
+    }
+
+    static __thread tsa_snapshot_full_t snap_storage;
+    tsa_snapshot_full_t* snap = &snap_storage;
+
+    for (int i = 0; i < count; i++) {
+        tsa_handle_t* h = handles[i];
+        if (!h) continue;
+        if (tsa_take_snapshot_full(h, snap) != 0) continue;
+
+        const tsa_tr101290_stats_t* s = &snap->stats;
+        const char* sid = h->config.input_label;
+        if (!sid[0]) sid = "unknown";
+
+        char labels[128];
+        snprintf(labels, sizeof(labels), "{stream_id=\"%s\"}", sid);
+
+        SAFE_APPEND("tsa_signal_lock_status%s %d\n", labels, snap->summary.signal_lock ? 1 : 0);
+        SAFE_APPEND("tsa_health_score%s %.1f\n", labels, snap->predictive.master_health);
+        SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
+        
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid, (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid, (unsigned long long)s->pat_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid, (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pmt_error\"} %llu\n", sid, (unsigned long long)s->pmt_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pid_error\"} %llu\n", sid, (unsigned long long)s->pid_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pts_error\"} %llu\n", sid, (unsigned long long)s->pts_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"crc_error\"} %llu\n", sid, (unsigned long long)s->crc_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"transport_error\"} %llu\n", sid, (unsigned long long)s->transport_error.count);
+    }
+#undef SAFE_APPEND
+}
+
+void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t sz) {
+    if (!handles || !buf || sz < 4096) return;
+    int off = 0;
+    int n;
+
+#define SAFE_APPEND(...)                                                           \
+    {                                                                              \
+        n = snprintf(buf + off, (sz > (size_t)off) ? (sz - off) : 0, __VA_ARGS__); \
+        if (n > 0) off += (off + n < (int)sz) ? n : (int)(sz - off - 1);           \
+    }
+
+    static __thread tsa_snapshot_full_t snap_storage;
+    tsa_snapshot_full_t* snap = &snap_storage;
+
+    for (int i = 0; i < count; i++) {
+        tsa_handle_t* h = handles[i];
+        if (!h) continue;
+        if (tsa_take_snapshot_full(h, snap) != 0) continue;
+
+        const tsa_tr101290_stats_t* s = &snap->stats;
+        const char* sid = h->config.input_label;
+        if (!sid[0]) sid = "unknown";
+
+        for (uint32_t j = 0; j < snap->active_pid_count; j++) {
+            uint16_t p = snap->pids[j].pid;
+            const char* t = snap->pids[j].type_str[0] ? snap->pids[j].type_str : "Unknown";
+            char pid_labels[256];
+            snprintf(pid_labels, sizeof(pid_labels), "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"}", sid, p, t);
+
+            SAFE_APPEND("tsa_pid_bitrate_bps%s %llu\n", pid_labels, (unsigned long long)s->pid_bitrate_bps[p]);
+            if (snap->pids[j].eb_fill_pct > 0 || snap->pids[j].tb_fill_pct > 0) {
+                SAFE_APPEND("tsa_pid_tstd_eb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].eb_fill_pct);
+                SAFE_APPEND("tsa_pid_tstd_tb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].tb_fill_pct);
+                SAFE_APPEND("tsa_pid_tstd_mb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].mb_fill_pct);
+            }
+        }
+    }
+#undef SAFE_APPEND
+}
+
 void tsa_export_pid_labels(tsa_metric_buffer_t* buf, tsa_handle_t* h, uint16_t pid) {
     if (!buf || !h || pid >= TS_PID_MAX) return;
 

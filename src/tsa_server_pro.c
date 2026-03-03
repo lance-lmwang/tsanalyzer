@@ -345,7 +345,9 @@ static void* io_thread(void* arg) {
 static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
-        if (mg_match(hm->uri, mg_str("/metrics"), NULL)) {
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL) || 
+            mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
+            mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[4 * 1024 * 1024];
             tsa_handle_t* h_list[MAX_CONNS];
             int count = 0;
@@ -355,7 +357,14 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 if (g_conns[i]->tsa) h_list[count++] = g_conns[i]->tsa;
             }
             pthread_mutex_unlock(&g_conn_lock);
-            tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
+            
+            if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {
+                tsa_exporter_prom_core(h_list, count, resp, sizeof(resp));
+            } else if (mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
+                tsa_exporter_prom_pids(h_list, count, resp, sizeof(resp));
+            } else {
+                tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
+            }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
             static char resp[512 * 1024];

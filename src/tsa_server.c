@@ -124,11 +124,20 @@ static void load_config(const char *file) {
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *)ev_data;
-        if (mg_match(hm->uri, mg_str("/metrics"), NULL)) {
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL) ||
+            mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
+            mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[1024 * 1024];
             tsa_handle_t *h_list[MAX_STREAMS];
             for (int i = 0; i < g_node_count; i++) h_list[i] = g_nodes[i].tsa;
-            tsa_exporter_prom_v2(h_list, g_node_count, resp, sizeof(resp));
+            
+            if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {
+                tsa_exporter_prom_core(h_list, g_node_count, resp, sizeof(resp));
+            } else if (mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
+                tsa_exporter_prom_pids(h_list, g_node_count, resp, sizeof(resp));
+            } else {
+                tsa_exporter_prom_v2(h_list, g_node_count, resp, sizeof(resp));
+            }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         }
     }
