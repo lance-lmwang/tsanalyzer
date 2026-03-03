@@ -4,50 +4,90 @@ TsAnalyzer is a professional-grade **Software-Defined Measurement Instrument** d
 
 ## 🚀 Key Features (v2.2.0 PRO)
 - **Metrology Grade Precision**: Verified **8.00 Mbps CBR** accuracy on broadcast samples with < 0.001% error.
-- **Deterministic Engine**: 100% Bit-identical results via定点数 (Fixed-point) and 128-bit math.
+- **Deterministic Engine**: 100% Bit-identical results via 定点数 (Fixed-point) and 128-bit math.
 - **Micro-Smooth Pacing**: Integrated **Token Bucket Pacer** ensuring sub-10ms CBR stability.
-- **Industrial Robustness**: Dynamic heap memory model supporting high-density multi-stream analysis without stack risks.
+- **Industrial Robustness**: Dynamic heap memory model supporting high-density multi-stream analysis.
 - **Real-time Forensics**: RCA scoring, TR 101 290 P1/P2 monitoring, and MDI-DF calculation.
 
 ---
 
-## 📖 Technical Documentation
+## 📊 Metrology Architecture
 
-The following documents define the "Instrument-Grade" specification of TsAnalyzer:
+TsAnalyzer follows a strict **7-Tier Metrology Architecture** for full-stack signal visibility, as defined in the **[NOC Dashboard Spec](./docs/44_grafana_dashboard_spec.md)**.
 
-### 1. Strategy & Overview
-- **[Product Overview](./docs/00_product_overview.md)**: The V2.3 Whitepaper defining the Engineering Identity and Metrology Domains.
-- **[Engine Execution Model](./docs/01_engine_execution_model.md)**: Deterministic runtime architecture, thread topology, and packet ownership rules.
-- **[Timing Model](./docs/02_timing_model.md)**: Temporal physics defining HAT, STC, and VSTC domains.
-- **[Buffer Model](./docs/03_buffer_model.md)**: Deterministic ISO/IEC 13818-1 Annex D simulation and RST derivation.
-- **[Metrology Model](./docs/04_metrology_model.md)**: Measurement theory, causality engine, and traceability contract.
-- **[Determinism Contract](./docs/05_determinism_contract.md)**: The "Constitution" guaranteeing bit-identical reproducibility.
-- **[Performance Contract](./docs/06_performance_contract.md)**: Throughput and latency budgets as correctness requirements.
-- **[Error Model](./docs/07_error_model.md)**: Error propagation physics and measurement validity hierarchy.
-- **[Validation Methodology](./docs/08_validation_methodology.md)**: The framework for proving accuracy, repeatability, and real-world equivalence.
-- **[Operational Modes](./docs/09_operational_modes.md)**: Trust levels defining measurement authority.
-- **[Engine Constraints](./docs/10_engine_constraints.md)**: Non-negotiable architectural laws to preserve metrological integrity.
-- **[Implementation Roadmap](./docs/11_implementation_roadmap.md)**: The sequential path to achieving instrument-grade precision.
-
-### 2. Technical Specifications
-- **[TR 101 290 Metrology Spec](./docs/16_tr101290_analysis_spec.md)**: Detailed mathematical implementation of P1/P2/P3, V-STC, VBV simulation, and commercial ad-audits.
-- **[Deterministic 4-Layer Architecture](./docs/12_system_architecture_diagram.md)**: Low-level engine design including NUMA, Zero-copy, and L2-cache optimizations.
-- **[High-Performance Server Design](./docs/34_server_high_performance_design.md)**: Bare-metal OS sealing and math precision preservation strategies.
-
-### 3. Verification & Determinism
-- **[Engine Verification Matrix](./docs/21_engine_verification_matrix.md)**: The "Proof of Correctness" protocols for hardware-reference benchmarking.
-- **[Determinism Threat Model](./docs/22_determinism_threat_model.md)**: Systematic identification and mitigation of timing and memory entropy.
-- **[Resource & Performance Spec](./docs/15_resource_performance.md)**: Defined throughput, latency, and determinism gates (G1-G4).
+- **Tier 1 (Master)**: Signal Presence, Fidelity (0-100%), and Engine Determinism.
+- **Tier 2 (Link)**: SRT RTT/Loss, MDI Delay Factor (DF), and Media Loss Rate (MLR).
+- **Tier 3 (P1)**: TR 101 290 Priority 1 (Sync, PAT, PMT, CC Errors).
+- **Tier 4 (P2)**: TR 101 290 Priority 2 (PCR Jitter, PCR Repetition, PTS Error).
+- **Tier 5 (MUX)**: PID Bitrate Distribution and Null Packet Density.
+- **Tier 6 (Essence)**: FPS Stability, GOP Cadence, and AV Sync (Lip-Sync Offset).
+- **Tier 7 (Forensic)**: Millisecond-aligned event audit trails and RCA logs.
 
 ---
 
-## 🛠️ Key Metrology Metrics
-| Tier | Category | Key Indicators |
-| :--- | :--- | :--- |
-| **Tier 1** | IP/Transport | MDI (DF:MLR), Path Skew (2022-7), SRT RTT. |
-| **Tier 2** | MPEG-TS | TR 101 290 P1/P2/P3, **RST (Remaining Safe Time)**. |
-| **Tier 3** | Content Audit | SCTE-35 Precision Alignment, Audio Loudness (BS.1770-4). |
-| **Tier 4** | ABR Synergy | Cross-profile PTS Drift, IDR/GOP Boundary matching. |
+## 💻 Quick Start & Usage
+
+### 1. Standalone Analysis (tsa)
+The `tsa` CLI is used for single-stream analysis. It defaults to Prometheus metrics on port `12345`.
+
+**Offline Replay (Maximum Speed):**
+```bash
+./build/tsa --mode=replay sample.ts
+```
+*Outputs `final_metrology.json` upon completion.*
+
+**Real-time Monitoring (UDP/SRT):**
+```bash
+# UDP Multicast/Unicast
+./build/tsa --mode=live --udp 1234
+
+# SRT Listener
+./build/tsa --mode=live --srt-url srt://:9000
+```
+
+### 2. Server Mode (tsa_server)
+For multi-stream NOC environments, `tsa_server` manages up to 16 streams via a centralized HTTP port (`8088` by default).
+
+```bash
+# Start server with config file
+./build/tsa_server tsa.conf
+```
+
+**Add Stream via API:**
+```bash
+curl -X POST http://localhost:8088/api/v1/config/streams \
+     -H "Content-Type: application/json" \
+     -d '{"stream_id":"CH-01","url":"udp://127.0.0.1:19001"}'
+```
+
+### 3. Accessing Metrics
+Metrics are exported via Prometheus (default `tsa` port: `12345`, `tsa_server` port: `8088`):
+- `tsa_pcr_bitrate_bps`: True content bitrate recovered from PCR clock.
+- `tsa_physical_bitrate_bps`: Physical arrival rate at the network interface.
+- `tsa_pcr_jitter_ms`: Microsecond-precision arrival jitter.
+- `tsa_mdi_df_ms`: MDI Delay Factor (Network Jitter).
+
+---
+
+## 🧪 Stream Simulation (tsp)
+
+Use the integrated `tsp` (TS Pacer) to simulate broadcast sources:
+```bash
+# Send file at 5 Mbps to local analyzer
+./build/tsp -i 127.0.0.1 -p 19001 -b 5000000 -l -f sample.ts
+```
+
+---
+
+## 🛠 Build & Verify
+The project uses a simplified Makefile wrapping CMake commands.
+
+```bash
+make           # Build Release version (-O3)
+make test      # Run all unit tests (80+ cases)
+make full-test # Run Unit + Determinism + E2E tests
+make rt-test   # Run Real-time Metrology Verification (30s)
+```
 
 ---
 
@@ -56,25 +96,12 @@ The following documents define the "Instrument-Grade" specification of TsAnalyze
 
 ---
 
-## 🛠 Build & Verify
-The project uses a simplified Makefile wrapping complex CMake commands.
+## 📖 Technical Documentation
 
-```bash
-# Standard Build (Release mode with -O3)
-make
+### Strategy & Overview
+- **[Product Overview](./docs/00_product_overview.md)** | **[Timing Model](./docs/02_timing_model.md)** | **[Buffer Model](./docs/03_buffer_model.md)**
+- **[Determinism Contract](./docs/05_determinism_contract.md)** | **[Validation Methodology](./docs/08_validation_methodology.md)**
 
-# Execute Unit Tests (89 test cases)
-make test
-
-# Full Validation (Unit + Determinism + E2E Smoke)
-make full-test
-
-# Real-time Metrology Verification (30s PCR-locked test)
-make rt-test
-```
-
-## 📊 Monitoring
-Metrics are exported via Prometheus at `http://localhost:8080/metrics`.
-- `tsa_pcr_bitrate_bps`: True content bitrate recovered from PCR clock.
-- `tsa_physical_bitrate_bps`: Physical arrival rate at the network interface.
-- `tsa_pcr_jitter_ms`: Microsecond-precision arrival jitter.
+### Technical Specifications
+- **[TR 101 290 Metrology](./docs/16_tr101290_analysis_spec.md)** | **[NOC Dashboard Spec](./docs/44_grafana_dashboard_spec.md)**
+- **[High-Performance Design](./docs/34_server_high_performance_design.md)** | **[Engine Verification](./docs/21_engine_verification_matrix.md)**

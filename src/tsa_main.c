@@ -245,10 +245,28 @@ static void* http_thread(void* arg) {
     return NULL;
 }
 
+static void print_usage(const char* prog) {
+    printf("TSA - Transport Stream Analyzer (Professional Edition)\n");
+    printf("Usage: %s [options] <input.ts>\n\n", prog);
+    printf("Core Options:\n");
+    printf("  -u, --udp <port>      Listen for incoming TS over UDP on specified port.\n");
+    printf("  -s, --srt-url <url>   Listen for incoming SRT stream (e.g., srt://:9000).\n");
+    printf("  -m, --mode <mode>     Operation mode: live, replay, forensic, certification.\n");
+    printf("                        - live: Real-time analysis with system clock mapping.\n");
+    printf("                        - replay: Fastest possible analysis from file (simulated time).\n");
+    printf("                        - forensic: Deep analysis with persistent state recovery.\n\n");
+    printf("HTTP Metrics:\n");
+    printf("  Metrics available at http://localhost:12345/metrics (Prometheus format)\n");
+    printf("  Full snapshot API: http://localhost:12345/api/v1/snapshot\n\n");
+    printf("Examples:\n");
+    printf("  Analysis of a local file:   %s --mode=replay sample.ts\n", prog);
+    printf("  Real-time UDP monitoring:  %s --mode=live --udp 1234\n", prog);
+    printf("  Real-time SRT monitoring:  %s --mode=live --srt-url srt://:9000\n", prog);
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
-        printf("Usage: %s [options] <input.ts>\n", argv[0]);
-        printf("Options:\n  --udp <port>\n  --srt-url <url>\n  --mode=live|replay|forensic|certification\n");
+        print_usage(argv[0]);
         return 1;
     }
 
@@ -262,10 +280,14 @@ int main(int argc, char** argv) {
     static struct option long_options[] = {{"udp", required_argument, 0, 'u'},
                                            {"srt-url", required_argument, 0, 's'},
                                            {"mode", required_argument, 0, 'm'},
+                                           {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
-    while ((opt = getopt_long(argc, argv, "u:s:m:", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "u:s:m:h", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'h':
+                print_usage(argv[0]);
+                return 0;
             case 'u':
                 cap_args.cfg.udp_port = atoi(optarg);
                 break;
