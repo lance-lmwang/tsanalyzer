@@ -98,36 +98,38 @@ typedef struct {
 } tsa_snapshot_lite_t;
 
 typedef struct {
+    uint32_t pid;
+    char type_str[16];
+    int64_t bitrate_q16_16;
+    uint64_t bitrate_min;
+    uint64_t bitrate_max;
+    uint64_t cc_errors;
+    uint8_t liveness_status;
+    uint8_t status;
+    uint16_t width;
+    uint16_t height;
+    uint8_t profile;
+    uint32_t audio_sample_rate;
+    uint8_t audio_channels;
+    uint32_t gop_n;
+    uint32_t gop_min;
+    uint32_t gop_max;
+    uint32_t gop_ms;
+    uint64_t i_frames;
+    uint64_t p_frames;
+    uint64_t b_frames;
+    float eb_fill_pct;
+    float tb_fill_pct;
+    float mb_fill_pct;
+} tsa_pid_info_t;
+
+typedef struct {
     tsa_snapshot_lite_t summary;
     tsa_tr101290_stats_t stats;
     tsa_srt_stats_t srt;
     tsa_predictive_stats_t predictive;
     uint32_t active_pid_count;
-    struct {
-        uint32_t pid;
-        char type_str[16];
-        int64_t bitrate_q16_16;
-        uint64_t bitrate_min;
-        uint64_t bitrate_max;
-        uint64_t cc_errors;
-        uint8_t liveness_status;
-        uint8_t status;
-        uint16_t width;
-        uint16_t height;
-        uint8_t profile;
-        uint32_t audio_sample_rate;
-        uint8_t audio_channels;
-        uint32_t gop_n;
-        uint32_t gop_min;
-        uint32_t gop_max;
-        uint32_t gop_ms;
-        uint64_t i_frames;
-        uint64_t p_frames;
-        uint64_t b_frames;
-        float eb_fill_pct;
-        float tb_fill_pct;
-        float mb_fill_pct;
-    } pids[MAX_ACTIVE_PIDS];
+    tsa_pid_info_t pids[MAX_ACTIVE_PIDS];
 } tsa_snapshot_full_t;
 
 typedef enum {

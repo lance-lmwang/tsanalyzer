@@ -1016,6 +1016,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     if (n == 0) n = h->last_snap_ns;
     if (!h->stc_locked) h->stc_ns = n;
     
+    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
+    uint8_t inactive_idx = a ^ 1;
+    tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
+
     // Drain all active PIDs based on new STC
     for (uint32_t i = 0; i < h->pid_tracker_count; i++) {
         tsa_tstd_drain(h, h->pid_active_list[i]);
@@ -1060,8 +1064,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     double dr = fabs(sl - 1.0);
     if (dr > 0.000001) re = (float)((100.0 - h->live->pcr_accuracy_ns / 1000000.0) / dr / 1000.0);
     double cn = 0, ce = 0;
-    h->snap_state.stats->predictive.rst_network_s = rn;
-    h->snap_state.stats->predictive.rst_encoder_s = re;
+    sn->predictive.rst_network_s = rn;
+    sn->predictive.rst_encoder_s = re;
     if (h->live->mdi_mlr_pkts_s > 0) cn += 0.8;
     if (rn < 5.0) cn += (5.0 - rn) / 5.0;
     if (h->live->pcr_jitter_max_ns > 10000000ULL)
@@ -1096,7 +1100,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 
     for (int p = 0; p < TS_PID_MAX; p++)
         if (h->pid_seen[p] && h->pid_eb_fill_q64[p] == 0 && h->live->pid_is_referenced[p]) ce += 0.9;
-    h->snap_state.stats->predictive.fault_domain =
+    sn->predictive.fault_domain =
         (cn > 0.6 && ce < 0.2) ? 1 : (ce > 0.6 && cn < 0.2) ? 2 : (cn > 0.4 && ce > 0.4) ? 3 : 0;
     // Signal Loss Check (Timeout: 500ms relative to system time n)
     bool any_packets_recently = false;
@@ -1147,10 +1151,6 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
     }
     float he = h->last_health_score;
-
-    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
-    uint8_t inactive_idx = a ^ 1;
-    tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
 
     sn->predictive.master_health = he;
     sn->summary.master_health = he;
