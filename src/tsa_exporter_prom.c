@@ -36,8 +36,8 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_global_network_incident 0\n");
     }
 
-    tsa_snapshot_full_t* snap = malloc(sizeof(tsa_snapshot_full_t));
-    if (!snap) return;
+    static __thread tsa_snapshot_full_t snap_storage;
+    tsa_snapshot_full_t* snap = &snap_storage;
 
     for (int i = 0; i < count; i++) {
         tsa_handle_t* h = handles[i];
@@ -142,7 +142,6 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         }
 
     }
-    free(snap);
 #undef SAFE_APPEND
 }
 
