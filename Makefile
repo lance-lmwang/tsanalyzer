@@ -79,11 +79,20 @@ test-e2e: release
 
 test-e2d: test-e2e
 
-# --- Automated Chaos Simulation Test ---
-test-chaos: release
-	@echo "$(GREEN)=== Running Automated Chaos Simulation Test ===$(RESET)"
-	@chmod +x scripts/verify_chaos_simulation.sh
-	@./scripts/verify_chaos_simulation.sh
+# --- Live Streaming Demo ---
+demo: release
+	@echo "$(GREEN)=== Starting Live Stream Analysis Demo ===$(RESET)"
+	@pkill -9 tsa || true
+	@pkill -9 tsp || true
+	@./build/tsp -i 127.0.0.1 -p 19001 -b 10000000 -l -f sample/test_1m.ts > /dev/null 2>&1 &
+	@./build/tsa --mode=live --udp 19001 > tsa_live.log 2>&1 &
+	@echo "Waiting for engine warmup..."
+	@sleep 2
+	@chmod +x scripts/tsa_monitor.py
+	@./scripts/tsa_monitor.py --duration 15
+	@pkill -9 tsa || true
+	@pkill -9 tsp || true
+	@echo "$(GREEN)Demo Complete.$(RESET)"
 
 help:
 	@echo "$(GREEN)TsAnalyzer Build System$(RESET)"
@@ -93,6 +102,7 @@ help:
 	@echo "  make clean     - Remove all build artifacts"
 	@echo "  make test      - Run all unit tests"
 	@echo "  make full-test - Run Unit + Determinism + E2E tests"
+	@echo "  make demo      - Run 15s Live Analysis Demo (tsp -> tsa -> python monitor)"
 	@echo "  make test-e2e  - Run End-to-End Dashboard Test"
 	@echo "  make test-chaos - Run Automated Fault Injection Test"
 	@echo "  make rt-test   - Run Real-time Metrology (30s)"

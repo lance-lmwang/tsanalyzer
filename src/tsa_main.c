@@ -192,11 +192,18 @@ static void* metrology_thread(void* arg) {
     ts_packet_t pkt;
     int backoff_cnt = 0;
     uint64_t last_ts = 0;
+    uint64_t last_snap_ts = 0;
     while (1) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
             tsa_process_packet(g_h, pkt.data, pkt.timestamp_ns);
             last_ts = pkt.timestamp_ns;
+            
+            // Periodically commit snapshot (every 100ms)
+            if (last_ts - last_snap_ts > 100000000ULL) {
+                tsa_commit_snapshot(g_h, last_ts);
+                last_snap_ts = last_ts;
+            }
             backoff_cnt = 0;
         } else {
             backoff_sleep(backoff_cnt++);

@@ -1090,6 +1090,13 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     for (uint32_t i = 0; i < ptc; i++) {
         uint16_t p = h->pid_active_list[i];
         if (p >= TS_PID_MAX) continue;
+
+        // Calculate PID-level bitrate
+        uint64_t p_dp = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
+        if (dt > 0) {
+            h->live->pid_bitrate_bps[p] = (uint64_t)(((unsigned __int128)p_dp * 1504 * 1000000000ULL) / dt);
+        }
+
         const char* st = tsa_get_pid_type_name(h, p);
         if (!st) continue;
 
