@@ -1267,19 +1267,54 @@ void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     return p;
 }
 size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* sn, char* b, size_t s) {
-    if (!sn || !b || s < 1024) return 0;
+    if (!sn || !b || s < 2048) return 0;
     int off = 0;
-    int n = snprintf(b + off, s - off,
-                     "{\"status\":\"ok\",\"master_health\":%.1f,\"metrics\":{\"bitrate_bps\":%llu},\"pids\":[",
-                     sn->summary.master_health, (unsigned long long)sn->stats.physical_bitrate_bps);
-    if (n > 0) off += n;
-    for (uint32_t i = 0; i < sn->active_pid_count; i++) {
-        n = snprintf(b + off, s - off, "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bps\":%llu}", (i == 0) ? "" : ",",
-                     sn->pids[i].pid, sn->pids[i].type_str, (unsigned long long)(sn->pids[i].bitrate_q16_16 >> 16));
-        if (n > 0) off += n;
+    int n;
+
+#define SAFE_JSON(...)                                                             \
+    {                                                                              \
+        n = snprintf(b + off, (s > (size_t)off) ? (s - off) : 0, __VA_ARGS__);     \
+        if (n > 0) off += (off + n < (int)s) ? n : (int)(s - off - 1);             \
     }
-    n = snprintf(b + off, s - off, "]}");
-    if (n > 0) off += n;
+
+    const tsa_tr101290_stats_t* st = &sn->stats;
+
+    SAFE_JSON("{");
+    // Tier 0/1: Master Control Console (SIGNAL STATUS)
+    SAFE_JSON("\"status\":{\"signal_lock\":%s,\"master_health\":%.1f,\"engine_determinism\":{\"drops\":%llu,\"overruns\":%llu}},",
+              sn->summary.signal_lock ? "true" : "false", sn->summary.master_health,
+              (unsigned long long)st->internal_analyzer_drop, (unsigned long long)st->worker_slice_overruns);
+
+    // Tier 2: Transport & Link Integrity (SRT/MDI)
+    SAFE_JSON("\"tier1_link\":{\"physical_bitrate_bps\":%llu,\"srt_rtt_ms\":%lld,\"srt_loss_p0\":%llu,\"srt_retransmit_pct\":%.2f,\"mdi_df_ms\":%.2f},",
+              (unsigned long long)st->physical_bitrate_bps, (long long)sn->srt.rtt_ms,
+              (unsigned long long)sn->srt.bytes_lost, sn->srt.retransmit_tax * 100.0, (float)st->mdi_df_ms);
+
+    // Tier 3/4: ETR 290 P1 & P2
+    SAFE_JSON("\"tier2_compliance\":{\"p1\":{\"sync_loss\":%llu,\"pat_error\":%llu,\"cc_error\":%llu},\"p2\":{\"pcr_jitter_ms\":%.3f,\"pcr_repetition\":%llu}},",
+              (unsigned long long)st->sync_loss.count, (unsigned long long)st->pat_error.count,
+              (unsigned long long)st->cc_error.count, st->pcr_jitter_avg_ns / 1000000.0,
+              (unsigned long long)st->pcr_repetition_error.count);
+
+    // Tier 5/6: Essence & Payload Dynamics
+    SAFE_JSON("\"tier3_essence\":{\"total_bitrate_bps\":%llu,\"video_fps\":%.2f,\"gop_ms\":%u,\"av_sync_offset_ms\":%d},",
+              (unsigned long long)st->physical_bitrate_bps, (float)st->video_fps, st->gop_ms, st->av_sync_ms);
+
+    // Tier 4/5: Predictive & RST
+    SAFE_JSON("\"tier4_predictive\":{\"rst_network_s\":%.2f,\"rst_encoder_s\":%.2f,\"mdi_df_ms\":%.2f},",
+              sn->predictive.rst_network_s, sn->predictive.rst_encoder_s, (float)st->mdi_df_ms);
+
+    // PIDs & T-STD Details
+    SAFE_JSON("\"pids\":[");
+    for (uint32_t i = 0; i < sn->active_pid_count; i++) {
+        const tsa_pid_info_t* p = &sn->pids[i];
+        SAFE_JSON("%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,\"eb_fill_pct\":%.2f,\"tb_fill_pct\":%.2f,\"mb_fill_pct\":%.2f}",
+                  (i == 0) ? "" : ",", p->pid, p->type_str[0] ? p->type_str : "Unknown",
+                  (unsigned long long)st->pid_bitrate_bps[p->pid], p->eb_fill_pct, p->tb_fill_pct, p->mb_fill_pct);
+    }
+    SAFE_JSON("]}");
+
+#undef SAFE_JSON
     return (size_t)off;
 }
 float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) {

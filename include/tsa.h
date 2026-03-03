@@ -33,6 +33,8 @@ typedef struct {
     tsa_alarm_t crc_error;
     tsa_alarm_t pcr_repetition_error;
     tsa_alarm_t pcr_accuracy_error;
+    tsa_alarm_t pts_error;
+    tsa_alarm_t cat_error;
 
     uint64_t cc_loss_count;
     uint64_t cc_duplicate_count;

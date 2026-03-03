@@ -29,23 +29,24 @@ def test_dashboard_integrity():
             if f == 'tsa_stream_focus.json':
                 titles = [p.get('title', '') for p in data.get('panels', [])]
                 
-                # Critical Tier Check
+                # Critical Tier Check (7-Tier Model)
                 required_tiers = [
-                    'FAILURE DOMAIN',      # Tier 1
-                    'Link Capacity',       # Tier 2
-                    'CC Error',            # Tier 2
-                    'BITRATE ENVELOPE',    # Tier 3
-                    'RST SURVIVAL',        # Tier 4
-                    'OPERATIONAL AUDIT'    # Tier 5
+                    'SIGNAL STATUS',       # Tier 1
+                    'SRT/MDI',             # Tier 2
+                    'CRITICAL COMPLIANCE', # Tier 3
+                    'CLOCK & TIMING',      # Tier 4
+                    'SERVICE PAYLOAD',     # Tier 5
+                    'ESSENCE QUALITY',     # Tier 6
+                    'ALARM RECAP'          # Tier 7
                 ]
                 
                 for tier in required_tiers:
-                    found = any(tier in t for j in titles for t in [j] if tier in t)
+                    found = any(tier in t for t in titles)
                     if not found:
-                        print(f"❌ FAIL: Tier '{tier}' was deleted in {f}!")
+                        print(f"❌ FAIL: Tier keyword '{tier}' not found in {f}!")
                         return False
     
-    print("✅ PASS: All 3 Planes and 5 Tiers are structurally sound.")
+    print("✅ PASS: All 3 Planes and 7 Tiers are structurally sound.")
     return True
 
 if __name__ == "__main__":

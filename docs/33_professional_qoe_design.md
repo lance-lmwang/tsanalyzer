@@ -6,37 +6,45 @@ This document defines the high-end monitoring architecture for TsAnalyzer Pro, b
 
 ## 1. Professional Data Layer (Metric Tiering)
 
-We move away from a flat metric list to a **five-tier diagnostic model**:
+We move away from a flat metric list to a **seven-tier diagnostic model**:
 
-### Tier 1: Executive Signal Lock (QoS)
-- **Stream Status**: (LOCKED / SIGNAL LOST) - High-level binary state.
-- **Link Saturation**: Real-time comparison of current bitrate vs. allocated link bandwidth.
-- **SRT Safety Margin**: Current buffer level (ms) vs. configured latency.
+### Tier 1: Master Control Console (SIGNAL STATUS)
+- **Signal Presence**: (LOCKED / SIGNAL LOST) - High-level binary state based on sync byte consistency.
+- **Signal Fidelity**: (0-100%) - Aggregate health score derived from CC errors, jitter, and RST.
+- **Engine Determinism**: Real-time tracking of `internal_analyzer_drop` and `worker_slice_overruns`.
 
-### Tier 2: ETR 290 Compliance (The Matrix)
-*Instead of one line, we use a 2x4 Matrix with real-time counters.*
+### Tier 2: Transport & Link Integrity (SRT/MDI)
+- **SRT Metrics**: RTT (ms), NAK count, and Retransmit Tax.
+- **Network Jitter**: MDI Delay Factor (DF) and Media Loss Rate (MLR).
+
+### Tier 3: ETR 290 P1 (CRITICAL COMPLIANCE)
+*Instead of one line, we use a diagnostic matrix with real-time counters.*
 - **Priority 1 (Fatal)**:
     - `tsa_sync_loss_errors`: Sync Loss count (Delta 60s).
     - `tsa_pat_error_count`: PAT Missing/Timeout (Immediate).
     - `tsa_pmt_error_count`: PMT Missing/Timeout (Immediate).
-    - `tsa_cc_errors_total`: **Continuity Error Count** (Real-time delta, NOT just boolean).
+    - `tsa_cc_errors_total`: **Continuity Error Count** (Real-time delta).
+
+### Tier 4: ETR 290 P2 (CLOCK & TIMING)
 - **Priority 2 (Performance)**:
-    - `tsa_pcr_repetition_errors`: PCR Interval issues.
-    - `tsa_pcr_accuracy_errors`: PCR Jitter/Drift issues.
+    - `tsa_pcr_repetition_errors`: PCR Interval issues (Max 40ms).
+    - `tsa_pcr_accuracy_errors`: PCR Jitter/Drift issues vs. STC.
     - `tsa_crc_errors`: Section CRC mismatch.
 
-### Tier 3: TS Mux & Payload Analysis (The Spectrum)
+### Tier 5: Service Payload Dynamics (MUX)
 - **Muxrate Envelope**:
-    - **Physical (SRT)**: Thick Cyan line.
-    - **Logical (TS)**: Dashed White line.
-    - **Effective Payload**: Area stack of Video/Audio PIDs.
-    - **Stuffing (Null)**: Dark Blue area stack at the bottom (shows explicitly how much bandwidth is "wasted").
-- **PID Inventory**: A sortable table with micro-gauges for every active PID.
+    - **Physical (SRT)**: High-resolution bitrate trend.
+    - **Logical (TS)**: Effective muxrate calculation.
+    - **Stuffing (Null)**: Explicit visualization of NULL packet density.
 
-### Tier 4: ES Vital & QoE (Quality of Experience)
-- **Video Cadence**: FPS (Frame rate) and GOP size consistency.
-- **Lip-Sync**: AV-Sync Offset (ms) with threshold markers.
-- **Content Health**: Black Frame / Freeze Frame duration counters.
+### Tier 6: Essence Quality & Temporal Stability
+- **Video Cadence**: Frame Rate (FPS) and GOP size consistency.
+- **Lip-Sync**: AV-Sync Offset (ms) between PTS of Video and Audio.
+- **Content Health**: Detection of black frames or frozen content.
+
+### Tier 7: Alarm Recap & Forensic Audit Trail
+- **Operational Log**: High-density table of recent compliance events.
+- **Forensic Anchor**: Absolute millisecond alignment for bit-exact replay.
 
 ---
 

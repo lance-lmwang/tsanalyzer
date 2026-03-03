@@ -1,32 +1,54 @@
 {
-  "annotations": {
-    "list": []
+  "uid": "stream-focus",
+  "title": "TsAnalyzer Pro - STREAM FOCUS",
+  "refresh": "5s",
+  "schemaVersion": 36,
+  "version": 1,
+  "time": {
+    "from": "now-15m",
+    "to": "now"
   },
-  "editable": true,
   "graphTooltip": 1,
-  "liveNow": false,
+  "templating": {
+    "list": [
+      {
+        "name": "stream",
+        "type": "query",
+        "query": "label_values(tsa_health_score, stream_id)",
+        "refresh": 1,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "label": "Focus Stream"
+      }
+    ]
+  },
   "panels": [
     {
+      "type": "row",
+      "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 0
       },
-      "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)",
-      "type": "row",
       "collapsed": false
     },
     {
-      "title": "SIGNAL PRESENCE",
       "type": "stat",
+      "title": "SIGNAL PRESENCE",
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 6,
         "x": 0,
         "y": 1
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
           "expr": "tsa_signal_lock_status{stream_id=\"$stream\"}"
@@ -39,12 +61,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "color": "red",
-                  "text": "LOST"
+                  "text": "LOST",
+                  "color": "red"
                 },
                 "1": {
-                  "color": "green",
-                  "text": "LOCKED"
+                  "text": "LOCKED",
+                  "color": "green"
                 }
               }
             }
@@ -53,40 +75,22 @@
       },
       "options": {
         "colorMode": "background",
-        "textMode": "value"
+        "justifyMode": "center"
       }
     },
     {
-      "title": "FAILURE DOMAIN",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 4,
-        "y": 1
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "avg_over_time(tsa_health_score{stream_id=\"$stream\"}[15s])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none"
-        }
-      }
-    },
-    {
-      "title": "SIGNAL FIDELITY",
       "type": "gauge",
+      "title": "SIGNAL FIDELITY",
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 12,
+        "x": 6,
         "y": 1
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
           "expr": "tsa_health_score{stream_id=\"$stream\"}"
@@ -96,157 +100,124 @@
         "defaults": {
           "min": 0,
           "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 70
-              },
-              {
-                "color": "green",
-                "value": 90
-              }
-            ]
-          }
+          "unit": "percent"
         }
       }
     },
     {
-      "title": "ENGINE DETERMINISM",
       "type": "stat",
+      "title": "ENGINE DETERMINISM",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 18,
         "y": 1
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
-          "expr": "tsa_internal_analyzer_drop{stream_id=\"$stream\"} + tsa_worker_slice_overruns{stream_id=\"$stream\"}"
+          "expr": "tsa_internal_analyzer_drop{stream_id=\"$stream\"}",
+          "legendFormat": "Drops"
+        },
+        {
+          "expr": "tsa_worker_slice_overruns{stream_id=\"$stream\"}",
+          "legendFormat": "Overruns"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          }
-        }
-      }
+      ]
     },
     {
+      "type": "row",
+      "title": "TIER 2: TRANSPORT & LINK INTEGRITY (SRT/MDI)",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 5
       },
-      "title": "TIER 2: TRANSPORT & LINK INTEGRITY (SRT/MDI)",
-      "type": "row",
       "collapsed": false
     },
     {
-      "title": "Link Capacity",
       "type": "stat",
+      "title": "Link Capacity",
       "gridPos": {
         "h": 3,
         "w": 6,
         "x": 0,
         "y": 6
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
           "expr": "tsa_physical_bitrate_bps{stream_id=\"$stream\"}"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bps"
-        }
-      }
+      ]
     },
     {
-      "title": "SRT NAK Count",
       "type": "stat",
+      "title": "SRT NAK",
       "gridPos": {
         "h": 3,
         "w": 6,
         "x": 6,
         "y": 6
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
-          "expr": "mdi_mlr{stream_id=\"$stream\"}"
+          "expr": "tsa_srt_nak_count{stream_id=\"$stream\"}"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none"
-        }
-      }
+      ]
     },
     {
-      "title": "Buffer Margin",
       "type": "stat",
+      "title": "SRT RTT",
       "gridPos": {
         "h": 3,
         "w": 6,
         "x": 12,
         "y": 6
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
-          "expr": "mdi_df{stream_id=\"$stream\"}"
+          "expr": "tsa_srt_rtt_ms{stream_id=\"$stream\"}"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        }
-      }
+      ]
     },
     {
-      "title": "SRT Link RTT",
       "type": "stat",
+      "title": "MDI DF",
       "gridPos": {
         "h": 3,
         "w": 6,
         "x": 18,
         "y": 6
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
-          "expr": "tsa_srt_rtt_ms{stream_id=\"$stream\"}"
+          "expr": "mdi_df{stream_id=\"$stream\"}"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        }
-      }
+      ]
     },
     {
-      "title": "TIER 3: ETR 290 P1 (CRITICAL COMPLIANCE)",
       "type": "row",
+      "title": "TIER 3: ETR 290 P1 (CRITICAL COMPLIANCE)",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -256,663 +227,84 @@
       "collapsed": false
     },
     {
-      "title": "P1.1 Sync Loss",
       "type": "stat",
+      "title": "Sync Loss",
       "gridPos": {
         "h": 3,
-        "w": 4,
+        "w": 6,
         "x": 0,
         "y": 10
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
           "expr": "tsa_tr101290_p1_sync_loss{stream_id=\"$stream\"}"
         }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000.0,
-                "result": {
-                  "color": "red",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
+      ]
     },
     {
-      "title": "P1.2 Sync Byte",
       "type": "stat",
+      "title": "PAT Error",
       "gridPos": {
         "h": 3,
-        "w": 4,
-        "x": 4,
+        "w": 6,
+        "x": 6,
         "y": 10
       },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_sync_byte_errors_total{stream_id=\"$stream\"}"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000.0,
-                "result": {
-                  "color": "red",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "title": "P1.3 PAT Error",
-      "type": "stat",
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 8,
-        "y": 10
-      },
-      "datasource": "Prometheus",
       "targets": [
         {
           "expr": "tsa_tr101290_p1_pat_error{stream_id=\"$stream\"}"
         }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000.0,
-                "result": {
-                  "color": "red",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
+      ]
     },
     {
-      "title": "P1.5 PMT Error",
       "type": "stat",
+      "title": "PMT Error",
       "gridPos": {
         "h": 3,
-        "w": 4,
+        "w": 6,
         "x": 12,
         "y": 10
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
-          "expr": "tsa_pmt_error_count{stream_id=\"$stream\"}"
+          "expr": "tsa_tr101290_p1_pmt_error{stream_id=\"$stream\"}"
         }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000.0,
-                "result": {
-                  "color": "red",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
+      ]
     },
     {
-      "title": "P1.4 CC Error",
       "type": "stat",
+      "title": "CC Error",
       "gridPos": {
         "h": 3,
-        "w": 4,
-        "x": 16,
+        "w": 6,
+        "x": 18,
         "y": 10
       },
-      "datasource": "Prometheus",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
           "expr": "tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}"
         }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000.0,
-                "result": {
-                  "color": "red",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
+      ]
     },
     {
-      "title": "P1.6 TEI Error",
-      "type": "stat",
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 20,
-        "y": 10
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_transport_error_count{stream_id=\"$stream\"}"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000.0,
-                "result": {
-                  "color": "red",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 18
-      },
-      "title": "TIER 5: SERVICE PAYLOAD DYNAMICS (MUX)",
       "type": "row",
-      "collapsed": false
-    },
-    {
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 34
-      },
-      "title": "TIER 6: ESSENCE QUALITY & TEMPORAL STABILITY",
-      "type": "row",
-      "collapsed": false
-    },
-    {
-      "title": "FRAME RATE STABILITY (FPS)",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 35
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_essence_video_fps{stream_id=\"$stream\"}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none"
-        }
-      }
-    },
-    {
-      "title": "GOP CADENCE (ms)",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 35
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_gop_ms{stream_id=\"$stream\"}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        }
-      }
-    },
-    {
-      "title": "LIP-SYNC OFFSET (ms)",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 35
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_essence_av_sync_ms{stream_id=\"$stream\"}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        }
-      }
-    },
-    {
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 44
-      },
-      "title": "TIER 7: ALARM RECAP & FORENSIC AUDIT TRAIL",
-      "type": "row",
-      "collapsed": false
-    },
-    {
-      "title": "ALARM EVENT LOG (RECENT 1H)",
-      "type": "table",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 45
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "increase(tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}[1h]) > 0",
-          "format": "table",
-          "instant": false,
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "displayMode": "color-background"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.1
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "title": "PID BITRATE REVENUE (STACKED DENSITY)",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 19
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "sum by (type) (tsa_pid_bitrate_bps{stream_id=\"$stream\"})",
-          "legendFormat": "{{type}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bps",
-          "custom": {
-            "stacking": {
-              "mode": "normal"
-            },
-            "fillOpacity": 40,
-            "lineInterpolation": "stepAfter"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "H.264"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "HEVC"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "MPEG2-V"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "MPEG1-A"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "blue"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "AAC"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "blue"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "PAT"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "PMT"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "0x1fff"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "grey"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Stuffing"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "grey"
-                }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "title": "THROUGHPUT ANALYSIS",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 6,
-        "w": 16,
-        "x": 0,
-        "y": 27
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_physical_bitrate_bps{stream_id=\"$stream\"}",
-          "legendFormat": "Physical"
-        },
-        {
-          "expr": "tsa_pcr_bitrate_bps{stream_id=\"$stream\"}",
-          "legendFormat": "Logical"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bps",
-          "custom": {
-            "fillOpacity": 10
-          }
-        }
-      }
-    },
-    {
-      "title": "NULL PACKET DENSITY (%)",
-      "type": "gauge",
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 16,
-        "y": 27
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "((tsa_pid_bitrate_bps{stream_id=\"$stream\",pid=\"0x1fff\"} / ignoring(pid,type) group_left sum by(stream_id) (tsa_pid_bitrate_bps{stream_id=\"$stream\"})) * 100) or on() vector(0)",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "min": 0,
-          "max": 100,
-          "unit": "percent",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "blue",
-                "value": 20
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
       "title": "TIER 4: ETR 290 P2 (CLOCK & TIMING)",
-      "type": "row",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -922,170 +314,102 @@
       "collapsed": false
     },
     {
-      "title": "P2.3 PCR Repetition",
-      "type": "stat",
+      "type": "timeseries",
+      "title": "PCR JITTER & ACCURACY",
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 24,
         "x": 0,
         "y": 14
       },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_pcr_repetition_errors{stream_id=\"$stream\"}"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
       },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000000.0,
-                "result": {
-                  "color": "yellow",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "title": "P2.5 PCR Accuracy",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 14
-      },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "tsa_pcr_accuracy_errors{stream_id=\"$stream\"}"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "justifyMode": "center",
-        "textMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "color": "green",
-                  "text": "OK"
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 0.1,
-                "to": 1000000000000000.0,
-                "result": {
-                  "color": "yellow",
-                  "text": "ALARM"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "title": "PCR JITTER TREND (ms)",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 14
-      },
-      "datasource": "Prometheus",
       "targets": [
         {
           "expr": "tsa_pcr_jitter_ms{stream_id=\"$stream\"}"
         }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "TIER 5: SERVICE PAYLOAD DYNAMICS (MUX)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "PID BITRATE REVENUE",
+      "gridPos": {
+        "h": 15,
+        "w": 18,
+        "x": 0,
+        "y": 19
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (pid, type) (tsa_pid_bitrate_bps{stream_id=\"$stream\"})"
+        }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "custom": {
-            "fillOpacity": 10
-          }
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
         }
       }
     },
     {
-      "title": "PCR ACCURACY TREND (ns)",
-      "type": "timeseries",
+      "type": "row",
+      "title": "TIER 6: ESSENCE QUALITY & TEMPORAL STABILITY",
       "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 14
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
       },
-      "datasource": "Prometheus",
+      "collapsed": false
+    },
+    {
+      "type": "row",
+      "title": "TIER 7: ALARM RECAP & FORENSIC AUDIT TRAIL",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "collapsed": false
+    },
+    {
+      "type": "table",
+      "title": "ALARM EVENT LOG",
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
         {
-          "expr": "tsa_pcr_accuracy_ns{stream_id=\"$stream\"}"
+          "expr": "increase(tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}[1h]) > 0",
+          "format": "table"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ns",
-          "custom": {
-            "fillOpacity": 10
-          }
-        }
-      }
+      ]
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 36,
-  "style": "dark",
-  "tags": [
-    "professional"
-  ],
-  "templating": {
-    "list": [
-      {
-        "datasource": "Prometheus",
-        "definition": "label_values(tsa_health_score, stream_id)",
-        "name": "stream",
-        "query": "label_values(tsa_health_score, stream_id)",
-        "refresh": 1,
-        "type": "query"
-      }
-    ]
-  },
-  "time": {
-    "from": "now-15m",
-    "to": "now"
-  },
-  "title": "TsAnalyzer Pro - STREAM FOCUS",
-  "uid": "stream-focus"
+  "editable": true
 }

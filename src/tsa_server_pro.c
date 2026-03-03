@@ -357,6 +357,29 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             pthread_mutex_unlock(&g_conn_lock);
             tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+        } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
+            static char resp[512 * 1024];
+            char id_val[64];
+            tsa_handle_t* target = NULL;
+            if (mg_http_get_var(&hm->query, "id", id_val, sizeof(id_val)) > 0) {
+                pthread_mutex_lock(&g_conn_lock);
+                int total = atomic_load(&g_conn_count);
+                for (int i = 0; i < total; i++) {
+                    if (strcmp(g_conns[i]->id, id_val) == 0) {
+                        target = g_conns[i]->tsa;
+                        break;
+                    }
+                }
+                pthread_mutex_unlock(&g_conn_lock);
+            }
+            if (target) {
+                tsa_snapshot_full_t snap;
+                tsa_take_snapshot_full(target, &snap);
+                tsa_snapshot_to_json(&snap, resp, sizeof(resp));
+                mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+            } else {
+                mg_http_reply(c, 404, NULL, "Stream ID not found or missing\n");
+            }
         } else {
             mg_http_reply(c, 200, "", "TsAnalyzer Pro - Appliance Metric Gateway\n");
         }

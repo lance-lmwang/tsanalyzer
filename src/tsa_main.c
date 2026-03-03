@@ -216,6 +216,12 @@ static void fn(struct mg_connection* c, int ev, void* ev_data) {
             static char resp[128 * 1024];
             tsa_exporter_prom_v2(&g_h, 1, resp, sizeof(resp));
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+        } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
+            static char resp[512 * 1024];
+            tsa_snapshot_full_t snap;
+            tsa_take_snapshot_full(g_h, &snap);
+            tsa_snapshot_to_json(&snap, resp, sizeof(resp));
+            mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         }
     }
 }

@@ -51,13 +51,16 @@ def render_dashboard(snap):
 
     out = []
     out.append(f"{BOLD}{CYAN}+------------------------------------------------------------------------------+{RESET}")
-    out.append(f"{BOLD}{CYAN}| TSANALYZER PRO NOC - CLI DASHBOARD v2.0 {RESET}{DIM}             [ UTC {time.strftime('%H:%M:%S')} ]{RESET}{BOLD}{CYAN} |{RESET}")
+    out.append(f"{BOLD}{CYAN}| TSANALYZER PRO NOC - CLI DASHBOARD v3.0 {RESET}{DIM}             [ UTC {time.strftime('%H:%M:%S')} ]{RESET}{BOLD}{CYAN} |{RESET}")
     out.append(f"{BOLD}{CYAN}+------------------------------------------------------------------------------+{RESET}")
     l_box = f"{s_color}* {lock}{RESET}"
-    out.append(f"| {BOLD}TIER 1 - LINK & LOCK{RESET}                                                 |")
+    out.append(f"| {BOLD}TIER 1 - MASTER CONTROL CONSOLE (SIGNAL STATUS){RESET}                       |")
     out.append(f"| {l_box}    RTT: {rtt}ms    LOSS: {s_color}{loss}{RESET}    RETR: {retr}%    SCORE: {score_c}{score}{RESET} |")
     out.append(f"{DIM}+------------------------------------------------------------------------------+{RESET}")
-    out.append(f"| {BOLD}TIER 2 - TR 101 290 MATRIX (60s Window){RESET}                                |")
+    out.append(f"| {BOLD}TIER 2 - TRANSPORT & LINK INTEGRITY (SRT/MDI){RESET}                          |")
+    out.append(f"| MDI-DF: {mdi:.1f}ms    RETRANSMIT TAX: {retr}%                                     |")
+    out.append(f"{DIM}+------------------------------------------------------------------------------+{RESET}")
+    out.append(f"| {BOLD}TIER 3 - ETR 290 P1 (CRITICAL COMPLIANCE){RESET}                                |")
 
     m_sync = GREEN + "OK" + RESET if snap['tier2_compliance']['p1']['sync_loss'] == 0 else RED + "FAIL" + RESET
     m_pat = GREEN + "OK" + RESET if snap['tier2_compliance']['p1']['pat_error'] == 0 else RED + "FAIL" + RESET
@@ -65,13 +68,12 @@ def render_dashboard(snap):
     m_cc = GREEN + "OK" + RESET if snap['tier2_compliance']['p1']['cc_error'] == 0 else RED + "FAIL" + RESET
 
     out.append(f"| [ SYNC:{m_sync} ]  [ PAT:{m_pat} ]  [ PMT:{m_pmt} ]  [ CC:{m_cc} ]                          |")
-    out.append(f"| [ {DIM}TERR:OK{RESET} ]  [ {DIM}CRC:OK{RESET} ]  [ {DIM}PCR:OK{RESET} ]  [ {DIM}PTS:OK{RESET} ]                          |")
     out.append(f"{DIM}+------------------------------------------------------------------------------+{RESET}")
-    out.append(f"| {BOLD}TIER 3 - ES VITALS & STABILITY{RESET}                                         |")
+    out.append(f"| {BOLD}TIER 6 - ESSENCE QUALITY & TEMPORAL STABILITY{RESET}                          |")
     out.append(f"| FPS: {f_color}{fps:.2f}{RESET}    GOP: {gop:.2f}s    AV: {a_color}{av}ms{RESET}    BR: {br:.2f}Mbps             |")
     out.append(f"{DIM}+------------------------------------------------------------------------------+{RESET}")
-    out.append(f"| {BOLD}TIER 4 - PREDICTIVE SURVIVAL (RST){RESET}                                     |")
-    out.append(f"| Net RST: {rst_c}{rstn:.1f}s{RESET}    Enc RST: {rste:.1f}s    MDI-DF: {mdi:.1f}ms                          |")
+    out.append(f"| {BOLD}TIER 4/5 - PREDICTIVE & PAYLOAD DYNAMICS{RESET}                               |")
+    out.append(f"| Net RST: {rst_c}{rstn:.1f}s{RESET}    Enc RST: {rste:.1f}s    MDI-MLR: {loss} pkts/s               |")
     out.append(f"{BOLD}{CYAN}+------------------------------------------------------------------------------+{RESET}")
 
     sys.stdout.write("\033[H" + "\n".join(out) + "\n")

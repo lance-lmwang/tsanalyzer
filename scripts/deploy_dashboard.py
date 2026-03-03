@@ -26,60 +26,63 @@ def create_dashboard_base(uid, title, refresh='5s'):
 # PLANE 1: GLOBAL STREAM WALL (Tier 0)
 # -----------------------------------------------------------------------------
 def deploy_global_wall():
-    dash = create_dashboard_base('global-wall', 'TsAnalyzer Pro - GLOBAL STREAM WALL')
+    dash = create_dashboard_base('global-wall', 'TsAnalyzer Pro - GLOBAL STREAM WALL (PLANE 1)')
     
     dash['panels'].append({
+        'title': 'GLOBAL MONITORING MATRIX (CLICK TO FOCUS)',
         'type': 'stat',
-        'title': '',
-        'gridPos': {'h': 3, 'w': 1, 'x': 0, 'y': 0},
-        'repeat': 'stream_id',
-        'repeatDirection': 'h',
+        'gridPos': {'h': 12, 'w': 24, 'x': 0, 'y': 4},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
         'targets': [{
-            'expr': 'max_over_time(dominant_failure_domain[5m])',
+            'expr': 'tsa_health_score',
             'legendFormat': '{{stream_id}}'
         }],
         'fieldConfig': {
             'defaults': {
                 'mappings': [
-                    {'type': 'value', 'options': {'0': {'text': '🟢', 'color': 'green', 'index': 0}}},
-                    {'type': 'value', 'options': {'1': {'text': '🟡', 'color': 'yellow', 'index': 1}}},
-                    {'type': 'value', 'options': {'2': {'text': '🔴', 'color': 'red', 'index': 2}}},
-                    {'type': 'value', 'options': {'3': {'text': '🚨', 'color': 'dark-red', 'index': 3}}}
+                    {'type': 'range', 'options': {'from': 90, 'to': 100, 'result': {'color': 'green', 'text': 'STABLE'}}},
+                    {'type': 'range', 'options': {'from': 70, 'to': 90, 'result': {'color': 'yellow', 'text': 'DEGRADED'}}},
+                    {'type': 'range', 'options': {'from': 1, 'to': 70, 'result': {'color': 'red', 'text': 'CRITICAL'}}},
+                    {'type': 'value', 'options': {'0': {'color': 'dark-red', 'text': 'LOST'}}}
                 ],
-                'thresholds': {
-                    'mode': 'absolute',
-                    'steps': [{'value': None, 'color': 'transparent'}]
-                }
+                'links': [{
+                    'title': 'Jump to ${__series.name} Focus View',
+                    'url': '/d/stream-focus?var-stream=${__series.name}',
+                    'targetBlank': False
+                }]
             }
         },
         'options': {
             'colorMode': 'background',
             'justifyMode': 'center',
             'textMode': 'name',
-        },
-        'links': [{
-            'title': 'Focus View',
-            'url': '/d/stream-focus?var-stream=${__value.text}&from=${__from}&to=${__to}',
-            'targetBlank': False
-        }]
+            'orientation': 'auto'
+        }
     })
 
     dash['panels'].insert(0, {
         'type': 'stat',
-        'title': 'FLEET INSTABILITY',
+        'title': 'FLEET INSTABILITY (%)',
         'gridPos': {'h': 4, 'w': 24, 'x': 0, 'y': 0},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
         'targets': [
-            {'expr': 'sum(dominant_failure_domain > 0) / count(dominant_failure_domain) * 100', 'legendFormat': 'Instability %'}
+            {'expr': '((count(tsa_health_score < 100) / count(tsa_health_score)) * 100) or on() vector(0)'}
         ],
-        'fieldConfig': {'defaults': {'unit': 'percent', 'decimals': 1}}
+        'fieldConfig': {
+            'defaults': {
+                'unit': 'percent',
+                'thresholds': {
+                    'mode': 'absolute',
+                    'steps': [{'color': 'green', 'value': None}, {'color': 'red', 'value': 1}]
+                }
+            }
+        }
     })
 
     return dash
 
 # -----------------------------------------------------------------------------
-# PLANE 2: STREAM FOCUS VIEW (Tiers 1–5)
+# PLANE 2: STREAM FOCUS VIEW (7-Tier Architecture)
 # -----------------------------------------------------------------------------
 def deploy_stream_focus():
     dash = create_dashboard_base('stream-focus', 'TsAnalyzer Pro - STREAM FOCUS')
@@ -92,82 +95,106 @@ def deploy_stream_focus():
         'label': 'Focus Stream'
     })
 
-    # TIER 1: FAILURE DOMAIN
+    # TIER 1: MASTER CONTROL CONSOLE
     dash['panels'].append({
-        'type': 'stat', 'title': 'FAILURE DOMAIN', 'gridPos': {'h': 4, 'w': 10, 'x': 2, 'y': 0},
+        'type': 'row', 'title': 'TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 0}, 'collapsed': False
+    })
+    dash['panels'].append({
+        'type': 'stat', 'title': 'SIGNAL PRESENCE', 'gridPos': {'h': 4, 'w': 6, 'x': 0, 'y': 1},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'avg_over_time(dominant_failure_domain{stream_id="$stream"}[15s])'}],
+        'targets': [{'expr': 'tsa_signal_lock_status{stream_id="$stream"}'}],
         'fieldConfig': {
             'defaults': {
-                'mappings': [
-                    {'type': 'value', 'options': {'0': {'text': '✅ SIGNAL OPTIMAL', 'color': 'green'}}},
-                    {'type': 'value', 'options': {'1': {'text': '⚠️ NETWORK IMPAIRMENT', 'color': 'yellow'}}},
-                    {'type': 'value', 'options': {'2': {'text': '☢️ ENCODER INSTABILITY', 'color': 'orange'}}},
-                    {'type': 'value', 'options': {'3': {'text': '🚨 MULTI-CAUSAL CRITICAL', 'color': 'red'}}}
-                ]
+                'mappings': [{'type': 'value', 'options': {'0': {'text': 'LOST', 'color': 'red'}, '1': {'text': 'LOCKED', 'color': 'green'}}}]
             }
         },
         'options': {'colorMode': 'background', 'justifyMode': 'center'}
     })
-
-    # TIER 2: DIAGNOSTICS MATRIX
-    metrics = [
-        ('Link Capacity', 'tsa_link_capacity', 6, 4),
-        ('SRT NAK', 'tsa_srt_nak_count', 6, 5),
-        ('Buffer Margin', 'tsa_buffer_margin_ms', 6, 6),
-        ('SRT RTT', 'tsa_srt_rtt_ms', 6, 7),
-        ('Sync Loss', 'tsa_sync_loss_count', 11, 4),
-        ('PAT Error', 'tsa_pat_error_count', 11, 5),
-        ('PMT Error', 'tsa_pmt_error_count', 11, 6),
-        ('CC Error', 'tsa_cc_error_count', 11, 7)
-    ]
-    for label, metric, x, y in metrics:
-        dash['panels'].append({
-            'type': 'stat', 'title': label, 'gridPos': {'h': 2, 'w': 3, 'x': x, 'y': y},
-            'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-            'targets': [{'expr': f'{metric}{{stream_id="$stream"}}'}],
-            'options': {'colorMode': 'background', 'justifyMode': 'center'}
-        })
-
-    # TIER 3: BITRATE & ESSENCE
     dash['panels'].append({
-        'type': 'timeseries', 'title': 'BITRATE ENVELOPE', 'gridPos': {'h': 10, 'w': 15, 'x': 0, 'y': 8},
+        'type': 'gauge', 'title': 'SIGNAL FIDELITY', 'gridPos': {'h': 4, 'w': 12, 'x': 6, 'y': 1},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [
-            {'expr': 'avg_over_time(tsa_physical_bitrate_bps{stream_id="$stream"}[$__interval])', 'legendFormat': 'Avg'},
-            {'expr': 'max_over_time(tsa_physical_bitrate_bps{stream_id="$stream"}[$__interval])', 'legendFormat': 'Max'},
-            {'expr': 'min_over_time(tsa_physical_bitrate_bps{stream_id="$stream"}[$__interval])', 'legendFormat': 'Min'}
-        ],
-        'fieldConfig': {'defaults': {'unit': 'bps', 'custom': {'fillOpacity': 20, 'gradientMode': 'opacity'}}}
+        'targets': [{'expr': 'tsa_health_score{stream_id="$stream"}'}],
+        'fieldConfig': {'defaults': {'min': 0, 'max': 100, 'unit': 'percent'}}
     })
-
     dash['panels'].append({
-        'type': 'timeseries', 'title': 'AV SYNC / GOP', 'gridPos': {'h': 10, 'w': 9, 'x': 15, 'y': 8},
+        'type': 'stat', 'title': 'ENGINE DETERMINISM', 'gridPos': {'h': 4, 'w': 6, 'x': 18, 'y': 1},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
         'targets': [
-            {'expr': 'tsa_av_sync_ms{stream_id="$stream"}', 'legendFormat': 'AV Sync (ms)'}
+            {'expr': 'tsa_internal_analyzer_drop{stream_id="$stream"}', 'legendFormat': 'Drops'},
+            {'expr': 'tsa_worker_slice_overruns{stream_id="$stream"}', 'legendFormat': 'Overruns'}
         ]
     })
 
-    # TIER 4: PREDICTIVE HORIZON
+    # TIER 2: TRANSPORT & LINK INTEGRITY
     dash['panels'].append({
-        'type': 'stat', 'title': 'RST SURVIVAL', 'gridPos': {'h': 4, 'w': 11, 'x': 0, 'y': 18},
-        'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'tsa_rst_survival_sec{stream_id="$stream"}'}],
-        'options': {'textMode': 'value_and_name', 'colorMode': 'value'}
+        'type': 'row', 'title': 'TIER 2: TRANSPORT & LINK INTEGRITY (SRT/MDI)', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 5}, 'collapsed': False
     })
-    
+    # ... (Simplified Matrix implementation for brevity in this script)
+    metrics = [
+        ('Link Capacity', 'tsa_physical_bitrate_bps', 0, 6, 6),
+        ('SRT NAK', 'tsa_srt_nak_count', 6, 6, 6),
+        ('SRT RTT', 'tsa_srt_rtt_ms', 12, 6, 6),
+        ('MDI DF', 'mdi_df', 18, 6, 6)
+    ]
+    for label, metric, x, y, w in metrics:
+        dash['panels'].append({
+            'type': 'stat', 'title': label, 'gridPos': {'h': 3, 'w': w, 'x': x, 'y': y},
+            'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
+            'targets': [{'expr': f'{metric}{{stream_id="$stream"}}'}]
+        })
+
+    # TIER 3: ETR 290 P1
     dash['panels'].append({
-        'type': 'timeseries', 'title': 'PID INVENTORY', 'gridPos': {'h': 4, 'w': 13, 'x': 11, 'y': 18},
+        'type': 'row', 'title': 'TIER 3: ETR 290 P1 (CRITICAL COMPLIANCE)', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 9}, 'collapsed': False
+    })
+    p1_metrics = [
+        ('Sync Loss', 'tsa_tr101290_p1_sync_loss', 0, 10),
+        ('PAT Error', 'tsa_tr101290_p1_pat_error', 6, 10),
+        ('PMT Error', 'tsa_tr101290_p1_pmt_error', 12, 10),
+        ('CC Error', 'tsa_tr101290_p1_cc_error', 18, 10)
+    ]
+    for label, metric, x, y in p1_metrics:
+        dash['panels'].append({
+            'type': 'stat', 'title': label, 'gridPos': {'h': 3, 'w': 6, 'x': x, 'y': y},
+            'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
+            'targets': [{'expr': f'{metric}{{stream_id="$stream"}}'}]
+        })
+
+    # TIER 4: ETR 290 P2
+    dash['panels'].append({
+        'type': 'row', 'title': 'TIER 4: ETR 290 P2 (CLOCK & TIMING)', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 13}, 'collapsed': False
+    })
+    dash['panels'].append({
+        'type': 'timeseries', 'title': 'PCR JITTER & ACCURACY', 'gridPos': {'h': 4, 'w': 24, 'x': 0, 'y': 14},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'sum by (pid) (tsa_pid_bitrate_bps{stream_id="$stream"})'}]
+        'targets': [{'expr': 'tsa_pcr_jitter_ms{stream_id="$stream"}'}]
     })
 
-    # TIER 5: OPERATIONAL AUDIT TRAIL
+    # TIER 5: SERVICE PAYLOAD DYNAMICS
     dash['panels'].append({
-        'type': 'logs', 'title': 'OPERATIONAL AUDIT TRAIL', 'gridPos': {'h': 6, 'w': 24, 'x': 0, 'y': 22},
-        'datasource': { 'type': 'loki' },
-        'targets': [{'expr': '{stream_id="$stream"}'}]
+        'type': 'row', 'title': 'TIER 5: SERVICE PAYLOAD DYNAMICS (MUX)', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 18}, 'collapsed': False
+    })
+    dash['panels'].append({
+        'type': 'timeseries', 'title': 'PID BITRATE REVENUE', 'gridPos': {'h': 15, 'w': 18, 'x': 0, 'y': 19},
+        'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
+        'targets': [{'expr': 'sum by (pid, type) (tsa_pid_bitrate_bps{stream_id="$stream"})'}],
+        'options': {'legend': {'displayMode': 'table', 'placement': 'right'}}
+    })
+
+    # TIER 6: ESSENCE QUALITY
+    dash['panels'].append({
+        'type': 'row', 'title': 'TIER 6: ESSENCE QUALITY & TEMPORAL STABILITY', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 34}, 'collapsed': False
+    })
+    # (FPS, GOP, AV SYNC)
+    
+    # TIER 7: ALARM RECAP
+    dash['panels'].append({
+        'type': 'row', 'title': 'TIER 7: ALARM RECAP & FORENSIC AUDIT TRAIL', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 44}, 'collapsed': False
+    })
+    dash['panels'].append({
+        'type': 'table', 'title': 'ALARM EVENT LOG', 'gridPos': {'h': 16, 'w': 24, 'x': 0, 'y': 45},
+        'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
+        'targets': [{'expr': 'increase(tsa_tr101290_p1_cc_error{stream_id="$stream"}[1h]) > 0', 'format': 'table'}]
     })
 
     return dash
