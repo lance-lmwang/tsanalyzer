@@ -131,8 +131,8 @@ tsa_server_monitor: release
 	    ]
 	}
 	EOF
-	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/cctv5.ts > /dev/null 2>&1 &
-	@./build/tsp -i 127.0.0.1 -p 19002 -P -l -f sample/sport_hd.ts > /dev/null 2>&1 &
+	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/btvhd.ts > /dev/null 2>&1 &
+	@./build/tsp -i 127.0.0.1 -p 19002 -P -l -f sample/cctvhd.ts > /dev/null 2>&1 &
 	@./build/tsa_server test_server.conf > tsa_server.log 2>&1 &
 	@echo "Waiting for engine warmup..."
 	@sleep 5

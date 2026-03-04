@@ -25,13 +25,13 @@ add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_psi.c src/tsa_es.c src/t
 target_link_libraries(tsp_core srt_static pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
-add_executable(tsa src/tsa_main.c deps/mongoose/mongoose.c)
-target_link_libraries(tsa tsp_core srt_static pthread m dl ssl crypto)
-# Disable strict warnings for tsa to accommodate mongoose
+add_executable(tsa_cli src/tsa_cli.c deps/mongoose/mongoose.c)
+target_link_libraries(tsa_cli tsp_core srt_static pthread m dl ssl crypto)
+# Disable strict warnings for tsa_cli to accommodate mongoose
 if(MSVC)
-    target_compile_options(tsa PRIVATE /W3)
+    target_compile_options(tsa_cli PRIVATE /W3)
 else()
-    target_compile_options(tsa PRIVATE -Wno-all -Wno-extra -Wno-error)
+    target_compile_options(tsa_cli PRIVATE -Wno-all -Wno-extra -Wno-error)
 endif()
 
 add_executable(tsg src/tsg_main.c deps/mongoose/mongoose.c)
@@ -430,17 +430,17 @@ target_link_libraries(test_psi_version_rollover tsp_core pthread m dl ssl crypto
 add_test(NAME test_psi_version_rollover COMMAND test_psi_version_rollover)
 
 # --- Professional Tier Tests ---
-add_executable(test_pcr_pro tests/test_pcr_pro.c)
-target_link_libraries(test_pcr_pro tsp_core m pthread)
-add_test(NAME test_pcr_pro COMMAND test_pcr_pro)
+add_executable(test_crc_pro tests/test_crc_pro.c)
+target_link_libraries(test_crc_pro tsp_core pthread)
+add_test(NAME test_crc_pro COMMAND test_crc_pro)
+
+add_executable(test_tstd_btvhd tests/test_tstd_btvhd.c)
+target_link_libraries(test_tstd_btvhd tsp_core)
+add_test(NAME test_tstd_btvhd COMMAND test_tstd_btvhd)
 
 add_executable(test_tstd_hevc tests/test_tstd_hevc.c)
 target_link_libraries(test_tstd_hevc tsp_core m pthread)
 add_test(NAME test_tstd_hevc COMMAND test_tstd_hevc)
-
-add_executable(test_crc_pro tests/test_crc_pro.c)
-target_link_libraries(test_crc_pro tsp_core m pthread)
-add_test(NAME test_crc_pro COMMAND test_crc_pro)
 
 add_executable(test_gateway_pro tests/test_gateway_pro.c)
 target_link_libraries(test_gateway_pro tsp_core m pthread)

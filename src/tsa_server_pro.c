@@ -386,10 +386,13 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             }
             if (target) {
                 tsa_snapshot_full_t snap;
-                tsa_take_snapshot_full(target, &snap);
-                tsa_snapshot_to_json(&snap, resp, sizeof(resp));
-                mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
-                              resp);
+                if (tsa_take_snapshot_full(target, &snap) == 0) {
+                    tsa_snapshot_to_json(target, &snap, resp, sizeof(resp));
+                    mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
+                                  resp);
+                } else {
+                    mg_http_reply(c, 500, NULL, "Snapshot unavailable\n");
+                }
             } else {
                 mg_http_reply(c, 404, NULL, "Stream ID not found or missing\n");
             }
@@ -445,7 +448,7 @@ int main(int argc, char** argv) {
     mg_mgr_init(&mgr);
     char http_addr[64];
     snprintf(http_addr, sizeof(http_addr), "http://0.0.0.0:%d", g_http_port);
-    mg_http_listen(&mgr, http_addr, http_fn, NULL);
+    mg_http_listen(&mgr, http_addr, http_fn, &mgr);
     printf("PRO: HTTP Metrics active on %s\n", http_addr);
 
     while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 50);

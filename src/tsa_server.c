@@ -122,6 +122,7 @@ static void load_config(const char *file) {
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
+    node_t* g_nodes = (node_t*)c->mgr->userdata;
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *)ev_data;
         if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
@@ -153,7 +154,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             for (int i = 0; i < g_node_count; i++) {
                 tsa_snapshot_full_t snap;
                 if (tsa_take_snapshot_full(g_nodes[i].tsa, &snap) == 0) {
-                    size_t jlen = tsa_snapshot_to_json(&snap, stream_json, sizeof(stream_json));
+                    size_t jlen = tsa_snapshot_to_json(g_nodes[i].tsa, &snap, stream_json, sizeof(stream_json));
                     if (jlen > 0) {
                         if (i > 0) mg_http_printf_chunk(c, ",");
                         mg_http_printf_chunk(c, "%s", stream_json);
@@ -176,6 +177,7 @@ int main(int argc, char **argv) {
     mg_mgr_init(&mgr);
     char addr[128];
     snprintf(addr, sizeof(addr), "http://0.0.0.0:%d", g_http_port);
+    mgr.userdata = g_nodes;
     if (mg_http_listen(&mgr, addr, fn, NULL) == NULL) {
         fprintf(stderr, "❌ FATAL: Cannot listen on %s. Port already in use?\n", addr);
         return 1;

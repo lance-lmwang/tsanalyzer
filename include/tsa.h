@@ -179,7 +179,7 @@ void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count);
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t timestamp_ns);
 int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s);
 int tsa_take_snapshot_lite(tsa_handle_t* h, tsa_snapshot_lite_t* s);
-size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t sz);
+size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* snap, char* buf, size_t sz);
 void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz);
 void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
 void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz);
@@ -233,5 +233,7 @@ static inline int tsa_find_pid_in_snapshot(const tsa_snapshot_full_t* snap, uint
     }
     return -1;
 }
+
+
 
 #endif

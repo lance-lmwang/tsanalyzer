@@ -20,7 +20,7 @@ int main() {
     snap.pids[0].bitrate_q16_16 = (int64_t)7450000 << 16;
 
     char buffer[4096];
-    size_t len = tsa_snapshot_to_json(&snap, buffer, sizeof(buffer));
+    size_t len = tsa_snapshot_to_json(NULL, &snap, buffer, sizeof(buffer));
 
     printf("JSON Length: %zu\n", len);
     printf("JSON Output: %s\n", buffer);

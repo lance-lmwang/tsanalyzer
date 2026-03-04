@@ -1173,7 +1173,7 @@ void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     h->pool_offset = al + ((sz > 64) ? sz : 64);
     return p;
 }
-size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* sn, char* b, size_t s) {
+size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char* b, size_t s) {
     if (!sn || !b || s < 2048) return 0;
     int off = 0;
     int n;
@@ -1230,10 +1230,18 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* sn, char* b, size_t s) {
     for (uint32_t i = 0; i < sn->active_pid_count; i++) {
         const tsa_pid_info_t* p = &sn->pids[i];
         SAFE_JSON(
-            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,\"eb_fill_pct\":%.2f,\"tb_fill_pct\":%.2f,\"mb_"
-            "fill_pct\":%.2f}",
-            (i == 0) ? "" : ",", p->pid, p->type_str[0] ? p->type_str : "Unknown",
-            (unsigned long long)st->pid_bitrate_bps[p->pid], p->eb_fill_pct, p->tb_fill_pct, p->mb_fill_pct);
+            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,"
+            "\"buffer_status\":{\"eb_fill_pct\":%.2f,\"tb_fill_pct\":%.2f,\"mb_fill_pct\":%.2f}",
+            (i == 0) ? "" : ",", p->pid, tsa_get_pid_type_name(h, p->pid),
+            (unsigned long long)sn->stats.pid_bitrate_bps[p->pid], p->eb_fill_pct, p->tb_fill_pct, p->mb_fill_pct);
+
+        const char* p_st = tsa_get_pid_type_name(h, p->pid);
+        if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0) {
+            SAFE_JSON(",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"gop_n\":%u,\"gop_ms\":%u}",
+                      p->width, p->height, p->profile, p->gop_n, p->gop_ms);
+        }
+
+        SAFE_JSON("}");
     }
     SAFE_JSON("]}");
 

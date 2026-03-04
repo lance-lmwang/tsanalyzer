@@ -18,7 +18,7 @@
 #include "tsa.h"
 #include "tsa_internal.h"
 
-static tsa_handle_t* g_h = NULL;
+
 static volatile int g_keep_running = 1;
 
 /* Queues for the pipeline */
@@ -166,14 +166,14 @@ static void* capture_thread(void* arg) {
 
 /* 2. Decode Thread */
 static void* decode_thread(void* arg) {
-    (void)arg;
+    tsa_handle_t* h = (tsa_handle_t*)arg;
     set_thread_affinity(1);
     ts_packet_t pkt;
     int backoff_cnt = 0;
     while (1) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
-            tsa_feed_data(g_h, pkt.data, 188, pkt.timestamp_ns);
+            tsa_feed_data(h, pkt.data, 188, pkt.timestamp_ns);
             while (g_keep_running && !spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(backoff_cnt++);
             backoff_cnt = 0;
         } else {
@@ -188,7 +188,7 @@ static void* decode_thread(void* arg) {
 
 /* 3. Metrology Thread */
 static void* metrology_thread(void* arg) {
-    (void)arg;
+    tsa_handle_t* h = (tsa_handle_t*)arg;
     set_thread_affinity(2);
     ts_packet_t pkt;
     int backoff_cnt = 0;
@@ -197,16 +197,16 @@ static void* metrology_thread(void* arg) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
 
-            if (g_h->stc_ns - last_snap_ts > 100000000ULL) {
-                tsa_commit_snapshot(g_h, g_h->stc_ns);
-                last_snap_ts = g_h->stc_ns;
+            if (h->stc_ns - last_snap_ts > 100000000ULL) {
+                tsa_commit_snapshot(h, h->stc_ns);
+                last_snap_ts = h->stc_ns;
             }
             backoff_cnt = 0;
         } else {
             backoff_sleep(backoff_cnt++);
         }
     }
-    tsa_commit_snapshot(g_h, g_h->stc_ns);
+    tsa_commit_snapshot(h, h->stc_ns);
     printf("CLI: Metrology finished.\n");
     g_keep_running = 0;
     return NULL;
@@ -214,37 +214,36 @@ static void* metrology_thread(void* arg) {
 
 /* 4. Output/HTTP Thread */
 static void fn(struct mg_connection* c, int ev, void* ev_data) {
+    tsa_handle_t* h = (tsa_handle_t*)c->mgr->userdata;
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
         if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
             mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[128 * 1024];
             if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {
-                tsa_exporter_prom_core(&g_h, 1, resp, sizeof(resp));
+                tsa_exporter_prom_core(&h, 1, resp, sizeof(resp));
             } else if (mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
-                tsa_exporter_prom_pids(&g_h, 1, resp, sizeof(resp));
+                tsa_exporter_prom_pids(&h, 1, resp, sizeof(resp));
             } else {
-                tsa_exporter_prom_v2(&g_h, 1, resp, sizeof(resp));
+                tsa_exporter_prom_v2(&h, 1, resp, sizeof(resp));
             }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
             static char resp[512 * 1024];
             tsa_snapshot_full_t snap;
-            tsa_take_snapshot_full(g_h, &snap);
-            tsa_snapshot_to_json(&snap, resp, sizeof(resp));
+            tsa_take_snapshot_full(h, &snap);
+            tsa_snapshot_to_json(h, &snap, resp, sizeof(resp));
             mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         }
     }
 }
 
 static void* http_thread(void* arg) {
-    (void)arg;
+    struct mg_mgr* mgr = (struct mg_mgr*)arg;
     set_thread_affinity(3);
-    struct mg_mgr mgr;
-    mg_mgr_init(&mgr);
-    if (mg_http_listen(&mgr, "http://0.0.0.0:12345", fn, NULL) == NULL) return NULL;
-    while (g_keep_running) mg_mgr_poll(&mgr, 100);
-    mg_mgr_free(&mgr);
+    if (mg_http_listen(mgr, "http://0.0.0.0:12345", fn, NULL) == NULL) return NULL;
+    while (g_keep_running) mg_mgr_poll(mgr, 100);
+    mg_mgr_free(mgr);
     return NULL;
 }
 
@@ -318,16 +317,20 @@ int main(int argc, char** argv) {
 
     if (cap_args.cfg.op_mode == TSA_MODE_CERTIFICATION) printf("CLI: Certification Mode Active.\n");
 
-    g_h = tsa_create(&cap_args.cfg);
+    tsa_handle_t* h = tsa_create(&cap_args.cfg);
     q_cap_to_dec = spsc_queue_create(16384);
     q_dec_to_met = spsc_queue_create(16384);
 
     signal(SIGINT, sig_handler);
     pthread_t t_cap, t_dec, t_met, t_http;
     pthread_create(&t_cap, NULL, capture_thread, &cap_args);
-    pthread_create(&t_dec, NULL, decode_thread, NULL);
-    pthread_create(&t_met, NULL, metrology_thread, NULL);
-    pthread_create(&t_http, NULL, http_thread, NULL);
+    pthread_create(&t_dec, NULL, decode_thread, h);
+    pthread_create(&t_met, NULL, metrology_thread, h);
+
+    struct mg_mgr mgr;
+    mg_mgr_init(&mgr);
+    mgr.userdata = h;
+    pthread_create(&t_http, NULL, http_thread, &mgr);
 
     printf("CLI: 4-Thread Pipeline Started. Core Affinity [0,1,2,3]\n");
     while (g_keep_running) usleep(100000);
@@ -339,9 +342,9 @@ int main(int argc, char** argv) {
 
     // Dump final report
     tsa_snapshot_full_t snap;
-    if (tsa_take_snapshot_full(g_h, &snap) == 0) {
+    if (tsa_take_snapshot_full(h, &snap) == 0) {
         char* buf = malloc(256 * 1024);
-        tsa_snapshot_to_json(&snap, buf, 256 * 1024);
+        tsa_snapshot_to_json(h, &snap, buf, 256 * 1024);
         FILE* f_out = fopen("final_metrology.json", "w");
         if (f_out) {
             fprintf(f_out, "%s\n", buf);
@@ -353,9 +356,9 @@ int main(int argc, char** argv) {
 
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);
-    tsa_commit_snapshot(g_h, g_h->stc_ns);
-    tsa_render_dashboard(g_h);
-    tsa_destroy(g_h);
+    tsa_commit_snapshot(h, h->stc_ns);
+    tsa_render_dashboard(h);
+    tsa_destroy(h);
     printf("CLI: Shutdown Complete.\n");
     return 0;
 }

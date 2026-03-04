@@ -43,10 +43,10 @@ void test_invalid_json_mock() {
 
     char buf[1024];
     // Test with tiny buffer (should not crash)
-    tsa_snapshot_to_json(&snap, buf, 5);
+    tsa_snapshot_to_json(NULL, &snap, buf, 5);
 
     // Test with nulls
-    size_t res = tsa_snapshot_to_json(NULL, buf, 1024);
+    size_t res = tsa_snapshot_to_json(NULL, &snap, buf, 1024);
     assert(res == 0);
 
     printf("[PASS] Serializer safety verified.\n");
