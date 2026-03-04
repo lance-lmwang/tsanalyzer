@@ -14,29 +14,41 @@ GREEN  := \033[32m
 RED    := \033[31m
 RESET  := \033[0m
 
-.PHONY: all debug release clean test full-test rt-test install lint format help test-e2e test-e2d test-chaos
+# Only non-file targets should be PHONY
+.PHONY: all clean test full-test rt-test install lint format help tsa_cli_monitor
 
 all: release
 
-# --- Build Targets ---
-debug:
-	@echo "$(BLUE)=== Building Debug Version ===$(RESET)"
-	@mkdir -p $(BUILD_DIR)
-	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug ..
-	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
+# --- File-based Build Targets ---
 
-release:
-	@echo "$(BLUE)=== Building Release Version ===$(RESET)"
+# Sentinel file to track CMake configuration
+$(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
+	@echo "$(BLUE)=== Configuring Build Environment ===$(RESET)"
 	@mkdir -p $(BUILD_DIR)
 	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_BUILD_TYPE=Release ..
+
+# The actual binaries depend on the CMake config and source files
+# We use a broad match for simplicity, or specific files for precision
+$(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server: $(BUILD_DIR)/CMakeCache.txt src/*.c include/*.h tests/*.c
+	@echo "$(BLUE)=== Building Binaries ===$(RESET)"
 	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
 	@ln -sf tsa_cli build/tsa
 
+# release is now a simple alias for the binaries
+release: $(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server
+
+debug:
+	@echo "$(BLUE)=== Building Debug Version ===$(RESET)"
+	@mkdir -p $(BUILD_DIR)_debug
+	@cd $(BUILD_DIR)_debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug ..
+	@$(MAKE) -C $(BUILD_DIR)_debug -j$(JOBS)
+
 clean:
 	@echo "$(RED)=== Cleaning Build Artifacts ===$(RESET)"
-	@rm -rf $(BUILD_DIR)
+	@rm -rf $(BUILD_DIR) $(BUILD_DIR)_debug
 
 # --- Test Targets ---
+
 test: release
 	@echo "$(GREEN)=== Running Unit Tests (Timeout: 30s) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
@@ -48,7 +60,7 @@ full-test: release
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
 	@echo "2. Determinism Verification..."
 	@chmod +x scripts/verify_determinism.sh
-	@./scripts/verify_determinism.sh
+	@./scripts/verify_determinism.sh ./sample/test_1m.ts
 	@echo "3. Functional E2E (CLI-based)..."
 	@chmod +x scripts/verify_realtime_metrology.sh scripts/verify_pcr_repetition.sh
 	@./scripts/verify_realtime_metrology.sh
@@ -83,8 +95,6 @@ test-e2e: release
 	@chmod +x scripts/test_big_screen_e2e.sh
 	@./scripts/test_big_screen_e2e.sh
 
-test-e2d: test-e2e
-
 # --- Live Streaming Demo ---
 demo: release
 	@echo "$(GREEN)=== Starting Live Stream Analysis Demo ===$(RESET)"
@@ -115,57 +125,12 @@ tsa_cli_monitor: release
 	@pkill -9 tsp || true
 	@echo "$(GREEN)Monitor Session Complete.$(RESET)"
 
-# --- Real-time Server Monitor (Multi-Stream) ---
-tsa_server_monitor: release
-	@echo "$(GREEN)=== Starting TsAnalyzer Server Multi-Stream Monitor (PCR-Locked) ===$(RESET)"
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@cat << EOF > test_server.conf
-	{
-	    "http_port": 8088,
-	    "metrics_path": "/metrics",
-	    "expert_mode": false,
-	    "nodes": [
-	        {
-	            "name": "CCTV5",
-	            "url": "udp://@:19001"
-	        },
-	        {
-	            "name": "SPORT_HD",
-	            "url": "udp://@:19002"
-	        }
-	    ]
-	}
-	EOF
-	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/btvhd.ts > /dev/null 2>&1 &
-	@./build/tsp -i 127.0.0.1 -p 19002 -P -l -f sample/cctvhd.ts > /dev/null 2>&1 &
-	@./build/tsa_server test_server.conf > tsa_server.log 2>&1 &
-	@echo "Waiting for engine warmup..."
-	@sleep 5
-	@./scripts/tsa_monitor.py --url http://localhost:8088/api/v1/snapshot --duration 40
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@rm test_server.conf
-	@echo "$(GREEN)Server Monitor Session Complete.$(RESET)"
-
-# --- Offline File Analysis (Replay Mode) ---
-tsa_file_report: release
-	@echo "$(GREEN)=== Starting TsAnalyzer Offline Forensic Analysis ===$(RESET)"
-	@./build/tsa --mode=replay sample/mpts_4prog.ts
-	@echo "$(GREEN)Analysis Complete.$(RESET)"
-
 help:
 	@echo "$(GREEN)TsAnalyzer Build System$(RESET)"
 	@echo "Usage:"
-	@echo "  make           - Build release version (default)"
-	@echo "  make debug     - Build debug version with symbols"
-	@echo "  make clean     - Remove all build artifacts"
+	@echo "  make           - Build release version (if needed)"
 	@echo "  make test      - Run all unit tests"
 	@echo "  make full-test - Run Unit + Determinism + E2E tests"
-	@echo "  make demo      - Run 15s Live Analysis Demo (tsp -> tsa -> python monitor)"
-	@echo "  make test-e2e  - Run End-to-End Dashboard Test"
-	@echo "  make test-chaos - Run Automated Fault Injection Test"
 	@echo "  make rt-test   - Run Real-time Metrology (30s)"
 	@echo "  make lint      - Run cppcheck static analysis"
-	@echo "  make format    - Apply clang-format"
-	@echo "  make install   - Install binaries to $(INSTALL_PREFIX)"
+	@echo "  make clean     - Remove all build artifacts"
