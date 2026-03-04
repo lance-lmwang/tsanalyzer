@@ -47,12 +47,17 @@ static void *worker(void *arg) {
     }
 
     uint8_t buf[1500 * 7];
-    uint64_t last_commit = (uint64_t)ts_now_ns128();
+    struct timespec ts_init;
+    clock_gettime(CLOCK_MONOTONIC, &ts_init);
+    uint64_t last_commit = (uint64_t)ts_init.tv_sec * 1000000000ULL + ts_init.tv_nsec;
     s->remainder_len = 0;
 
     while (atomic_load(&g_run)) {
         ssize_t len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
-        uint64_t now = (uint64_t)ts_now_ns128();
+        
+        struct timespec ts_now;
+        clock_gettime(CLOCK_MONOTONIC, &ts_now);
+        uint64_t now = (uint64_t)ts_now.tv_sec * 1000000000ULL + ts_now.tv_nsec;
         if (len > 0) {
             uint8_t *p = buf;
             int remaining = (int)len;
@@ -86,7 +91,8 @@ static void *worker(void *arg) {
                 s->remainder_len = remaining;
             }
         }
-        if (now - last_commit > 1000000000ULL) {
+        // Heartbeat: 100ms interval for faster TR 101 290 1.1 timeout detection
+        if (now - last_commit > 100000000ULL) {
             tsa_commit_snapshot(s->tsa, now);
             last_commit = now;
         }

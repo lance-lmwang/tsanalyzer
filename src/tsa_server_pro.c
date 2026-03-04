@@ -42,6 +42,7 @@ typedef struct {
     atomic_bool closed;
     _Atomic uint64_t pending_drops;
     uint32_t conn_idx;
+    uint64_t last_commit_ns; // Heartbeat tracking
 } conn_t;
 
 static conn_t* g_conns[MAX_CONNS];
@@ -172,8 +173,9 @@ static void* worker_thread(void* arg) {
                     }
                 }
 
-                if (drained > 0) {
+                if (drained > 0 || (now > c->last_commit_ns && (now - c->last_commit_ns) > 100000000ULL)) {
                     tsa_commit_snapshot(c->tsa, now);
+                    c->last_commit_ns = now;
                 }
             }
 
@@ -451,9 +453,30 @@ int main(int argc, char** argv) {
     mg_http_listen(&mgr, http_addr, http_fn, &mgr);
     printf("PRO: HTTP Metrics active on %s\n", http_addr);
 
-    while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 50);
+    while (atomic_load(&g_run)) {
+        mg_mgr_poll(&mgr, 50);
+        
+        // Global Heartbeat Sweeper: Enqueue inactive connections to trigger timeout analysis
+        uint64_t now = (uint64_t)ts_now_ns128();
+        int total = atomic_load(&g_conn_count);
+        for (int i = 0; i < total; i++) {
+            conn_t* c = g_conns[i];
+            if (c && c->tsa && !atomic_load(&c->closed)) {
+                if (now > c->last_commit_ns && (now - c->last_commit_ns) > 100000000ULL) {
+                    if (!atomic_load_explicit(&c->scheduled, memory_order_relaxed)) {
+                        if (!atomic_exchange_explicit(&c->scheduled, true, memory_order_acq_rel)) {
+                            if (!mpmc_queue_push(g_ready_queue, c->conn_idx)) {
+                                atomic_store_explicit(&c->scheduled, false, memory_order_relaxed);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     mg_mgr_free(&mgr);
+
     pthread_join(t_io, NULL);
     for (int i = 0; i < WORKER_THREADS; i++) pthread_join(t_workers[i], NULL);
     srt_epoll_release(srt_eid);
