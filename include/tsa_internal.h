@@ -5,8 +5,8 @@
 #include <stdatomic.h>
 #include <time.h>
 
-#include "tsa.h"
 #include "mpmc_queue.h"
+#include "tsa.h"
 
 typedef __int128_t int128_t;
 typedef int128_t q64_64;

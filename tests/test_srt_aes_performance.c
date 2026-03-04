@@ -63,7 +63,7 @@ void test_srt_aes_performance() {
     for (int i = 0; i < total_pkts; i++) {
         if (tsp_enqueue(pacer, pkt, 1) != 0) {
             usleep(100);
-            i--; // retry
+            i--;  // retry
             continue;
         }
     }

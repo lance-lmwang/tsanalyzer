@@ -121,8 +121,8 @@ static void process_scte35(tsa_handle_t* h, uint16_t pid, const uint8_t* p) {
             cmd_name = "Private Command";
             break;
     }
-    printf("[%s] SCTE-35: Detected %s on PID 0x%04x\n",
-           h->config.input_label[0] ? h->config.input_label : "Unknown", cmd_name, pid);
+    printf("[%s] SCTE-35: Detected %s on PID 0x%04x\n", h->config.input_label[0] ? h->config.input_label : "Unknown",
+           cmd_name, pid);
 }
 
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {

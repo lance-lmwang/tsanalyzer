@@ -124,8 +124,7 @@ static void load_config(const char *file) {
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *)ev_data;
-        if (mg_match(hm->uri, mg_str("/metrics"), NULL) ||
-            mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
             mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[1024 * 1024];
             tsa_handle_t *h_list[MAX_STREAMS];
@@ -140,16 +139,17 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
-            mg_printf(c, "HTTP/1.1 200 OK\r\n"
-                         "Content-Type: application/json\r\n"
-                         "Transfer-Encoding: chunked\r\n"
-                         "Access-Control-Allow-Origin: *\r\n\r\n");
+            mg_printf(c,
+                      "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: application/json\r\n"
+                      "Transfer-Encoding: chunked\r\n"
+                      "Access-Control-Allow-Origin: *\r\n\r\n");
 
             mg_http_printf_chunk(c, "[");
-            
+
             // Allocate single buffer outside the loop to reduce stack pressure
-            static char stream_json[128 * 1024]; 
-            
+            static char stream_json[128 * 1024];
+
             for (int i = 0; i < g_node_count; i++) {
                 tsa_snapshot_full_t snap;
                 if (tsa_take_snapshot_full(g_nodes[i].tsa, &snap) == 0) {
@@ -161,7 +161,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 }
             }
             mg_http_printf_chunk(c, "]");
-            mg_http_printf_chunk(c, ""); // End of chunks
+            mg_http_printf_chunk(c, "");  // End of chunks
         }
     }
 }

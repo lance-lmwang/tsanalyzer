@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sched.h>
@@ -14,11 +15,10 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #include "../deps/mongoose/mongoose.h"
-#include "spsc_queue.h"
 #include "mpmc_queue.h"
+#include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
 
@@ -32,7 +32,7 @@ typedef enum { CONN_UDP, CONN_SRT_LISTENER, CONN_SRT_CLIENT } conn_type_t;
 
 typedef struct {
     SRTSOCKET fd;
-    int tx_fd;           /* Forwarding socket */
+    int tx_fd; /* Forwarding socket */
     conn_type_t type;
     char id[64];
     tsa_handle_t* tsa;
@@ -69,8 +69,10 @@ static void load_config(const char* file) {
             char key[32];
             int val;
             if (sscanf(line + 7, "%s %d", key, &val) == 2) {
-                if (strcmp(key, "http_port") == 0) g_http_port = val;
-                else if (strcmp(key, "srt_port") == 0) g_srt_port = val;
+                if (strcmp(key, "http_port") == 0)
+                    g_http_port = val;
+                else if (strcmp(key, "srt_port") == 0)
+                    g_srt_port = val;
             }
             continue;
         }
@@ -115,7 +117,7 @@ static uint64_t g_cycles_per_us = 3000;
 
 static inline uint64_t rdtsc(void) {
     uint32_t lo, hi;
-    __asm__ __volatile__("rdtsc" : "=a" (lo), "=d" (hi));
+    __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
     return ((uint64_t)hi << 32) | lo;
 }
 
@@ -140,7 +142,7 @@ static void* worker_thread(void* arg) {
     (void)arg;
     ts_packet_t pkt;
     uint32_t stream_id;
-    uint64_t slice_cycles = 500 * g_cycles_per_us; // 500us quota
+    uint64_t slice_cycles = 500 * g_cycles_per_us;  // 500us quota
 
     while (atomic_load(&g_run)) {
         if (mpmc_queue_pop(g_ready_queue, &stream_id)) {
@@ -299,7 +301,8 @@ static void* io_thread(void* arg) {
                                 atomic_store(&c->closed, true);
                             }
                             break;
-                        } else break;
+                        } else
+                            break;
                     }
                 }
             }
@@ -333,7 +336,8 @@ static void* io_thread(void* arg) {
                                 }
                             }
                         }
-                    } else break;
+                    } else
+                        break;
                 }
             }
         }
@@ -345,8 +349,7 @@ static void* io_thread(void* arg) {
 static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
-        if (mg_match(hm->uri, mg_str("/metrics"), NULL) || 
-            mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
             mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[4 * 1024 * 1024];
             tsa_handle_t* h_list[MAX_CONNS];
@@ -357,7 +360,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 if (g_conns[i]->tsa) h_list[count++] = g_conns[i]->tsa;
             }
             pthread_mutex_unlock(&g_conn_lock);
-            
+
             if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {
                 tsa_exporter_prom_core(h_list, count, resp, sizeof(resp));
             } else if (mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
@@ -385,7 +388,8 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 tsa_snapshot_full_t snap;
                 tsa_take_snapshot_full(target, &snap);
                 tsa_snapshot_to_json(&snap, resp, sizeof(resp));
-                mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+                mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
+                              resp);
             } else {
                 mg_http_reply(c, 404, NULL, "Stream ID not found or missing\n");
             }
@@ -412,7 +416,7 @@ int main(int argc, char** argv) {
     sa.sin_port = htons(g_srt_port);
     sa.sin_addr.s_addr = INADDR_ANY;
 
-    int sync = 0; // Non-blocking listener
+    int sync = 0;  // Non-blocking listener
     srt_setsockopt(sl, 0, SRTO_RCVSYN, &sync, sizeof(sync));
     if (srt_bind(sl, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
         srt_listen(sl, 64);
@@ -452,8 +456,10 @@ int main(int argc, char** argv) {
     srt_epoll_release(srt_eid);
     srt_cleanup();
     for (int i = 0; i < atomic_load(&g_conn_count); i++) {
-        if (g_conns[i]->type == CONN_UDP) close(g_conns[i]->fd);
-        else srt_close(g_conns[i]->fd);
+        if (g_conns[i]->type == CONN_UDP)
+            close(g_conns[i]->fd);
+        else
+            srt_close(g_conns[i]->fd);
         if (g_conns[i]->tsa) tsa_destroy(g_conns[i]->tsa);
         if (g_conns[i]->tx_q) spsc_queue_destroy(g_conns[i]->tx_q);
         if (g_conns[i]->ana_q) spsc_queue_destroy(g_conns[i]->ana_q);

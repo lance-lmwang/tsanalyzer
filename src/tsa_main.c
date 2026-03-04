@@ -196,7 +196,7 @@ static void* metrology_thread(void* arg) {
     while (1) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
-            
+
             if (g_h->stc_ns - last_snap_ts > 100000000ULL) {
                 tsa_commit_snapshot(g_h, g_h->stc_ns);
                 last_snap_ts = g_h->stc_ns;
@@ -216,8 +216,7 @@ static void* metrology_thread(void* arg) {
 static void fn(struct mg_connection* c, int ev, void* ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
-        if (mg_match(hm->uri, mg_str("/metrics"), NULL) ||
-            mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
             mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[128 * 1024];
             if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {

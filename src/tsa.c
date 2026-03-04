@@ -201,10 +201,6 @@ static int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h) 
 
 /* --- PSI/SI Parsing moved to tsa_psi.c --- */
 
-
-
-
-
 tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     tsa_handle_t* h = calloc(1, sizeof(tsa_handle_t));
     if (!h) return NULL;
@@ -567,10 +563,10 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
     // Calculate STC increment with sanity guards
     uint64_t br_for_inc = h->live->pcr_bitrate_bps;
     if (br_for_inc < 1000000) br_for_inc = h->live->physical_bitrate_bps;
-    if (br_for_inc < 1000000) br_for_inc = 10000000; // Default 10Mbps fallback
+    if (br_for_inc < 1000000) br_for_inc = 10000000;  // Default 10Mbps fallback
 
     uint64_t stc_step = (1504ULL * 1000000000ULL) / br_for_inc;
-    if (stc_step > 1000000) stc_step = 1000000; // Cap at 1ms per packet to prevent runaway
+    if (stc_step > 1000000) stc_step = 1000000;  // Cap at 1ms per packet to prevent runaway
 
     if (h->stc_locked) {
         h->stc_ns += stc_step;
@@ -815,15 +811,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 
     uint64_t stc = h->stc_ns, dt = stc - h->last_snap_ns;
     // Handle time domain jump or zero dt
-    if (dt == 0 || dt > 100000000000ULL) { // 100s jump
-        dt = 100000000ULL; // Default to 100ms for this cycle
+    if (dt == 0 || dt > 100000000000ULL) {  // 100s jump
+        dt = 100000000ULL;                  // Default to 100ms for this cycle
         // If it's a massive jump (epoch change), reset PID arrival baselines
         for (int i = 0; i < TS_PID_MAX; i++) {
             h->live->pid_last_seen_vstc[i] = stc;
             h->live->pid_last_seen_ns[i] = n;
         }
     }
-    if (dt < 1000000ULL) dt = 1000000ULL; // Minimum 1ms for stability
+    if (dt < 1000000ULL) dt = 1000000ULL;  // Minimum 1ms for stability
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
     if (dp > 0) {
@@ -983,10 +979,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         h->stc_ns > h->stc_first_lock_pcr_ns) {
         uint64_t wall_elapsed = n - h->stc_first_lock_wall_ns;
         uint64_t pcr_elapsed = h->stc_ns - h->stc_first_lock_pcr_ns;
-        if (wall_elapsed > 1000000000ULL) { // Need at least 1s of data for stable ppm
+        if (wall_elapsed > 1000000000ULL) {  // Need at least 1s of data for stable ppm
             double ratio = (double)pcr_elapsed / (double)wall_elapsed;
             h->stc_wall_drift_ppm = (float)((ratio - 1.0) * 1000000.0);
-            h->live->pcr_drift_ppm = h->stc_wall_drift_ppm; // Update live stats for export
+            h->live->pcr_drift_ppm = h->stc_wall_drift_ppm;  // Update live stats for export
         }
     } else {
         h->stc_wall_drift_ppm = 0;
@@ -1010,7 +1006,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->predictive.rst_network_s = rn;
     sn->predictive.rst_encoder_s = re;
     sn->predictive.stc_wall_drift_ppm = h->stc_wall_drift_ppm;
-    sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2) ? 1 : (ce > 0.6 && cn < 0.2) ? 2 : (cn > 0.4 && ce > 0.4) ? 3 : 0;
+    sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2)   ? 1
+                                  : (ce > 0.6 && cn < 0.2) ? 2
+                                  : (cn > 0.4 && ce > 0.4) ? 3
+                                                           : 0;
 
     sn->summary.master_health = h->last_health_score;
     sn->summary.total_packets = h->live->total_ts_packets;
@@ -1025,7 +1024,9 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     *h->prev_snap_base = *h->live;
     h->last_snap_ns = stc;
     h->live->pcr_jitter_max_ns = 0;
-    if (ai > 0) printf("DEBUG: Committed snapshot with %u PIDs, total_packets: %llu\n", ai, (unsigned long long)sn->stats.total_ts_packets);
+    if (ai > 0)
+        printf("DEBUG: Committed snapshot with %u PIDs, total_packets: %llu\n", ai,
+               (unsigned long long)sn->stats.total_ts_packets);
 }
 
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
@@ -1218,8 +1219,11 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* sn, char* b, size_t s) {
         (unsigned long long)st->physical_bitrate_bps, (float)st->video_fps, st->gop_ms, st->av_sync_ms);
 
     // Tier 4/5: Predictive & RST
-    SAFE_JSON("\"tier4_predictive\":{\"rst_network_s\":%.2f,\"rst_encoder_s\":%.2f,\"stc_wall_drift_ppm\":%.3f,\"mdi_df_ms\":%.2f},",
-              sn->predictive.rst_network_s, sn->predictive.rst_encoder_s, sn->predictive.stc_wall_drift_ppm, (float)st->mdi_df_ms);
+    SAFE_JSON(
+        "\"tier4_predictive\":{\"rst_network_s\":%.2f,\"rst_encoder_s\":%.2f,\"stc_wall_drift_ppm\":%.3f,\"mdi_df_ms\":"
+        "%.2f},",
+        sn->predictive.rst_network_s, sn->predictive.rst_encoder_s, sn->predictive.stc_wall_drift_ppm,
+        (float)st->mdi_df_ms);
 
     // PIDs & T-STD Details
     SAFE_JSON("\"pids\":[");
