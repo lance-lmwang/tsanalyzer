@@ -91,15 +91,17 @@ The project uses a simplified Makefile wrapping CMake commands.
 
 ```bash
 make           # Build Release version (-O3)
-make test      # Run all unit tests (80+ cases)
-make full-test # Run Unit + Determinism + E2E tests
-make rt-test   # Run Real-time Metrology Verification (30s)
+make test      # Run all unit tests (100+ cases)
+make full-test # Run Unit + Determinism + Functional (CLI) + Integration (Server)
+make rt-test   # Run Real-time Metrology Verification (CLI-based)
 ```
 
 ---
 
-## ⚖️ Determinism Contract
+## ⚖️ Determinism & Metrology Contract
 > *Input (Packet Sequence + HW Timestamp) + Engine version (MD5) = Bit-identical JSON Analysis.*
+
+TsAnalyzer uses a **27MHz Alpha-Beta Filter Clock** for professional jitter analysis, ensuring immunity from system clock drift.
 
 ---
 

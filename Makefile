@@ -30,6 +30,7 @@ release:
 	@mkdir -p $(BUILD_DIR)
 	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_BUILD_TYPE=Release ..
 	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
+	@ln -sf tsa_cli build/tsa
 
 clean:
 	@echo "$(RED)=== Cleaning Build Artifacts ===$(RESET)"
@@ -40,6 +41,7 @@ test: release
 	@echo "$(GREEN)=== Running Unit Tests (Timeout: 30s) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
 
+# Comprehensive validation including functional and integration tests
 full-test: release
 	@echo "$(GREEN)=== Running Full Validation Suite ===$(RESET)"
 	@echo "1. Unit Tests (Timeout: 30s)..."
@@ -47,9 +49,13 @@ full-test: release
 	@echo "2. Determinism Verification..."
 	@chmod +x scripts/verify_determinism.sh
 	@./scripts/verify_determinism.sh
-	@echo "3. E2E Smoke Test..."
-	@chmod +x scripts/verify_30s_smoke.sh
-	@./scripts/verify_30s_smoke.sh
+	@echo "3. Functional E2E (CLI-based)..."
+	@chmod +x scripts/verify_realtime_metrology.sh scripts/verify_pcr_repetition.sh
+	@./scripts/verify_realtime_metrology.sh
+	@./scripts/verify_pcr_repetition.sh
+	@echo "4. Integration E2E (Server-based)..."
+	@chmod +x scripts/test-e2e.sh
+	@./scripts/test-e2e.sh
 
 rt-test: release
 	@echo "$(GREEN)=== Running Real-time Metrology Test (30s) ===$(RESET)"
