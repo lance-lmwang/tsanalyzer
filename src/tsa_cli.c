@@ -203,7 +203,24 @@ static void* metrology_thread(void* arg) {
             }
             backoff_cnt = 0;
         } else {
+            // Heartbeat: If no packets for 100ms real-time, commit a snapshot using real-time
+            // to allow timeout/TTL logic to fire.
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+            
+            // Only heartbeat if we are in LIVE mode
+            if (h->stc_ns - last_snap_ts > 100000000ULL) {
+                tsa_commit_snapshot(h, h->stc_ns);
+                last_snap_ts = h->stc_ns;
+            }
+            
             backoff_sleep(backoff_cnt++);
+            if (backoff_cnt > 100) {
+                // If extremely idle, ensure we still commit occasionally
+                tsa_commit_snapshot(h, h->stc_ns);
+                usleep(50000); 
+            }
         }
     }
     tsa_commit_snapshot(h, h->stc_ns);

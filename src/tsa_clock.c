@@ -13,14 +13,6 @@ static uint64_t parse_pcr_27mhz(const uint8_t *p) {
     return base * 300 + ext;
 }
 
-/**
- * Calculates the nanosecond difference between two points in monotonic time.
- */
-static int64_t timespec_diff_ns(const struct timespec *start, const struct timespec *end) {
-    return (int64_t)(end->tv_sec - start->tv_sec) * 1000000000LL + 
-           (end->tv_nsec - start->tv_nsec);
-}
-
 void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns) {
     if (!packet || !inspector) return;
 
@@ -46,6 +38,10 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
         inspector->first_pcr_local_ns = now_ns;
         inspector->last_pcr_val = current_pcr;
         inspector->last_pcr_local_ns = now_ns;
+        
+        inspector->filtered_offset = 0;
+        inspector->filtered_rate = 0.027; // 27MHz / 1e9 ns
+        
         inspector->initialized = true;
         inspector->pcr_count = 1;
         inspector->pending_discontinuity = false;
@@ -64,26 +60,38 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
         inspector->pcr_interval_max_ticks = interval;
     }
 
-    /* 6. Overall Jitter (PCR_OJ) calculation */
-    int64_t elapsed_ns = (int64_t)(now_ns - inspector->first_pcr_local_ns);
-    int64_t expected_pcr_delta = (elapsed_ns * 27) / 1000;
-    int64_t actual_pcr_delta = (current_pcr >= inspector->first_pcr_val) ?
-                               (current_pcr - inspector->first_pcr_val) :
-                               (current_pcr + (PCR_MAX_VALUE - inspector->first_pcr_val));
-
-    int64_t jitter_ticks = actual_pcr_delta - expected_pcr_delta;
-    inspector->pcr_jitter_ms = (double)jitter_ticks / PCR_TICKS_PER_MS;
+    /* 6. Overall Jitter (PCR_OJ) calculation with Alpha-Beta Filter
+     * This avoids the 'sawtooth' effect by estimating the actual clock rate.
+     */
+    int64_t dt_ns = (int64_t)(now_ns - inspector->last_pcr_local_ns);
+    if (dt_ns > 0) {
+        // Prediction
+        double predicted_pcr_incr = (inspector->filtered_rate * dt_ns);
+        
+        // Measurement
+        double actual_incr = (current_pcr >= inspector->last_pcr_val) ?
+                               (double)(current_pcr - inspector->last_pcr_val) :
+                               (double)(current_pcr + (PCR_MAX_VALUE - inspector->last_pcr_val));
+        
+        // Innovation (Residual)
+        double residual = actual_incr - predicted_pcr_incr;
+        
+        // Alpha-Beta Update (tuned for stability)
+        const double alpha = 0.05;
+        const double beta = 0.005;
+        
+        // Update estimate
+        inspector->filtered_rate += (beta / dt_ns) * residual;
+        
+        // Jitter is the deviation from the expected arrival
+        double instant_jitter_ms = residual / PCR_TICKS_PER_MS;
+        inspector->pcr_jitter_ms = (inspector->pcr_jitter_ms * 0.9) + (instant_jitter_ms * 0.1);
+    }
 
     /* 7. Update internal state */
     inspector->last_pcr_val = current_pcr;
     inspector->last_pcr_local_ns = now_ns;
     inspector->pcr_count++;
-
-    /* 8. Drift Compensation (every 1000 samples) */
-    if (inspector->pcr_count % 1000 == 0) {
-        inspector->first_pcr_val = current_pcr;
-        inspector->first_pcr_local_ns = now_ns;
-    }
 }
 
 void tsa_clock_reset(tsa_clock_inspector_t *inspector) {
@@ -92,5 +100,4 @@ void tsa_clock_reset(tsa_clock_inspector_t *inspector) {
     inspector->pcr_interval_max_ticks = 0;
     inspector->pcr_jitter_ms = 0;
     inspector->pcr_count = 0;
-    /* Do not reset priority_1_errors here to preserve history of the current stream session */
 }

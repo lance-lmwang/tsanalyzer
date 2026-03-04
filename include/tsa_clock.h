@@ -36,9 +36,17 @@ typedef struct {
     uint64_t pcr_interval_max_ticks; /* Maximum observed PCR repetition interval */
     double pcr_jitter_ms;            /* PCR Overall Jitter (PCR_OJ) in milliseconds */
     
+    /* Alpha-Beta Filter for Drift Estimation 
+     * filtered_offset: estimated ticks offset
+     * filtered_rate: estimated ticks per nanosecond (nominal is 0.027)
+     */
+    double filtered_offset;
+    double filtered_rate;
+
     /* Statistics */
     uint64_t pcr_count;
-    uint32_t priority_1_errors;      /* TR 101 290 1.1 (PCR_error) repetition violation count */
+    uint32_t priority_1_errors;
+      /* TR 101 290 1.1 (PCR_error) repetition violation count */
     
     /* Discontinuity handling */
     bool pending_discontinuity;      /* Set if a discontinuity was detected, waiting for next PCR */
