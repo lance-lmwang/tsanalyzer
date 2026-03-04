@@ -93,6 +93,7 @@ typedef struct {
     float master_health;
     float rst_network_s;
     float rst_encoder_s;
+    float stc_wall_drift_ppm;
     uint32_t fault_domain;
     bool lid_active;
     double stc_drift_slope;

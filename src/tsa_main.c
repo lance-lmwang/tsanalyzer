@@ -354,6 +354,7 @@ int main(int argc, char** argv) {
 
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);
+    tsa_commit_snapshot(g_h, g_h->stc_ns);
     tsa_render_dashboard(g_h);
     tsa_destroy(g_h);
     printf("CLI: Shutdown Complete.\n");

@@ -26,8 +26,6 @@
     } while (0)
 
 /* --- Forward Declarations --- */
-static void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid);
-static void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
 static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid);
 
 /* --- High-precision Time Utilities --- */
@@ -148,8 +146,8 @@ const char* tsa_stream_type_to_str(uint8_t type) {
             return "ADTS-AAC";
         case 0x11:
             return "AAC-LATM";
-        case 0x1b:
-            return "H.264";
+        case 0x86:
+            return "SCTE-35";
         case 0x24:
             return "HEVC";
         case 0x81:
@@ -159,59 +157,7 @@ const char* tsa_stream_type_to_str(uint8_t type) {
     }
 }
 
-/* --- Bit Reader --- */
-typedef struct {
-    const uint8_t* buf;
-    int size;
-    int pos;
-} bit_reader_t;
-static uint32_t read_bits(bit_reader_t* r, int n) {
-    uint32_t val = 0;
-    for (int i = 0; i < n; i++) {
-        if (r->pos / 8 >= r->size) break;
-        val = (val << 1) | ((r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1);
-        r->pos++;
-    }
-    return val;
-}
-static uint32_t read_ue(bit_reader_t* r) {
-    int count = 0;
-    while (read_bits(r, 1) == 0 && count < 32) count++;
-    if (count >= 32) return 0;
-    return (1 << count) - 1 + read_bits(r, count);
-}
-
-typedef struct {
-    const uint8_t* buf;
-    int size;
-    int pos;
-    int zeros;
-} h265_reader_t;
-static uint32_t read_bits_h265(h265_reader_t* r, int n) {
-    uint32_t val = 0;
-    for (int i = 0; i < n; i++) {
-        if (r->pos / 8 >= r->size) break;
-        if ((r->pos % 8 == 0) && r->zeros >= 2 && r->buf[r->pos / 8] == 0x03) {
-            r->pos += 8;
-            r->zeros = 0;
-        }
-        if (r->pos / 8 >= r->size) break;
-        uint8_t bit = (r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1;
-        val = (val << 1) | bit;
-        if (bit == 0)
-            r->zeros++;
-        else
-            r->zeros = 0;
-        r->pos++;
-    }
-    return val;
-}
-static uint32_t read_ue_h265(h265_reader_t* r) {
-    int count = 0;
-    while (read_bits_h265(r, 1) == 0 && count < 32) count++;
-    if (count >= 32) return 0;
-    return (1 << count) - 1 + read_bits_h265(r, count);
-}
+/* --- Bit Reader moved to tsa_internal.h --- */
 
 typedef struct {
     uint8_t stream_id;
@@ -251,343 +197,13 @@ static int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h) 
     return 0;
 }
 
-static void parse_h264_sps(tsa_handle_t* h, uint16_t pid, const uint8_t* buf, int size) {
-    if (size < 10) return;
-    bit_reader_t r = {buf, size, 0};
-    read_bits(&r, 8);
-    h->pid_profile[pid] = read_bits(&r, 8);
-    read_bits(&r, 16);
-    read_ue(&r);
-    if (h->pid_profile[pid] >= 100) {
-        if (read_ue(&r) == 3) read_bits(&r, 1);
-        read_ue(&r);
-        read_ue(&r);
-        read_bits(&r, 1);
-        if (read_bits(&r, 1)) {
-            for (int i = 0; i < 8; i++) {
-                if (read_bits(&r, 1)) {
-                    int sz = (i < 6) ? 16 : 64;
-                    int last = 8, next = 8;
-                    for (int j = 0; j < sz; j++) {
-                        if (next != 0) next = (last + read_ue(&r)) % 256;
-                        last = (next == 0) ? last : next;
-                    }
-                }
-            }
-        }
-    }
-    h->pid_log2_max_frame_num[pid] = read_ue(&r) + 4;
-    uint32_t poc_t = read_ue(&r);
-    if (poc_t == 0)
-        read_ue(&r);
-    else if (poc_t == 1) {
-        read_bits(&r, 1);
-        read_ue(&r);
-        read_ue(&r);
-        uint32_t num = read_ue(&r);
-        for (uint32_t i = 0; i < num; i++) read_ue(&r);
-    }
-    read_ue(&r);
-    read_bits(&r, 1);
-    uint32_t pw = read_ue(&r);
-    uint32_t ph = read_ue(&r);
-    uint32_t mb = read_bits(&r, 1);
-    if (!mb) read_bits(&r, 1);
-    read_bits(&r, 1);
-    uint32_t w = (pw + 1) * 16;
-    uint32_t he = (ph + 1) * 16 * (2 - mb);
-    if (read_bits(&r, 1)) {
-        uint32_t cl = read_ue(&r), cr = read_ue(&r), ct = read_ue(&r), cb = read_ue(&r);
-        w -= (cl + cr) * 2;
-        he -= (ct + cb) * 2;
-    }
-    h->pid_width[pid] = w;
-    h->pid_height[pid] = he;
-}
+/* --- ES Parsing moved to tsa_es.c --- */
 
-static void parse_h265_sps(tsa_handle_t* h, uint16_t pid, const uint8_t* buf, int size) {
-    if (size < 20) return;
-    h265_reader_t r = {buf, size, 0, 0};
-    read_bits_h265(&r, 16);
-    read_bits_h265(&r, 4);
-    uint32_t layers = read_bits_h265(&r, 3) + 1;
-    read_bits_h265(&r, 1);
-    read_bits_h265(&r, 2);
-    read_bits_h265(&r, 1);
-    h->pid_profile[pid] = read_bits_h265(&r, 5);
-    read_bits_h265(&r, 32);
-    read_bits_h265(&r, 1);
-    read_bits_h265(&r, 1);
-    read_bits_h265(&r, 1);
-    read_bits_h265(&r, 1);
-    read_bits_h265(&r, 44);
-    read_bits_h265(&r, 8);
-    uint8_t sp[8], sl[8];
-    for (uint32_t i = 0; i < layers - 1; i++) {
-        sp[i] = read_bits_h265(&r, 1);
-        sl[i] = read_bits_h265(&r, 1);
-    }
-    if (layers > 1) {
-        for (uint32_t i = layers - 1; i < 8; i++) read_bits_h265(&r, 2);
-    }
-    for (uint32_t i = 0; i < layers - 1; i++) {
-        if (sp[i]) {
-            read_bits_h265(&r, 2);
-            read_bits_h265(&r, 1);
-            read_bits_h265(&r, 5);
-            read_bits_h265(&r, 32);
-            read_bits_h265(&r, 48);
-        }
-        if (sl[i]) read_bits_h265(&r, 8);
-    }
-    read_ue_h265(&r);
-    uint32_t chroma = read_ue_h265(&r);
-    if (chroma == 3) read_bits_h265(&r, 1);
-    h->pid_width[pid] = read_ue_h265(&r);
-    h->pid_height[pid] = read_ue_h265(&r);
-}
+/* --- PSI/SI Parsing moved to tsa_psi.c --- */
 
-static void parse_aac_adts(tsa_handle_t* h, uint16_t pid, const uint8_t* buf, int size) {
-    if (size < 7 || buf[0] != 0xFF || (buf[1] & 0xF0) != 0xF0) return;
-    uint8_t prof = (buf[2] >> 6) + 1, f_idx = (buf[2] >> 2) & 0x0F, ch = ((buf[2] & 0x01) << 2) | (buf[3] >> 6);
-    const uint32_t rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
-                              16000, 12000, 11025, 8000,  7350,  0,     0,     0};
-    h->pid_profile[pid] = prof;
-    if (f_idx < 13) h->pid_audio_sample_rate[pid] = rates[f_idx];
-    h->pid_audio_channels[pid] = ch;
-}
 
-static void parse_mpeg_audio(tsa_handle_t* h, uint16_t pid, const uint8_t* buf, int size) {
-    if (size < 4 || buf[0] != 0xFF || (buf[1] & 0xE0) != 0xE0) return;
-    uint8_t id = (buf[1] >> 3) & 0x01, lay = (buf[1] >> 1) & 0x03, f_idx = (buf[2] >> 2) & 0x03,
-            mod = (buf[3] >> 6) & 0x03;
-    uint32_t rates[2][3] = {{22050, 24000, 16000}, {44100, 48000, 32000}};
-    if (f_idx < 3) h->pid_audio_sample_rate[pid] = rates[id][f_idx];
-    h->pid_audio_channels[pid] = (mod == 3) ? 1 : 2;
-    h->pid_profile[pid] = 4 - lay;
-}
 
-static void tsa_handle_video_frame(tsa_handle_t* h, uint16_t pid, int nal_type, const uint8_t* payload, int len,
-                                   bool is_h265) {
-    bool is_idr = false;
-    int slice_type = -1;
 
-    if (is_h265) {
-        is_idr = (nal_type == 19 || nal_type == 20);
-    } else {
-        is_idr = (nal_type == 5);
-        if (nal_type == 1 && len > 1) {  // non-IDR slice
-            bit_reader_t r = {payload, len, 0};
-            read_ue(&r);  // first_mb_in_slice
-            slice_type = read_ue(&r);
-            if (slice_type > 4) slice_type -= 5;
-        }
-    }
-
-    if (is_idr || slice_type == 2 || slice_type == 7) {  // I slice
-        h->pid_i_frames[pid]++;
-        h->pid_gop_n[pid]++;
-        if (is_idr) {
-            h->pid_last_gop_n[pid] = h->pid_gop_n[pid];
-            if (h->pid_gop_min[pid] == 0 || h->pid_last_gop_n[pid] < h->pid_gop_min[pid])
-                h->pid_gop_min[pid] = h->pid_last_gop_n[pid];
-            if (h->pid_last_gop_n[pid] > h->pid_gop_max[pid]) h->pid_gop_max[pid] = h->pid_last_gop_n[pid];
-            h->pid_gop_n[pid] = 0;
-            if (h->pid_last_idr_ns[pid] > 0) {
-                h->pid_gop_ms[pid] = (uint32_t)((h->stc_ns - h->pid_last_idr_ns[pid]) / 1000000ULL);
-            }
-            h->pid_last_idr_ns[pid] = h->stc_ns;
-        }
-    } else if (slice_type == 0 || slice_type == 5) {  // P slice
-        h->pid_p_frames[pid]++;
-        h->pid_gop_n[pid]++;
-    } else if (slice_type == 1 || slice_type == 6) {  // B slice
-        h->pid_b_frames[pid]++;
-        h->pid_gop_n[pid]++;
-    }
-}
-
-static void parse_ac3_audio(tsa_handle_t* h, uint16_t pid, const uint8_t* buf, int size) {
-    if (size < 6 || buf[0] != 0x0B || buf[1] != 0x77) return;
-    uint8_t fsc = (buf[4] >> 6) & 0x03, acm = buf[6] >> 5;
-    uint32_t r[] = {48000, 44100, 32000, 0};
-    uint8_t c[] = {2, 1, 2, 3, 3, 4, 4, 5};
-    if (fsc < 3) h->pid_audio_sample_rate[pid] = r[fsc];
-    if (acm < 8) h->pid_audio_channels[pid] = c[acm];
-}
-
-void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, int len, uint64_t now) {
-    const char* st = tsa_get_pid_type_name(h, pid);
-    if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "AAC-LATM") == 0) {
-        for (int i = 0; i <= len - 7; i++) {
-            if (pay[i] == 0xFF && (pay[i + 1] & 0xF0) == 0xF0) {
-                parse_aac_adts(h, pid, pay + i, len - i);
-                break;
-            }
-        }
-        return;
-    } else if (strcmp(st, "MPEG1-A") == 0 || strcmp(st, "MPEG2-A") == 0) {
-        for (int i = 0; i <= len - 4; i++) {
-            if (pay[i] == 0xFF && (pay[i + 1] & 0xE0) == 0xE0) {
-                parse_mpeg_audio(h, pid, pay + i, len - i);
-                break;
-            }
-        }
-        return;
-    } else if (strcmp(st, "AC3") == 0) {
-        for (int i = 0; i <= len - 6; i++) {
-            if (pay[i] == 0x0B && pay[i + 1] == 0x77) {
-                parse_ac3_audio(h, pid, pay + i, len - i);
-                break;
-            }
-        }
-        return;
-    }
-    bool is_h264 = (strcmp(st, "H.264") == 0);
-    bool is_h265 = (strcmp(st, "HEVC") == 0);
-    if (!is_h264 && !is_h265 && strcmp(st, "ES") != 0) return;
-
-    const uint8_t* p = pay;
-    const uint8_t* end = pay + len - 4;
-    while (p <= end) {
-        // Optimized Start-Code Scanner using memchr
-        p = memchr(p, 0x00, end - p + 1);
-        if (!p) break;
-        if (p[1] == 0x00 && p[2] == 0x01) {
-            uint8_t nt;
-            const uint8_t* d = p + 3;
-            int l = len - (int)(d - pay);
-            if (l <= 0) {
-                p++;
-                continue;
-            }
-
-            bool is_idr = false, is_sps = false;
-            if (is_h264) {
-                nt = d[0] & 0x1F;
-                is_sps = (nt == 7);
-                is_idr = (nt == 5);
-            } else if (is_h265) {
-                nt = (d[0] & 0x7E) >> 1;
-                is_sps = (nt == 33);
-                is_idr = (nt == 19 || nt == 20);
-            } else {
-                nt = d[0] & 0x1F;
-                is_sps = (nt == 7);
-                is_idr = (nt == 5);
-            }
-
-            if (is_sps) {
-                if (is_h264)
-                    parse_h264_sps(h, pid, d, l);
-                else if (is_h265)
-                    parse_h265_sps(h, pid, d, l);
-            } else if (is_idr || (is_h264 && nt == 1) || (is_h265 && (nt >= 0 && nt <= 9))) {
-                tsa_handle_video_frame(h, pid, nt, d, l, is_h265);
-            }
-            p += 3;  // Skip the found start code
-        } else {
-            p++;
-        }
-    }
-}
-
-static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
-    (void)now;
-    int sl = ((p[1] & 0x0F) << 8) | p[2];
-    h->seen_pat = true;
-    h->program_count = 0;
-    for (int i = 8; i < sl + 3 - 4; i += 4) {
-        uint16_t pn = (p[i] << 8) | p[i + 1], pp = ((p[i + 2] & 0x1F) << 8) | p[i + 3];
-        if (pn != 0 && h->program_count < MAX_PROGRAMS) {
-            h->pid_is_pmt[pp] = true;
-            h->live->pid_is_referenced[pp] = true;
-            h->programs[h->program_count].pmt_pid = pp;
-            h->programs[h->program_count].stream_count = 0;
-            h->program_count++;
-        }
-    }
-}
-
-static void process_pmt(tsa_handle_t* h, uint16_t pmt_pid, const uint8_t* p, uint64_t now) {
-    (void)now;
-    int sl = ((p[1] & 0x0F) << 8) | p[2];
-    uint16_t pcr = ((p[8] & 0x1F) << 8) | p[9];
-    int pi = ((p[10] & 0x0F) << 8) | p[11];
-    ts_program_info_t* pr = NULL;
-    for (uint32_t i = 0; i < h->program_count; i++)
-        if (h->programs[i].pmt_pid == pmt_pid) {
-            pr = &h->programs[i];
-            break;
-        }
-    if (pr) {
-        for (uint32_t i = 0; i < pr->stream_count; i++) {
-            h->live->pid_is_referenced[pr->streams[i].pid] = false;
-            tsa_reset_pid_stats(h, pr->streams[i].pid);
-        }
-        pr->pcr_pid = pcr;
-        if (!h->live->pid_is_referenced[pcr]) tsa_reset_pid_stats(h, pcr);
-        h->live->pid_is_referenced[pcr] = true;
-        pr->stream_count = 0;
-    }
-    for (int i = 12 + pi; i < sl + 3 - 4;) {
-        uint8_t ty = p[i];
-        uint16_t pid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
-        int es = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        h->pid_stream_type[pid] = ty;
-        tsa_precompile_pid_labels(h, pid);
-        if (pr && pr->stream_count < MAX_STREAMS_PER_PROG) {
-            pr->streams[pr->stream_count].pid = pid;
-            pr->streams[pr->stream_count].stream_type = ty;
-            pr->stream_count++;
-        }
-        if (!h->live->pid_is_referenced[pid]) tsa_reset_pid_stats(h, pid);
-        h->live->pid_is_referenced[pid] = true;
-        i += 5 + es;
-    }
-}
-
-static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
-    (void)now;
-    int sl = ((p[1] & 0x0F) << 8) | p[2];
-    if (sl < 8) return;
-
-    // Skip SDT header (11 bytes including table_id, etc., up to first service)
-    // p[0]: table_id
-    // p[1..2]: section_length
-    // p[3..4]: transport_stream_id
-    // p[5]: version/cni
-    // p[6]: section_number
-    // p[7]: last_section_number
-    // p[8..9]: original_network_id
-    // p[10]: reserved_future_use
-
-    for (int i = 11; i < sl + 3 - 4;) {
-        // uint16_t service_id = (p[i] << 8) | p[i+1];
-        uint16_t descriptors_loop_length = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        const uint8_t* d = p + i + 5;
-        for (int j = 0; j < descriptors_loop_length;) {
-            uint8_t tag = d[j];
-            uint8_t len = d[j + 1];
-            if (tag == 0x48) {  // Service Descriptor
-                // uint8_t service_type = d[j+2];
-                uint8_t provider_len = d[j + 3];
-                if (provider_len < 255) {
-                    memcpy(h->provider_name, d + j + 4, provider_len);
-                    h->provider_name[provider_len] = '\0';
-                }
-                uint8_t service_len = d[j + 4 + provider_len];
-                if (service_len < 255) {
-                    memcpy(h->service_name, d + j + 5 + provider_len, service_len);
-                    h->service_name[service_len] = '\0';
-                }
-            }
-            j += 2 + len;
-        }
-        i += 5 + descriptors_loop_length;
-        break;  // Just process the first service for now
-    }
-}
 
 tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     tsa_handle_t* h = calloc(1, sizeof(tsa_handle_t));
@@ -605,6 +221,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->ignore_next_cc, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_seen, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_is_pmt, bool, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_is_scte35, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_stream_type, uint8_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_to_active_idx, int16_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_pes_buf, uint8_t*, TS_PID_MAX);
@@ -639,7 +256,15 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->double_buffer.buffers[0] = calloc(1, sizeof(tsa_snapshot_full_t));
     h->double_buffer.buffers[1] = calloc(1, sizeof(tsa_snapshot_full_t));
     atomic_init(&h->double_buffer.active_idx, 0);
-    if (!h->live || !h->prev_snap_base || !h->double_buffer.buffers[0] || !h->double_buffer.buffers[1]) goto fail;
+
+    h->event_q = calloc(1, sizeof(tsa_event_ring_t));
+    if (h->event_q) {
+        atomic_init(&h->event_q->head, 0);
+        atomic_init(&h->event_q->tail, 0);
+    }
+
+    if (!h->live || !h->prev_snap_base || !h->double_buffer.buffers[0] || !h->double_buffer.buffers[1] || !h->event_q)
+        goto fail;
     if (cfg) h->config = *cfg;
     if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
@@ -683,6 +308,7 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->ignore_next_cc);
     FREE_IF(h->pid_seen);
     FREE_IF(h->pid_is_pmt);
+    FREE_IF(h->pid_is_scte35);
     FREE_IF(h->pid_stream_type);
     FREE_IF(h->pid_to_active_idx);
     FREE_IF(h->pid_pes_len);
@@ -715,10 +341,11 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]);
     FREE_IF(h->double_buffer.buffers[1]);
+    FREE_IF(h->event_q);
     free(h);
 }
 
-static void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
+void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return;
     const char* codec = tsa_get_pid_type_name(h, pid);
     const char* type = "Other";
@@ -732,7 +359,7 @@ static void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
              h->config.input_label[0] ? h->config.input_label : "unknown", pid, type, codec);
 }
 
-static void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
+void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->pid_seen[pid] = false;
     h->live->pid_packet_count[pid] = 0;
     h->live->pid_bitrate_bps[pid] = 0;
@@ -869,84 +496,26 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
     tsa_update_pid_tracker(h, r->pid);
     h->live->pid_packet_count[r->pid]++;
     h->live->pid_last_seen_vstc[r->pid] = h->stc_ns;
-    if (r->pid == 0 || h->pid_is_pmt[r->pid] || r->pid == 0x11) {
+    if (r->pid == 0 || h->pid_is_pmt[r->pid] || r->pid == 0x11 || h->pid_is_scte35[r->pid]) {
         tsa_section_filter_push(h, r->pid, p, r);
     }
 }
 
-void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
-    if (!res->has_payload) return;
-    ts_section_filter_t* f = &h->pid_filters[pid];
-    const uint8_t* payload = pkt + 4 + res->af_len;
-    int len = res->payload_len;
+/* --- Section Filter moved to tsa_psi.c --- */
 
-    if (res->pusi) {
-        uint8_t pointer = payload[0];
-        if (pointer + 1 > len) return;
+void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64_t val) {
+    if (!h || !h->event_q) return;
+    size_t head = atomic_load_explicit(&h->event_q->head, memory_order_relaxed);
+    size_t tail = atomic_load_explicit(&h->event_q->tail, memory_order_acquire);
+    if (head - tail >= MAX_EVENT_QUEUE) return;
 
-        // Complete any pending section using the bytes before the pointer
-        if (f->active && !f->complete && pointer > 0) {
-            int to_copy = (pointer < (f->section_length + 3 - f->assembled_len))
-                              ? pointer
-                              : (f->section_length + 3 - f->assembled_len);
-            memcpy(f->payload + f->assembled_len, payload + 1, to_copy);
-            f->assembled_len += to_copy;
-            if (f->assembled_len >= f->section_length + 3) f->complete = true;
-        }
+    size_t idx = head % MAX_EVENT_QUEUE;
+    h->event_q->events[idx].type = type;
+    h->event_q->events[idx].pid = pid;
+    h->event_q->events[idx].timestamp_ns = h->stc_ns;
+    h->event_q->events[idx].value = val;
 
-        // Handle completed section from previous packets if any
-        // (In a real implementation we'd call the processor here if f->complete)
-
-        // Start new section
-        payload += 1 + pointer;
-        len -= 1 + pointer;
-        if (len < 3) {
-            f->active = false;
-            return;
-        }
-
-        f->table_id = payload[0];
-        f->section_length = ((payload[1] & 0x0F) << 8) | payload[2];
-        if (f->section_length > 4093) {
-            f->active = false;
-            return;
-        }
-
-        f->assembled_len = 0;
-        int to_copy = (len < f->section_length + 3) ? len : f->section_length + 3;
-        memcpy(f->payload, payload, to_copy);
-        f->assembled_len = to_copy;
-        f->active = true;
-        f->complete = (f->assembled_len >= f->section_length + 3);
-    } else if (f->active && !f->complete) {
-        int need = (f->section_length + 3) - f->assembled_len;
-        int to_copy = (len < need) ? len : need;
-        memcpy(f->payload + f->assembled_len, payload, to_copy);
-        f->assembled_len += to_copy;
-        if (f->assembled_len >= f->section_length + 3) f->complete = true;
-    }
-
-    if (f->complete) {
-        if (tsa_crc32_check(f->payload, f->section_length + 3) == 0) {
-            uint8_t ver = (f->payload[5] & 0x3E) >> 1;
-            f->version_number = ver;
-            // Only process if version changed or it's the first time
-            if (!f->seen_before || f->version_number != f->last_version) {
-                if (pid == 0)
-                    process_pat(h, f->payload, h->stc_ns);
-                else if (h->pid_is_pmt[pid])
-                    process_pmt(h, pid, f->payload, h->stc_ns);
-                else if (pid == 0x11)
-                    process_sdt(h, f->payload, h->stc_ns);
-                f->last_version = f->version_number;
-                f->seen_before = true;
-            }
-        } else {
-            h->live->crc_error.count++;
-        }
-        f->active = false;
-        f->complete = false;
-    }
+    atomic_store_explicit(&h->event_q->head, head + 1, memory_order_release);
 }
 
 void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count) {
@@ -995,15 +564,17 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->metro_offset = 0;
     }
 
-    // Calculate STC increment
+    // Calculate STC increment with sanity guards
     uint64_t br_for_inc = h->live->pcr_bitrate_bps;
-    if (br_for_inc < TSA_MIN_PCR_BITRATE) br_for_inc = h->live->physical_bitrate_bps;
-    if (br_for_inc < TSA_MIN_PCR_BITRATE) br_for_inc = 10000000; // Default 10Mbps
+    if (br_for_inc < 1000000) br_for_inc = h->live->physical_bitrate_bps;
+    if (br_for_inc < 1000000) br_for_inc = 10000000; // Default 10Mbps fallback
+
+    uint64_t stc_step = (1504ULL * 1000000000ULL) / br_for_inc;
+    if (stc_step > 1000000) stc_step = 1000000; // Cap at 1ms per packet to prevent runaway
 
     if (h->stc_locked) {
-        h->stc_ns += (1504ULL * 1000000000ULL) / br_for_inc;
+        h->stc_ns += stc_step;
     } else {
-        // Fallback: If not locked, use wall clock delta since last packet
         h->stc_ns += (now > h->last_pcr_arrival_ns) ? (now - h->last_pcr_arrival_ns) : 1000000ULL;
     }
 
@@ -1062,9 +633,6 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             ts_cc_status_t s =
                 cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
             if (s == TS_CC_LOSS) {
-                fprintf(stdout, "[%s] CC_ALARM: Detected on PID 0x%04x (Stream: %s)\n", tsa_get_pid_type_name(h, pid),
-                        pid, h->config.input_label);
-                fflush(stdout);
                 h->live->cc_error.count++;
                 h->live->cc_error.last_timestamp_ns = now;
                 h->live->cc_error.triggering_vstc = h->stc_ns;
@@ -1073,12 +641,14 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
                 h->live->latched_cc_error = 1;
                 h->pid_status[pid] = TSA_STATUS_DEGRADED;
                 h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
+                tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, res->cc);
             } else if (s == TS_CC_DUPLICATE)
                 h->live->cc_duplicate_count++;
             else if (s == TS_CC_OUT_OF_ORDER) {
                 h->live->cc_error.count++;
                 h->live->cc_error.last_timestamp_ns = now;
                 h->pid_status[pid] = TSA_STATUS_DEGRADED;
+                tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, res->cc);
             }
         }
     }
@@ -1149,6 +719,8 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             if (first_lock) {
                 h->last_snap_ns = pn;
                 h->start_ns = pn;
+                h->stc_first_lock_pcr_ns = pn;
+                h->stc_first_lock_wall_ns = now;
                 // Reset baseline for the next snapshot to avoid burst artifacts
                 *h->prev_snap_base = *h->live;
                 for (int i = 0; i < TS_PID_MAX; i++) {
@@ -1207,6 +779,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
             h->live->sync_loss.count++;
             h->live->sync_loss.last_timestamp_ns = n;
             h->signal_lock = false;
+            tsa_push_event(h, TSA_EVENT_SYNC_LOSS, 0, 0);
         }
         h->live->sync_byte_error.count++;
         h->live->sync_byte_error.last_timestamp_ns = n;
@@ -1242,10 +815,18 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 
     uint64_t stc = h->stc_ns, dt = stc - h->last_snap_ns;
     // Handle time domain jump or zero dt
-    if (dt == 0 || dt > 1000000000000ULL) dt = 100000000ULL;
+    if (dt == 0 || dt > 100000000000ULL) { // 100s jump
+        dt = 100000000ULL; // Default to 100ms for this cycle
+        // If it's a massive jump (epoch change), reset PID arrival baselines
+        for (int i = 0; i < TS_PID_MAX; i++) {
+            h->live->pid_last_seen_vstc[i] = stc;
+            h->live->pid_last_seen_ns[i] = n;
+        }
+    }
+    if (dt < 1000000ULL) dt = 1000000ULL; // Minimum 1ms for stability
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0 && dt >= 5000000ULL) {
+    if (dp > 0) {
         uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
         if (h->live->physical_bitrate_bps == 0)
             h->live->physical_bitrate_bps = instant_br;
@@ -1268,6 +849,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
             h->live->pat_error.last_timestamp_ns = n;
             h->live->alarm_pat_error = true;
             h->pid_status[0] = TSA_STATUS_INVALID;
+            tsa_push_event(h, TSA_EVENT_PAT_TIMEOUT, 0, 0);
         } else {
             h->live->alarm_pat_error = false;
         }
@@ -1281,6 +863,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
                 if (pmt_vstc_dt > 500000000ULL) {
                     pmt_missing = true;
                     h->pid_status[ppid] = TSA_STATUS_INVALID;
+                    tsa_push_event(h, TSA_EVENT_PMT_TIMEOUT, ppid, 0);
                 }
             }
         }
@@ -1355,7 +938,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         if (p >= TS_PID_MAX) continue;
 
         uint64_t p_pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
-        if (p_pd > 0 && dt >= 5000000ULL) {
+        if (p_pd > 0 && dt >= 1000000ULL) {
             uint64_t cb = (p_pd * 1504 * 1000000000ULL) / dt;
             if (cb > 10000000000ULL) cb = 10000000000ULL;
             if (h->live->pid_bitrate_bps[p] == 0)
@@ -1395,7 +978,20 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         ai++;
     }
 
-    sn->active_pid_count = ai;
+    // Calculate long-term drift between PCR clock and Wall clock (LIVE MODE ONLY)
+    if (h->config.op_mode == TSA_MODE_LIVE && h->stc_locked && n > h->stc_first_lock_wall_ns &&
+        h->stc_ns > h->stc_first_lock_pcr_ns) {
+        uint64_t wall_elapsed = n - h->stc_first_lock_wall_ns;
+        uint64_t pcr_elapsed = h->stc_ns - h->stc_first_lock_pcr_ns;
+        if (wall_elapsed > 1000000000ULL) { // Need at least 1s of data for stable ppm
+            double ratio = (double)pcr_elapsed / (double)wall_elapsed;
+            h->stc_wall_drift_ppm = (float)((ratio - 1.0) * 1000000.0);
+            h->live->pcr_drift_ppm = h->stc_wall_drift_ppm; // Update live stats for export
+        }
+    } else {
+        h->stc_wall_drift_ppm = 0;
+    }
+
     float current_health = 100.0f;
     if (!h->signal_lock) {
         current_health = 0.0f;
@@ -1413,6 +1009,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->predictive.master_health = h->last_health_score;
     sn->predictive.rst_network_s = rn;
     sn->predictive.rst_encoder_s = re;
+    sn->predictive.stc_wall_drift_ppm = h->stc_wall_drift_ppm;
     sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2) ? 1 : (ce > 0.6 && cn < 0.2) ? 2 : (cn > 0.4 && ce > 0.4) ? 3 : 0;
 
     sn->summary.master_health = h->last_health_score;
@@ -1428,6 +1025,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     *h->prev_snap_base = *h->live;
     h->last_snap_ns = stc;
     h->live->pcr_jitter_max_ns = 0;
+    if (ai > 0) printf("DEBUG: Committed snapshot with %u PIDs, total_packets: %llu\n", ai, (unsigned long long)sn->stats.total_ts_packets);
 }
 
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
@@ -1620,8 +1218,8 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* sn, char* b, size_t s) {
         (unsigned long long)st->physical_bitrate_bps, (float)st->video_fps, st->gop_ms, st->av_sync_ms);
 
     // Tier 4/5: Predictive & RST
-    SAFE_JSON("\"tier4_predictive\":{\"rst_network_s\":%.2f,\"rst_encoder_s\":%.2f,\"mdi_df_ms\":%.2f},",
-              sn->predictive.rst_network_s, sn->predictive.rst_encoder_s, (float)st->mdi_df_ms);
+    SAFE_JSON("\"tier4_predictive\":{\"rst_network_s\":%.2f,\"rst_encoder_s\":%.2f,\"stc_wall_drift_ppm\":%.3f,\"mdi_df_ms\":%.2f},",
+              sn->predictive.rst_network_s, sn->predictive.rst_encoder_s, sn->predictive.stc_wall_drift_ppm, (float)st->mdi_df_ms);
 
     // PIDs & T-STD Details
     SAFE_JSON("\"pids\":[");
@@ -1831,7 +1429,54 @@ void tsa_render_dashboard(tsa_handle_t* h) {
                (double)(p->bitrate_q16_16 >> 16) / 1e6, p->eb_fill_pct, (unsigned long long)p->i_frames,
                (unsigned long long)p->p_frames, (unsigned long long)p->b_frames);
     }
-    printf("================================================================================\n\n");
+    printf("================================================================================\n");
+
+    // Drain and display events
+    bool header_printed = false;
+    size_t head = atomic_load_explicit(&h->event_q->head, memory_order_acquire);
+    size_t tail = atomic_load_explicit(&h->event_q->tail, memory_order_relaxed);
+
+    while (tail < head) {
+        if (!header_printed) {
+            printf("\n RECENT BROADCAST EVENTS:\n");
+            printf("--------------------------------------------------------------------------------\n");
+            header_printed = true;
+        }
+        tsa_event_t* ev = &h->event_q->events[tail % MAX_EVENT_QUEUE];
+        const char* type_str = "UNKNOWN";
+        switch (ev->type) {
+            case TSA_EVENT_CC_ERROR:
+                type_str = "CC ERROR";
+                break;
+            case TSA_EVENT_PCR_JITTER:
+                type_str = "PCR JITTER";
+                break;
+            case TSA_EVENT_PCR_REPETITION:
+                type_str = "PCR REPETITION";
+                break;
+            case TSA_EVENT_SCTE35:
+                type_str = "SCTE-35";
+                break;
+            case TSA_EVENT_SYNC_LOSS:
+                type_str = "SYNC LOSS";
+                break;
+            case TSA_EVENT_CRC_ERROR:
+                type_str = "CRC ERROR";
+                break;
+            case TSA_EVENT_PAT_TIMEOUT:
+                type_str = "PAT TIMEOUT";
+                break;
+            case TSA_EVENT_PMT_TIMEOUT:
+                type_str = "PMT TIMEOUT";
+                break;
+        }
+        printf(" [%10llu] %-15s PID 0x%04x  Value: %llu\n", (unsigned long long)ev->timestamp_ns / 1000000ULL, type_str,
+               ev->pid, (unsigned long long)ev->value);
+        tail++;
+    }
+    atomic_store_explicit(&h->event_q->tail, tail, memory_order_release);
+    if (header_printed) printf("================================================================================\n");
+    printf("\n");
 }
 
 /*

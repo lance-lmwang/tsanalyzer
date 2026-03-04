@@ -100,6 +100,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_pcr_accuracy_errors%s %llu\n", labels, (unsigned long long)s->pcr_accuracy_error.count);
         SAFE_APPEND("tsa_pcr_accuracy_ns%s %.2f\n", labels, (float)s->pcr_accuracy_ns);
         SAFE_APPEND("tsa_pcr_accuracy_piecewise_ms%s %.3f\n", labels, s->pcr_accuracy_ns_piecewise / 1000000.0);
+        SAFE_APPEND("tsa_stc_wall_drift_ppm%s %.3f\n", labels, snap->predictive.stc_wall_drift_ppm);
 
         // Tier 5: Service Payload Dynamics (MUX)
         SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);

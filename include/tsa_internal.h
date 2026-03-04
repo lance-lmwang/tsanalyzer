@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "tsa.h"
+#include "mpmc_queue.h"
 
 typedef __int128_t int128_t;
 typedef int128_t q64_64;
@@ -86,6 +87,32 @@ typedef struct {
 } tsa_sampling_point_t;
 
 typedef enum { TS_SYNC_HUNTING = 0, TS_SYNC_CONFIRMING, TS_SYNC_LOCKED } tsa_sync_state_t;
+
+typedef enum {
+    TSA_EVENT_CC_ERROR = 0,
+    TSA_EVENT_PCR_JITTER,
+    TSA_EVENT_PCR_REPETITION,
+    TSA_EVENT_SCTE35,
+    TSA_EVENT_SYNC_LOSS,
+    TSA_EVENT_CRC_ERROR,
+    TSA_EVENT_PAT_TIMEOUT,
+    TSA_EVENT_PMT_TIMEOUT
+} tsa_event_type_t;
+
+typedef struct {
+    tsa_event_type_t type;
+    uint16_t pid;
+    uint64_t timestamp_ns;
+    uint64_t value;
+} tsa_event_t;
+
+#define MAX_EVENT_QUEUE 1024
+
+typedef struct {
+    tsa_event_t events[MAX_EVENT_QUEUE];
+    alignas(64) _Atomic size_t head;
+    alignas(64) _Atomic size_t tail;
+} tsa_event_ring_t;
 
 typedef struct {
     uint8_t table_id;
@@ -180,6 +207,7 @@ struct tsa_handle {
     bool* ignore_next_cc;
     bool* pid_seen;
     bool* pid_is_pmt;
+    bool* pid_is_scte35;
     uint8_t* pid_stream_type;
     int16_t* pid_to_active_idx;
     uint32_t pid_tracker_count;
@@ -229,9 +257,17 @@ struct tsa_handle {
     uint64_t stc_ns;           // PCR-driven System Time Clock
     uint64_t last_pcr_stc_ns;  // STC at last PCR arrival
 
+    // PCR-to-Wall drift tracking
+    uint64_t stc_first_lock_pcr_ns;
+    uint64_t stc_first_lock_wall_ns;
+    float stc_wall_drift_ppm;
+
     void* pool_base;
     size_t pool_offset;
     size_t pool_size;
+
+    /* Event-driven Alarm Queue (inspired by opensrthub) */
+    tsa_event_ring_t* event_q;
 };
 
 /* Stage-specific processing for multithreaded pipeline */
@@ -260,7 +296,68 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns,
 #define TS_PCR_FLAG 0x10
 
 /* --- Internal Utilities --- */
+void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid);
+void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t pid);
+
+/* --- Bit Reader (Shared for ES Inspectors) --- */
+typedef struct {
+    const uint8_t* buf;
+    int size;
+    int pos;
+} bit_reader_t;
+
+static inline uint32_t read_bits(bit_reader_t* r, int n) {
+    uint32_t val = 0;
+    for (int i = 0; i < n; i++) {
+        if (r->pos / 8 >= r->size) break;
+        val = (val << 1) | ((r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1);
+        r->pos++;
+    }
+    return val;
+}
+
+static inline uint32_t read_ue(bit_reader_t* r) {
+    int count = 0;
+    while (read_bits(r, 1) == 0 && count < 32) count++;
+    if (count >= 32) return 0;
+    return (1 << count) - 1 + read_bits(r, count);
+}
+
+typedef struct {
+    const uint8_t* buf;
+    int size;
+    int pos;
+    int zeros;
+} h265_reader_t;
+
+static inline uint32_t read_bits_h265(h265_reader_t* r, int n) {
+    uint32_t val = 0;
+    for (int i = 0; i < n; i++) {
+        if (r->pos / 8 >= r->size) break;
+        if ((r->pos % 8 == 0) && r->zeros >= 2 && r->buf[r->pos / 8] == 0x03) {
+            r->pos += 8;
+            r->zeros = 0;
+        }
+        if (r->pos / 8 >= r->size) break;
+        uint8_t bit = (r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1;
+        val = (val << 1) | bit;
+        if (bit == 0)
+            r->zeros++;
+        else
+            r->zeros = 0;
+        r->pos++;
+    }
+    return val;
+}
+
+static inline uint32_t read_ue_h265(h265_reader_t* r) {
+    int count = 0;
+    while (read_bits_h265(r, 1) == 0 && count < 32) count++;
+    if (count >= 32) return 0;
+    return (1 << count) - 1 + read_bits_h265(r, count);
+}
+
 int tsa_fast_itoa(char* buf, int64_t val);
 int tsa_fast_ftoa(char* buf, float val, int precision);
 
@@ -306,6 +403,8 @@ int128_t ts_now_ns128(void);
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len, uint64_t now_ns);
 const char* tsa_stream_type_to_str(uint8_t type);
 void tsa_export_pid_labels(tsa_metric_buffer_t* buf, tsa_handle_t* h, uint16_t pid);
+
+void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64_t val);
 
 void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t now_ns);
 void tsa_render_dashboard(tsa_handle_t* h);

@@ -21,7 +21,7 @@ set(USE_STATIC_LIBSTDCXX ON CACHE BOOL "Use static libstdc++ for air-gapped depl
 add_subdirectory(deps/srt)
 include_directories(include deps/mongoose deps/srt/srtcore ${CMAKE_CURRENT_BINARY_DIR}/deps/srt)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_psi.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
 target_link_libraries(tsp_core srt_static pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
