@@ -99,6 +99,9 @@ static void process_scte35(tsa_handle_t* h, uint16_t pid, const uint8_t* p) {
     // ...
     // p[13]: splice_command_type
     if (p[0] != 0xFC) return;
+    int sl = ((p[1] & 0x0F) << 8) | p[2];
+    if (sl < 11) return; // Minimal SCTE-35 header is ~11 bytes + CRC
+
     uint8_t cmd_type = p[13];
     const char* cmd_name = "Unknown";
     switch (cmd_type) {
