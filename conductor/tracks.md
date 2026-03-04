@@ -21,3 +21,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track: Professional Content-Layer Analysis (PES & GOP)**
   *Link: [./tracks/professional_content_analysis_20260304/](./tracks/professional_content_analysis_20260304/)*
 
+- [ ] **Track: Architectural Evolution & Advanced Analytics**
+  *Link: [./tracks/architectural_evolution_20260305/](./tracks/architectural_evolution_20260305/)*
+
