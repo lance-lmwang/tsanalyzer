@@ -446,12 +446,22 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
     bool is_h264 = (strcmp(st, "H.264") == 0);
     bool is_h265 = (strcmp(st, "HEVC") == 0);
     if (!is_h264 && !is_h265 && strcmp(st, "ES") != 0) return;
-    for (int i = 0; i <= len - 4; i++) {
-        if (pay[i] == 0x00 && pay[i + 1] == 0x00 && pay[i + 2] == 0x01) {
+
+    const uint8_t* p = pay;
+    const uint8_t* end = pay + len - 4;
+    while (p <= end) {
+        // Optimized Start-Code Scanner using memchr
+        p = memchr(p, 0x00, end - p + 1);
+        if (!p) break;
+        if (p[1] == 0x00 && p[2] == 0x01) {
             uint8_t nt;
-            const uint8_t* d = pay + i + 3;
-            int l = len - (i + 3);
-            if (l <= 0) continue;
+            const uint8_t* d = p + 3;
+            int l = len - (int)(d - pay);
+            if (l <= 0) {
+                p++;
+                continue;
+            }
+
             bool is_idr = false, is_sps = false;
             if (is_h264) {
                 nt = d[0] & 0x1F;
@@ -466,6 +476,7 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                 is_sps = (nt == 7);
                 is_idr = (nt == 5);
             }
+
             if (is_sps) {
                 if (is_h264)
                     parse_h264_sps(h, pid, d, l);
@@ -474,6 +485,9 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
             } else if (is_idr || (is_h264 && nt == 1) || (is_h265 && (nt >= 0 && nt <= 9))) {
                 tsa_handle_video_frame(h, pid, nt, d, l, is_h265);
             }
+            p += 3;  // Skip the found start code
+        } else {
+            p++;
         }
     }
 }
@@ -618,6 +632,8 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->pid_au_head = calloc(TS_PID_MAX, 1);
     h->pid_au_tail = calloc(TS_PID_MAX, 1);
     h->pid_pending_dts = calloc(TS_PID_MAX, sizeof(uint64_t));
+    h->pid_last_pts_33 = calloc(TS_PID_MAX, sizeof(uint64_t));
+    h->pid_pts_offset_64 = calloc(TS_PID_MAX, sizeof(uint64_t));
     h->live = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->prev_snap_base = calloc(1, sizeof(tsa_tr101290_stats_t));
     h->double_buffer.buffers[0] = calloc(1, sizeof(tsa_snapshot_full_t));
@@ -628,7 +644,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 32);
-    h->pool_size = 1024 * 1024 + 32 * 4096; /* 1MB + 32 slots * 4KB for PES */
+    h->pool_size = 1024 * 1024 + 32 * 65536; /* 1MB + 32 slots * 64KB for PES */
     if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
     h->pool_offset = 0;
     h->pes_total_allocated = 32 * 4096;
@@ -639,6 +655,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pid_gop_min[i] = 0xFFFFFFFF;
         h->pid_pes_buf[i] = NULL;
         h->pid_pes_cap[i] = 0;
+        h->pid_last_pts_33[i] = 0x1FFFFFFFFULL;
     }
     /* Assign first 32 potential PES buffers to a pool */
     h->pes_pool_used = 0;
@@ -692,6 +709,8 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_au_head);
     FREE_IF(h->pid_au_tail);
     FREE_IF(h->pid_pending_dts);
+    FREE_IF(h->pid_last_pts_33);
+    FREE_IF(h->pid_pts_offset_64);
     FREE_IF(h->live);
     FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]);
@@ -795,6 +814,25 @@ static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
     return idx;
 }
 
+static uint64_t tsa_recover_pts_64(tsa_handle_t* h, uint16_t pid, uint64_t pts_33) {
+    if (h->pid_last_pts_33[pid] == 0x1FFFFFFFFULL) {
+        h->pid_last_pts_33[pid] = pts_33;
+        h->pid_pts_offset_64[pid] = 0;
+        return pts_33;
+    }
+    uint64_t last_33 = h->pid_last_pts_33[pid];
+    // PTS wrap: 33 bits = 0x1FFFFFFFF (8589934591)
+    if (pts_33 < last_33 && (last_33 - pts_33) > 0x100000000ULL) {
+        h->pid_pts_offset_64[pid] += 0x200000000ULL;
+    } else if (pts_33 > last_33 && (pts_33 - last_33) > 0x100000000ULL) {
+        if (h->pid_pts_offset_64[pid] >= 0x200000000ULL) {
+            h->pid_pts_offset_64[pid] -= 0x200000000ULL;
+        }
+    }
+    h->pid_last_pts_33[pid] = pts_33;
+    return pts_33 + h->pid_pts_offset_64[pid];
+}
+
 void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_result_t* r) {
     if (!h || !p || !r) return;
     (void)n;
@@ -805,10 +843,28 @@ void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_de
     r->has_payload = (p[3] & 0x10) && r->payload_len > 0;
     r->cc = p[3] & 0x0F;
     r->has_discontinuity = (r->af_len > 1) && (p[5] & 0x80);
+    r->has_pes_header = false;
+    r->pts = r->dts = 0;
+
+    if (r->pusi && r->has_payload) {
+        tsa_pes_header_t ph;
+        if (tsa_parse_pes_header(p + 4 + r->af_len, r->payload_len, &ph) == 0) {
+            r->has_pes_header = true;
+            r->pts = ph.pts;
+            r->dts = ph.dts;
+        }
+    }
 }
 void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_result_t* r) {
     if (!h || !p || !r) return;
     tsa_decode_packet_pure(h, p, n, r);
+
+    // Stateful PTS/DTS recovery
+    if (r->has_pes_header) {
+        r->pts = tsa_recover_pts_64(h, r->pid, r->pts);
+        r->dts = tsa_recover_pts_64(h, r->pid, r->dts);
+    }
+
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r->pid);
     h->live->pid_packet_count[r->pid]++;
@@ -940,10 +996,14 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
     }
 
     // Calculate STC increment
-    if (h->stc_locked && h->live->pcr_bitrate_bps > TSA_MIN_PCR_BITRATE) {
-        h->stc_ns += (1504ULL * 1000000000ULL) / h->live->pcr_bitrate_bps;
+    uint64_t br_for_inc = h->live->pcr_bitrate_bps;
+    if (br_for_inc < TSA_MIN_PCR_BITRATE) br_for_inc = h->live->physical_bitrate_bps;
+    if (br_for_inc < TSA_MIN_PCR_BITRATE) br_for_inc = 10000000; // Default 10Mbps
+
+    if (h->stc_locked) {
+        h->stc_ns += (1504ULL * 1000000000ULL) / br_for_inc;
     } else {
-        // Fallback: If no PCR bitrate, use wall clock delta since last packet
+        // Fallback: If not locked, use wall clock delta since last packet
         h->stc_ns += (now > h->last_pcr_arrival_ns) ? (now - h->last_pcr_arrival_ns) : 1000000ULL;
     }
 
@@ -1037,36 +1097,27 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             }
             h->pid_pes_len[pid] = 0;
 
-            // Check for PES header and PTS
-            const uint8_t* payload = pkt + 4 + res->af_len;
-            tsa_pes_header_t ph;
-            if (tsa_parse_pes_header(payload, res->payload_len, &ph) == 0) {
-                if (ph.has_pts) {
-                    h->pid_pending_dts[pid] = (ph.dts * 1000000ULL) / 90;
+            // Use pre-parsed PES header and PTS from ts_decode_result_t
+            if (res->has_pes_header) {
+                h->pid_pending_dts[pid] = (res->dts * 1000000ULL) / 90;
 
-                    const char* st = tsa_get_pid_type_name(h, pid);
-                    if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
-                        h->last_v_pts = ph.pts;
-                        if (h->last_a_pts > 0)
-                            h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
-                    } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 ||
-                               strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0) {
-                        h->last_a_pts = ph.pts;
-                        if (h->last_v_pts > 0)
-                            h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
-                    }
-                }
-            } else {
-                // If PUSI but not a valid PES header for a known ES PID, it might be an error
-                if (h->live->pid_is_referenced[pid]) {
-                    // Possible PTS error
+                const char* st = tsa_get_pid_type_name(h, pid);
+                if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
+                    h->last_v_pts = res->pts;
+                    if (h->last_a_pts > 0)
+                        h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
+                } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 ||
+                           strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0) {
+                    h->last_a_pts = res->pts;
+                    if (h->last_v_pts > 0)
+                        h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
                 }
             }
 
             /* If no buffer assigned yet, grab one from the pool */
             if (h->pid_pes_buf[pid] == NULL && h->pes_pool_used < 32) {
-                h->pid_pes_buf[pid] = tsa_mem_pool_alloc(h, 4096);
-                h->pid_pes_cap[pid] = 4096;
+                h->pid_pes_buf[pid] = tsa_mem_pool_alloc(h, 65536);
+                h->pid_pes_cap[pid] = 65536;
                 h->pes_pool_used++;
             }
         }
@@ -1092,8 +1143,18 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         }
 
         if (h->config.op_mode == TSA_MODE_REPLAY || !h->stc_locked) {
+            bool first_lock = !h->stc_locked;
             h->stc_ns = pn;
             h->stc_locked = true;
+            if (first_lock) {
+                h->last_snap_ns = pn;
+                h->start_ns = pn;
+                // Reset baseline for the next snapshot to avoid burst artifacts
+                *h->prev_snap_base = *h->live;
+                for (int i = 0; i < TS_PID_MAX; i++) {
+                    if (h->pid_seen[i]) h->live->pid_last_seen_ns[i] = pn;
+                }
+            }
         }
 
         ts_pcr_window_add(&h->pcr_window, now, pn, 0);
@@ -1180,52 +1241,50 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     }
 
     uint64_t stc = h->stc_ns, dt = stc - h->last_snap_ns;
-    if (dt == 0) dt = 100000000ULL;
-    if (dt < 1000ULL) dt = 1000ULL;
+    // Handle time domain jump or zero dt
+    if (dt == 0 || dt > 1000000000000ULL) dt = 100000000ULL;
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0) {
+    if (dp > 0 && dt >= 5000000ULL) {
         uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
-        // EMA smoothing: new = 0.3 * instant + 0.7 * old
         if (h->live->physical_bitrate_bps == 0)
             h->live->physical_bitrate_bps = instant_br;
         else
             h->live->physical_bitrate_bps = (uint64_t)(0.3 * instant_br + 0.7 * h->live->physical_bitrate_bps);
-
-        // Safety cap: nobody is sending 100Gbps TS over loopback
         if (h->live->physical_bitrate_bps > 10000000000ULL) h->live->physical_bitrate_bps = 10000000000ULL;
     }
+
     h->live->mdi_mlr_pkts_s =
         (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * 1000000000ULL) / dt;
     h->live->mdi_df_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
     h->live->stream_utc_ms = stc / 1000000ULL;
 
     // TR 101 290 P1/P2 Timeout Alarms (using VSTC)
-    if (h->live->total_ts_packets > 0) {
+    if (h->stc_locked) {
         // PAT timeout (500ms)
         uint64_t pat_vstc_dt = h->stc_ns - h->live->pid_last_seen_vstc[0];
-        if (pat_vstc_dt > 500000000ULL) {
+        if (h->pid_seen[0] && pat_vstc_dt > 500000000ULL) {
             h->live->pat_error.count++;
             h->live->pat_error.last_timestamp_ns = n;
             h->live->alarm_pat_error = true;
-            h->pid_status[0] = TSA_STATUS_DEGRADED;
+            h->pid_status[0] = TSA_STATUS_INVALID;
         } else {
             h->live->alarm_pat_error = false;
         }
 
         // PMT timeout (500ms)
-        bool pmt_error = false;
+        bool pmt_missing = false;
         for (int i = 0; i < MAX_PROGRAMS; i++) {
             uint16_t ppid = h->programs[i].pmt_pid;
             if (ppid > 0 && ppid < TS_PID_MAX) {
                 uint64_t pmt_vstc_dt = h->stc_ns - h->live->pid_last_seen_vstc[ppid];
                 if (pmt_vstc_dt > 500000000ULL) {
-                    pmt_error = true;
-                    h->pid_status[ppid] = TSA_STATUS_DEGRADED;
+                    pmt_missing = true;
+                    h->pid_status[ppid] = TSA_STATUS_INVALID;
                 }
             }
         }
-        if (pmt_error) {
+        if (pmt_missing) {
             h->live->pmt_error.count++;
             h->live->pmt_error.last_timestamp_ns = n;
             h->live->alarm_pmt_error = true;
@@ -1245,7 +1304,6 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         }
     }
 
-    // Update discrete boolean flags for other errors
     h->live->alarm_sync_loss = !h->signal_lock;
     h->live->alarm_cc_error = (h->live->cc_error.count > h->prev_snap_base->cc_error.count);
     h->live->alarm_pcr_repetition_error =
@@ -1254,13 +1312,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count);
     h->live->alarm_crc_error = (h->live->crc_error.count > h->prev_snap_base->crc_error.count);
 
-    int128_t sq;
+    int128_t sq, ic;
     int64_t pa = 0;
     double sl = 1.0;
-    if (ts_pcr_window_regress(&h->pcr_window, &sq, NULL, &pa) == 0) {
+    if (ts_pcr_window_regress(&h->pcr_window, &sq, &ic, &pa) == 0) {
         sl = (double)sq / (double)((int128_t)1 << 64);
         h->live->pcr_drift_ppm = (sl - 1.0) * 1000000.0;
         h->live->pcr_accuracy_ns = (double)pa;
+        h->stc_slope_q64 = sq;
+        h->stc_intercept_q64 = ic;
     }
     float rn = 999.0f, re = 999.0f;
     if (h->live->pcr_bitrate_bps > h->live->physical_bitrate_bps && h->live->physical_bitrate_bps > 0) {
@@ -1275,8 +1335,6 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     double dr = fabs(sl - 1.0);
     if (dr > 0.000001) re = (float)((100.0 - h->live->pcr_accuracy_ns / 1000000.0) / dr / 1000.0);
     double cn = 0, ce = 0;
-    sn->predictive.rst_network_s = rn;
-    sn->predictive.rst_encoder_s = re;
     if (h->live->mdi_mlr_pkts_s > 0) cn += 0.8;
     if (rn < 5.0) cn += (5.0 - rn) / 5.0;
     if (h->live->pcr_jitter_max_ns > 10000000ULL)
@@ -1285,123 +1343,21 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         ce += 0.5;
     if (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count) ce += 0.4;
 
-    // Aggregate Video/Audio Metrics for Global Dashboard
     h->live->video_fps = 0;
     h->live->gop_ms = 0;
 
     uint32_t ptc = h->pid_tracker_count;
     if (ptc > MAX_ACTIVE_PIDS) ptc = MAX_ACTIVE_PIDS;
 
+    uint32_t ai = 0;
     for (uint32_t i = 0; i < ptc; i++) {
         uint16_t p = h->pid_active_list[i];
         if (p >= TS_PID_MAX) continue;
 
-        // Calculate PID-level bitrate with EMA smoothing
-        uint64_t p_dp = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
-        if (dt > 0) {
-            uint64_t p_instant_br = (uint64_t)(((unsigned __int128)p_dp * 1504 * 1000000000ULL) / dt);
-            if (h->live->pid_bitrate_bps[p] == 0)
-                h->live->pid_bitrate_bps[p] = p_instant_br;
-            else
-                h->live->pid_bitrate_bps[p] = (uint64_t)(0.3 * p_instant_br + 0.7 * h->live->pid_bitrate_bps[p]);
-        }
-
-        const char* st = tsa_get_pid_type_name(h, p);
-        if (!st) continue;
-
-        // Priority 1: Direct Video Codec Match
-        if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
-            if (h->pid_gop_ms[p] > 0 && h->pid_last_gop_n[p] > 0) {
-                h->live->video_fps = (float)h->pid_last_gop_n[p] * 1000.0f / h->pid_gop_ms[p];
-                h->live->gop_ms = h->pid_gop_ms[p];
-            }
-            // If we found a valid video PID with metrics, we can stop searching
-            if (h->live->video_fps > 0) break;
-        }
-
-        // Ghost PID Detection (Step 4)
-        if (p != 0 && p != 0x1FFF && !h->pid_is_pmt[p] && p != 0x11 && p != 0x01 && p != 0x10 && p != 0x12 &&
-            p != 0x14) {
-            if (!h->live->pid_is_referenced[p] && p_dp > 0) {
-                h->pid_status[p] = TSA_STATUS_DEGRADED;
-            }
-        }
-    }
-
-    for (int p = 0; p < TS_PID_MAX; p++)
-        if (h->pid_seen[p] && h->pid_eb_fill_q64[p] == 0 && h->live->pid_is_referenced[p]) ce += 0.9;
-    sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2)   ? 1
-                                  : (ce > 0.6 && cn < 0.2) ? 2
-                                  : (cn > 0.4 && ce > 0.4) ? 3
-                                                           : 0;
-    // Signal Loss Check (Timeout: 500ms relative to system time n)
-    bool any_packets_recently = false;
-    for (int p = 0; p < TS_PID_MAX; p++) {
-        if (h->pid_seen[p]) {
-            if (h->live->pid_last_seen_ns[p] > 0 && n > h->live->pid_last_seen_ns[p]) {
-                uint64_t dt = n - h->live->pid_last_seen_ns[p];
-                if (dt < 500000000ULL) {
-                    any_packets_recently = true;
-                    break;
-                }
-            }
-        }
-    }
-    if (!any_packets_recently && h->live->total_ts_packets > 0) {
-        h->signal_lock = false;
-    }
-
-    // BASE SCORING
-    float current_health = 100.0f;
-    if (!h->signal_lock) {
-        current_health = 0.0f;
-    } else {
-        // Penalty for SRT/Network Jitter
-        if (rn < 5.0f) {
-            current_health -= (5.0f - rn) * 4.0f;
-        }
-        // Penalty for Encoder Drift
-        if (re < 30.0f) {
-            current_health -= (30.0f - re) * 0.5f;
-        }
-        // AGGRESSIVE Penalty for CC Errors
-        uint64_t total_cc = h->live->cc_error.count;
-        uint64_t prev_cc = h->prev_snap_base->cc_error.count;
-        if (total_cc > prev_cc) {
-            current_health -= 25.0f;  // Drop 25 points immediately on CC error
-        }
-    }
-
-    if (current_health < 0) current_health = 0;
-
-    // Smooth Transition (to make errors visible on dashboard)
-    // If the new score is lower, jump there immediately.
-    // If higher, recover slowly.
-    if (current_health < h->last_health_score || h->last_health_score < 0.1) {
-        h->last_health_score = current_health;
-    } else {
-        h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
-    }
-    float he = h->last_health_score;
-
-    sn->predictive.master_health = he;
-    sn->summary.master_health = he;
-    sn->summary.total_packets = h->live->total_ts_packets;
-    sn->summary.signal_lock = h->signal_lock;
-    sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
-
-    strncpy(sn->service_name, h->service_name, 255);
-    sn->service_name[255] = '\0';
-    strncpy(sn->provider_name, h->provider_name, 255);
-    sn->provider_name[255] = '\0';
-
-    sn->stats = *h->live;
-    uint32_t ai = 0;
-    for (uint32_t i = 0; i < h->pid_tracker_count && ai < MAX_ACTIVE_PIDS; i++) {
-        uint16_t p = h->pid_active_list[i];
-        uint64_t pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
-        if (pd > 0) {
-            uint64_t cb = (pd * 1504 * 1000000000ULL) / dt;
+        uint64_t p_pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
+        if (p_pd > 0 && dt >= 5000000ULL) {
+            uint64_t cb = (p_pd * 1504 * 1000000000ULL) / dt;
+            if (cb > 10000000000ULL) cb = 10000000000ULL;
             if (h->live->pid_bitrate_bps[p] == 0)
                 h->live->pid_bitrate_bps[p] = cb;
             else
@@ -1409,24 +1365,65 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
                     (cb * (uint64_t)h->pcr_ema_alpha_q32 +
                      h->live->pid_bitrate_bps[p] * ((1ULL << 32) - (uint64_t)h->pcr_ema_alpha_q32)) >>
                     32;
-            if (cb > 0) {
-                if (h->pid_bitrate_min[p] == 0 || cb < h->pid_bitrate_min[p]) h->pid_bitrate_min[p] = cb;
-                if (cb > h->pid_bitrate_max[p]) h->pid_bitrate_max[p] = cb;
+        }
+
+        const char* p_st = tsa_get_pid_type_name(h, p);
+        if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0) {
+            if (h->pid_gop_ms[p] > 0 && h->pid_last_gop_n[p] > 0) {
+                h->live->video_fps = (float)h->pid_last_gop_n[p] * 1000.0f / h->pid_gop_ms[p];
+                h->live->gop_ms = h->pid_gop_ms[p];
             }
         }
+
         sn->pids[ai].pid = p;
-        strncpy(sn->pids[ai].type_str, tsa_get_pid_type_name(h, p), 15);
+        strncpy(sn->pids[ai].type_str, p_st, 15);
         sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16;
         sn->pids[ai].status = (uint8_t)h->pid_status[p];
         sn->pids[ai].width = h->pid_width[p];
         sn->pids[ai].height = h->pid_height[p];
+        sn->pids[ai].profile = h->pid_profile[p];
+        sn->pids[ai].audio_sample_rate = h->pid_audio_sample_rate[p];
+        sn->pids[ai].audio_channels = h->pid_audio_channels[p];
+        sn->pids[ai].gop_n = h->pid_last_gop_n[p];
+        sn->pids[ai].gop_min = h->pid_gop_min[p];
+        sn->pids[ai].gop_max = h->pid_gop_max[p];
+        sn->pids[ai].gop_ms = h->pid_gop_ms[p];
         sn->pids[ai].i_frames = h->pid_i_frames[p];
         sn->pids[ai].p_frames = h->pid_p_frames[p];
         sn->pids[ai].b_frames = h->pid_b_frames[p];
         sn->pids[ai].eb_fill_pct = (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0);
         ai++;
     }
+
     sn->active_pid_count = ai;
+    float current_health = 100.0f;
+    if (!h->signal_lock) {
+        current_health = 0.0f;
+    } else {
+        if (rn < 5.0f) current_health -= (5.0f - rn) * 4.0f;
+        if (re < 30.0f) current_health -= (30.0f - re) * 0.5f;
+        if (h->live->cc_error.count > h->prev_snap_base->cc_error.count) current_health -= 25.0f;
+    }
+    if (current_health < 0) current_health = 0;
+    if (current_health < h->last_health_score || h->last_health_score < 0.1)
+        h->last_health_score = current_health;
+    else
+        h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
+
+    sn->predictive.master_health = h->last_health_score;
+    sn->predictive.rst_network_s = rn;
+    sn->predictive.rst_encoder_s = re;
+    sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2) ? 1 : (ce > 0.6 && cn < 0.2) ? 2 : (cn > 0.4 && ce > 0.4) ? 3 : 0;
+
+    sn->summary.master_health = h->last_health_score;
+    sn->summary.total_packets = h->live->total_ts_packets;
+    sn->summary.signal_lock = h->signal_lock;
+    sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
+
+    strncpy(sn->service_name, h->service_name, 255);
+    strncpy(sn->provider_name, h->provider_name, 255);
+
+    sn->stats = *h->live;
     atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
     *h->prev_snap_base = *h->live;
     h->last_snap_ns = stc;

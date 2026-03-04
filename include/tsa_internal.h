@@ -157,6 +157,9 @@ struct tsa_handle {
     uint64_t last_v_pts;
     uint64_t last_a_pts;
 
+    uint64_t* pid_last_pts_33;
+    uint64_t* pid_pts_offset_64;
+
     uint64_t metro_last_now;
     uint64_t metro_offset;
 
@@ -240,6 +243,9 @@ typedef struct {
     int payload_len;
     uint8_t cc;
     bool has_discontinuity;
+    bool has_pes_header;
+    uint64_t pts;
+    uint64_t dts;
 } ts_decode_result_t;
 
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
