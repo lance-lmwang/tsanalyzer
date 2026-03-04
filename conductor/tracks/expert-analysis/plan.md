@@ -16,6 +16,6 @@
 - [x] Calculate real-time `buffer_fullness_pct`.
 
 ## Phase 4: Full API & Verification (The Delivery)
-- [x] Update `/api/v1/metrology/full` to include the `buffer_status` and `video_metadata` objects.
-- [ ] Create automated tests using the provided `btvhd.ts` sample.
-- [ ] Verify T-STD accuracy against existing MTS4000 logs.
+- [x] Update `/api/v1/metrology/full`: Include nested `buffer_status` and `video_metadata` objects in the JSON output.
+- [/] Create automated tests: `tests/test_tstd_btvhd.c` created, needs logic refinement for large JSON blobs.
+- [ ] Verify T-STD accuracy: Compare results against existing MTS4000 logs.
