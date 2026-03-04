@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
                 cfg.port = (uint16_t)atoi(optarg);
                 break;
             case 'S':
-                cfg.srt_url = optarg;
+                cfg.url = optarg;
                 break;
             case 'P':
                 cfg.mode = TSPACER_MODE_PCR;
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if ((cfg.mode != TSPACER_MODE_PCR && cfg.bitrate == 0) || (cfg.dest_ip == NULL && cfg.srt_url == NULL)) {
+    if ((cfg.mode != TSPACER_MODE_PCR && cfg.bitrate == 0) || (cfg.dest_ip == NULL && cfg.url == NULL)) {
         fprintf(stderr, "Error: Missing required arguments.\n");
         print_usage(argv[0]);
         return 1;

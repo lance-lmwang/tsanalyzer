@@ -167,7 +167,7 @@ typedef struct {
     uint32_t entropy_window_packets;
 
     int udp_port;
-    char srt_url[256];
+    char url[256];
     int http_port;
 } tsa_config_t;
 

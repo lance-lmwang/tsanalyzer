@@ -36,7 +36,7 @@ typedef struct {
     uint64_t bitrate;
     uint32_t ts_per_udp;
     int cpu_core;
-    const char* srt_url;
+    const char* url;
     const char* dest_ip;
     uint16_t port;
     uint16_t pcr_pid;
@@ -107,7 +107,7 @@ void spsc_ring_destroy(spsc_ring_t* r);
 int spsc_ring_push(spsc_ring_t* r, const uint8_t* data, size_t sz);
 int spsc_ring_pop(spsc_ring_t* r, uint8_t* data, size_t sz);
 
-int parse_srt_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
+int parse_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
                       int* pbkeylen);
 
 #endif

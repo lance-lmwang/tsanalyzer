@@ -29,7 +29,7 @@ static int setup_srt(tsp_handle_t* h, const char* url) {
     char host[256];
     int port, is_l, lat, pb;
     char pass[128] = "";
-    if (parse_srt_url_ext(url, host, &port, &is_l, &lat, pass, &pb) != 0) {
+    if (parse_url_ext(url, host, &port, &is_l, &lat, pass, &pb) != 0) {
         fprintf(stderr, "SRT: URL parse failed: %s\n", url);
         return -1;
     }
@@ -164,8 +164,8 @@ tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
     h->fd = socket(AF_INET, SOCK_DGRAM, 0);
     h->last_pcr_val_tx = INVALID_PCR;
 
-    if (cfg->srt_url) {
-        if (setup_srt(h, cfg->srt_url) != 0) {
+    if (cfg->url) {
+        if (setup_srt(h, cfg->url) != 0) {
             free(h->ring_buffer);
             if (h->fd >= 0) close(h->fd);
             free(h);

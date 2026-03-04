@@ -115,13 +115,13 @@ static void* capture_thread(void* arg) {
                 usleep(1000);
         }
         close(fd);
-    } else if (strlen(cfg->srt_url) > 0) {
+    } else if (strlen(cfg->url) > 0) {
         srt_startup();
         SRTSOCKET sock = srt_create_socket();
         struct sockaddr_in sa = {0};
         char addr_str[256];
         int port = 9000;
-        sscanf(cfg->srt_url, "srt://%[^:]:%d", addr_str, &port);
+        sscanf(cfg->url, "srt://%[^:]:%d", addr_str, &port);
         sa.sin_family = AF_INET;
         sa.sin_port = htons(port);
         sa.sin_addr.s_addr = (strlen(addr_str) == 0 || addr_str[0] == ':') ? INADDR_ANY : inet_addr(addr_str);
@@ -129,7 +129,7 @@ static void* capture_thread(void* arg) {
         srt_setsockopt(sock, 0, SRTO_RCVSYN, &yes, sizeof(yes));
         if (srt_bind(sock, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
             srt_listen(sock, 1);
-            printf("CLI: SRT Live Capture Active (%s)\n", cfg->srt_url);
+            printf("CLI: SRT Live Capture Active (%s)\n", cfg->url);
             while (g_keep_running) {
                 struct sockaddr_in cli;
                 int clen = sizeof(cli);
@@ -311,7 +311,7 @@ int main(int argc, char** argv) {
                 cap_args.cfg.udp_port = atoi(optarg);
                 break;
             case 's':
-                strncpy(cap_args.cfg.srt_url, optarg, sizeof(cap_args.cfg.srt_url) - 1);
+                strncpy(cap_args.cfg.url, optarg, sizeof(cap_args.cfg.url) - 1);
                 break;
             case 'm':
                 if (strcmp(optarg, "live") == 0)

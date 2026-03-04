@@ -16,7 +16,7 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
     char host[256];
     int port, is_listener, latency, pbkeylen;
     char passphrase[128] = "";
-    if (parse_srt_url_ext(url, host, &port, &is_listener, &latency, passphrase, &pbkeylen) != 0) return NULL;
+    if (parse_url_ext(url, host, &port, &is_listener, &latency, passphrase, &pbkeylen) != 0) return NULL;
 
     srt_startup();
     SRTSOCKET s = srt_create_socket();

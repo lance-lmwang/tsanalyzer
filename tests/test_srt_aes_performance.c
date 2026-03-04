@@ -30,7 +30,7 @@ void* srt_listener_thread(void* arg) {
 void test_srt_aes_performance() {
     printf("Running test_srt_aes_performance...\n");
 
-    const char* srt_url = "srt://127.0.0.1:9004?mode=caller&passphrase=benchmark-secret-key-123&pbkeylen=16";
+    const char* url = "srt://127.0.0.1:9004?mode=caller&passphrase=benchmark-secret-key-123&pbkeylen=16";
 
     pthread_t l_thread;
     pthread_create(&l_thread, NULL, srt_listener_thread, NULL);
@@ -41,7 +41,7 @@ void test_srt_aes_performance() {
     tsp_config_t cfg = {0};
     cfg.bitrate = 100000000;  // 100 Mbps
     cfg.ts_per_udp = 7;
-    cfg.srt_url = srt_url;
+    cfg.url = url;
 
     tsp_handle_t* pacer = tsp_create(&cfg);
     if (!pacer) {
