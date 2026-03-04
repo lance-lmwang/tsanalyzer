@@ -913,6 +913,9 @@ static void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid) {
     h->live->pid_eb_fill_bytes[pid] = (uint32_t)(h->pid_eb_fill_q64[pid] >> 64);
 }
 
+#define TSA_MIN_PCR_BITRATE 10000
+#define TSA_SYNC_GUARD_THRESHOLD_NS 1000000000ULL
+
 void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, const ts_decode_result_t* res) {
     if (!h || !pkt || !res) return;
     uint16_t pid = res->pid;
@@ -929,6 +932,26 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->metro_last_now = now;
         h->metro_offset = 0;
     }
+    
+    // Calculate STC increment
+    if (h->stc_locked && h->live->pcr_bitrate_bps > TSA_MIN_PCR_BITRATE) {
+        h->stc_ns += (1504ULL * 1000000000ULL) / h->live->pcr_bitrate_bps;
+    } else {
+        // Fallback: If no PCR bitrate, use wall clock delta since last packet
+        h->stc_ns += (now > h->last_pcr_arrival_ns) ? (now - h->last_pcr_arrival_ns) : 1000000ULL;
+    }
+
+    // --- Hybrid Sync Guard ---
+    // If the gap between VSTC and System Clock exceeds threshold in Live mode,
+    // snap back to system clock to prevent starvation or infinite drift.
+    if (h->config.is_live) {
+        uint64_t diff = (h->stc_ns > now) ? (h->stc_ns - now) : (now - h->stc_ns);
+        if (diff > TSA_SYNC_GUARD_THRESHOLD_NS) {
+            h->stc_ns = now;
+        }
+    }
+    h->last_pcr_arrival_ns = now;
+
     if (h->live->pid_last_seen_ns[pid] > 0) {
         uint64_t dt = h->stc_ns - h->live->pid_last_seen_ns[pid];
         int128_t l_eb = TO_Q64_64(0.04), l_tb = TO_Q64_64(0.05);
@@ -1080,22 +1103,7 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->last_pcr_ticks = pt;
         h->last_pcr_arrival_ns = now;
         h->pkts_since_pcr = 0;
-    } else {
-        if (h->stc_locked && h->live->pcr_bitrate_bps > 10000) {
-            h->stc_ns += (1504ULL * 1000000000ULL) / h->live->pcr_bitrate_bps;
-        } else {
-            // Fallback: If no PCR bitrate, use wall clock delta since last packet
-            h->stc_ns += (now > h->last_pcr_arrival_ns) ? (now - h->last_pcr_arrival_ns) : 1000000ULL;
-        }
-
-        // --- Hybrid Sync Guard ---
-        // If the gap between VSTC and System Clock exceeds 1s in Live mode,
-        // snap back to system clock to prevent starvation or infinite drift.
-        if (h->config.is_live && (uint64_t)abs((int64_t)h->stc_ns - (int64_t)now) > 1000000000ULL) {
-            h->stc_ns = now;
-        }
     }
-    h->last_pcr_arrival_ns = now; // Update for next packet reference
 }
 
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {

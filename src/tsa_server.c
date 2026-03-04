@@ -146,17 +146,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                          "Access-Control-Allow-Origin: *\r\n\r\n");
 
             mg_http_printf_chunk(c, "[");
+            
+            // Allocate single buffer outside the loop to reduce stack pressure
+            static char stream_json[128 * 1024]; 
+            
             for (int i = 0; i < g_node_count; i++) {
                 tsa_snapshot_full_t snap;
                 if (tsa_take_snapshot_full(g_nodes[i].tsa, &snap) == 0) {
-                    if (i > 0) mg_http_printf_chunk(c, ",");
-
-                    // Use a stack-based small buffer for individual stream snapshots
-                    // as tsa_snapshot_to_json still requires a buffer.
-                    // 128KB is plenty for a single stream's PID list.
-                    char stream_json[128 * 1024];
-                    tsa_snapshot_to_json(&snap, stream_json, sizeof(stream_json));
-                    mg_http_printf_chunk(c, "%s", stream_json);
+                    size_t jlen = tsa_snapshot_to_json(&snap, stream_json, sizeof(stream_json));
+                    if (jlen > 0) {
+                        if (i > 0) mg_http_printf_chunk(c, ",");
+                        mg_http_printf_chunk(c, "%s", stream_json);
+                    }
                 }
             }
             mg_http_printf_chunk(c, "]");

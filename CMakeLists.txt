@@ -421,6 +421,10 @@ add_executable(test_crc_error_psi tests/test_crc_error_psi.c)
 target_link_libraries(test_crc_error_psi tsp_core pthread m dl ssl crypto)
 add_test(NAME test_crc_error_psi COMMAND test_crc_error_psi)
 
+add_executable(test_psi_version_rollover tests/test_psi_version_rollover.c)
+target_link_libraries(test_psi_version_rollover tsp_core pthread m dl ssl crypto)
+add_test(NAME test_psi_version_rollover COMMAND test_psi_version_rollover)
+
 # --- Professional Tier Tests ---
 add_executable(test_pcr_pro tests/test_pcr_pro.c)
 target_link_libraries(test_pcr_pro tsp_core m pthread)
