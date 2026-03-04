@@ -52,6 +52,17 @@ Between valid PCR samples ($PCR_1$ at $HAT_1$ and $PCR_2$ at $HAT_2$):
 2.  **Calculation**: Intermediate values derive solely from this linear relation.
 3.  **Rigor**: Uses **__int128 fixed-point arithmetic** to ensure overflow protection and bit-identical reconstruction across architectures.
 
+### 4.1 PCR Clock Inspector (27MHz Base)
+TsAnalyzer employs a dedicated **ClockInspector** module for each PCR PID to perform high-fidelity physical layer analysis:
+- **Reconstruction**: Recombines the 33-bit `base` and 9-bit `extension` into a continuous 42-bit 27MHz timeline.
+- **Wrap-around Handling**: Correctly handles the 42-bit PCR rollover (approx. every 26.5 hours).
+- **Drift Compensation**: Periodically resets the reference baseline (every 1000 PCRs) to distinguish between short-term **Jitter** and long-term **Drift** caused by local system clock PPM errors.
+
+### 4.2 Overall Jitter (PCR_OJ) Formula
+The Overall Jitter is calculated by comparing the actual PCR arrival with the expected arrival based on the monotonic system clock:
+$$Jitter = (PCR_{curr} - PCR_{ref}) - \frac{(HAT_{curr} - HAT_{ref}) \times 27,000,000}{1,000,000,000}$$
+Where $HAT$ is the Hardware Arrival Time in nanoseconds.
+
 ---
 
 ## 5. High-Precision Pacing Model (Pacer Side)

@@ -206,6 +206,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (!h) return NULL;
     ALLOC_OR_GOTO(h->pid_filters, ts_section_filter_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_status, tsa_measurement_status_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->clock_inspectors, tsa_clock_inspector_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_eb_fill_q64, int128_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_tb_fill_q64, int128_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_mb_fill_q64, int128_t, TS_PID_MAX);
@@ -277,6 +278,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pid_pes_buf[i] = NULL;
         h->pid_pes_cap[i] = 0;
         h->pid_last_pts_33[i] = 0x1FFFFFFFFULL;
+        h->clock_inspectors[i].pid = i;
     }
     /* Assign first 32 potential PES buffers to a pool */
     h->pes_pool_used = 0;
@@ -293,6 +295,7 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_filters);
     FREE_IF(h->pid_pes_buf);
     FREE_IF(h->pid_status);
+    FREE_IF(h->clock_inspectors);
     FREE_IF(h->pid_eb_fill_q64);
     FREE_IF(h->pid_tb_fill_q64);
     FREE_IF(h->pid_mb_fill_q64);
@@ -695,6 +698,16 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
     if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
         h->live->pid_is_referenced[pid] = true;
         tsa_update_pid_tracker(h, pid);
+
+        // Update the new ClockInspector
+        tsa_clock_update(pkt, &h->clock_inspectors[pid], now);
+        
+        // Sync new metrics to snapshot (for now, we'll use the ones from the first PCR PID seen)
+        // In a real multi-program environment, we might want to aggregate or show per-PID.
+        h->live->pcr_jitter_max_ns = (uint64_t)(fabs(h->clock_inspectors[pid].pcr_jitter_ms) * 1000000.0);
+        h->live->pcr_repetition_max_ms = h->clock_inspectors[pid].pcr_interval_max_ticks / (PCR_TICKS_PER_MS);
+        h->live->pcr_repetition_error.count = h->clock_inspectors[pid].priority_1_errors;
+
         uint64_t pt = extract_pcr(pkt), pn = pt * 1000 / 27;
 
         if (h->last_pcr_ticks > 0 && h->last_pcr_interval_bitrate_bps > 0) {
@@ -881,12 +894,29 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         } else {
             h->live->alarm_sdt_error = false;
         }
+
+        // PCR Repetition timeout (40ms - TR 101 290 1.1)
+        bool pcr_repetition_error = false;
+        for (int i = 0; i < MAX_PROGRAMS; i++) {
+            uint16_t pcr_pid = h->programs[i].pcr_pid;
+            if (pcr_pid > 0 && pcr_pid < TS_PID_MAX) {
+                if (h->clock_inspectors[pcr_pid].initialized) {
+                    int64_t elapsed_ns = (int64_t)(n - h->clock_inspectors[pcr_pid].last_pcr_local_ns);
+                    
+                    if (elapsed_ns > 40000000LL) { // 40ms
+                        pcr_repetition_error = true;
+                        h->live->pcr_repetition_error.count++;
+                        h->live->pcr_repetition_error.last_timestamp_ns = n;
+                        tsa_push_event(h, TSA_EVENT_PCR_REPETITION, pcr_pid, (uint64_t)(elapsed_ns / 1000000));
+                    }
+                }
+            }
+        }
+        h->live->alarm_pcr_repetition_error = pcr_repetition_error;
     }
 
     h->live->alarm_sync_loss = !h->signal_lock;
     h->live->alarm_cc_error = (h->live->cc_error.count > h->prev_snap_base->cc_error.count);
-    h->live->alarm_pcr_repetition_error =
-        (h->live->pcr_repetition_error.count > h->prev_snap_base->pcr_repetition_error.count);
     h->live->alarm_pcr_accuracy_error =
         (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count);
     h->live->alarm_crc_error = (h->live->crc_error.count > h->prev_snap_base->crc_error.count);

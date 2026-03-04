@@ -32,8 +32,8 @@ All metrology in TsAnalyzer is driven by the **[Timing Model](./02_timing_model.
 | :--- | :--- | :--- | :--- |
 | **Transport_error** | P 2.1 | Immediate | `transport_error_indicator` bit set to 1. |
 | **CRC_error** | P 2.2 | Immediate | CRC32 mismatch for PAT, PMT, CAT, NIT, SDT, EIT. |
-| **PCR_repetition** | P 2.3 | 40ms | Interval between PCRs > 1,080,000 V-STC units. |
-| **PCR_accuracy** | P 2.4 | ± 500ns | **Decomposed metrology**: PCR_AC (Accuracy), PCR_DR (Drift), PCR_OJ (Jitter). |
+| **PCR_repetition** | P 2.3 | 40ms | **Dual-Path Detection**: 1. Per-packet interval check; 2. Background heartbeat check (triggers if stream stops). |
+| **PCR_accuracy** | P 2.4 | ± 500ns | **Real-time Metrology**: PCR_OJ (Overall Jitter) measured via 27MHz ClockInspector module. |
 | **PCR_accuracy_piecewise** | P 2.4+ | ± 500ns | **Piecewise Model (Professional PCBR parity)**: Self-clocking accuracy derived from packet counts and interval bitrate. |
 | **PTS_error** | P 2.5 | 700ms | PTS interval > 18.9M V-STC units (90kHz). |
 | **CAT_error** | P 2.6 | Immediate | Table_ID != 0x01 when scrambling bit is set. |

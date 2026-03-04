@@ -21,7 +21,7 @@ set(USE_STATIC_LIBSTDCXX ON CACHE BOOL "Use static libstdc++ for air-gapped depl
 add_subdirectory(deps/srt)
 include_directories(include deps/mongoose deps/srt/srtcore ${CMAKE_CURRENT_BINARY_DIR}/deps/srt)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_psi.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_clock.c src/tsa_psi.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
 target_link_libraries(tsp_core srt_static pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
@@ -428,6 +428,10 @@ add_test(NAME test_crc_error_psi COMMAND test_crc_error_psi)
 add_executable(test_psi_version_rollover tests/test_psi_version_rollover.c)
 target_link_libraries(test_psi_version_rollover tsp_core pthread m dl ssl crypto)
 add_test(NAME test_psi_version_rollover COMMAND test_psi_version_rollover)
+
+add_executable(test_clock_inspector tests/test_clock_inspector.c)
+target_link_libraries(test_clock_inspector tsp_core pthread m)
+add_test(NAME test_clock_inspector COMMAND test_clock_inspector)
 
 # --- Professional Tier Tests ---
 add_executable(test_crc_pro tests/test_crc_pro.c)

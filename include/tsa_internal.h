@@ -7,6 +7,7 @@
 
 #include "mpmc_queue.h"
 #include "tsa.h"
+#include "tsa_clock.h"
 
 typedef __int128_t int128_t;
 typedef int128_t q64_64;
@@ -147,6 +148,7 @@ struct tsa_handle {
     uint64_t last_snap_ns;
 
     tsa_measurement_status_t* pid_status;  // Dynamic [TS_PID_MAX]
+    tsa_clock_inspector_t* clock_inspectors; // Dynamic [TS_PID_MAX]
 
     bool seen_pat, seen_pmt;
     bool signal_lock;
