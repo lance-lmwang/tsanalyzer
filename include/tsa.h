@@ -36,6 +36,16 @@ typedef struct {
     tsa_alarm_t pcr_accuracy_error;
     tsa_alarm_t pts_error;
     tsa_alarm_t cat_error;
+    tsa_alarm_t sdt_error;
+
+    bool alarm_sync_loss;
+    bool alarm_pat_error;
+    bool alarm_cc_error;
+    bool alarm_pmt_error;
+    bool alarm_pcr_repetition_error;
+    bool alarm_pcr_accuracy_error;
+    bool alarm_crc_error;
+    bool alarm_sdt_error;
 
     uint64_t cc_loss_count;
     uint64_t cc_duplicate_count;
@@ -61,6 +71,7 @@ typedef struct {
     float pid_eb_fill_pct[TS_PID_MAX];
     uint32_t pid_eb_fill_bytes[TS_PID_MAX];
     uint64_t pid_last_seen_ns[TS_PID_MAX];
+    uint64_t pid_last_seen_vstc[TS_PID_MAX];
     uint64_t total_ts_packets;
     uint64_t engine_processing_latency_ns;
     uint64_t internal_analyzer_drop;
@@ -129,6 +140,8 @@ typedef struct {
     tsa_tr101290_stats_t stats;
     tsa_srt_stats_t srt;
     tsa_predictive_stats_t predictive;
+    char service_name[256];
+    char provider_name[256];
     uint32_t active_pid_count;
     tsa_pid_info_t pids[MAX_ACTIVE_PIDS];
 } tsa_snapshot_full_t;

@@ -409,6 +409,18 @@ add_executable(test_es_deep_analysis tests/test_es_deep_analysis.c)
 target_link_libraries(test_es_deep_analysis tsp_core pthread m)
 add_test(NAME test_es_deep_analysis COMMAND test_es_deep_analysis)
 
+add_executable(test_psi_assembly tests/test_psi_assembly.c)
+target_link_libraries(test_psi_assembly tsp_core pthread m dl ssl crypto)
+add_test(NAME test_psi_assembly COMMAND test_psi_assembly)
+
+add_executable(test_fragmented_psi tests/test_fragmented_psi.c)
+target_link_libraries(test_fragmented_psi tsp_core pthread m dl ssl crypto)
+add_test(NAME test_fragmented_psi COMMAND test_fragmented_psi)
+
+add_executable(test_crc_error_psi tests/test_crc_error_psi.c)
+target_link_libraries(test_crc_error_psi tsp_core pthread m dl ssl crypto)
+add_test(NAME test_crc_error_psi COMMAND test_crc_error_psi)
+
 # --- Professional Tier Tests ---
 add_executable(test_pcr_pro tests/test_pcr_pro.c)
 target_link_libraries(test_pcr_pro tsp_core m pthread)

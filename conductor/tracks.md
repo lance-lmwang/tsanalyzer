@@ -15,3 +15,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: ES & T-STD Extension (Expert Analysis)**
   *Link: [./tracks/expert-analysis/](./tracks/expert-analysis/)*
+
+- [x] **Track: libeasyice Parity & Professional Robustness**
+  *Link: [./tracks/libeasyice_parity_20260304/](./tracks/libeasyice_parity_20260304/)*

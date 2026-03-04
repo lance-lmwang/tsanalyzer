@@ -92,6 +92,18 @@ typedef enum {
     TS_SYNC_LOCKED
 } tsa_sync_state_t;
 
+typedef struct {
+    uint8_t table_id;
+    uint8_t version_number;
+    uint8_t last_version;
+    bool seen_before;
+    uint16_t section_length;
+    uint16_t assembled_len;
+    uint8_t payload[4096];
+    bool active;
+    bool complete;
+} ts_section_filter_t;
+
 struct tsa_handle {
 
     tsa_config_t config;
@@ -104,6 +116,8 @@ struct tsa_handle {
     tsa_sensors_t sensors;
     tsa_sampling_point_t last_sampling_point;
     uint64_t last_pcr_total_pkts;
+
+    ts_section_filter_t* pid_filters; // Dynamic [TS_PID_MAX]
 
 
     alignas(64) uint64_t start_ns;
@@ -177,6 +191,9 @@ struct tsa_handle {
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
 
+    char service_name[256];
+    char provider_name[256];
+
     // PES & ES Deep Analysis (Expert Mode) - Dynamic
     uint8_t** pid_pes_buf;
     uint32_t* pid_pes_len;
@@ -231,6 +248,8 @@ typedef struct {
     bool has_discontinuity;
 } ts_decode_result_t;
 
+void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
+
 void tsa_decode_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
 void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
 void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, const ts_decode_result_t* res);
@@ -265,6 +284,7 @@ void tsa_mbuf_append_float(tsa_metric_buffer_t* b, float v, int prec);
 void tsa_mbuf_append_char(tsa_metric_buffer_t* b, char c);
 
 uint32_t mpegts_crc32(const uint8_t* data, int len);
+uint32_t tsa_crc32_check(const uint8_t* data, int len);
 
 /* FIX: Add missing T-STD function declarations for tests */
 float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t pid);

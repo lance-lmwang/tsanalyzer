@@ -145,7 +145,7 @@ tsa_server_monitor: release
 # --- Offline File Analysis (Replay Mode) ---
 tsa_file_report: release
 	@echo "$(GREEN)=== Starting TsAnalyzer Offline Forensic Analysis ===$(RESET)"
-	@./build/tsa --mode=replay sample/cctvhd.ts
+	@./build/tsa --mode=replay sample/mpts_4prog.ts
 	@echo "$(GREEN)Analysis Complete.$(RESET)"
 
 help:
