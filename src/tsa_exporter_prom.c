@@ -93,16 +93,19 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                     (unsigned long long)s->transport_error.count);
 
         SAFE_APPEND("tsa_transport_error_count%s %llu\n", labels, (unsigned long long)s->transport_error.count);
-        
+
         // Tier 4: ETR 290 P2 (CLOCK & TIMING)
         SAFE_APPEND("tsa_pcr_jitter_ms%s %.3f\n", labels, s->pcr_jitter_avg_ns / 1000000.0);
         SAFE_APPEND("tsa_pcr_repetition_errors%s %llu\n", labels, (unsigned long long)s->pcr_repetition_error.count);
         SAFE_APPEND("tsa_pcr_accuracy_errors%s %llu\n", labels, (unsigned long long)s->pcr_accuracy_error.count);
         SAFE_APPEND("tsa_pcr_accuracy_ns%s %.2f\n", labels, (float)s->pcr_accuracy_ns);
+        SAFE_APPEND("tsa_pcr_accuracy_piecewise_ms%s %.3f\n", labels, s->pcr_accuracy_ns_piecewise / 1000000.0);
 
         // Tier 5: Service Payload Dynamics (MUX)
         SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
         SAFE_APPEND("tsa_pcr_bitrate_bps%s %llu\n", labels, (unsigned long long)s->pcr_bitrate_bps);
+        SAFE_APPEND("tsa_pcr_bitrate_piecewise_bps%s %llu\n", labels,
+                    (unsigned long long)s->last_pcr_interval_bitrate_bps);
 
         // Tier 6: Essence Quality & Temporal Stability
         SAFE_APPEND("tsa_essence_video_fps%s %.2f\n", labels, (float)s->video_fps);
@@ -120,7 +123,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
             const char* pid_labels = h->pid_labels[p];
 
             SAFE_APPEND("tsa_pid_bitrate_bps%s %llu\n", pid_labels, (unsigned long long)s->pid_bitrate_bps[p]);
-            
+
             // T-STD Metrics
             if (snap->pids[j].eb_fill_pct > 0 || snap->pids[j].tb_fill_pct > 0) {
                 SAFE_APPEND("tsa_pid_tstd_eb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].eb_fill_pct);
@@ -138,7 +141,6 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                 }
             }
         }
-
     }
 #undef SAFE_APPEND
 }
@@ -177,15 +179,23 @@ void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t
         SAFE_APPEND("tsa_signal_lock_status%s %d\n", labels, snap->summary.signal_lock ? 1 : 0);
         SAFE_APPEND("tsa_health_score%s %.1f\n", labels, snap->predictive.master_health);
         SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
-        
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid, (unsigned long long)s->sync_loss.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid, (unsigned long long)s->pat_error.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid, (unsigned long long)s->cc_error.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pmt_error\"} %llu\n", sid, (unsigned long long)s->pmt_error.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pid_error\"} %llu\n", sid, (unsigned long long)s->pid_error.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pts_error\"} %llu\n", sid, (unsigned long long)s->pts_error.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"crc_error\"} %llu\n", sid, (unsigned long long)s->crc_error.count);
-        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"transport_error\"} %llu\n", sid, (unsigned long long)s->transport_error.count);
+
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
+                    (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid,
+                    (unsigned long long)s->pat_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid,
+                    (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pmt_error\"} %llu\n", sid,
+                    (unsigned long long)s->pmt_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pid_error\"} %llu\n", sid,
+                    (unsigned long long)s->pid_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"pts_error\"} %llu\n", sid,
+                    (unsigned long long)s->pts_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"crc_error\"} %llu\n", sid,
+                    (unsigned long long)s->crc_error.count);
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"transport_error\"} %llu\n", sid,
+                    (unsigned long long)s->transport_error.count);
     }
 #undef SAFE_APPEND
 }

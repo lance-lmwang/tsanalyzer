@@ -69,7 +69,6 @@ typedef struct {
 
 typedef enum { TSA_STATUS_VALID = 0, TSA_STATUS_DEGRADED = 1, TSA_STATUS_INVALID = 2 } tsa_measurement_status_t;
 
-
 typedef struct {
     _Atomic uint64_t total_packets;
     _Atomic uint64_t pid_packet_count[8192];
@@ -86,11 +85,7 @@ typedef struct {
     uint64_t cc_loss_count;
 } tsa_sampling_point_t;
 
-typedef enum {
-    TS_SYNC_HUNTING = 0,
-    TS_SYNC_CONFIRMING,
-    TS_SYNC_LOCKED
-} tsa_sync_state_t;
+typedef enum { TS_SYNC_HUNTING = 0, TS_SYNC_CONFIRMING, TS_SYNC_LOCKED } tsa_sync_state_t;
 
 typedef struct {
     uint8_t table_id;
@@ -105,20 +100,18 @@ typedef struct {
 } ts_section_filter_t;
 
 struct tsa_handle {
-
     tsa_config_t config;
 
     tsa_sync_state_t sync_state;
     uint32_t sync_confirm_count;
-    uint8_t  sync_buffer[188 * 2];
+    uint8_t sync_buffer[188 * 2];
     uint32_t sync_buffer_len;
 
     tsa_sensors_t sensors;
     tsa_sampling_point_t last_sampling_point;
     uint64_t last_pcr_total_pkts;
 
-    ts_section_filter_t* pid_filters; // Dynamic [TS_PID_MAX]
-
+    ts_section_filter_t* pid_filters;  // Dynamic [TS_PID_MAX]
 
     alignas(64) uint64_t start_ns;
     bool engine_started;
@@ -139,6 +132,7 @@ struct tsa_handle {
     uint64_t last_pcr_ticks;
     uint64_t last_pcr_arrival_ns;
     uint64_t pkts_since_pcr;
+    uint64_t last_pcr_interval_bitrate_bps;
     int128_t pcr_jitter_sq_sum_ns;
     uint64_t pcr_jitter_count;
     ts_pcr_window_t pcr_window;
@@ -147,14 +141,14 @@ struct tsa_handle {
     tsa_tr101290_stats_t* live;
     tsa_tr101290_stats_t* prev_snap_base;
 
-    char (*pid_labels)[128]; // [TS_PID_MAX] Pre-compiled prometheus labels
+    char (*pid_labels)[128];  // [TS_PID_MAX] Pre-compiled prometheus labels
     tsa_srt_stats_t srt_live;
 
     /* T-STD AU Queue */
     struct {
         uint64_t dts_ns;
         uint32_t size;
-    } (*pid_au_q)[32]; // [TS_PID_MAX][32]
+    } (*pid_au_q)[32];  // [TS_PID_MAX][32]
     uint8_t* pid_au_head;
     uint8_t* pid_au_tail;
 
@@ -162,7 +156,7 @@ struct tsa_handle {
 
     uint64_t last_v_pts;
     uint64_t last_a_pts;
-    
+
     uint64_t metro_last_now;
     uint64_t metro_offset;
 

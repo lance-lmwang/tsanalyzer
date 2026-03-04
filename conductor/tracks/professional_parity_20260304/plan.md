@@ -1,4 +1,4 @@
-# Implementation Plan: libeasyice Parity & Professional Robustness (20260304)
+# Implementation Plan: Professional Parity & Professional Robustness (20260304)
 
 ## Phase 1: Section Filter & Assembly Engine (PSI/SI)
 **Objective:** Replace naive single-packet table parsing with robust, multi-packet section assembly and CRC validation.
@@ -24,7 +24,7 @@
 - [x] **Step 3:** Update the dashboard output to surface the exact Audio/Video Sync drift based on the computed $\Delta(PTS_{video} - PTS_{audio})$ instead of raw arrival differences.
 
 ## Phase 4: Validation & Integration
-**Objective:** Prove parity with `libeasyice` using complex test streams.
+**Objective:** Prove parity with `Professional` using complex test streams.
 - [x] **Step 1:** Develop a unit test `test_fragmented_psi.c` that intentionally splits a PAT/PMT across 3 TS packets to verify the Section Assembler.
 - [x] **Step 2:** Inject artificial CRC errors in a test stream and verify that the engine ignores the corrupted table update.
 - [x] **Step 3:** Run a final regression using `make tsa_file_report` on a standard MPTS file and verify the dashboard successfully logs all TR 101 290 timeouts and AV sync metrics.

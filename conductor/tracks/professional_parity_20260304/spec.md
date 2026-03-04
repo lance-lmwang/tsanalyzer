@@ -1,15 +1,15 @@
-# Specification: libeasyice Parity & Professional Robustness (20260304)
+# Specification: Professional Parity & Professional Robustness (20260304)
 
 ## 1. Background and Motivation
-The current `tsanalyzer` has established a robust baseline for synchronized metrology (Sync-Lock, PCR VSTC, Sampling Barriers). However, when benchmarked against industrial-grade tools like `libeasyice`, gaps remain in comprehensive protocol decoding and deep validation. Specifically, the parser currently assumes a simplified SI/PSI layout and lacks a full TR 101 290 state machine. 
+The current `tsanalyzer` has established a robust baseline for synchronized metrology (Sync-Lock, PCR VSTC, Sampling Barriers). However, when benchmarked against industrial-grade tools like `Professional`, gaps remain in comprehensive protocol decoding and deep validation. Specifically, the parser currently assumes a simplified SI/PSI layout and lacks a full TR 101 290 state machine. 
 
-To achieve full "Measurement Instrument" status, `tsanalyzer` must adopt `libeasyice`'s architectural rigor in section filtering, table reassembly, and comprehensive error probing.
+To achieve full "Measurement Instrument" status, `tsanalyzer` must adopt `Professional`'s architectural rigor in section filtering, table reassembly, and comprehensive error probing.
 
 ## 2. Architectural Objectives
 
 ### 2.1 Stateful Section Assembly (PSI/SI Filtering)
 - **Current State:** The engine naively parses the first packet of a PAT/PMT/SDT assuming it fits within a single 188-byte payload. It does not validate CRC32 or handle multi-packet tables.
-- **Target State (libeasyice style):** Implement a Section Filter Engine (similar to `libdvbpsi` integration in `libeasyice`).
+- **Target State (Professional style):** Implement a Section Filter Engine (similar to `libdvbpsi` integration in `Professional`).
   - Reassemble tables split across multiple TS packets.
   - Implement strict CRC32 validation before accepting table data.
   - Track `version_number` to seamlessly handle dynamic channel map updates.

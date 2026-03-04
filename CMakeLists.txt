@@ -80,6 +80,9 @@ add_executable(test_entropy tests/test_entropy.c)
 target_link_libraries(test_entropy tsp_core pthread m)
 add_test(NAME test_entropy COMMAND test_entropy)
 
+add_executable(test_pcr_piecewise tests/test_pcr_piecewise.c)
+target_link_libraries(test_pcr_piecewise tsp_core ${SRT_LIBRARIES} ${EXTRA_LIBS} atomic m)
+
 add_executable(test_tr101290 tests/test_tr101290.c)
 target_link_libraries(test_tr101290 tsp_core pthread)
 add_test(NAME test_tr101290 COMMAND test_tr101290)

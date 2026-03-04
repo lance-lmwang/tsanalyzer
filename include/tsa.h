@@ -56,6 +56,7 @@ typedef struct {
     uint64_t pcr_jitter_max_ns;
     uint64_t pcr_repetition_max_ms;
     double pcr_accuracy_ns;
+    double pcr_accuracy_ns_piecewise;
     double pcr_drift_ppm;
     double mdi_df_ms;
     double mdi_mlr_pkts_s;
@@ -65,6 +66,7 @@ typedef struct {
     uint64_t stream_utc_ms;
     uint64_t pid_packet_count[TS_PID_MAX];
     uint64_t pid_bitrate_bps[TS_PID_MAX];
+    uint64_t last_pcr_interval_bitrate_bps;
     uint64_t pid_cc_errors[TS_PID_MAX];
     bool pid_is_referenced[TS_PID_MAX];
     uint64_t latched_cc_error;

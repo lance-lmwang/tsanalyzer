@@ -59,6 +59,8 @@ TsAnalyzer 2.0 provides a structured, broadcast-grade JSON report for live strea
   "metrics": {
     "bitrate_bps": 10000000,
     "pcr_jitter_ns": 420.5,
+    "pcr_accuracy_piecewise_ms": 0.05,
+    "piecewise_pcr_bitrate_bps": 9985420,
     "pcr_drift_ppm": 15.2,
     "mdi_df_ms": 5.24
   }
@@ -67,6 +69,8 @@ TsAnalyzer 2.0 provides a structured, broadcast-grade JSON report for live strea
 
 ### 3.2 Metric Definitions
 - **`health`**: 0-100 score. P1 errors trigger a 40-point penalty and a 60-point "Lid" rule.
+- **`pcr_accuracy_piecewise_ms`**: Self-clocking PCR accuracy derived from the Piecewise Constant Bitrate model (PCBR). Ideal for file analysis and non-live forensics.
+- **`piecewise_pcr_bitrate_bps`**: The instantaneous transport rate calculated between the last two PCR points.
 - **`pcr_drift_ppm`**: Clock frequency offset in Parts Per Million. Values > ±30 indicate source clock instability.
 - **`mdi_df_ms`**: Delay Factor. Buffer size (ms) required to neutralize network jitter.
 

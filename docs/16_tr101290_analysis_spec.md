@@ -34,12 +34,27 @@ All metrology in TsAnalyzer is driven by the **[Timing Model](./02_timing_model.
 | **CRC_error** | P 2.2 | Immediate | CRC32 mismatch for PAT, PMT, CAT, NIT, SDT, EIT. |
 | **PCR_repetition** | P 2.3 | 40ms | Interval between PCRs > 1,080,000 V-STC units. |
 | **PCR_accuracy** | P 2.4 | ± 500ns | **Decomposed metrology**: PCR_AC (Accuracy), PCR_DR (Drift), PCR_OJ (Jitter). |
+| **PCR_accuracy_piecewise** | P 2.4+ | ± 500ns | **Piecewise Model (Professional PCBR parity)**: Self-clocking accuracy derived from packet counts and interval bitrate. |
 | **PTS_error** | P 2.5 | 700ms | PTS interval > 18.9M V-STC units (90kHz). |
 | **CAT_error** | P 2.6 | Immediate | Table_ID != 0x01 when scrambling bit is set. |
 
 ---
 
-## 4. ISO/IEC 13818-1 Annex D: Buffer Simulation
+## 4. Piecewise Constant Bitrate Model (Professional PCBR Absorption)
+
+To ensure professional-grade accuracy in non-live environments (e.g., file analysis, re-broadcast forensics), TsAnalyzer implements the **Piecewise Constant Bitrate (PCBR)** model for PCR accuracy:
+
+1.  **Interval Bitrate Calculation**: For every pair of PCRs on the same PID, the engine calculates the *instantaneous transport rate* ($R_i$):
+    $$R_i = \frac{\text{packets\_since\_last\_pcr} \times 188 \times 8 \times 27,000,000}{\text{pcr\_current} - \text{pcr\_previous}}$$
+2.  **Self-Clocking Prediction**: The expected value for the *next* PCR ($PCR_{exp}$) is predicted using the previous interval's bitrate $R_{i-1}$:
+    $$PCR_{exp} = PCR_{prev} + \frac{\text{packets\_since\_last\_pcr} \times 188 \times 8 \times 27,000,000}{R_{i-1}}$$
+3.  **Accuracy Metric**: The `pcr_accuracy_ns_piecewise` is the difference between the actual and expected PCR, converted to nanoseconds.
+
+This model provides a **deterministic baseline** that is immune to system scheduling jitter or VSTC drift, making it the "Gold Standard" for verifying multiplexer compliance in offline workflows.
+
+---
+
+## 5. ISO/IEC 13818-1 Annex D: Buffer Simulation
 
 Buffer health metrology is driven by the **[Buffer Model](./03_buffer_model.md)**.
 - **T-STD Simulation**: TsAnalyzer implements a time-locked leaky bucket for every active PID.
