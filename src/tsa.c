@@ -538,7 +538,7 @@ static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     (void)now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     if (sl < 8) return;
-    
+
     // Skip SDT header (11 bytes including table_id, etc., up to first service)
     // p[0]: table_id
     // p[1..2]: section_length
@@ -548,7 +548,7 @@ static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     // p[7]: last_section_number
     // p[8..9]: original_network_id
     // p[10]: reserved_future_use
-    
+
     for (int i = 11; i < sl + 3 - 4; ) {
         // uint16_t service_id = (p[i] << 8) | p[i+1];
         uint16_t descriptors_loop_length = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
@@ -831,7 +831,7 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
 
         // Complete any pending section using the bytes before the pointer
         if (f->active && !f->complete && pointer > 0) {
-            int to_copy = (pointer < (f->section_length + 3 - f->assembled_len)) ? 
+            int to_copy = (pointer < (f->section_length + 3 - f->assembled_len)) ?
                           pointer : (f->section_length + 3 - f->assembled_len);
             memcpy(f->payload + f->assembled_len, payload + 1, to_copy);
             f->assembled_len += to_copy;
@@ -852,7 +852,7 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         f->table_id = payload[0];
         f->section_length = ((payload[1] & 0x0F) << 8) | payload[2];
         if (f->section_length > 4093) { f->active = false; return; }
-        
+
         f->assembled_len = 0;
         int to_copy = (len < f->section_length + 3) ? len : f->section_length + 3;
         memcpy(f->payload, payload, to_copy);
@@ -1081,10 +1081,21 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         h->last_pcr_arrival_ns = now;
         h->pkts_since_pcr = 0;
     } else {
-        if (h->stc_locked && h->live->pcr_bitrate_bps > 0) {
+        if (h->stc_locked && h->live->pcr_bitrate_bps > 10000) {
             h->stc_ns += (1504ULL * 1000000000ULL) / h->live->pcr_bitrate_bps;
+        } else {
+            // Fallback: If no PCR bitrate, use wall clock delta since last packet
+            h->stc_ns += (now > h->last_pcr_arrival_ns) ? (now - h->last_pcr_arrival_ns) : 1000000ULL;
+        }
+
+        // --- Hybrid Sync Guard ---
+        // If the gap between VSTC and System Clock exceeds 1s in Live mode,
+        // snap back to system clock to prevent starvation or infinite drift.
+        if (h->config.is_live && (uint64_t)abs((int64_t)h->stc_ns - (int64_t)now) > 1000000000ULL) {
+            h->stc_ns = now;
         }
     }
+    h->last_pcr_arrival_ns = now; // Update for next packet reference
 }
 
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
@@ -1273,7 +1284,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         }
 
         // Ghost PID Detection (Step 4)
-        if (p != 0 && p != 0x1FFF && !h->pid_is_pmt[p] && p != 0x11 && 
+        if (p != 0 && p != 0x1FFF && !h->pid_is_pmt[p] && p != 0x11 &&
             p != 0x01 && p != 0x10 && p != 0x12 && p != 0x14) {
             if (!h->live->pid_is_referenced[p] && p_dp > 0) {
                 h->pid_status[p] = TSA_STATUS_DEGRADED;
@@ -1340,7 +1351,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->summary.total_packets = h->live->total_ts_packets;
     sn->summary.signal_lock = h->signal_lock;
     sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
-    
+
     strncpy(sn->service_name, h->service_name, 255);
     sn->service_name[255] = '\0';
     strncpy(sn->provider_name, h->provider_name, 255);

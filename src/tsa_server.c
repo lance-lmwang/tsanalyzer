@@ -56,7 +56,7 @@ static void *worker(void *arg) {
         if (len > 0) {
             uint8_t *p = buf;
             int remaining = (int)len;
-            
+
             // 1. Handle previous remainder
             if (s->remainder_len > 0) {
                 int needed = 188 - s->remainder_len;
@@ -72,14 +72,14 @@ static void *worker(void *arg) {
                     remaining = 0;
                 }
             }
-            
+
             // 2. Handle full packets
             while (remaining >= 188) {
                 tsa_process_packet(s->tsa, p, now);
                 p += 188;
                 remaining -= 188;
             }
-            
+
             // 3. Store new remainder
             if (remaining > 0) {
                 memcpy(s->remainder, p, remaining);
@@ -130,7 +130,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             static char resp[1024 * 1024];
             tsa_handle_t *h_list[MAX_STREAMS];
             for (int i = 0; i < g_node_count; i++) h_list[i] = g_nodes[i].tsa;
-            
+
             if (mg_match(hm->uri, mg_str("/metrics/core"), NULL)) {
                 tsa_exporter_prom_core(h_list, g_node_count, resp, sizeof(resp));
             } else if (mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
@@ -140,18 +140,27 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
-            static char resp[2 * 1024 * 1024]; // 2MB for multi-stream JSON
-            int off = 0;
-            off += snprintf(resp + off, sizeof(resp) - off, "[");
+            mg_printf(c, "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: application/json\r\n"
+                         "Transfer-Encoding: chunked\r\n"
+                         "Access-Control-Allow-Origin: *\r\n\r\n");
+
+            mg_http_printf_chunk(c, "[");
             for (int i = 0; i < g_node_count; i++) {
                 tsa_snapshot_full_t snap;
                 if (tsa_take_snapshot_full(g_nodes[i].tsa, &snap) == 0) {
-                    if (i > 0) off += snprintf(resp + off, sizeof(resp) - off, ",");
-                    off += tsa_snapshot_to_json(&snap, resp + off, sizeof(resp) - off);
+                    if (i > 0) mg_http_printf_chunk(c, ",");
+
+                    // Use a stack-based small buffer for individual stream snapshots
+                    // as tsa_snapshot_to_json still requires a buffer.
+                    // 128KB is plenty for a single stream's PID list.
+                    char stream_json[128 * 1024];
+                    tsa_snapshot_to_json(&snap, stream_json, sizeof(stream_json));
+                    mg_http_printf_chunk(c, "%s", stream_json);
                 }
             }
-            off += snprintf(resp + off, sizeof(resp) - off, "]");
-            mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+            mg_http_printf_chunk(c, "]");
+            mg_http_printf_chunk(c, ""); // End of chunks
         }
     }
 }
