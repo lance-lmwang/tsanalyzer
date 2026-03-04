@@ -1060,7 +1060,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 }
 
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
-    if (p >= TS_PID_MAX) return "Unknown";
+    if (!h || p >= TS_PID_MAX) return "Unknown";
     if (p == 0) return "PAT";
     if (p == 0x1FFF) return "Stuffing";
     if (h->pid_is_pmt[p]) return "PMT";

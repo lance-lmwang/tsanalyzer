@@ -63,36 +63,45 @@ static int parse_json_value(const char* json, const char* key, char* out_buf, si
 int main() {
     printf("Running T-STD & Video Metadata Test (btvhd.ts)...\n");
 
+    const char* binary = "./tsa_cli";
+    if (access(binary, X_OK) != 0) binary = "./build/tsa_cli";
+    if (access(binary, X_OK) != 0) binary = "../build/tsa_cli";
+
+    const char* sample = "sample/btvhd.ts";
+    if (access(sample, R_OK) != 0) sample = "../sample/btvhd.ts";
+
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "./build/tsa_cli --mode=replay sample/btvhd.ts");
+    snprintf(cmd, sizeof(cmd), "%s --mode=replay %s", binary, sample);
+    printf("Executing: %s\n", cmd);
 
     FILE* fp = popen(cmd, "r");
     if (!fp) {
         perror("Failed to run tsa_cli command");
         return 1;
     }
-
+    
     char line[1024];
-    char* json_output = malloc(512 * 1024); // 512KB for JSON
-    json_output[0] = '\0';
-    bool in_json = false;
-
     while (fgets(line, sizeof(line), fp) != NULL) {
-        if (strstr(line, "CLI: Final metrology saved.")) {
-            in_json = true;
-            continue;
-        }
-        if (in_json) {
-            strcat(json_output, line);
-        }
+        printf("CLI: %s", line);
     }
     pclose(fp);
 
-    // Basic JSON validation
-    if (strlen(json_output) == 0) {
-        fprintf(stderr, "Error: JSON output is empty\n");
+    // Read from the saved JSON file
+    const char* json_file = "final_metrology.json";
+    FILE* jf = fopen(json_file, "r");
+    if (!jf) {
+        perror("Failed to open final_metrology.json");
         return 1;
     }
+
+    fseek(jf, 0, SEEK_END);
+    long fsize = ftell(jf);
+    fseek(jf, 0, SEEK_SET);
+
+    char* json_output = malloc(fsize + 1);
+    fread(json_output, 1, fsize, jf);
+    fclose(jf);
+    json_output[fsize] = 0;
 
     char pids_array[256 * 1024];
     if (parse_json_value(json_output, "pids", pids_array, sizeof(pids_array)) != 0) {

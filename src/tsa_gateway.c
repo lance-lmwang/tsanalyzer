@@ -29,7 +29,7 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
 
     gw->tsa = tsa_create(&cfg->analysis);
     gw->tsp = tsp_create(&cfg->pacing);
-    tsp_start(gw->tsp);
+    if (gw->tsp) tsp_start(gw->tsp);
 
     if (cfg->enable_auto_forensics) {
         gw->ring = tsa_packet_ring_create(cfg->forensic_ring_size ? cfg->forensic_ring_size : 10000);
@@ -42,8 +42,10 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
 
 void tsa_gateway_destroy(tsa_gateway_t* gw) {
     if (!gw) return;
-    tsp_stop(gw->tsp);
-    tsp_destroy(gw->tsp);
+    if (gw->tsp) {
+        tsp_stop(gw->tsp);
+        tsp_destroy(gw->tsp);
+    }
     tsa_destroy(gw->tsa);
     if (gw->ring) tsa_packet_ring_destroy(gw->ring);
     free(gw);

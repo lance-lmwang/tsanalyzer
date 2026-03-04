@@ -19,8 +19,11 @@ int main() {
     snap.pids[0].liveness_status = 1;
     snap.pids[0].bitrate_q16_16 = (int64_t)7450000 << 16;
 
+    tsa_config_t cfg = {0};
+    tsa_handle_t *h = tsa_create(&cfg);
+    
     char buffer[4096];
-    size_t len = tsa_snapshot_to_json(NULL, &snap, buffer, sizeof(buffer));
+    size_t len = tsa_snapshot_to_json(h, &snap, buffer, sizeof(buffer));
 
     printf("JSON Length: %zu\n", len);
     printf("JSON Output: %s\n", buffer);
@@ -31,6 +34,7 @@ int main() {
     assert(strstr(buffer, "\"pid\":\"0x0100\"") != NULL);
     assert(strstr(buffer, "\"bps\":7450000") != NULL);
 
+    tsa_destroy(h);
     printf("JSON serialization verified.\n");
     return 0;
 }
