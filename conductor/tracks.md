@@ -17,4 +17,7 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./tracks/expert-analysis/](./tracks/expert-analysis/)*
 
 - [x] **Track: Professional Parity & Professional Robustness**
-  *Link: [./tracks/Professional_parity_20260304/](./tracks/Professional_parity_20260304/)*
+  *Link: [./tracks/professional_parity_20260304/](./tracks/professional_parity_20260304/)*
+- [ ] **Track: Professional Content-Layer Analysis (PES & GOP)**
+  *Link: [./tracks/professional_content_analysis_20260304/](./tracks/professional_content_analysis_20260304/)*
+
