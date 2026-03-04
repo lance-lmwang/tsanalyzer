@@ -37,9 +37,7 @@ function assert_success {
 }
 
 # --- Test Execution ---
-print_header "SETUP: Building project and cleaning up environment"
-./build.sh
-assert_success
+print_header "SETUP: Cleaning up environment"
 pkill -f tsa_server || true
 pkill -f tsp || true
 rm -rf "$LOG_DIR" && mkdir -p "$LOG_DIR"

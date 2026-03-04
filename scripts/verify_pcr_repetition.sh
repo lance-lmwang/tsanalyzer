@@ -5,8 +5,9 @@
 set -e
 PORT_API=12345
 PORT_UDP=19001
-SAMPLE_TS="./sample/btvhd.ts"
-if [ ! -f "$SAMPLE_TS" ]; then SAMPLE_TS="../sample/btvhd.ts"; fi
+SAMPLE_TS="./sample/test_1m.ts"
+if [ ! -f "$SAMPLE_TS" ]; then SAMPLE_TS="./sample/btvhd.ts"; fi
+if [ ! -f "$SAMPLE_TS" ]; then SAMPLE_TS="../sample/test_1m.ts"; fi
 
 echo ">>> TsAnalyzer: PCR Repetition Verification (via CLI)"
 
