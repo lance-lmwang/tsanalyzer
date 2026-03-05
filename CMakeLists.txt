@@ -54,7 +54,7 @@ if(PCAP_LIBRARY)
     message(STATUS "PCAP support ENABLED (Found: ${PCAP_LIBRARY})")
     add_definitions(-DHAVE_PCAP)
     include_directories(${PCAP_INCLUDE_DIR})
-    set(PCAP_LINK_LIBS ${PCAP_LIBRARY})
+    set(PCAP_LINK_LIBS ${PCAP_LIBRARY} dbus-1)
 else()
     message(WARNING "PCAP support DISABLED (libpcap.a or system .so not found)")
     set(PCAP_LINK_LIBS "")
@@ -62,12 +62,12 @@ endif()
 
 include_directories(include)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c)
 target_link_libraries(tsp_core ${SRT_LIBRARY} ${PCAP_LINK_LIBS} pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
 add_executable(tsa_cli src/tsa_cli.c src/mongoose.c)
-target_link_libraries(tsa_cli tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
+target_link_libraries(tsa_cli tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto dbus-1)
 # Disable strict warnings for tsa_cli to accommodate mongoose
 if(MSVC)
     target_compile_options(tsa_cli PRIVATE /W3)

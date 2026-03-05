@@ -27,3 +27,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track: Metrology Refinement (Industrial Grade)**
   *Link: [./tracks/metrology_refinement_20260305/](./tracks/metrology_refinement_20260305/)*
 
+- [ ] **Track: Astra Architecture Integration**
+  *Link: [./tracks/astra_architecture_integration/](./tracks/astra_architecture_integration/)*
+
