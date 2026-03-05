@@ -216,6 +216,82 @@ static void print_usage(const char* prog) {
     printf("  Real-time SRT monitoring:  %s --mode=live --srt-url srt://:9000\n", prog);
 }
 
+
+static void parse_args(int argc, char** argv, tsa_config_t* cfg, char* filename, size_t filename_sz, char* interface, size_t interface_sz) {
+    int opt;
+    static struct option long_options[] = {{"udp", required_argument, 0, 'u'},
+                                           {"srt-url", required_argument, 0, 's'},
+                                           {"interface", required_argument, 0, 'i'},
+                                           {"mode", required_argument, 0, 'm'},
+                                           {"help", no_argument, 0, 'h'},
+                                           {0, 0, 0, 0}};
+
+    while ((opt = getopt_long(argc, argv, "u:s:i:m:h", long_options, NULL)) != -1) {
+        switch (opt) {
+            case 'h':
+                print_usage(argv[0]);
+                exit(0);
+            case 'u':
+                cfg->udp_port = atoi(optarg);
+                break;
+            case 's':
+                strncpy(cfg->url, optarg, sizeof(cfg->url) - 1);
+                break;
+            case 'i':
+                strncpy(interface, optarg, interface_sz - 1);
+                break;
+            case 'm':
+                if (strcmp(optarg, "live") == 0)
+                    cfg->op_mode = TSA_MODE_LIVE;
+                else if (strcmp(optarg, "replay") == 0)
+                    cfg->op_mode = TSA_MODE_REPLAY;
+                else if (strcmp(optarg, "forensic") == 0)
+                    cfg->op_mode = TSA_MODE_FORENSIC;
+                else if (strcmp(optarg, "certification") == 0)
+                    cfg->op_mode = TSA_MODE_CERTIFICATION;
+                break;
+        }
+    }
+    if (optind < argc) {
+        strncpy(filename, argv[optind], filename_sz - 1);
+        strncpy(cfg->input_label, "CLI-FILE", sizeof(cfg->input_label) - 1);
+        if (cfg->op_mode == TSA_MODE_LIVE) {
+            cfg->op_mode = TSA_MODE_REPLAY;
+        }
+    } else {
+        strncpy(cfg->input_label, "CLI-NET", sizeof(cfg->input_label) - 1);
+    }
+}
+
+static tsa_source_t* init_source(tsa_config_t* cfg, const char* interface, const char* filename, tsa_source_callbacks_t* cbs) {
+    if (interface[0]) {
+        return tsa_source_create(TSA_SOURCE_PCAP, interface, cbs, NULL);
+    } else if (cfg->udp_port > 0) {
+        char url[64]; snprintf(url, sizeof(url), "udp://0.0.0.0:%d", cfg->udp_port);
+        return tsa_source_create(TSA_SOURCE_UDP, url, cbs, NULL);
+    } else if (cfg->url[0]) {
+        return tsa_source_create(TSA_SOURCE_SRT, cfg->url, cbs, NULL);
+    } else if (filename[0]) {
+        return tsa_source_create(TSA_SOURCE_FILE, filename, cbs, NULL);
+    }
+    return NULL;
+}
+
+static void dump_final_report(tsa_handle_t* h) {
+    tsa_snapshot_full_t snap;
+    if (tsa_take_snapshot_full(h, &snap) == 0) {
+        char* buf = malloc(256 * 1024);
+        tsa_snapshot_to_json(h, &snap, buf, 256 * 1024);
+        FILE* f_out = fopen("final_metrology.json", "w");
+        if (f_out) {
+            fprintf(f_out, "%s\n", buf);
+            fclose(f_out);
+            printf("CLI: Final metrology saved.\n");
+        }
+        free(buf);
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         print_usage(argv[0]);
@@ -229,50 +305,8 @@ int main(int argc, char** argv) {
     cfg.op_mode = TSA_MODE_LIVE;
 
     char filename[512] = "";
-    int opt;
     char interface[64] = "";
-    static struct option long_options[] = {{"udp", required_argument, 0, 'u'},
-                                           {"srt-url", required_argument, 0, 's'},
-                                           {"interface", required_argument, 0, 'i'},
-                                           {"mode", required_argument, 0, 'm'},
-                                           {"help", no_argument, 0, 'h'},
-                                           {0, 0, 0, 0}};
-
-    while ((opt = getopt_long(argc, argv, "u:s:i:m:h", long_options, NULL)) != -1) {
-        switch (opt) {
-            case 'h':
-                print_usage(argv[0]);
-                return 0;
-            case 'u':
-                cfg.udp_port = atoi(optarg);
-                break;
-            case 's':
-                strncpy(cfg.url, optarg, sizeof(cfg.url) - 1);
-                break;
-            case 'i':
-                strncpy(interface, optarg, sizeof(interface) - 1);
-                break;
-            case 'm':
-                if (strcmp(optarg, "live") == 0)
-                    cfg.op_mode = TSA_MODE_LIVE;
-                else if (strcmp(optarg, "replay") == 0)
-                    cfg.op_mode = TSA_MODE_REPLAY;
-                else if (strcmp(optarg, "forensic") == 0)
-                    cfg.op_mode = TSA_MODE_FORENSIC;
-                else if (strcmp(optarg, "certification") == 0)
-                    cfg.op_mode = TSA_MODE_CERTIFICATION;
-                break;
-        }
-    }
-    if (optind < argc) {
-        strncpy(filename, argv[optind], sizeof(filename) - 1);
-        strncpy(cfg.input_label, "CLI-FILE", sizeof(cfg.input_label) - 1);
-        if (cfg.op_mode == TSA_MODE_LIVE) {
-            cfg.op_mode = TSA_MODE_REPLAY;
-        }
-    } else {
-        strncpy(cfg.input_label, "CLI-NET", sizeof(cfg.input_label) - 1);
-    }
+    parse_args(argc, argv, &cfg, filename, sizeof(filename), interface, sizeof(interface));
 
     if (cfg.op_mode == TSA_MODE_CERTIFICATION) printf("CLI: Certification Mode Active.\n");
 
@@ -280,20 +314,8 @@ int main(int argc, char** argv) {
     q_cap_to_dec = spsc_queue_create(16384);
     q_dec_to_met = spsc_queue_create(16384);
 
-    /* Initialize Source */
     tsa_source_callbacks_t source_cbs = { .on_packets = on_source_packets, .on_status = on_source_status };
-    tsa_source_t* source = NULL;
-    
-    if (interface[0]) {
-        source = tsa_source_create(TSA_SOURCE_PCAP, interface, &source_cbs, NULL);
-    } else if (cfg.udp_port > 0) {
-        char url[64]; snprintf(url, sizeof(url), "udp://0.0.0.0:%d", cfg.udp_port);
-        source = tsa_source_create(TSA_SOURCE_UDP, url, &source_cbs, NULL);
-    } else if (cfg.url[0]) {
-        source = tsa_source_create(TSA_SOURCE_SRT, cfg.url, &source_cbs, NULL);
-    } else if (filename[0]) {
-        source = tsa_source_create(TSA_SOURCE_FILE, filename, &source_cbs, NULL);
-    }
+    tsa_source_t* source = init_source(&cfg, interface, filename, &source_cbs);
 
     if (!source) {
         fprintf(stderr, "Error: No valid input source specified.\n");
@@ -320,19 +342,7 @@ int main(int argc, char** argv) {
     pthread_join(t_http, NULL);
     tsa_source_destroy(source);
 
-    // Dump final report
-    tsa_snapshot_full_t snap;
-    if (tsa_take_snapshot_full(h, &snap) == 0) {
-        char* buf = malloc(256 * 1024);
-        tsa_snapshot_to_json(h, &snap, buf, 256 * 1024);
-        FILE* f_out = fopen("final_metrology.json", "w");
-        if (f_out) {
-            fprintf(f_out, "%s\n", buf);
-            fclose(f_out);
-            printf("CLI: Final metrology saved.\n");
-        }
-        free(buf);
-    }
+    dump_final_report(h);
 
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);

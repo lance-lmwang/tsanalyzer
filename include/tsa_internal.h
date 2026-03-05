@@ -360,3 +360,4 @@ int tsa_fast_itoa(char* buf, int64_t val);
 int tsa_fast_ftoa(char* buf, float val, int prec);
 
 #endif
+void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid);

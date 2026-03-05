@@ -56,7 +56,7 @@ endif()
 
 include_directories(include)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
 target_link_libraries(tsp_core ${SRT_LIBRARY} ${PCAP_LINK_LIBS} pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)

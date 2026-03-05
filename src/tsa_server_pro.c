@@ -409,29 +409,20 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
     }
 }
 
-int main(int argc, char** argv) {
-    const char* conf_file = (argc > 1) ? argv[1] : "tsa.conf";
-    calibrate_tsc();
-    g_ready_queue = mpmc_queue_create(16384);
-    srt_startup();
-    signal(SIGINT, sig_handler);
-    signal(SIGPIPE, SIG_IGN);
 
-    load_config(conf_file);
-
-    /* Setup SRT Listener using configured port */
-    SRTSOCKET sl = srt_create_socket();
+static void setup_srt_listener(SRTSOCKET* out_sl, int* out_srt_eid) {
+    *out_sl = srt_create_socket();
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(g_srt_port);
     sa.sin_addr.s_addr = INADDR_ANY;
 
     int sync = 0;  // Non-blocking listener
-    srt_setsockopt(sl, 0, SRTO_RCVSYN, &sync, sizeof(sync));
-    if (srt_bind(sl, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
-        srt_listen(sl, 64);
+    srt_setsockopt(*out_sl, 0, SRTO_RCVSYN, &sync, sizeof(sync));
+    if (srt_bind(*out_sl, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
+        srt_listen(*out_sl, 64);
         conn_t* c = calloc(1, sizeof(conn_t));
-        c->fd = sl;
+        c->fd = *out_sl;
         c->type = CONN_SRT_LISTENER;
         pthread_mutex_lock(&g_conn_lock);
         int idx = atomic_fetch_add(&g_conn_count, 1);
@@ -443,40 +434,56 @@ int main(int argc, char** argv) {
         fprintf(stderr, "PRO: Failed to bind SRT on %d\n", g_srt_port);
     }
 
-    int srt_eid = srt_epoll_create();
+    *out_srt_eid = srt_epoll_create();
     int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
-    srt_epoll_add_usock(srt_eid, sl, &events);
+    srt_epoll_add_usock(*out_srt_eid, *out_sl, &events);
+}
 
-    pthread_t t_io, t_workers[WORKER_THREADS];
-    pthread_create(&t_io, NULL, io_thread, (void*)(intptr_t)srt_eid);
-    for (int i = 0; i < WORKER_THREADS; i++) pthread_create(&t_workers[i], NULL, worker_thread, NULL);
-
-    struct mg_mgr mgr;
-    mg_mgr_init(&mgr);
-    char http_addr[64];
-    snprintf(http_addr, sizeof(http_addr), "http://0.0.0.0:%d", g_http_port);
-    mg_http_listen(&mgr, http_addr, http_fn, &mgr);
-    printf("PRO: HTTP Metrics active on %s\n", http_addr);
-
-    // Initialize Shared Memory for tsa_top
-    int shm_fd = shm_open(TSA_TOP_SHM_NAME, O_CREAT | O_RDWR, 0666);
-    tsa_top_shm_block_t* shm_block = NULL;
-    if (shm_fd >= 0) {
-        if (ftruncate(shm_fd, sizeof(tsa_top_shm_block_t)) == 0) {
-            shm_block = mmap(0, sizeof(tsa_top_shm_block_t), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-            if (shm_block != MAP_FAILED) {
-                memset(shm_block, 0, sizeof(tsa_top_shm_block_t));
+static void init_shm(int* out_shm_fd, tsa_top_shm_block_t** out_shm_block) {
+    *out_shm_fd = shm_open(TSA_TOP_SHM_NAME, O_CREAT | O_RDWR, 0666);
+    *out_shm_block = NULL;
+    if (*out_shm_fd >= 0) {
+        if (ftruncate(*out_shm_fd, sizeof(tsa_top_shm_block_t)) == 0) {
+            *out_shm_block = mmap(0, sizeof(tsa_top_shm_block_t), PROT_READ | PROT_WRITE, MAP_SHARED, *out_shm_fd, 0);
+            if (*out_shm_block != MAP_FAILED) {
+                memset(*out_shm_block, 0, sizeof(tsa_top_shm_block_t));
                 printf("PRO: Shared memory initialized at %s\n", TSA_TOP_SHM_NAME);
             } else {
-                shm_block = NULL;
+                *out_shm_block = NULL;
             }
         }
     }
+}
 
+static void cleanup_and_exit(int shm_fd, tsa_top_shm_block_t* shm_block, struct mg_mgr* mgr, pthread_t t_io, pthread_t t_workers[], int srt_eid) {
+    if (shm_block) munmap(shm_block, sizeof(tsa_top_shm_block_t));
+    if (shm_fd >= 0) close(shm_fd);
+    shm_unlink(TSA_TOP_SHM_NAME);
+
+    mg_mgr_free(mgr);
+
+    pthread_join(t_io, NULL);
+    for (int i = 0; i < WORKER_THREADS; i++) pthread_join(t_workers[i], NULL);
+    srt_epoll_release(srt_eid);
+    srt_cleanup();
+    for (int i = 0; i < (int)atomic_load(&g_conn_count); i++) {
+        if (g_conns[i]->type == CONN_UDP)
+            close((int)g_conns[i]->fd);
+        else
+            srt_close(g_conns[i]->fd);
+        if (g_conns[i]->tsa) tsa_destroy(g_conns[i]->tsa);
+        if (g_conns[i]->tx_q) spsc_queue_destroy(g_conns[i]->tx_q);
+        if (g_conns[i]->ana_q) spsc_queue_destroy(g_conns[i]->ana_q);
+        free(g_conns[i]);
+    }
+    mpmc_queue_destroy(g_ready_queue);
+}
+
+static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
     uint64_t last_shm_update = 0;
 
     while (atomic_load(&g_run)) {
-        mg_mgr_poll(&mgr, 50);
+        mg_mgr_poll(mgr, 50);
         
         // Global Heartbeat Sweeper: Enqueue inactive connections to trigger timeout analysis
         uint64_t now = (uint64_t)ts_now_ns128();
@@ -557,27 +564,39 @@ int main(int argc, char** argv) {
             last_shm_update = now;
         }
     }
+}
 
-    if (shm_block) munmap(shm_block, sizeof(tsa_top_shm_block_t));
-    if (shm_fd >= 0) close(shm_fd);
-    shm_unlink(TSA_TOP_SHM_NAME);
+int main(int argc, char** argv) {
+    const char* conf_file = (argc > 1) ? argv[1] : "tsa.conf";
+    calibrate_tsc();
+    g_ready_queue = mpmc_queue_create(16384);
+    srt_startup();
+    signal(SIGINT, sig_handler);
+    signal(SIGPIPE, SIG_IGN);
 
-    mg_mgr_free(&mgr);
+    load_config(conf_file);
 
-    pthread_join(t_io, NULL);
-    for (int i = 0; i < WORKER_THREADS; i++) pthread_join(t_workers[i], NULL);
-    srt_epoll_release(srt_eid);
-    srt_cleanup();
-    for (int i = 0; i < (int)atomic_load(&g_conn_count); i++) {
-        if (g_conns[i]->type == CONN_UDP)
-            close((int)g_conns[i]->fd);
-        else
-            srt_close(g_conns[i]->fd);
-        if (g_conns[i]->tsa) tsa_destroy(g_conns[i]->tsa);
-        if (g_conns[i]->tx_q) spsc_queue_destroy(g_conns[i]->tx_q);
-        if (g_conns[i]->ana_q) spsc_queue_destroy(g_conns[i]->ana_q);
-        free(g_conns[i]);
-    }
-    mpmc_queue_destroy(g_ready_queue);
+    SRTSOCKET sl;
+    int srt_eid;
+    setup_srt_listener(&sl, &srt_eid);
+
+    pthread_t t_io, t_workers[WORKER_THREADS];
+    pthread_create(&t_io, NULL, io_thread, (void*)(intptr_t)srt_eid);
+    for (int i = 0; i < WORKER_THREADS; i++) pthread_create(&t_workers[i], NULL, worker_thread, NULL);
+
+    struct mg_mgr mgr;
+    mg_mgr_init(&mgr);
+    char http_addr[64];
+    snprintf(http_addr, sizeof(http_addr), "http://0.0.0.0:%d", g_http_port);
+    mg_http_listen(&mgr, http_addr, http_fn, &mgr);
+    printf("PRO: HTTP Metrics active on %s\n", http_addr);
+
+    int shm_fd;
+    tsa_top_shm_block_t* shm_block;
+    init_shm(&shm_fd, &shm_block);
+
+    run_main_loop(&mgr, shm_block);
+
+    cleanup_and_exit(shm_fd, shm_block, &mgr, t_io, t_workers, srt_eid);
     return 0;
 }

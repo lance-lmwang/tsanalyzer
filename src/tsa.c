@@ -46,51 +46,9 @@ int128_t ts_now_ns128(void) {
 }
 
 /* --- String Utilities --- */
-int tsa_fast_itoa(char* buf, int64_t val) {
-    if (val == 0) {
-        buf[0] = '0';
-        buf[1] = '\0';
-        return 1;
-    }
-    int i = 0, sign = (val < 0);
-    if (sign) val = -val;
-    while (val > 0) {
-        buf[i++] = (val % 10) + '0';
-        val /= 10;
-    }
-    if (sign) buf[i++] = '-';
-    for (int j = 0; j < i / 2; j++) {
-        char t = buf[j];
-        buf[j] = buf[i - 1 - j];
-        buf[i - 1 - j] = t;
-    }
-    buf[i] = '\0';
-    return i;
-}
 
-int tsa_fast_ftoa(char* buf, float val, int precision) {
-    int off = 0;
-    if (val < 0) {
-        buf[off++] = '-';
-        val = -val;
-    }
-    float rounding = 0.5f;
-    for (int i = 0; i < precision; i++) rounding /= 10.0f;
-    val += rounding;
-    int64_t integral = (int64_t)val;
-    off += tsa_fast_itoa(buf + off, integral);
-    if (precision <= 0) return off;
-    buf[off++] = '.';
-    float frac = val - (float)integral;
-    for (int i = 0; i < precision; i++) {
-        frac *= 10;
-        int digit = (int)frac;
-        buf[off++] = digit + '0';
-        frac -= digit;
-    }
-    buf[off] = '\0';
-    return off;
-}
+
+
 
 void tsa_mbuf_init(tsa_metric_buffer_t* b, char* buf, size_t sz) {
     b->ptr = buf;
@@ -545,7 +503,7 @@ void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count) {
     }
 }
 
-static void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid) {
+void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid) {
     if (!h || h->stc_ns == 0) return;
     uint8_t head = h->pid_au_head[pid];
     while (head != h->pid_au_tail[pid]) {
@@ -876,274 +834,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     }
 }
 
-void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
-    if (!h) return;
-    if (n == 0) n = h->last_snap_ns;
-    if (!h->stc_locked) h->stc_ns = n;
 
-    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
-    uint8_t inactive_idx = a ^ 1;
-    tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
-
-    // Drain all active PIDs based on new STC
-    for (uint32_t i = 0; i < h->pid_tracker_count; i++) {
-        tsa_tstd_drain(h, h->pid_active_list[i]);
-    }
-
-    uint64_t stc = h->stc_ns, dt = stc - h->last_snap_ns;
-    // Handle time domain jump or zero dt
-    if (dt == 0 || dt > 100000000000ULL) {  // 100s jump
-        dt = 100000000ULL;                  // Default to 100ms for this cycle
-        // If it's a massive jump (epoch change), reset PID arrival baselines
-        for (int i = 0; i < TS_PID_MAX; i++) {
-            h->live->pid_last_seen_vstc[i] = stc;
-            h->live->pid_last_seen_ns[i] = n;
-        }
-    }
-    if (dt < 1000000ULL) dt = 1000000ULL;  // Minimum 1ms for stability
-
-    uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0) {
-        uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * 1504 * 1000000000ULL) / dt);
-        if (h->live->physical_bitrate_bps == 0)
-            h->live->physical_bitrate_bps = instant_br;
-        else
-            h->live->physical_bitrate_bps = (uint64_t)(0.3 * instant_br + 0.7 * h->live->physical_bitrate_bps);
-        if (h->live->physical_bitrate_bps > 10000000000ULL) h->live->physical_bitrate_bps = 10000000000ULL;
-    }
-
-    h->live->mdi_mlr_pkts_s =
-        (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * 1000000000ULL) / dt;
-    h->live->mdi_df_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
-    h->live->stream_utc_ms = stc / 1000000ULL;
-
-    // TR 101 290 P1/P2 Timeout Alarms (using VSTC)
-    if (h->stc_locked) {
-        // PAT timeout (500ms)
-        uint64_t pat_vstc_dt = h->stc_ns - h->live->pid_last_seen_vstc[0];
-        if (h->pid_seen[0] && pat_vstc_dt > 500000000ULL) {
-            h->live->pat_error.count++;
-            h->live->pat_error.last_timestamp_ns = n;
-            h->live->alarm_pat_error = true;
-            h->pid_status[0] = TSA_STATUS_INVALID;
-            tsa_push_event(h, TSA_EVENT_PAT_TIMEOUT, 0, 0);
-        } else {
-            h->live->alarm_pat_error = false;
-        }
-
-        // PMT timeout (500ms)
-        bool pmt_missing = false;
-        for (int i = 0; i < MAX_PROGRAMS; i++) {
-            uint16_t ppid = h->programs[i].pmt_pid;
-            if (ppid > 0 && ppid < TS_PID_MAX) {
-                uint64_t pmt_vstc_dt = h->stc_ns - h->live->pid_last_seen_vstc[ppid];
-                if (pmt_vstc_dt > 500000000ULL) {
-                    pmt_missing = true;
-                    h->pid_status[ppid] = TSA_STATUS_INVALID;
-                    tsa_push_event(h, TSA_EVENT_PMT_TIMEOUT, ppid, 0);
-                }
-            }
-        }
-        if (pmt_missing) {
-            h->live->pmt_error.count++;
-            h->live->pmt_error.last_timestamp_ns = n;
-            h->live->alarm_pmt_error = true;
-        } else {
-            h->live->alarm_pmt_error = false;
-        }
-
-        // SDT timeout (2000ms)
-        uint64_t sdt_vstc_dt = h->stc_ns - h->live->pid_last_seen_vstc[0x11];
-        if (h->pid_seen[0x11] && sdt_vstc_dt > 2000000000ULL) {
-            h->live->sdt_error.count++;
-            h->live->sdt_error.last_timestamp_ns = n;
-            h->live->alarm_sdt_error = true;
-            h->pid_status[0x11] = TSA_STATUS_DEGRADED;
-        } else {
-            h->live->alarm_sdt_error = false;
-        }
-
-        // PCR Repetition timeout (40ms - TR 101 290 1.1)
-        bool pcr_repetition_error = false;
-        for (int i = 0; i < MAX_PROGRAMS; i++) {
-            uint16_t pcr_pid = h->programs[i].pcr_pid;
-            if (pcr_pid > 0 && pcr_pid < TS_PID_MAX) {
-                if (h->clock_inspectors[pcr_pid].initialized) {
-                    int64_t elapsed_ns = (int64_t)(n - h->clock_inspectors[pcr_pid].last_pcr_local_ns);
-                    
-                    if (elapsed_ns > 40000000LL) { // 40ms
-                        pcr_repetition_error = true;
-                        h->live->pcr_repetition_error.count++;
-                        h->live->pcr_repetition_error.last_timestamp_ns = n;
-                        tsa_push_event(h, TSA_EVENT_PCR_REPETITION, pcr_pid, (uint64_t)(elapsed_ns / 1000000));
-                    }
-                }
-            }
-        }
-        h->live->alarm_pcr_repetition_error = pcr_repetition_error;
-    }
-
-    h->live->alarm_sync_loss = !h->signal_lock;
-    h->live->alarm_cc_error = (h->live->cc_error.count > h->prev_snap_base->cc_error.count);
-    h->live->alarm_pcr_accuracy_error =
-        (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count);
-    h->live->alarm_crc_error = (h->live->crc_error.count > h->prev_snap_base->crc_error.count);
-
-    int64_t pa = 0;
-    double sl = 1.0, ic_d = 0.0;
-    const double Q64 = 18446744073709551616.0;
-    
-    if (ts_pcr_window_regress(&h->pcr_window, &sl, &ic_d, &pa) == 0) {
-        double instant_drift = (sl - 1.0) * 1000000.0;
-        // Strong EMA filter (alpha=0.01) for professional stability
-        h->live->pcr_drift_ppm = (h->live->pcr_drift_ppm * 0.99) + (instant_drift * 0.01);
-        if (h->op_mode == TSA_MODE_REPLAY) {
-            h->live->pcr_drift_ppm = 0.0;
-            h->stc_wall_drift_ppm = 0.0;
-        } else {
-            h->stc_wall_drift_ppm = h->live->pcr_drift_ppm;
-        }
-        h->live->pcr_accuracy_ns = (double)pa;
-        h->stc_slope_q64 = (int128_t)(sl * Q64);
-        h->stc_intercept_q64 = (int128_t)(ic_d * Q64);
-    } else {
-        h->live->pcr_drift_ppm = 0.0;
-        h->stc_wall_drift_ppm = 0.0;
-    }
-    
-    double l_sl = sl, l_ic = 0.0;
-    int64_t l_pa = 0;
-    if (ts_pcr_window_regress(&h->pcr_long_window, &l_sl, &l_ic, &l_pa) == 0) {
-        h->long_term_drift_ppm = (l_sl - 1.0) * 1000000.0;
-        if (h->op_mode == TSA_MODE_REPLAY) h->long_term_drift_ppm = 0.0;
-    } else {
-        h->long_term_drift_ppm = 0.0;
-    }
-
-
-    double rn = 999.0, re = 999.0;
-    if (h->live->pcr_bitrate_bps > h->live->physical_bitrate_bps && h->live->physical_bitrate_bps > 0) {
-        uint32_t la = h->srt_live.effective_rcv_latency_ms ? h->srt_live.effective_rcv_latency_ms : 50,
-                 ji = (uint32_t)(h->live->pcr_jitter_max_ns / 1000000ULL);
-        if (la > ji)
-            rn = (double)((uint64_t)(la - ji) * h->live->pcr_bitrate_bps / 1000) /
-                 (double)(h->live->pcr_bitrate_bps - h->live->physical_bitrate_bps);
-        else
-            rn = 0.0;
-    }
-    double dr = fabs(l_sl - 1.0);
-    if (dr > 0.000001) re = (100.0 - h->live->pcr_accuracy_ns / 1000000.0) / dr / 1000.0;
-
-    double cn = 0, ce = 0;
-    if (h->live->mdi_mlr_pkts_s > 0) cn += 0.8;
-    if (rn < 5.0) cn += (5.0 - rn) / 5.0;
-    if (h->live->pcr_jitter_max_ns > 10000000ULL)
-        ce += 0.8;
-    else if (h->live->pcr_jitter_max_ns > 500000ULL)
-        ce += 0.5;
-    if (h->live->pcr_accuracy_error.count > h->prev_snap_base->pcr_accuracy_error.count) ce += 0.4;
-
-    h->live->video_fps = 0;
-    h->live->gop_ms = 0;
-
-    uint32_t ptc = h->pid_tracker_count;
-    if (ptc > MAX_ACTIVE_PIDS) ptc = MAX_ACTIVE_PIDS;
-
-    uint32_t ai = 0;
-    for (uint32_t i = 0; i < ptc; i++) {
-        uint16_t p = h->pid_active_list[i];
-        if (p >= TS_PID_MAX) continue;
-
-        uint64_t p_pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
-        if (p_pd > 0 && dt >= 1000000ULL) {
-            uint64_t cb = (p_pd * 1504 * 1000000000ULL) / dt;
-            if (cb > 10000000000ULL) cb = 10000000000ULL;
-            if (h->live->pid_bitrate_bps[p] == 0)
-                h->live->pid_bitrate_bps[p] = cb;
-            else
-                h->live->pid_bitrate_bps[p] =
-                    (cb * (uint64_t)h->pcr_ema_alpha_q32 +
-                     h->live->pid_bitrate_bps[p] * ((1ULL << 32) - (uint64_t)h->pcr_ema_alpha_q32)) >>
-                    32;
-        }
-
-        const char* p_st = tsa_get_pid_type_name(h, p);
-        if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0) {
-            if (h->pid_gop_ms[p] > 0 && h->pid_last_gop_n[p] > 0) {
-                h->live->video_fps = (float)h->pid_last_gop_n[p] * 1000.0f / h->pid_gop_ms[p];
-                h->live->gop_ms = h->pid_gop_ms[p];
-            }
-        }
-
-        sn->pids[ai].pid = p;
-        strncpy(sn->pids[ai].type_str, p_st, 15);
-        sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16;
-        sn->pids[ai].status = (uint8_t)h->pid_status[p];
-        sn->pids[ai].width = h->pid_width[p];
-        sn->pids[ai].height = h->pid_height[p];
-        sn->pids[ai].profile = h->pid_profile[p];
-        sn->pids[ai].audio_sample_rate = h->pid_audio_sample_rate[p];
-        sn->pids[ai].audio_channels = h->pid_audio_channels[p];
-        sn->pids[ai].gop_n = h->pid_last_gop_n[p];
-        sn->pids[ai].gop_min = h->pid_gop_min[p];
-        sn->pids[ai].gop_max = h->pid_gop_max[p];
-        sn->pids[ai].gop_ms = h->pid_gop_ms[p];
-        sn->pids[ai].i_frames = h->pid_i_frames[p];
-        sn->pids[ai].p_frames = h->pid_p_frames[p];
-        sn->pids[ai].b_frames = h->pid_b_frames[p];
-        sn->pids[ai].has_cea708 = h->pid_has_cea708[p];
-        sn->pids[ai].has_scte35 = h->pid_is_scte35[p];
-        sn->pids[ai].eb_fill_pct = (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0);
-        ai++;
-    }
-
-    float current_health = 100.0f;
-    if (!h->signal_lock) {
-        current_health = 0.0f;
-    } else {
-        if (rn < 5.0f) current_health -= (5.0f - rn) * 4.0f;
-        if (re < 30.0f) current_health -= (30.0f - re) * 0.5f;
-        if (h->live->cc_error.count > h->prev_snap_base->cc_error.count) current_health -= 25.0f;
-    }
-    if (current_health < 0) current_health = 0;
-    if (current_health < h->last_health_score || h->last_health_score < 0.1)
-        h->last_health_score = current_health;
-    else
-        h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
-
-    memset(&sn->predictive, 0, sizeof(sn->predictive));
-    sn->predictive.master_health = h->last_health_score;
-    sn->predictive.rst_network_s = rn;
-    sn->predictive.rst_encoder_s = re;
-    sn->predictive.stc_wall_drift_ppm = h->stc_wall_drift_ppm;
-    sn->predictive.long_term_drift_ppm = h->long_term_drift_ppm;
-    sn->predictive.stc_drift_slope = sl;
-    sn->predictive.pcr_jitter_ns = h->live->pcr_jitter_max_ns;
-    sn->predictive.stc_locked_bool = h->stc_locked ? 1 : 0;
-    
-    sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2)   ? 1
-                                  : (ce > 0.6 && cn < 0.2) ? 2
-                                  : (cn > 0.4 && ce > 0.4) ? 3
-                                                           : 0;
-
-    sn->summary.master_health = h->last_health_score;
-    sn->summary.total_packets = h->live->total_ts_packets;
-    sn->summary.signal_lock = h->signal_lock;
-    sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
-
-    strncpy(sn->network_name, h->network_name, 255);
-    strncpy(sn->service_name, h->service_name, 255);
-    strncpy(sn->provider_name, h->provider_name, 255);
-
-    sn->stats = *h->live;
-    atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
-    *h->prev_snap_base = *h->live;
-    h->last_snap_ns = stc;
-    h->live->pcr_jitter_max_ns = 0;
-    if (ai > 0)
-        printf("DEBUG: Committed snapshot with %u PIDs, total_packets: %llu\n", ai,
-               (unsigned long long)sn->stats.total_ts_packets);
-}
 
 const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
     if (!h || p >= TS_PID_MAX) return "Unknown";
@@ -1174,41 +865,7 @@ uint32_t tsa_crc32_check(const uint8_t* data, int len) {
     return mpegts_crc32(data, len);
 }
 
-uint32_t mpegts_crc32(const uint8_t* d, int l) {
-    static const uint32_t t[256] = {
-        0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005, 0x2608edb8,
-        0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd, 0x4c11db70, 0x48d0c6c7,
-        0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75, 0x6a1936c8, 0x6ed82b7f, 0x639b0da6,
-        0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a, 0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
-        0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58, 0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84,
-        0xa9ee3033, 0xa4ad16ea, 0xa06c0b5d, 0xd4326d90, 0xd0f37027, 0xddb056fe, 0xd9714b49, 0xc7361b4c, 0xc3f706fb,
-        0xceb42022, 0xca753d95, 0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4, 0xe5ffeb43, 0xe8bccd9a,
-        0xec7dd02d, 0x34867077, 0x30476dc0, 0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5, 0x2ac12072,
-        0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16, 0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca, 0x7897ab07,
-        0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c, 0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08,
-        0x571d7dd1, 0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba, 0xaca5c697, 0xa864db20, 0xa527fdf9,
-        0xa1e6e04e, 0xbfa1b04b, 0xbb60adfc, 0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698, 0x832f1041, 0x87ee0df6,
-        0x99a95df3, 0x9d684044, 0x902b669d, 0x94ea7b2a, 0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e, 0xf3b06b3b,
-        0xf771768c, 0xfa325055, 0xfef34de2, 0xc6bcf05f, 0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
-        0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80, 0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c,
-        0x774bb0eb, 0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a, 0x58c1663d, 0x558240e4, 0x51435d53,
-        0x251d3b9e, 0x21dc2629, 0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c, 0x3b5a6b9b, 0x0315d626,
-        0x07d4cb91, 0x0a97ed48, 0x0e56f0ff, 0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e, 0xf5ee4bb9,
-        0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65, 0xeba91bbc, 0xef68060b, 0xd727bbb6, 0xd3e6a601, 0xdea580d8,
-        0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3, 0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7,
-        0xae3afba2, 0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71, 0x92b45ba8, 0x9675461f, 0x8832161a,
-        0x8cf30bad, 0x81b02d74, 0x857130c3, 0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640, 0x4e8ee645, 0x4a4ffbf2,
-        0x470cdd2b, 0x43cdc09c, 0x7b827d21, 0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a, 0x61043093,
-        0x65c52d24, 0x119b4be9, 0x155a565e, 0x18197087, 0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
-        0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d, 0x2056cd3a, 0x2d15ebe3, 0x29d4f654, 0xc5a92679,
-        0xc1683bce, 0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb, 0xdbee767c, 0xe3a1cbc1, 0xe760d676,
-        0xea23f0af, 0xeee2ed18, 0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4, 0x89b8fd09, 0x8d79e0be, 0x803ac667,
-        0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662, 0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,
-        0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4};
-    uint32_t c = 0xFFFFFFFF;
-    for (int i = 0; i < l; i++) c = (c << 8) ^ t[((c >> 24) ^ d[i]) & 0xFF];
-    return c;
-}
+
 uint64_t extract_pcr(const uint8_t* p) {
     if (!(p[3] & 0x20) || p[4] == 0 || !(p[5] & 0x10)) return INVALID_PCR;
     uint64_t b =
@@ -1232,22 +889,8 @@ void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t s, uint64_t p, uint64_t o) {
     if (w->count < w->size) w->count++;
 }
 
-int tsa_take_snapshot_lite(tsa_handle_t* h, tsa_snapshot_lite_t* s) {
-    if (!h || !s) return -1;
-    s->total_packets = h->live->total_ts_packets;
-    s->physical_bitrate_bps = h->live->physical_bitrate_bps;
-    s->active_pid_count = h->pid_tracker_count;
-    s->signal_lock = h->signal_lock;
-    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
-    s->master_health = h->double_buffer.buffers[a]->summary.master_health;
-    return 0;
-}
-int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s) {
-    if (!h || !s) return -1;
-    uint8_t a = atomic_load_explicit(&h->double_buffer.active_idx, memory_order_acquire);
-    *s = *h->double_buffer.buffers[a];
-    return 0;
-}
+
+
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* s) {
     if (!h || !s) return;
     h->srt_live = *s;
@@ -1260,87 +903,7 @@ void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     h->pool_offset = al + ((sz > 64) ? sz : 64);
     return p;
 }
-size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char* b, size_t s) {
-    if (!sn || !b || s < 2048) return 0;
-    int off = 0;
-    int n;
 
-#define SAFE_JSON(...)                                                         \
-    {                                                                          \
-        n = snprintf(b + off, (s > (size_t)off) ? (s - off) : 0, __VA_ARGS__); \
-        if (n > 0) off += (off + n < (int)s) ? n : (int)(s - off - 1);         \
-    }
-
-    const tsa_tr101290_stats_t* st = &sn->stats;
-
-    SAFE_JSON("{");
-    // Tier 0/1: Master Control Console (SIGNAL STATUS)
-    SAFE_JSON(
-        "\"status\":{\"signal_lock\":%s,\"network_name\":\"%s\",\"service_name\":\"%s\",\"provider_name\":\"%s\","
-        "\"master_health\":%.1f,"
-        "\"engine_determinism\":{\"drops\":%llu,\"overruns\":%llu}},",
-        sn->summary.signal_lock ? "true" : "false", sn->network_name, sn->service_name, sn->provider_name,
-        sn->predictive.master_health,
-        (unsigned long long)st->internal_analyzer_drop, (unsigned long long)st->worker_slice_overruns);
-
-    // Tier 2: Transport & Link Integrity (SRT/MDI)
-    SAFE_JSON(
-        "\"tier1_link\":{\"physical_bitrate_bps\":%llu,\"srt_rtt_ms\":%lld,\"srt_loss_p0\":%llu,\"srt_retransmit_pct\":"
-        "%.2f,\"mdi_df_ms\":%.2f},",
-        (unsigned long long)st->physical_bitrate_bps, (long long)sn->srt.rtt_ms, (unsigned long long)sn->srt.bytes_lost,
-        sn->srt.retransmit_tax * 100.0, (float)st->mdi_df_ms);
-
-    // Tier 3/4: ETR 290 P1 & P2
-    SAFE_JSON(
-        "\"tier2_compliance\":{\"p1\":{\"sync_loss\":%llu,\"pat_error\":%llu,\"cc_error\":{\"count\":%llu,\"first_occur\":"
-        "%llu,\"last_occur\":%llu},\"pmt_error\":%llu,"
-        "\"pid_error\":%llu},\"p2\":{\"pcr_jitter_ms\":%.3f,\"pcr_accuracy_piecewise_ms\":%.3f,\"piecewise_pcr_bitrate_"
-        "bps\":%llu,\"pcr_repetition\":%llu,\"pts_error\":%llu,\"crc_error\":%llu,\"transport_error\":%llu}},",
-        (unsigned long long)st->sync_loss.count, (unsigned long long)st->pat_error.count,
-        (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.first_timestamp_ns,
-        (unsigned long long)st->cc_error.last_timestamp_ns, (unsigned long long)st->pmt_error.count,
-        (unsigned long long)st->pid_error.count, st->pcr_jitter_avg_ns / 1000000.0,
-        st->pcr_accuracy_ns_piecewise / 1000000.0, (unsigned long long)st->last_pcr_interval_bitrate_bps,
-        (unsigned long long)st->pcr_repetition_error.count, (unsigned long long)st->pts_error.count,
-        (unsigned long long)st->crc_error.count, (unsigned long long)st->transport_error.count);
-
-    // Tier 5/6: Essence & Payload Dynamics
-    SAFE_JSON(
-        "\"tier3_essence\":{\"total_bitrate_bps\":%llu,\"video_fps\":%.2f,\"gop_ms\":%u,\"av_sync_offset_ms\":%d},",
-        (unsigned long long)st->physical_bitrate_bps, (float)st->video_fps, st->gop_ms, st->av_sync_ms);
-
-    // Tier 4/5: Predictive & RST
-    SAFE_JSON(
-        "\"tier4_predictive\":{\"rst_network_s\":%.2f,\"rst_encoder_s\":%.2f,\"stc_wall_drift_ppm\":%.3f,\"mdi_df_ms\":"
-        "%.2f},",
-        sn->predictive.rst_network_s, sn->predictive.rst_encoder_s, sn->predictive.stc_wall_drift_ppm,
-        (float)st->mdi_df_ms);
-
-    // PIDs & T-STD Details
-    SAFE_JSON("\"pids\":[");
-    for (uint32_t i = 0; i < sn->active_pid_count; i++) {
-        const tsa_pid_info_t* p = &sn->pids[i];
-        SAFE_JSON(
-            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,"
-            "\"buffer_status\":{\"eb_fill_pct\":%.2f,\"tb_fill_pct\":%.2f,\"mb_fill_pct\":%.2f}",
-            (i == 0) ? "" : ",", p->pid, tsa_get_pid_type_name(h, p->pid),
-            (unsigned long long)sn->stats.pid_bitrate_bps[p->pid], p->eb_fill_pct, p->tb_fill_pct, p->mb_fill_pct);
-
-        const char* p_st = tsa_get_pid_type_name(h, p->pid);
-        if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0) {
-            SAFE_JSON(",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"gop_n\":%u,\"gop_ms\":%u,\"has_cea708\":"
-                      "%s,\"has_scte35\":%s}",
-                      p->width, p->height, p->profile, p->gop_n, p->gop_ms, p->has_cea708 ? "true" : "false",
-                      p->has_scte35 ? "true" : "false");
-        }
-
-        SAFE_JSON("}");
-    }
-    SAFE_JSON("]}");
-
-#undef SAFE_JSON
-    return (size_t)off;
-}
 float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) {
     return (float)(h->pid_tb_fill_q64[p] >> 64);
 }
@@ -1507,82 +1070,7 @@ double calculate_pcr_jitter(uint64_t pcr, uint64_t now, double* drift) {
     return 0;
 }
 
-void tsa_render_dashboard(tsa_handle_t* h) {
-    if (!h) return;
-    tsa_snapshot_full_t snap;
-    tsa_take_snapshot_full(h, &snap);
-    time_t now_t = time(NULL);
-    char* ct = ctime(&now_t);
-    if (ct) ct[strlen(ct) - 1] = '\0';
-    printf("\n================================================================================\n");
-    printf(" TSA PROFESSIONAL METROLOGY REPORT                                %s\n", ct);
-    printf("================================================================================\n");
-    printf(" Signal Status:  %s\n", snap.summary.signal_lock ? "LOCKED" : "LOSS");
-    if (snap.service_name[0]) {
-        printf(" Service:        %s\n", snap.service_name);
-        printf(" Provider:       %s\n", snap.provider_name);
-    }
-    printf(" Total Packets:  %llu\n", (unsigned long long)snap.summary.total_packets);
-    printf(" PCR Bitrate:    %.2f Mbps\n", (double)snap.stats.pcr_bitrate_bps / 1e6);
-    printf(" AV Sync:        %d ms\n", snap.stats.av_sync_ms);
-    printf("--------------------------------------------------------------------------------\n");
-    printf(" PID      | TYPE       | BITRATE (Mbps) | EB FILL | I/P/B Frames\n");
-    printf("--------------------------------------------------------------------------------\n");
-    for (uint32_t i = 0; i < snap.active_pid_count; i++) {
-        tsa_pid_info_t* p = &snap.pids[i];
-        printf(" 0x%04x   | %-10s | %15.3f | %5.1f%% | %llu/%llu/%llu\n", p->pid, p->type_str,
-               (double)(p->bitrate_q16_16 >> 16) / 1e6, p->eb_fill_pct, (unsigned long long)p->i_frames,
-               (unsigned long long)p->p_frames, (unsigned long long)p->b_frames);
-    }
-    printf("================================================================================\n");
 
-    // Drain and display events
-    bool header_printed = false;
-    size_t head = atomic_load_explicit(&h->event_q->head, memory_order_acquire);
-    size_t tail = atomic_load_explicit(&h->event_q->tail, memory_order_relaxed);
-
-    while (tail < head) {
-        if (!header_printed) {
-            printf("\n RECENT BROADCAST EVENTS:\n");
-            printf("--------------------------------------------------------------------------------\n");
-            header_printed = true;
-        }
-        tsa_event_t* ev = &h->event_q->events[tail % MAX_EVENT_QUEUE];
-        const char* type_str = "UNKNOWN";
-        switch (ev->type) {
-            case TSA_EVENT_CC_ERROR:
-                type_str = "CC ERROR";
-                break;
-            case TSA_EVENT_PCR_JITTER:
-                type_str = "PCR JITTER";
-                break;
-            case TSA_EVENT_PCR_REPETITION:
-                type_str = "PCR REPETITION";
-                break;
-            case TSA_EVENT_SCTE35:
-                type_str = "SCTE-35";
-                break;
-            case TSA_EVENT_SYNC_LOSS:
-                type_str = "SYNC LOSS";
-                break;
-            case TSA_EVENT_CRC_ERROR:
-                type_str = "CRC ERROR";
-                break;
-            case TSA_EVENT_PAT_TIMEOUT:
-                type_str = "PAT TIMEOUT";
-                break;
-            case TSA_EVENT_PMT_TIMEOUT:
-                type_str = "PMT TIMEOUT";
-                break;
-        }
-        printf(" [%10llu] %-15s PID 0x%04x  Value: %llu\n", (unsigned long long)ev->timestamp_ns / 1000000ULL, type_str,
-               ev->pid, (unsigned long long)ev->value);
-        tail++;
-    }
-    atomic_store_explicit(&h->event_q->tail, tail, memory_order_release);
-    if (header_printed) printf("================================================================================\n");
-    printf("\n");
-}
 
 /*
  * Industrial-Grade-style Stream Sync Lock Implementation
