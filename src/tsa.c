@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "tsa_internal.h"
-#include "tsa_engine.h"
+#include "tsa_plugin.h"
 
 /* --- Macros --- */
 #define ALLOC_OR_GOTO(p, t, n)    \
@@ -163,6 +163,8 @@ static int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h) 
 tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     tsa_handle_t* h = calloc(1, sizeof(tsa_handle_t));
     if (!h) return NULL;
+    
+    tsa_stream_init(&h->root_stream, h, NULL);
     ALLOC_OR_GOTO(h->pid_filters, ts_section_filter_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_status, tsa_measurement_status_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_cc_error_suppression, uint32_t, TS_PID_MAX);
@@ -256,8 +258,8 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
     
     /* Register default engines */
-    extern tsa_engine_ops_t tsa_scte35_engine;
-    tsa_register_engine(h, &tsa_scte35_engine);
+    extern tsa_plugin_ops_t tsa_scte35_engine;
+    tsa_plugin_attach_instance(h, &tsa_scte35_engine);
 
     return h;
 fail:
@@ -728,20 +730,29 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
 
 /* --- Engine Management --- */
 
-void tsa_register_engine(tsa_handle_t* h, struct tsa_engine_ops* ops) {
-    if (h->engine_count >= MAX_TSA_ENGINES) return;
-    h->engines[h->engine_count].ops = ops;
-    h->engines[h->engine_count].instance = ops->create(h);
-    h->engine_count++;
+void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
+    if (h->plugin_count >= MAX_TSA_PLUGINS) return;
+    h->plugins[h->plugin_count].ops = ops;
+    h->plugins[h->plugin_count].instance = ops->create(h);
+    
+    // Attach stream to root if plugin exposes one
+    if (ops->get_stream) {
+        tsa_stream_t* child_stream = ops->get_stream(h->plugins[h->plugin_count].instance);
+        if (child_stream) {
+            tsa_stream_attach(&h->root_stream, child_stream);
+        }
+    }
+    
+    h->plugin_count++;
 }
 
 void tsa_destroy_engines(tsa_handle_t* h) {
-    for (int i = 0; i < h->engine_count; i++) {
-        if (h->engines[i].ops->destroy) {
-            h->engines[i].ops->destroy(h->engines[i].instance);
+    for (int i = 0; i < h->plugin_count; i++) {
+        if (h->plugins[i].ops->destroy) {
+            h->plugins[i].ops->destroy(h->plugins[i].instance);
         }
     }
-    h->engine_count = 0;
+    h->plugin_count = 0;
 }
 
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
@@ -784,12 +795,10 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     tsa_decode_packet(h, p, n, &r);
     tsa_metrology_process(h, p, n, &r);
 
-    /* Dispatch to modular engines */
-    for (int i = 0; i < h->engine_count; i++) {
-        if (h->engines[i].ops->process_packet) {
-            h->engines[i].ops->process_packet(h->engines[i].instance, p, &r, n);
-        }
-    }
+    /* Dispatch to modular plugins via Stream Tree */
+    h->current_ns = n;
+    h->current_res = r;
+    tsa_stream_send(&h->root_stream, p);
 
     h->live->engine_processing_latency_ns = (uint64_t)(ts_now_ns128() - start);
 

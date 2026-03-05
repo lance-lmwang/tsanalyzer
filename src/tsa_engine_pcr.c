@@ -3,26 +3,38 @@
 #include <string.h>
 #include <math.h>
 #include "tsa_internal.h"
-#include "tsa_engine.h"
+#include "tsa_plugin.h"
 
 typedef struct {
     tsa_handle_t* h;
+    tsa_stream_t stream;
 } pcr_ctx_t;
+
+static void pcr_on_ts(void* self, const uint8_t* pkt);
 
 static void* pcr_create(void* h) {
     pcr_ctx_t* ctx = calloc(1, sizeof(pcr_ctx_t));
     ctx->h = (tsa_handle_t*)h;
+    tsa_stream_init(&ctx->stream, ctx, pcr_on_ts);
     return ctx;
 }
 
 static void pcr_destroy(void* engine) {
-    free(engine);
+    pcr_ctx_t* ctx = (pcr_ctx_t*)engine;
+    tsa_stream_destroy(&ctx->stream);
+    free(ctx);
 }
 
-static void pcr_process_packet(void* engine, const uint8_t* pkt, const void* decode_res, uint64_t now) {
+static tsa_stream_t* pcr_get_stream(void* engine) {
     pcr_ctx_t* ctx = (pcr_ctx_t*)engine;
+    return &ctx->stream;
+}
+
+static void pcr_on_ts(void* self, const uint8_t* pkt) {
+    pcr_ctx_t* ctx = (pcr_ctx_t*)self;
     tsa_handle_t* h = ctx->h;
-    const ts_decode_result_t* res = (const ts_decode_result_t*)decode_res;
+    const ts_decode_result_t* res = &h->current_res;
+    uint64_t now = h->current_ns;
     uint16_t pid = res->pid;
 
     if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
@@ -77,13 +89,14 @@ static void pcr_process_packet(void* engine, const uint8_t* pkt, const void* dec
     }
 }
 
-static tsa_engine_ops_t pcr_ops = {
-    .name = "PCR_ENGINE",
+static tsa_plugin_ops_t pcr_ops = {
+    .name = "PCR_ANALYSIS",
     .create = pcr_create,
     .destroy = pcr_destroy,
-    .process_packet = pcr_process_packet,
+    .get_stream = pcr_get_stream,
 };
 
 void tsa_register_pcr_engine(tsa_handle_t* h) {
-    tsa_register_engine(h, &pcr_ops);
+    extern void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops);
+    tsa_plugin_attach_instance(h, &pcr_ops);
 }

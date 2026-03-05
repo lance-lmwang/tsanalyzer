@@ -9,6 +9,8 @@
 #include "tsa.h"
 #include "tsa_bitstream.h"
 #include "tsa_clock.h"
+#include "tsa_stream.h"
+#include "tsa_plugin.h"
 
 /* --- Fundamental Types --- */
 typedef __int128_t int128_t;
@@ -287,13 +289,17 @@ struct tsa_handle {
 
     tsa_event_ring_t* event_q;
 
-    /* --- Modular Engines --- */
-    #define MAX_TSA_ENGINES 16
+    /* --- Stream Tree & Plugins --- */
+    tsa_stream_t root_stream;
+    uint64_t current_ns;
+    ts_decode_result_t current_res;
+
+    #define MAX_TSA_PLUGINS 16
     struct {
         void* instance;
-        struct tsa_engine_ops* ops;
-    } engines[MAX_TSA_ENGINES];
-    int engine_count;
+        struct tsa_plugin_ops_s* ops;
+    } plugins[MAX_TSA_PLUGINS];
+    int plugin_count;
 };
 
 /* --- Internal APIs --- */

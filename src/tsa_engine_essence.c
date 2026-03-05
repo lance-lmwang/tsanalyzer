@@ -2,26 +2,38 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tsa_internal.h"
-#include "tsa_engine.h"
+#include "tsa_plugin.h"
 
 typedef struct {
     tsa_handle_t* h;
+    tsa_stream_t stream;
 } essence_ctx_t;
+
+static void essence_on_ts(void* self, const uint8_t* pkt);
 
 static void* essence_create(void* h) {
     essence_ctx_t* ctx = calloc(1, sizeof(essence_ctx_t));
     ctx->h = (tsa_handle_t*)h;
+    tsa_stream_init(&ctx->stream, ctx, essence_on_ts);
     return ctx;
 }
 
 static void essence_destroy(void* engine) {
-    free(engine);
+    essence_ctx_t* ctx = (essence_ctx_t*)engine;
+    tsa_stream_destroy(&ctx->stream);
+    free(ctx);
 }
 
-static void essence_process_packet(void* engine, const uint8_t* pkt, const void* decode_res, uint64_t now) {
+static tsa_stream_t* essence_get_stream(void* engine) {
     essence_ctx_t* ctx = (essence_ctx_t*)engine;
+    return &ctx->stream;
+}
+
+static void essence_on_ts(void* self, const uint8_t* pkt) {
+    essence_ctx_t* ctx = (essence_ctx_t*)self;
     tsa_handle_t* h = ctx->h;
-    const ts_decode_result_t* res = (const ts_decode_result_t*)decode_res;
+    const ts_decode_result_t* res = &h->current_res;
+    uint64_t now = h->current_ns;
     uint16_t pid = res->pid;
 
     if (res->payload_len > 0) {
@@ -71,13 +83,14 @@ static void essence_process_packet(void* engine, const uint8_t* pkt, const void*
     }
 }
 
-static tsa_engine_ops_t essence_ops = {
-    .name = "ESSENCE_ANALYZER",
+static tsa_plugin_ops_t essence_ops = {
+    .name = "ESSENCE_ANALYSIS",
     .create = essence_create,
     .destroy = essence_destroy,
-    .process_packet = essence_process_packet,
+    .get_stream = essence_get_stream,
 };
 
 void tsa_register_essence_engine(tsa_handle_t* h) {
-    tsa_register_engine(h, &essence_ops);
+    extern void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops);
+    tsa_plugin_attach_instance(h, &essence_ops);
 }

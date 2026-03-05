@@ -2,29 +2,41 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tsa_internal.h"
-#include "tsa_engine.h"
+#include "tsa_plugin.h"
 
 // We will port the H.264 / H.265 detailed SPS/PPS parsing here
 // Currently relying on tsa_es.c for basic extraction, but we will make it a subscriber engine.
 
 typedef struct {
     tsa_handle_t* h;
+    tsa_stream_t stream;
 } codec_ctx_t;
+
+static void codec_on_ts(void* self, const uint8_t* pkt);
 
 static void* codec_create(void* h) {
     codec_ctx_t* ctx = calloc(1, sizeof(codec_ctx_t));
     ctx->h = (tsa_handle_t*)h;
+    tsa_stream_init(&ctx->stream, ctx, codec_on_ts);
     return ctx;
 }
 
 static void codec_destroy(void* engine) {
-    free(engine);
+    codec_ctx_t* ctx = (codec_ctx_t*)engine;
+    tsa_stream_destroy(&ctx->stream);
+    free(ctx);
 }
 
-static void codec_process_packet(void* engine, const uint8_t* pkt, const void* decode_res, uint64_t now) {
+static tsa_stream_t* codec_get_stream(void* engine) {
     codec_ctx_t* ctx = (codec_ctx_t*)engine;
+    return &ctx->stream;
+}
+
+static void codec_on_ts(void* self, const uint8_t* pkt) {
+    codec_ctx_t* ctx = (codec_ctx_t*)self;
     tsa_handle_t* h = ctx->h;
-    const ts_decode_result_t* res = (const ts_decode_result_t*)decode_res;
+    const ts_decode_result_t* res = &h->current_res;
+    uint64_t now = h->current_ns;
     uint16_t pid = res->pid;
 
     if (res->payload_len > 0) {
@@ -83,13 +95,14 @@ static void codec_process_packet(void* engine, const uint8_t* pkt, const void* d
     }
 }
 
-static tsa_engine_ops_t codec_ops = {
+static tsa_plugin_ops_t codec_ops = {
     .name = "CODEC_METADATA",
     .create = codec_create,
     .destroy = codec_destroy,
-    .process_packet = codec_process_packet,
+    .get_stream = codec_get_stream,
 };
 
 void tsa_register_codec_engine(tsa_handle_t* h) {
-    tsa_register_engine(h, &codec_ops);
+    extern void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops);
+    tsa_plugin_attach_instance(h, &codec_ops);
 }
