@@ -59,6 +59,7 @@ ST-5 udp://127.0.0.1:19005
 ST-6 udp://127.0.0.1:19006
 ST-7 udp://127.0.0.1:19007
 ST-8 udp://127.0.0.1:19008
+IAT-BASELINE udp://127.0.0.1:19009
 EOF
 
 ./build/tsa_server tsa.conf > server.log 2>&1 &
@@ -67,10 +68,15 @@ echo "Engine started (Port: $TSA_PORT)."
 docker compose -f monitoring/docker-compose.yml up -d
 echo "Monitoring stack started (Prometheus: $PROM_PORT, Grafana: 3000)."
 
-echo "--- [5/5] TRAFFIC INJECTION (8 STREAMS @ 2MBPS) ---"
+echo "--- [5/5] TRAFFIC INJECTION (8 STREAMS + 1 IAT BASELINE) ---"
 for i in {1..8}; do
     ./build/tsp -i 127.0.0.1 -p $((19000+i)) -l -f "$SAMPLE_FILE" -b 2000000 > /dev/null 2>&1 &
 done
+
+# Inject pure IAT baseline traffic (1000us interval)
+./build/tsa_iat_tester -i 127.0.0.1 -p 19009 -s 1000 > /dev/null 2>&1 &
+IAT_PID=$!
+
 
 echo "Waiting for metrics to stabilize (20s)..."
 sleep 20

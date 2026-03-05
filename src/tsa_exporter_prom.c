@@ -101,6 +101,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_pcr_accuracy_ns%s %.2f\n", labels, (float)s->pcr_accuracy_ns);
         SAFE_APPEND("tsa_pcr_accuracy_piecewise_ms%s %.3f\n", labels, s->pcr_accuracy_ns_piecewise / 1000000.0);
         SAFE_APPEND("tsa_stc_wall_drift_ppm%s %.3f\n", labels, snap->predictive.stc_wall_drift_ppm);
+        SAFE_APPEND("tsa_long_term_drift_ppm%s %.3f\n", labels, snap->predictive.long_term_drift_ppm);
 
         // Tier 5: Service Payload Dynamics (MUX)
         SAFE_APPEND("tsa_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
@@ -131,6 +132,8 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                 SAFE_APPEND("tsa_pid_tstd_tb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].tb_fill_pct);
                 SAFE_APPEND("tsa_pid_tstd_mb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].mb_fill_pct);
             }
+            SAFE_APPEND("tsa_pid_has_cea708%s %d\n", pid_labels, snap->pids[j].has_cea708 ? 1 : 0);
+            SAFE_APPEND("tsa_pid_has_scte35%s %d\n", pid_labels, snap->pids[j].has_scte35 ? 1 : 0);
 
             if (snap->pids[j].width > 0) {
                 char v_labels[256];
@@ -234,6 +237,8 @@ void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t
                 SAFE_APPEND("tsa_pid_tstd_tb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].tb_fill_pct);
                 SAFE_APPEND("tsa_pid_tstd_mb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].mb_fill_pct);
             }
+            SAFE_APPEND("tsa_pid_has_cea708%s %d\n", pid_labels, snap->pids[j].has_cea708 ? 1 : 0);
+            SAFE_APPEND("tsa_pid_has_scte35%s %d\n", pid_labels, snap->pids[j].has_scte35 ? 1 : 0);
         }
     }
 #undef SAFE_APPEND

@@ -164,6 +164,25 @@ tsa_file_report: release
 	@./build/tsa --mode=replay sample/test.ts
 	@echo "$(GREEN)Analysis Complete.$(RESET)"
 
+# --- High-Density CLI Monitor (SHM-based) ---
+tsa_top: release
+	@echo "$(GREEN)=== Running TsAnalyzer Pro Top Monitor ===$(RESET)"
+	@pkill -9 tsa_server_pro || true
+	@pkill -9 tsa_generator || true
+	@echo "GLOBAL http_port 8081" > top_test.conf
+	@echo "ST-TOP udp://127.0.0.1:20001" >> top_test.conf
+	@build/tsa_server_pro top_test.conf > top_server.log 2>&1 & \
+	 SERVER_PID=$$!; \
+	 build/tsa_generator -i 127.0.0.1 -p 20001 -b 10000000 > /dev/null 2>&1 & \
+	 GEN_PID=$$!; \
+	 trap "kill $$SERVER_PID $$GEN_PID 2>/dev/null; rm top_test.conf; echo \"$(GREEN)Cleaned up.$(RESET)\"; exit" INT TERM; \
+	 sleep 1; \
+	 echo "$(GREEN)Launching tsa_top (Press 'q' to exit)...$(RESET)"; \
+	 build/tsa_top; \
+	 kill $$SERVER_PID $$GEN_PID 2>/dev/null; \
+	 rm top_test.conf; \
+	 echo "$(GREEN)Session Complete.$(RESET)"
+
 help:
 	@echo "$(GREEN)TsAnalyzer Build System$(RESET)"
 	@echo "Usage:"

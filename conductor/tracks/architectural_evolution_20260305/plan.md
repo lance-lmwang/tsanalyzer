@@ -16,7 +16,7 @@
 - [x] **Splice Command Parser**: Implement a lightweight parser to extract `splice_command_type` (e.g., `0x05` for Splice Insert) and log it via the CLI/Dashboard.
 
 ## Phase 4: Event-Driven Alarms (TR 101 290)
-- [x] **Create Event Queue**: Define a lightweight, lock-free event queue (similar to `opensrthub`'s dataqueue) to hold transient alarm states.
+- [x] **Create Event Queue**: Define a lightweight, lock-free event queue to hold transient alarm states.
 - [x] **Refactor Alarm Generation**: Modify `tsa_metrology_process` to push distinct alarm events (e.g., `ALARM_CC_ERROR_PID_0x0100`) rather than just incrementing global counters.
 - [x] **Dashboard Integration**: Update `tsa_render_dashboard` to consume and display these distinct events.
 

@@ -15,12 +15,15 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #include "../deps/mongoose/mongoose.h"
 #include "mpmc_queue.h"
 #include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
+#include "../include/tsa_top_shm.h"
 
 #define MAX_CONNS 4096
 #define HTTP_PORT "8081"
@@ -55,6 +58,8 @@ static int g_http_port = 8081;
 static int g_srt_port = 9000;
 
 extern void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
+extern void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz);
+extern void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t sz);
 
 static void load_config(const char* file) {
     FILE* fp = fopen(file, "r");
@@ -91,7 +96,7 @@ static void load_config(const char* file) {
                 if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
                     int flags = fcntl(udp_fd, F_GETFL, 0);
                     fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
-                    c->fd = udp_fd;
+                    c->fd = (SRTSOCKET)udp_fd;
                     c->type = CONN_UDP;
                     c->tsa = tsa_create(&cfg);
                     c->tx_q = spsc_queue_create(1024);
@@ -318,7 +323,7 @@ static void* io_thread(void* arg) {
             pthread_mutex_unlock(&g_conn_lock);
             if (c && c->type == CONN_UDP) {
                 while (true) {
-                    ssize_t len = recv(c->fd, raw_buf, sizeof(raw_buf), MSG_DONTWAIT);
+                    ssize_t len = recv((int)c->fd, raw_buf, sizeof(raw_buf), MSG_DONTWAIT);
                     if (len > 0) {
                         uint64_t now = (uint64_t)ts_now_ns128();
                         for (int k = 0; k < len / 188; k++) {
@@ -453,6 +458,23 @@ int main(int argc, char** argv) {
     mg_http_listen(&mgr, http_addr, http_fn, &mgr);
     printf("PRO: HTTP Metrics active on %s\n", http_addr);
 
+    // Initialize Shared Memory for tsa_top
+    int shm_fd = shm_open(TSA_TOP_SHM_NAME, O_CREAT | O_RDWR, 0666);
+    tsa_top_shm_block_t* shm_block = NULL;
+    if (shm_fd >= 0) {
+        if (ftruncate(shm_fd, sizeof(tsa_top_shm_block_t)) == 0) {
+            shm_block = mmap(0, sizeof(tsa_top_shm_block_t), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+            if (shm_block != MAP_FAILED) {
+                memset(shm_block, 0, sizeof(tsa_top_shm_block_t));
+                printf("PRO: Shared memory initialized at %s\n", TSA_TOP_SHM_NAME);
+            } else {
+                shm_block = NULL;
+            }
+        }
+    }
+
+    uint64_t last_shm_update = 0;
+
     while (atomic_load(&g_run)) {
         mg_mgr_poll(&mgr, 50);
         
@@ -473,7 +495,72 @@ int main(int argc, char** argv) {
                 }
             }
         }
+
+        // Update Shared Memory (every ~500ms) with Sequence Locking
+        if (shm_block && (now - last_shm_update) > 500000000ULL) {
+            // Write sequence lock: using atomic pointer logic since seq_lock is part of SHM
+            uint64_t seq = atomic_load_explicit((_Atomic uint64_t*)&shm_block->seq_lock, memory_order_acquire);
+            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 1, memory_order_release); // Make it odd
+
+            shm_block->num_active_streams = 0;
+            double total_health = 0.0;
+
+            for (int i = 0; i < total && i < TSA_TOP_MAX_STREAMS; i++) {
+                conn_t* c = g_conns[i];
+                if (c && c->tsa && !atomic_load(&c->closed)) {
+                    tsa_snapshot_full_t snap;
+                    if (tsa_take_snapshot_full(c->tsa, &snap) == 0) {
+                        tsa_top_stream_info_t* info = &shm_block->streams[shm_block->num_active_streams];
+                        memset(info, 0, sizeof(*info));
+                        strncpy(info->stream_id, c->id, sizeof(info->stream_id) - 1);
+                        info->total_packets = snap.summary.total_packets;
+                        info->current_bitrate_mbps = snap.summary.physical_bitrate_bps / 1000000.0;
+                        info->master_health = snap.summary.master_health;
+                        
+                        info->cc_errors = snap.stats.cc_loss_count + snap.stats.cc_duplicate_count;
+                        info->p1_errors = snap.stats.alarm_sync_loss + snap.stats.alarm_pat_error + snap.stats.alarm_cc_error + snap.stats.alarm_pmt_error;
+                        info->p2_errors = snap.stats.alarm_pcr_repetition_error + snap.stats.alarm_pcr_accuracy_error + snap.stats.alarm_crc_error;
+                        info->p3_errors = snap.stats.alarm_sdt_error;
+                        
+                        info->pcr_jitter_p99_ms = snap.stats.pcr_jitter_max_ns / 1000000.0;
+                        info->mdi_df_ms = snap.stats.mdi_df_ms;
+                        
+                        info->rst_net_s = snap.predictive.rst_network_s;
+                        info->rst_enc_s = snap.predictive.rst_encoder_s;
+                        info->drift_ppm = snap.predictive.stc_wall_drift_ppm;
+                        info->drift_long_ppm = snap.predictive.long_term_drift_ppm;
+                        
+                        for (uint32_t j = 0; j < snap.active_pid_count; j++) {
+                            if (snap.pids[j].width > 0 && info->width == 0) {
+                                info->width = (double)snap.pids[j].width;
+                                info->height = (double)snap.pids[j].height;
+                                info->fps = (snap.pids[j].gop_ms > 0) ? ((double)snap.pids[j].gop_n * 1000.0 / snap.pids[j].gop_ms) : 0.0;
+                                info->gop_ms = (double)snap.pids[j].gop_ms;
+                            }
+                            if (snap.pids[j].has_cea708) info->has_cea708 = 1;
+                            if (snap.pids[j].has_scte35) info->has_scte35 = 1;
+                        }
+
+                        info->is_active = 1;
+                        total_health += snap.summary.master_health;
+                        shm_block->num_active_streams++;
+                    }
+                }
+            }
+            if (shm_block->num_active_streams > 0) {
+                shm_block->global_health = total_health / shm_block->num_active_streams;
+            } else {
+                shm_block->global_health = 0.0;
+            }
+            
+            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 2, memory_order_release); // Back to even
+            last_shm_update = now;
+        }
     }
+
+    if (shm_block) munmap(shm_block, sizeof(tsa_top_shm_block_t));
+    if (shm_fd >= 0) close(shm_fd);
+    shm_unlink(TSA_TOP_SHM_NAME);
 
     mg_mgr_free(&mgr);
 
@@ -481,9 +568,9 @@ int main(int argc, char** argv) {
     for (int i = 0; i < WORKER_THREADS; i++) pthread_join(t_workers[i], NULL);
     srt_epoll_release(srt_eid);
     srt_cleanup();
-    for (int i = 0; i < atomic_load(&g_conn_count); i++) {
+    for (int i = 0; i < (int)atomic_load(&g_conn_count); i++) {
         if (g_conns[i]->type == CONN_UDP)
-            close(g_conns[i]->fd);
+            close((int)g_conns[i]->fd);
         else
             srt_close(g_conns[i]->fd);
         if (g_conns[i]->tsa) tsa_destroy(g_conns[i]->tsa);

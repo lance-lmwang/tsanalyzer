@@ -91,14 +91,15 @@ typedef struct tsa_srt_stats {
 } tsa_srt_stats_t;
 
 typedef struct {
-    float master_health;
-    float rst_network_s;
-    float rst_encoder_s;
-    float stc_wall_drift_ppm;
-    uint32_t fault_domain;
-    bool lid_active;
+    double master_health;
+    double rst_network_s;
+    double rst_encoder_s;
+    double stc_wall_drift_ppm;
+    double long_term_drift_ppm;
     double stc_drift_slope;
-    bool stc_locked_bool;
+    uint64_t fault_domain;
+    uint64_t lid_active;
+    uint64_t stc_locked_bool;
     uint64_t pcr_jitter_ns;
 } tsa_predictive_stats_t;
 
@@ -134,6 +135,8 @@ typedef struct {
     uint64_t i_frames;
     uint64_t p_frames;
     uint64_t b_frames;
+    bool has_cea708;
+    bool has_scte35;
     float eb_fill_pct;
     float tb_fill_pct;
     float mb_fill_pct;
@@ -217,6 +220,7 @@ typedef struct {
     bool enable_pcr_restamp;
     bool enable_auto_forensics;
     uint32_t forensic_ring_size;
+    bool enable_dynamic_grooming;
     uint64_t watchdog_timeout_ns;
 } tsa_gateway_config_t;
 

@@ -78,6 +78,11 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
                 gw->is_throttling = false;
             }
 
+            if (gw->cfg.enable_dynamic_grooming && snap.physical_bitrate_bps > 0) {
+                // Smoothly track input bitrate
+                tsp_update_bitrate(gw->tsp, snap.physical_bitrate_bps);
+            }
+
             if (gw->cfg.enable_auto_forensics && tsa_forensic_trigger(gw->tsa, 0)) {
                 char fname[64];
                 snprintf(fname, sizeof(fname), "forensic_%lu.ts", (unsigned long)time(NULL));

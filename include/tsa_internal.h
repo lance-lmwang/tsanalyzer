@@ -9,6 +9,7 @@
 #include "tsa.h"
 #include "tsa_clock.h"
 
+/* --- Fundamental Types --- */
 typedef __int128_t int128_t;
 typedef int128_t q64_64;
 
@@ -24,17 +25,14 @@ typedef int64_t q32_32;
 #define INT_TO_Q32_32(x) ((int64_t)(x) << 32)
 
 #define NS_PER_SEC 1000000000ULL
+#define INVALID_PCR 0xFFFFFFFFFFFFFFFFULL
 
-typedef uint64_t stc_27m_t;
+/* --- Protocol Constants --- */
+#define TS_AF_FLAG 0x20
+#define TS_PAYLOAD_FLAG 0x10
+#define TS_PCR_FLAG 0x10
 
-typedef struct {
-    stc_27m_t dts;
-    stc_27m_t pts;
-    size_t size;
-    uint64_t arrival_vstc;
-    uint16_t pid;
-} ts_access_unit_t;
-
+/* --- Helper Structures --- */
 typedef struct {
     uint64_t sys_ns;
     uint64_t pcr_ns;
@@ -47,13 +45,32 @@ typedef struct {
     uint32_t head;
 } ts_pcr_window_t;
 
-void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t sz);
-void ts_pcr_window_destroy(ts_pcr_window_t* w);
-void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t sys, uint64_t pcr, uint64_t off);
+typedef struct {
+    const uint8_t* buf;
+    int size;
+    int pos;
+} bit_reader_t;
 
-/* Updated signature for determinism: use int64_t for peak_acc in ns */
-int ts_pcr_window_regress(ts_pcr_window_t* w, int128_t* slope, int128_t* intercept, int64_t* peak_accuracy_ns);
+typedef struct {
+    union { char* ptr; char* base; };
+    union { size_t size; size_t capacity; };
+    size_t offset;
+} tsa_metric_buffer_t;
 
+typedef struct {
+    uint16_t pid;
+    uint8_t pusi;
+    uint8_t af_len;
+    bool has_payload;
+    int payload_len;
+    uint8_t cc;
+    bool has_discontinuity;
+    bool has_pes_header;
+    uint64_t pts;
+    uint64_t dts;
+} ts_decode_result_t;
+
+/* --- Protocol Structures --- */
 #define MAX_PROGRAMS 16
 #define MAX_STREAMS_PER_PROG 32
 
@@ -63,6 +80,7 @@ typedef struct {
 } ts_stream_info_t;
 
 typedef struct {
+    uint16_t program_number;
     uint16_t pmt_pid;
     uint16_t pcr_pid;
     uint32_t stream_count;
@@ -108,7 +126,6 @@ typedef struct {
 } tsa_event_t;
 
 #define MAX_EVENT_QUEUE 1024
-
 typedef struct {
     tsa_event_t events[MAX_EVENT_QUEUE];
     alignas(64) _Atomic size_t head;
@@ -127,6 +144,7 @@ typedef struct {
     bool complete;
 } ts_section_filter_t;
 
+/* --- The Handle --- */
 struct tsa_handle {
     tsa_config_t config;
 
@@ -139,19 +157,18 @@ struct tsa_handle {
     tsa_sampling_point_t last_sampling_point;
     uint64_t last_pcr_total_pkts;
 
-    ts_section_filter_t* pid_filters;  // Dynamic [TS_PID_MAX]
+    ts_section_filter_t* pid_filters;
 
     alignas(64) uint64_t start_ns;
     bool engine_started;
     uint64_t last_pat_ns;
     uint64_t last_pmt_ns;
     uint64_t last_snap_ns;
+    uint64_t last_commit_ns;
 
-    tsa_measurement_status_t* pid_status;  // Dynamic [TS_PID_MAX]
-    uint32_t* pid_cc_error_suppression;    // Dynamic [TS_PID_MAX]
-    uint32_t pat_error_suppression;
-    uint32_t sync_error_suppression;
-    tsa_clock_inspector_t* clock_inspectors; // Dynamic [TS_PID_MAX]
+    tsa_measurement_status_t* pid_status;
+    uint32_t* pid_cc_error_suppression;
+    tsa_clock_inspector_t* clock_inspectors;
 
     bool seen_pat, seen_pmt;
     bool signal_lock;
@@ -160,35 +177,32 @@ struct tsa_handle {
     uint32_t consecutive_sync_errors;
     uint32_t consecutive_good_syncs;
 
-    // PCR Analysis Core
     uint64_t last_pcr_ticks;
     uint64_t last_pcr_arrival_ns;
     uint64_t pkts_since_pcr;
     uint64_t last_pcr_interval_bitrate_bps;
-    int128_t pcr_jitter_sq_sum_ns;
-    uint64_t pcr_jitter_count;
     ts_pcr_window_t pcr_window;
+    ts_pcr_window_t pcr_long_window;
+    uint64_t last_long_pcr_sample_ns;
+    double long_term_drift_ppm;
+    double stc_wall_drift_ppm;
 
-    // Statistical Snapshots (Now Pointers)
     tsa_tr101290_stats_t* live;
     tsa_tr101290_stats_t* prev_snap_base;
 
-    char (*pid_labels)[128];  // [TS_PID_MAX] Pre-compiled prometheus labels
+    char (*pid_labels)[128];
     tsa_srt_stats_t srt_live;
 
-    /* T-STD AU Queue */
     struct {
         uint64_t dts_ns;
         uint32_t size;
-    } (*pid_au_q)[32];  // [TS_PID_MAX][32]
+    } (*pid_au_q)[32];
     uint8_t* pid_au_head;
     uint8_t* pid_au_tail;
-
     uint64_t* pid_pending_dts;
 
     uint64_t last_v_pts;
     uint64_t last_a_pts;
-
     uint64_t* pid_last_pts_33;
     uint64_t* pid_pts_offset_64;
 
@@ -196,15 +210,13 @@ struct tsa_handle {
     uint64_t metro_offset;
 
     q32_32 pcr_ema_alpha_q32;
-    float last_health_score;
+    double last_health_score;
 
-    /* Fixed-point Buffer Simulation (Q64.64) - Dynamic */
     int128_t* pid_eb_fill_q64;
     int128_t* pid_tb_fill_q64;
     int128_t* pid_mb_fill_q64;
     uint64_t* last_buffer_leak_vstc;
 
-    // PID State Tracking - Dynamic
     double* pid_bitrate_ema;
     uint64_t* pid_bitrate_min;
     uint64_t* pid_bitrate_max;
@@ -213,10 +225,11 @@ struct tsa_handle {
     bool* pid_seen;
     bool* pid_is_pmt;
     bool* pid_is_scte35;
+    bool* pid_has_cea708;
     uint8_t* pid_stream_type;
     int16_t* pid_to_active_idx;
     uint32_t pid_tracker_count;
-    uint16_t pid_active_list[MAX_ACTIVE_PIDS];  // Small, keep in-struct
+    uint16_t pid_active_list[MAX_ACTIVE_PIDS];
 
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
@@ -225,7 +238,6 @@ struct tsa_handle {
     char service_name[256];
     char provider_name[256];
 
-    // PES & ES Deep Analysis (Expert Mode) - Dynamic
     uint8_t** pid_pes_buf;
     uint32_t* pid_pes_len;
     uint32_t* pid_pes_cap;
@@ -241,7 +253,6 @@ struct tsa_handle {
     uint32_t* pid_last_frame_num;
     bool* pid_frame_num_valid;
 
-    // GOP Tracking - Dynamic
     uint32_t* pid_gop_n;
     uint32_t* pid_last_gop_n;
     uint32_t* pid_gop_min;
@@ -260,58 +271,24 @@ struct tsa_handle {
     alignas(64) int128_t stc_slope_q64;
     int128_t stc_intercept_q64;
     bool stc_locked;
-    uint64_t stc_ns;           // PCR-driven System Time Clock
-    uint64_t last_pcr_stc_ns;  // STC at last PCR arrival
+    uint64_t stc_ns;
+    uint64_t last_pcr_stc_ns;
 
-    // PCR-to-Wall drift tracking
     uint64_t stc_first_lock_pcr_ns;
     uint64_t stc_first_lock_wall_ns;
-    float stc_wall_drift_ppm;
 
     void* pool_base;
     size_t pool_offset;
     size_t pool_size;
 
-    /* Event-driven Alarm Queue (inspired by opensrthub) */
     tsa_event_ring_t* event_q;
 };
 
-/* Stage-specific processing for multithreaded pipeline */
-typedef struct {
-    uint16_t pid;
-    uint8_t pusi;
-    uint8_t af_len;
-    bool has_payload;
-    int payload_len;
-    uint8_t cc;
-    bool has_discontinuity;
-    bool has_pes_header;
-    uint64_t pts;
-    uint64_t dts;
-} ts_decode_result_t;
-
-void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
-
-void tsa_decode_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
-void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
-void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, const ts_decode_result_t* res);
-
-/* --- TS Packet Flags --- */
-#define TS_AF_FLAG 0x20
-#define TS_PAYLOAD_FLAG 0x10
-#define TS_PCR_FLAG 0x10
-
-/* --- Internal Utilities --- */
-void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid);
-void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
-const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t pid);
-
-/* --- Bit Reader (Shared for ES Inspectors) --- */
-typedef struct {
-    const uint8_t* buf;
-    int size;
-    int pos;
-} bit_reader_t;
+/* --- Internal APIs --- */
+void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t sz);
+void ts_pcr_window_destroy(ts_pcr_window_t* w);
+void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t sys, uint64_t pcr, uint64_t off);
+int ts_pcr_window_regress(ts_pcr_window_t* w, double* slope, double* intercept, int64_t* peak_accuracy_ns);
 
 static inline uint32_t read_bits(bit_reader_t* r, int n) {
     uint32_t val = 0;
@@ -330,55 +307,14 @@ static inline uint32_t read_ue(bit_reader_t* r) {
     return (1 << count) - 1 + read_bits(r, count);
 }
 
-typedef struct {
-    const uint8_t* buf;
-    int size;
-    int pos;
-    int zeros;
-} h265_reader_t;
+void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
+void tsa_decode_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
+void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);
+void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, const ts_decode_result_t* res);
 
-static inline uint32_t read_bits_h265(h265_reader_t* r, int n) {
-    uint32_t val = 0;
-    for (int i = 0; i < n; i++) {
-        if (r->pos / 8 >= r->size) break;
-        if ((r->pos % 8 == 0) && r->zeros >= 2 && r->buf[r->pos / 8] == 0x03) {
-            r->pos += 8;
-            r->zeros = 0;
-        }
-        if (r->pos / 8 >= r->size) break;
-        uint8_t bit = (r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1;
-        val = (val << 1) | bit;
-        if (bit == 0)
-            r->zeros++;
-        else
-            r->zeros = 0;
-        r->pos++;
-    }
-    return val;
-}
-
-static inline uint32_t read_ue_h265(h265_reader_t* r) {
-    int count = 0;
-    while (read_bits_h265(r, 1) == 0 && count < 32) count++;
-    if (count >= 32) return 0;
-    return (1 << count) - 1 + read_bits_h265(r, count);
-}
-
-int tsa_fast_itoa(char* buf, int64_t val);
-int tsa_fast_ftoa(char* buf, float val, int precision);
-
-/* FIX: Use anonymous union to align engine ptr/size with test base/capacity */
-typedef struct {
-    union {
-        char* ptr;
-        char* base;
-    };
-    union {
-        size_t size;
-        size_t capacity;
-    };
-    size_t offset;
-} tsa_metric_buffer_t;
+void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid);
+void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
+const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t pid);
 
 void tsa_mbuf_init(tsa_metric_buffer_t* b, char* buf, size_t sz);
 void tsa_mbuf_append_str(tsa_metric_buffer_t* b, const char* s);
@@ -388,15 +324,6 @@ void tsa_mbuf_append_char(tsa_metric_buffer_t* b, char c);
 
 uint32_t mpegts_crc32(const uint8_t* data, int len);
 uint32_t tsa_crc32_check(const uint8_t* data, int len);
-
-/* FIX: Add missing T-STD function declarations for tests */
-float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t pid);
-float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t pid);
-float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t pid);
-
-double calculate_shannon_entropy(const uint32_t* counts, int len);
-int check_cc_error(uint8_t last_cc, uint8_t curr_cc, bool has_payload, bool adaptation_only);
-double calculate_pcr_jitter(uint64_t pcr, uint64_t now, double* drift);
 uint64_t extract_pcr(const uint8_t* pkt);
 
 typedef enum { TS_CC_OK, TS_CC_DUPLICATE, TS_CC_LOSS, TS_CC_OUT_OF_ORDER } ts_cc_status_t;
@@ -407,11 +334,16 @@ struct timespec ns128_to_timespec(int128_t ns);
 int128_t ts_now_ns128(void);
 
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len, uint64_t now_ns);
-const char* tsa_stream_type_to_str(uint8_t type);
-void tsa_export_pid_labels(tsa_metric_buffer_t* buf, tsa_handle_t* h, uint16_t pid);
-
 void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64_t val);
 
-void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t now_ns);
-void tsa_render_dashboard(tsa_handle_t* h);
+/* --- Test/Utility Helpers --- */
+double calculate_shannon_entropy(const uint32_t* counts, int n);
+double calculate_pcr_jitter(uint64_t pt, uint64_t pn, double* drift);
+const char* tsa_stream_type_to_str(uint8_t type);
+float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t pid);
+float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t pid);
+float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t pid);
+int tsa_fast_itoa(char* buf, int64_t val);
+int tsa_fast_ftoa(char* buf, float val, int prec);
+
 #endif
