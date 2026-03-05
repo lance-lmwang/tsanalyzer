@@ -15,6 +15,7 @@
 
 typedef struct {
     uint64_t timestamp_ns;
+    uint64_t stc_ns;
     uint8_t data[188];
 } ts_packet_t;
 

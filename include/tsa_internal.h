@@ -160,7 +160,11 @@ struct tsa_handle {
     ts_section_filter_t* pid_filters;
 
     alignas(64) uint64_t start_ns;
+    tsa_op_mode_t op_mode;
     bool engine_started;
+    
+    bool pending_snapshot;
+    uint64_t snapshot_stc;
     uint64_t last_pat_ns;
     uint64_t last_pmt_ns;
     uint64_t last_snap_ns;

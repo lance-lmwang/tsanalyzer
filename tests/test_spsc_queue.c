@@ -29,6 +29,7 @@ void* producer(void* arg) {
     for (uint64_t i = 0; i < MSG_COUNT; i++) {
         ts_packet_t pkt;
         pkt.timestamp_ns = i;
+        pkt.stc_ns = i;
         memset(pkt.data, (uint8_t)(i & 0xFF), 188);
 
         int spins = 0;

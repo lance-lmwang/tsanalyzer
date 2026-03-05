@@ -75,9 +75,30 @@ static void* pcap_thread(void* arg) {
         }
         if (ret == 0) usleep(1000);
     }
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
     return NULL;
 }
 #endif
+
+static void* file_thread(void* arg) {
+    tsa_source_t* src = (tsa_source_t*)arg;
+    uint8_t buf[188 * 7];
+    while (src->running) {
+        size_t n = fread(buf, 1, sizeof(buf), src->handle.fp);
+        if (n > 0) {
+            src->cbs.on_packets(src->user_data, buf, n / 188, 0);
+        } else {
+            if (feof(src->handle.fp)) {
+                src->cbs.on_status(src->user_data, 0, "EOF");
+            } else {
+                src->cbs.on_status(src->user_data, -1, "File read error");
+            }
+            break;
+        }
+    }
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
+    return NULL;
+}
 
 static void* udp_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
@@ -96,6 +117,7 @@ static void* udp_thread(void* arg) {
         }
         if (n <= 0) usleep(1000);
     }
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
     return NULL;
 }
 
@@ -116,6 +138,7 @@ static void* srt_thread(void* arg) {
         }
         if (n <= 0) usleep(1000);
     }
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
     return NULL;
 }
 
@@ -139,6 +162,11 @@ void tsa_source_destroy(tsa_source_t* src) {
     } else if (src->type == TSA_SOURCE_PCAP) {
         pcap_close(src->handle.pcap_hdl);
 #endif
+    } else if (src->type == TSA_SOURCE_FILE) {
+        if (src->handle.fp) {
+            fclose(src->handle.fp);
+            src->handle.fp = NULL;
+        }
     }
     free(src);
 }
@@ -178,6 +206,13 @@ int tsa_source_start(tsa_source_t* src) {
         src->cbs.on_status(src->user_data, -1, "PCAP support not compiled in");
         return -1;
 #endif
+    } else if (src->type == TSA_SOURCE_FILE) {
+        src->handle.fp = fopen(src->url, "rb");
+        if (!src->handle.fp) {
+            src->cbs.on_status(src->user_data, -1, "Failed to open file");
+            return -1;
+        }
+        pthread_create(&src->thread, NULL, file_thread, src);
     }
     return 0;
 }

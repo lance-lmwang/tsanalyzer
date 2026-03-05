@@ -248,6 +248,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->pid_au_q = calloc(TS_PID_MAX, sizeof(*h->pid_au_q));
     h->pid_au_head = calloc(TS_PID_MAX, 1);
     h->pid_au_tail = calloc(TS_PID_MAX, 1);
+    h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
     h->pid_pending_dts = calloc(TS_PID_MAX, sizeof(uint64_t));
     h->pid_last_pts_33 = calloc(TS_PID_MAX, sizeof(uint64_t));
     h->pid_pts_offset_64 = calloc(TS_PID_MAX, sizeof(uint64_t));
@@ -290,6 +291,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     }
     /* Assign first 32 potential PES buffers to a pool */
     h->pes_pool_used = 0;
+    h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
     
     /* Register default engines */
     extern tsa_engine_ops_t tsa_scte35_engine;
@@ -866,6 +868,12 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     }
 
     h->live->engine_processing_latency_ns = (uint64_t)(ts_now_ns128() - start);
+
+    /* Commit snapshot if requested (synchronized with packet processing) */
+    if (h->pending_snapshot) {
+        tsa_commit_snapshot(h, h->snapshot_stc);
+        h->pending_snapshot = false;
+    }
 }
 
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
@@ -989,7 +997,12 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         double instant_drift = (sl - 1.0) * 1000000.0;
         // Strong EMA filter (alpha=0.01) for professional stability
         h->live->pcr_drift_ppm = (h->live->pcr_drift_ppm * 0.99) + (instant_drift * 0.01);
-        h->stc_wall_drift_ppm = h->live->pcr_drift_ppm;
+        if (h->op_mode == TSA_MODE_REPLAY) {
+            h->live->pcr_drift_ppm = 0.0;
+            h->stc_wall_drift_ppm = 0.0;
+        } else {
+            h->stc_wall_drift_ppm = h->live->pcr_drift_ppm;
+        }
         h->live->pcr_accuracy_ns = (double)pa;
         h->stc_slope_q64 = (int128_t)(sl * Q64);
         h->stc_intercept_q64 = (int128_t)(ic_d * Q64);
@@ -1002,6 +1015,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     int64_t l_pa = 0;
     if (ts_pcr_window_regress(&h->pcr_long_window, &l_sl, &l_ic, &l_pa) == 0) {
         h->long_term_drift_ppm = (l_sl - 1.0) * 1000000.0;
+        if (h->op_mode == TSA_MODE_REPLAY) h->long_term_drift_ppm = 0.0;
     } else {
         h->long_term_drift_ppm = 0.0;
     }

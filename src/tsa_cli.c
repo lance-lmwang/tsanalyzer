@@ -63,8 +63,15 @@ static void backoff_sleep(int count) {
 
 static void on_source_packets(void* user_data, const uint8_t* pkts, int count, uint64_t now_ns) {
     (void)user_data;
-    if (now_ns == 0) now_ns = (uint64_t)ts_now_ns128();
     ts_packet_t pkt;
+    if (count == 0) {
+        /* Poison pill: signal end of stream */
+        pkt.timestamp_ns = 0;
+        int backoff_cnt = 0;
+        while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
+        return;
+    }
+    if (now_ns == 0) now_ns = (uint64_t)ts_now_ns128();
     for (int i = 0; i < count; i++) {
         memcpy(pkt.data, pkts + (i * 188), 188);
         pkt.timestamp_ns = now_ns;
@@ -89,6 +96,7 @@ static void* decode_thread(void* arg) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
             tsa_feed_data(h, pkt.data, 188, pkt.timestamp_ns);
+            pkt.stc_ns = h->stc_ns; // Deterministic stream time
             while (g_keep_running && !spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(backoff_cnt++);
             backoff_cnt = 0;
         } else {
@@ -112,12 +120,21 @@ static void* metrology_thread(void* arg) {
         if (spsc_queue_pop(q_dec_to_met, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
 
-            if (h->stc_ns - last_snap_ts > 100000000ULL) {
-                tsa_commit_snapshot(h, h->stc_ns);
-                last_snap_ts = h->stc_ns;
+            // Trigger snapshot based on internal stream time (deterministic)
+            if (pkt.stc_ns - last_snap_ts > 100000000ULL) {
+                h->snapshot_stc = pkt.stc_ns;
+                h->pending_snapshot = true;
+                /* Wait for decode thread to acknowledge/process it */
+                while (g_keep_running && h->pending_snapshot) backoff_sleep(0);
+                last_snap_ts = pkt.stc_ns;
             }
             backoff_cnt = 0;
         } else {
+            if (h->op_mode == TSA_MODE_REPLAY) {
+                backoff_sleep(backoff_cnt++);
+                if (backoff_cnt > 1000) usleep(1000);
+                continue;
+            }
             // Heartbeat: If no packets for 100ms real-time, commit a snapshot using real-time
             // to allow timeout/TTL logic to fire.
             struct timespec ts;
@@ -250,6 +267,9 @@ int main(int argc, char** argv) {
     if (optind < argc) {
         strncpy(filename, argv[optind], sizeof(filename) - 1);
         strncpy(cfg.input_label, "CLI-FILE", sizeof(cfg.input_label) - 1);
+        if (cfg.op_mode == TSA_MODE_LIVE) {
+            cfg.op_mode = TSA_MODE_REPLAY;
+        }
     } else {
         strncpy(cfg.input_label, "CLI-NET", sizeof(cfg.input_label) - 1);
     }
@@ -316,8 +336,6 @@ int main(int argc, char** argv) {
 
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);
-    tsa_commit_snapshot(h, h->stc_ns);
-    tsa_render_dashboard(h);
     tsa_destroy(h);
     printf("CLI: Shutdown Complete.\n");
     return 0;
