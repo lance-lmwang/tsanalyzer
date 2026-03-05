@@ -40,18 +40,27 @@ struct tsa_source {
 #ifdef HAVE_PCAP
 static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, const u_char *pkt) {
     tsa_source_t* src = (tsa_source_t*)user;
-    
-    // Simple Ethernet/IP/UDP decapsulation
-    if (h->caplen < 14 + 20 + 8) return; 
+    int offset = 0;
+    int link_type = pcap_datalink(src->handle.pcap_hdl);
 
-    struct ethhdr *eth = (struct ethhdr *)pkt;
-    if (ntohs(eth->h_proto) != ETH_P_IP) return;
+    if (link_type == DLT_EN10MB) {
+        offset = 14; // Ethernet
+        if (h->caplen < 14) return;
+        uint16_t eth_type = ntohs(*(uint16_t *)(pkt + 12));
+        if (eth_type == 0x8100) offset += 4; // Skip VLAN tag
+    } else if (link_type == DLT_NULL) {
+        offset = 4; // Loopback
+    } else {
+        return; // Unsupported link type
+    }
 
-    struct iphdr *ip = (struct iphdr *)(pkt + 14);
+    if (h->caplen < offset + 20 + 8) return; 
+
+    struct iphdr *ip = (struct iphdr *)(pkt + offset);
     if (ip->protocol != IPPROTO_UDP) return;
 
     int ip_hdr_len = ip->ihl * 4;
-    struct udphdr *udp = (struct udphdr *)(pkt + 14 + ip_hdr_len);
+    struct udphdr *udp = (struct udphdr *)(pkt + offset + ip_hdr_len);
     uint8_t *payload = (uint8_t *)udp + 8;
     int payload_len = ntohs(udp->len) - 8;
 
@@ -67,13 +76,27 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
 
 static void* pcap_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
+    bool is_offline = strstr(src->url, ".pcap") != NULL;
+    
     while (src->running) {
         int ret = pcap_dispatch(src->handle.pcap_hdl, 100, pcap_packet_callback, (u_char*)src);
         if (ret < 0) {
-            src->cbs.on_status(src->user_data, -1, "PCAP error or EOF");
+            if (ret == -1) {
+                char err[512];
+                snprintf(err, sizeof(err), "PCAP Error: %s", pcap_geterr(src->handle.pcap_hdl));
+                src->cbs.on_status(src->user_data, -1, err);
+            } else if (ret == -2) {
+                src->cbs.on_status(src->user_data, 0, "PCAP breakloop");
+            }
             break;
         }
-        if (ret == 0) usleep(1000);
+        if (ret == 0) {
+            if (is_offline) {
+                src->cbs.on_status(src->user_data, 0, "EOF");
+                break;
+            }
+            usleep(1000);
+        }
     }
     src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
     return NULL;
@@ -195,7 +218,26 @@ int tsa_source_start(tsa_source_t* src) {
         if (strstr(src->url, ".pcap")) {
             src->handle.pcap_hdl = pcap_open_offline(src->url, errbuf);
         } else {
-            src->handle.pcap_hdl = pcap_open_live(src->url, 65535, 1, 100, errbuf);
+            // Professional Live Capture Setup
+            src->handle.pcap_hdl = pcap_create(src->url, errbuf);
+            if (src->handle.pcap_hdl) {
+                pcap_set_snaplen(src->handle.pcap_hdl, 65535);
+                pcap_set_promisc(src->handle.pcap_hdl, 1);
+                pcap_set_timeout(src->handle.pcap_hdl, 10);
+                pcap_set_immediate_mode(src->handle.pcap_hdl, 1);
+                pcap_set_buffer_size(src->handle.pcap_hdl, 16 * 1024 * 1024); // 16MB kernel buffer
+                if (pcap_activate(src->handle.pcap_hdl) != 0) {
+                    src->cbs.on_status(src->user_data, -1, pcap_geterr(src->handle.pcap_hdl));
+                    return -1;
+                }
+
+                // Set default BPF filter to reduce CPU load
+                struct bpf_program fp;
+                if (pcap_compile(src->handle.pcap_hdl, &fp, "udp", 1, PCAP_NETMASK_UNKNOWN) == 0) {
+                    pcap_setfilter(src->handle.pcap_hdl, &fp);
+                    pcap_freecode(&fp);
+                }
+            }
         }
         if (!src->handle.pcap_hdl) {
             src->cbs.on_status(src->user_data, -1, errbuf);

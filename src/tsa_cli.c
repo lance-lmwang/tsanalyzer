@@ -121,11 +121,9 @@ static void* metrology_thread(void* arg) {
             if (pkt.timestamp_ns == 0) break;
 
             // Trigger snapshot based on internal stream time (deterministic)
-            if (pkt.stc_ns - last_snap_ts > 100000000ULL) {
+            if (!h->pending_snapshot && pkt.stc_ns - last_snap_ts > 100000000ULL) {
                 h->snapshot_stc = pkt.stc_ns;
                 h->pending_snapshot = true;
-                /* Wait for decode thread to acknowledge/process it */
-                while (g_keep_running && h->pending_snapshot) backoff_sleep(0);
                 last_snap_ts = pkt.stc_ns;
             }
             backoff_cnt = 0;
@@ -272,6 +270,9 @@ static tsa_source_t* init_source(tsa_config_t* cfg, const char* interface, const
     } else if (cfg->url[0]) {
         return tsa_source_create(TSA_SOURCE_SRT, cfg->url, cbs, NULL);
     } else if (filename[0]) {
+        if (strstr(filename, ".pcap")) {
+            return tsa_source_create(TSA_SOURCE_PCAP, filename, cbs, NULL);
+        }
         return tsa_source_create(TSA_SOURCE_FILE, filename, cbs, NULL);
     }
     return NULL;
