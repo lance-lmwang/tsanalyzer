@@ -49,3 +49,4 @@ void tsa_register_engine(struct tsa_handle* h, struct tsa_engine_ops* ops);
 void tsa_destroy_engines(struct tsa_handle* h);
 
 #endif
+void tsa_register_tr101290_engine(struct tsa_handle* h);
