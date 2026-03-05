@@ -17,17 +17,22 @@
 
 #include "tsa_source.h"
 #include "tsa.h"
+#include "tsa_internal.h"
 
 struct tsa_source {
     tsa_source_type_t type;
     char url[256];
     char filter_ip[64];
     int filter_port;
+    bool pacing;
     tsa_source_callbacks_t cbs;
     void* user_data;
     
     pthread_t thread;
     volatile bool running;
+    
+    uint64_t first_pkt_ns;
+    uint64_t first_wall_ns;
     
     union {
         int udp_fd;
@@ -53,6 +58,24 @@ static int get_rtp_header_len(const uint8_t* p, int len) {
 
 static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, const u_char *pkt) {
     tsa_source_t* src = (tsa_source_t*)user;
+    
+    // Pacing Logic: Simulate original capture speed
+    uint64_t pkt_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
+    if (src->pacing) {
+        if (src->first_pkt_ns == 0) {
+            src->first_pkt_ns = pkt_ns;
+            src->first_wall_ns = (uint64_t)ts_now_ns128();
+        } else {
+            uint64_t stream_elapsed = pkt_ns - src->first_pkt_ns;
+            uint64_t wall_elapsed = (uint64_t)ts_now_ns128() - src->first_wall_ns;
+            if (stream_elapsed > wall_elapsed) {
+                uint64_t delay_us = (stream_elapsed - wall_elapsed) / 1000;
+                if (delay_us > 1000000) delay_us = 1000000; 
+                usleep(delay_us);
+            }
+        }
+    }
+
     int offset = 0;
     int link_type = pcap_datalink(src->handle.pcap_hdl);
 
@@ -62,14 +85,14 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
         uint16_t eth_type = ntohs(*(uint16_t *)(pkt + 12));
         if (eth_type == 0x8100) {
             if (h->caplen < 18) return;
-            offset += 4; // Skip VLAN
+            offset += 4; 
         }
     } else if (link_type == DLT_NULL) {
         offset = 4;
-    } else if (link_type == 113) { // DLT_LINUX_SLL
+    } else if (link_type == 113) {
         offset = 16;
     } else {
-        return; // Unsupported
+        return; 
     }
 
     if (h->caplen < offset + 20 + 8) return; 
@@ -84,17 +107,13 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
     uint8_t *payload = (uint8_t *)udp + 8;
     int payload_len = ntohs(udp->len) - 8;
     
-    // Safety check for payload length vs capture length
     if (payload_len <= 0 || (offset + ip_hdr_len + 8 + payload_len) > (int)h->caplen) return;
 
     uint64_t now_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
 
-    // TS over UDP (Raw)
     if (payload_len % 188 == 0) {
         src->cbs.on_packets(src->user_data, payload, payload_len / 188, now_ns);
-    } 
-    // TS over RTP
-    else {
+    } else {
         int rtp_len = get_rtp_header_len(payload, payload_len);
         if (rtp_len > 0 && rtp_len < payload_len && (payload_len - rtp_len) % 188 == 0) {
             src->cbs.on_packets(src->user_data, payload + rtp_len, (payload_len - rtp_len) / 188, now_ns);
@@ -126,7 +145,7 @@ static void* pcap_thread(void* arg) {
             usleep(1000);
         }
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
     return NULL;
 }
 #endif
@@ -147,7 +166,7 @@ static void* file_thread(void* arg) {
             break;
         }
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
     return NULL;
 }
 
@@ -168,7 +187,7 @@ static void* udp_thread(void* arg) {
         }
         if (n <= 0) usleep(1000);
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
     return NULL;
 }
 
@@ -189,7 +208,7 @@ static void* srt_thread(void* arg) {
         }
         if (n <= 0) usleep(1000);
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); // Poison pill
+    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
     return NULL;
 }
 
@@ -202,6 +221,10 @@ tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const c
     src->cbs = *cbs;
     src->user_data = user_data;
     return src;
+}
+
+void tsa_source_set_pacing(tsa_source_t* src, bool enabled) {
+    if (src) src->pacing = enabled;
 }
 
 void tsa_source_destroy(tsa_source_t* src) {
@@ -265,7 +288,6 @@ int tsa_source_start(tsa_source_t* src) {
             return -1;
         }
 
-        // Professional BPF Filtering
         char bpf_buf[256] = "udp";
         if (src->filter_ip[0] && src->filter_port > 0) {
             snprintf(bpf_buf, sizeof(bpf_buf), "host %s and udp port %d", src->filter_ip, src->filter_port);
@@ -279,7 +301,6 @@ int tsa_source_start(tsa_source_t* src) {
         if (pcap_compile(src->handle.pcap_hdl, &fp, bpf_buf, 1, PCAP_NETMASK_UNKNOWN) == 0) {
             pcap_setfilter(src->handle.pcap_hdl, &fp);
             pcap_freecode(&fp);
-            printf("PCAP: BPF filter applied: '%s'\n", bpf_buf);
         }
 
         pthread_create(&src->thread, NULL, pcap_thread, src);

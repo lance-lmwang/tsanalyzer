@@ -140,17 +140,15 @@ static void* http_thread(void* arg) {
     while (g_keep_running) {
         mg_mgr_poll(mgr, 100);
     }
-    mg_mgr_free(mgr);
     return NULL;
 }
 
-static void http_fn(struct mg_connection* c, int ev, void* ev_data, void* fn_data) {
-    struct mg_http_message* hm = (struct mg_http_message*)ev_data;
-    struct mg_mgr* mgr = (struct mg_mgr*)fn_data;
-    tsa_handle_t* h = (tsa_handle_t*)mgr->userdata;
+static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
+    tsa_handle_t* h = (tsa_handle_t*)c->mgr->userdata;
 
     if (ev == MG_EV_HTTP_MSG) {
-        if (mg_http_match_uri(hm, "/metrics")) {
+        struct mg_http_message* hm = (struct mg_http_message*)ev_data;
+        if (mg_match(hm->uri, mg_str("/metrics"), NULL)) {
             char* buf = malloc(256 * 1024);
             tsa_exporter_prom_v2(&h, 1, buf, 256 * 1024);
             mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", buf);
@@ -177,28 +175,31 @@ static void print_usage(const char* prog) {
     printf("  -i, --interface <dev>  Live PCAP capture on interface\n");
     printf("  --dst-ip <ip>          Filter by destination IP (PCAP only)\n");
     printf("  --dst-port <port>      Filter by destination UDP port (PCAP only)\n");
+    printf("  -p, --pacing           Simulate original capture speed during replay\n");
     printf("  -m, --mode <mode>      Operation mode: live, replay, forensic, certification\n");
     printf("  -h, --help             Show this help\n");
 }
 
-static void parse_args(int argc, char** argv, tsa_config_t* cfg, char* filename, size_t filename_sz, char* interface, size_t interface_sz, char* filter_ip, size_t filter_ip_sz, int* filter_port) {
+static void parse_args(int argc, char** argv, tsa_config_t* cfg, char* filename, size_t filename_sz, char* interface, size_t interface_sz, char* filter_ip, size_t filter_ip_sz, int* filter_port, bool* pacing) {
     int opt;
     static struct option long_options[] = {
         {"udp", required_argument, 0, 'u'},
         {"srt-url", required_argument, 0, 's'},
         {"interface", required_argument, 0, 'i'},
         {"mode", required_argument, 0, 'm'},
+        {"pacing", no_argument, 0, 'p'},
         {"dst-ip", required_argument, 0, 1001},
         {"dst-port", required_argument, 0, 1002},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}};
 
-    while ((opt = getopt_long(argc, argv, "u:s:i:m:h", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "u:s:i:m:ph", long_options, NULL)) != -1) {
         switch (opt) {
             case 'h': print_usage(argv[0]); exit(0);
             case 'u': cfg->udp_port = atoi(optarg); break;
             case 's': strncpy(cfg->url, optarg, sizeof(cfg->url) - 1); break;
             case 'i': strncpy(interface, optarg, interface_sz - 1); break;
+            case 'p': *pacing = true; break;
             case 1001: strncpy(filter_ip, optarg, filter_ip_sz - 1); break;
             case 1002: *filter_port = atoi(optarg); break;
             case 'm':
@@ -262,7 +263,8 @@ int main(int argc, char** argv) {
     char interface[64] = "";
     char filter_ip[64] = "";
     int filter_port = 0;
-    parse_args(argc, argv, &cfg, filename, sizeof(filename), interface, sizeof(interface), filter_ip, sizeof(filter_ip), &filter_port);
+    bool pacing = false;
+    parse_args(argc, argv, &cfg, filename, sizeof(filename), interface, sizeof(interface), filter_ip, sizeof(filter_ip), &filter_port, &pacing);
 
     tsa_handle_t* h = tsa_create(&cfg);
     q_cap_to_dec = spsc_queue_create(16384);
@@ -272,6 +274,7 @@ int main(int argc, char** argv) {
     tsa_source_t* source = init_source(&cfg, interface, filename, filter_ip, filter_port, &source_cbs);
 
     if (!source) { fprintf(stderr, "Error: No valid input source.\n"); return 1; }
+    tsa_source_set_pacing(source, pacing);
 
     signal(SIGINT, sig_handler);
     pthread_t t_dec, t_met, t_http;
@@ -282,10 +285,10 @@ int main(int argc, char** argv) {
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
     mgr.userdata = h;
-    mg_http_listen(&mgr, "http://0.0.0.0:12345", http_fn, &mgr);
+    mg_http_listen(&mgr, "http://0.0.0.0:12345", http_fn, NULL);
     pthread_create(&t_http, NULL, http_thread, &mgr);
 
-    printf("CLI: Pipeline Started. Filter: [%s:%d]\n", filter_ip[0]?filter_ip:"ANY", filter_port);
+    printf("CLI: Pipeline Started. Pacing: [%s] Filter: [%s:%d]\n", pacing?"ON":"OFF", filter_ip[0]?filter_ip:"ANY", filter_port);
     while (g_keep_running) usleep(100000);
 
     tsa_source_stop(source);
@@ -294,6 +297,7 @@ int main(int argc, char** argv) {
     pthread_join(t_http, NULL);
     tsa_source_destroy(source);
     dump_final_report(h);
+    mg_mgr_free(&mgr);
     spsc_queue_destroy(q_cap_to_dec);
     spsc_queue_destroy(q_dec_to_met);
     tsa_destroy(h);
