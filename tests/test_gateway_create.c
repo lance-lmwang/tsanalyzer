@@ -7,9 +7,8 @@
 
 int main() {
     tsa_gateway_config_t cfg = {0};
-    // Use a caller URL to a non-existent port with a very short timeout.
-    // This should fail or return quickly on most systems.
-    cfg.pacing.url = "srt://127.0.0.1:1?mode=caller&timeout=100";
+    // Use a UDP URL to avoid blocking on SRT connection timeout
+    cfg.pacing.url = "udp://127.0.0.1:1";
     cfg.pacing.dest_ip = "127.0.0.1";
     cfg.pacing.port = 0;
     cfg.analysis.is_live = true;

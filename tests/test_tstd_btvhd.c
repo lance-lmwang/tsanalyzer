@@ -3,140 +3,111 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "tsa.h"
+#include "tsa_internal.h"
 
-#ifdef _WIN32
-#define popen _popen
-#define pclose _pclose
-#endif
-
-// A very basic JSON parser for testing purposes
-static int parse_json_value(const char* json, const char* key, char* out_buf, size_t out_buf_len) {
-    char search_key[128];
-    snprintf(search_key, sizeof(search_key), "\"%s\":", key);
-    const char* start = strstr(json, search_key);
-    if (!start) return -1;
-
-    start += strlen(search_key);
-    while (*start && (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r')) {
-        start++;
+// Auto-generate test data directly instead of relying on sample/test.ts
+static uint32_t crc32_table[256];
+static void init_crc32() {
+    for (int i = 0; i < 256; i++) {
+        uint32_t crc = i << 24;
+        for (int j = 0; j < 8; j++) crc = (crc << 1) ^ (crc & 0x80000000 ? 0x04C11DB7 : 0);
+        crc32_table[i] = crc;
     }
+}
+static uint32_t get_crc32(const uint8_t* data, int len) {
+    uint32_t crc = 0xFFFFFFFF;
+    for (int i = 0; i < len; i++) crc = (crc << 8) ^ crc32_table[((crc >> 24) ^ data[i]) & 0xFF];
+    return crc;
+}
 
-    if (*start == '{') { // Handle objects
-        const char* end = start + 1;
-        int brace_count = 1;
-        while (*end && brace_count > 0) {
-            if (*end == '{') brace_count++;
-            if (*end == '}') brace_count--;
-            end++;
-        }
-        size_t len = end - start;
-        if (len >= out_buf_len) len = out_buf_len - 1;
-        memcpy(out_buf, start, len);
-        out_buf[len] = '\0';
-        return 0;
-    } else if (*start == '"') { // Handle strings
-        start++;
-        const char* end = strchr(start, '"');
-        if (!end) return -1;
-        size_t len = end - start;
-        if (len >= out_buf_len) len = out_buf_len - 1;
-        memcpy(out_buf, start, len);
-        out_buf[len] = '\0';
-        return 0;
-    } else { // Handle numbers/booleans
-        const char* end = start;
-        while (*end && *end != ',' && *end != '}' && *end != ']' && *end != ' ' && *end != '\t' && *end != '\n' && *end != '\r') {
-            end++;
-        }
-        size_t len = end - start;
-        if (len >= out_buf_len) len = out_buf_len - 1;
-        memcpy(out_buf, start, len);
-        out_buf[len] = '\0';
-        return 0;
-    }
+static uint8_t h264_sps_pps[] = {
+    0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1f, 0x95, 0xa8, 0x1e, 0x00, 0x5b, 0x90, // SPS 720p
+    0x00, 0x00, 0x00, 0x01, 0x68, 0xce, 0x3c, 0x80                                     // PPS
+};
+
+static void write_pat(uint8_t* p, uint8_t cc) {
+    memset(p, 0xFF, 188);
+    p[0] = 0x47; p[1] = 0x40; p[2] = 0x00; p[3] = 0x10 | (cc & 0x0F); p[4] = 0x00;
+    uint8_t section[] = {
+        0x00, 0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 0xE0 | (0x1000 >> 8), 0x1000 & 0xFF
+    };
+    memcpy(p + 5, section, sizeof(section));
+    uint32_t crc = get_crc32(p + 5, sizeof(section));
+    p[5 + sizeof(section) + 0] = (crc >> 24) & 0xFF;
+    p[5 + sizeof(section) + 1] = (crc >> 16) & 0xFF;
+    p[5 + sizeof(section) + 2] = (crc >> 8) & 0xFF;
+    p[5 + sizeof(section) + 3] = crc & 0xFF;
+}
+
+static void write_pmt(uint8_t* p, uint8_t cc) {
+    memset(p, 0xFF, 188);
+    p[0] = 0x47; p[1] = 0x40 | (0x1000 >> 8); p[2] = 0x1000 & 0xFF; p[3] = 0x10 | (cc & 0x0F); p[4] = 0x00;
+    uint8_t section[] = {
+        0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00,
+        0xE0 | (0x0100 >> 8), 0x0100 & 0xFF,
+        0xF0, 0x00,
+        0x1B, 0xE0 | (0x0100 >> 8), 0x0100 & 0xFF, 0xF0, 0x00 // H.264 video at 0x0100
+    };
+    memcpy(p + 5, section, sizeof(section));
+    uint32_t crc = get_crc32(p + 5, sizeof(section));
+    p[5 + sizeof(section) + 0] = (crc >> 24) & 0xFF;
+    p[5 + sizeof(section) + 1] = (crc >> 16) & 0xFF;
+    p[5 + sizeof(section) + 2] = (crc >> 8) & 0xFF;
+    p[5 + sizeof(section) + 3] = crc & 0xFF;
+}
+
+static void write_video(uint8_t* p, uint8_t cc) {
+    memset(p, 0xFF, 188);
+    p[0] = 0x47; p[1] = 0x40 | (0x0100 >> 8); p[2] = 0x0100 & 0xFF; p[3] = 0x10 | (cc & 0x0F);
+    p[4] = 0x00; p[5] = 0x00; p[6] = 0x01; p[7] = 0xe0; // PES
+    p[8] = 0x00; p[9] = 0x00; p[10] = 0x80; p[11] = 0x80; p[12] = 0x05;
+    p[13] = 0x21; p[14] = 0x00; p[15] = 0x01; p[16] = 0x00; p[17] = 0x01;
+    memcpy(p + 18, h264_sps_pps, sizeof(h264_sps_pps));
 }
 
 int main() {
-    printf("Running T-STD & Video Metadata Test (btvhd.ts)...\n");
+    printf("Running In-Memory Video Metadata Test (No external file dependency)...\n");
+    init_crc32();
 
-    const char* binary = "./tsa_cli";
-    if (access(binary, X_OK) != 0) binary = "./build/tsa_cli";
-    if (access(binary, X_OK) != 0) binary = "../build/tsa_cli";
+    tsa_config_t cfg = {0};
+    cfg.is_live = false;
+    tsa_handle_t* h = tsa_create(&cfg);
+    assert(h);
 
-    const char* sample = "sample/test.ts";
-    if (access(sample, R_OK) != 0) sample = "../sample/test.ts";
-    if (access(sample, R_OK) != 0) sample = "../../sample/test.ts";
+    uint8_t pkt[188];
+    uint64_t now = 1000000000ULL;
 
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "%s --mode=replay %s", binary, sample);
-    printf("Executing: %s\n", cmd);
+    write_pat(pkt, 0);
+    tsa_process_packet(h, pkt, now); now += 100000;
 
-    FILE* fp = popen(cmd, "r");
-    if (!fp) {
-        perror("Failed to run tsa_cli command");
-        return 1;
-    }
-    
-    char line[1024];
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        printf("CLI: %s", line);
-    }
-    pclose(fp);
+    write_pmt(pkt, 0);
+    tsa_process_packet(h, pkt, now); now += 100000;
 
-    // Read from the saved JSON file
-    const char* json_file = "final_metrology.json";
-    FILE* jf = fopen(json_file, "r");
-    if (!jf) {
-        perror("Failed to open final_metrology.json");
-        return 1;
-    }
+    write_video(pkt, 0);
+    tsa_process_packet(h, pkt, now); now += 100000;
 
-    fseek(jf, 0, SEEK_END);
-    long fsize = ftell(jf);
-    fseek(jf, 0, SEEK_SET);
+    // Send a second PUSI packet to flush the first one
+    uint8_t pkt2[188];
+    memcpy(pkt2, pkt, 188);
+    tsa_process_packet(h, pkt2, now); now += 100000;
 
-    char* json_output = malloc(fsize + 1);
-    fread(json_output, 1, fsize, jf);
-    fclose(jf);
-    json_output[fsize] = 0;
+    tsa_commit_snapshot(h, now + 10000000ULL);
 
-    char pids_array[256 * 1024];
-    if (parse_json_value(json_output, "pids", pids_array, sizeof(pids_array)) != 0) {
-        fprintf(stderr, "Error: PIDs array not found in JSON\n");
-        return 1;
-    }
+    tsa_snapshot_full_t snap;
+    tsa_take_snapshot_full(h, &snap);
 
-    // Check if we have any PID with video_metadata
-    char* current_pos = pids_array;
-    bool found_video = false;
-    while ((current_pos = strstr(current_pos, "{")) != NULL) {
-        char pid_obj[4096];
-        if (parse_json_value(current_pos, "{", pid_obj, sizeof(pid_obj)) != 0) break;
+    int idx = tsa_find_pid_in_snapshot(&snap, 0x0100);
+    assert(idx != -1);
 
-        char type_val[64];
-        if (parse_json_value(pid_obj, "type", type_val, sizeof(type_val)) == 0) {
-            if (strstr(type_val, "H.264") || strstr(type_val, "HEVC")) {
-                char video_meta[1024];
-                if (parse_json_value(pid_obj, "video_metadata", video_meta, sizeof(video_meta)) == 0) {
-                    printf("Found Video Metadata: %s\n", video_meta);
-                    found_video = true;
-                    break;
-                }
-            }
-        }
-        current_pos++;
-    }
+    printf("Found Video PID 0x0100: %dx%d\n", snap.pids[idx].width, snap.pids[idx].height);
+    assert(snap.pids[idx].width == 1280);
+    assert(snap.pids[idx].height == 720);
 
-    if (!found_video) {
-        fprintf(stderr, "Error: No video metadata found in report\n");
-        // return 1; // Temporarily don't fail, as btvhd might not have it in the first snapshot
-    }
+    tsa_destroy(h);
 
-    printf("T-STD & Video Metadata Test (btvhd.ts) PASSED!\n");
-    free(json_output);
+    printf("In-Memory Video Metadata Test PASSED!\n");
     return 0;
 }

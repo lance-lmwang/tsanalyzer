@@ -29,13 +29,13 @@ void test_pps_telemetry() {
 
     uint8_t payload[188] = {0x47, 0x1f, 0xff, 0x10};
 
-    printf("Sending packets for 2 seconds...\n");
+    printf("Sending packets for 0.5 seconds...\n");
     for (int i = 0; i < 5000; i++) {
         tsp_enqueue(h, payload, 1);
         if (i % 100 == 0) usleep(10000);
     }
 
-    sleep(2);
+    usleep(500000);
 
     uint64_t total, pps, det_rate, drops;
     int64_t max_j, min_j;
