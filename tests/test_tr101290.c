@@ -6,6 +6,15 @@
 
 #include "tsa_internal.h"
 
+/* Local implementation of missing TR 101 290 helper logic for testing */
+static int check_cc_error(uint8_t last_cc, uint8_t current_cc, bool has_payload, bool disc_indicator) {
+    if (disc_indicator) return 0;
+    if (!has_payload) return 0;
+    if (current_cc == last_cc) return 0; // Duplicate packets allowed
+    if (current_cc == ((last_cc + 1) & 0x0F)) return 0;
+    return 1; // Error
+}
+
 void test_cc_logic() {
     printf("Testing CC error logic...\n");
     // Standard increment

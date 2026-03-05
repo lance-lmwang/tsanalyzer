@@ -23,19 +23,22 @@ all: release
 
 # Sentinel file to track CMake configuration
 $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
+	@echo "$(BLUE)=== Checking Dependencies ===$(RESET)"
+	@if [ ! -f deps/srt/lib/libsrt.a ] && [ ! -f deps/srt/lib64/libsrt.a ]; then \
+		./build_deps.sh; \
+	fi
 	@echo "$(BLUE)=== Configuring Build Environment ===$(RESET)"
 	@mkdir -p $(BUILD_DIR)
-	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_BUILD_TYPE=Release ..
+	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX) -DCMAKE_BUILD_TYPE=Release ..
 
 # The actual binaries depend on the CMake config and source files
-# We use a broad match for simplicity, or specific files for precision
-$(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server: $(BUILD_DIR)/CMakeCache.txt src/*.c include/*.h tests/*.c
+$(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server $(BUILD_DIR)/tsa_server_pro: $(BUILD_DIR)/CMakeCache.txt src/*.c include/*.h tests/*.c
 	@echo "$(BLUE)=== Building Binaries ===$(RESET)"
 	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
 	@ln -sf tsa_cli build/tsa
 
 # release is now a simple alias for the binaries
-release: $(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server
+release: $(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server $(BUILD_DIR)/tsa_server_pro
 
 debug:
 	@echo "$(BLUE)=== Building Debug Version ===$(RESET)"

@@ -8,7 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../deps/mongoose/mongoose.h"
+#include "mongoose.h"
 #include "tsa.h"
 #include "tsp.h"
 

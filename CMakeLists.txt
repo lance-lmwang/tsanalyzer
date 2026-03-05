@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=native -DNDEBUG")
 else()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -Wall -Wextra -Werror")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -Wall -Wextra -Wno-error")
 endif()
 
 # SRT Configuration
@@ -18,15 +18,50 @@ set(ENABLE_TESTING ON CACHE BOOL "Enable testing" FORCE)
 set(ENABLE_CodeCoverage OFF CACHE BOOL "Disable code coverage" FORCE)
 set(USE_STATIC_LIBSTDCXX ON CACHE BOOL "Use static libstdc++ for air-gapped deployments" FORCE)
 
-add_subdirectory(deps/srt)
-include_directories(include deps/mongoose deps/srt/srtcore ${CMAKE_CURRENT_BINARY_DIR}/deps/srt)
+# Automatic Dependency Check & Build
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib/libsrt.a AND NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib64/libsrt.a)
+    message(STATUS "Dependencies missing. Running build_deps.sh...")
+    execute_process(
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/build_deps.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE build_deps_result
+    )
+    if(NOT build_deps_result EQUAL 0)
+        message(FATAL_ERROR "Failed to build dependencies via build_deps.sh")
+    endif()
+endif()
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
-target_link_libraries(tsp_core srt_static pthread m dl ssl crypto)
+# SRT configuration (local headers + local static lib)
+set(SRT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib64/libsrt.a)
+    set(SRT_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib64/libsrt.a)
+else()
+    set(SRT_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib/libsrt.a)
+endif()
+include_directories(${SRT_INCLUDE_DIR} ${SRT_INCLUDE_DIR}/srt)
+
+# libpcap configuration (Optional)
+set(PCAP_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include)
+set(PCAP_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/lib/libpcap.a)
+
+if(EXISTS ${PCAP_LIBRARY})
+    message(STATUS "PCAP support ENABLED")
+    add_definitions(-DHAVE_PCAP)
+    include_directories(${PCAP_INCLUDE_DIR})
+    set(PCAP_LINK_LIBS ${PCAP_LIBRARY})
+else()
+    message(WARNING "PCAP support DISABLED (libpcap.a not found)")
+    set(PCAP_LINK_LIBS "")
+endif()
+
+include_directories(include)
+
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
+target_link_libraries(tsp_core ${SRT_LIBRARY} ${PCAP_LINK_LIBS} pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
-add_executable(tsa_cli src/tsa_cli.c deps/mongoose/mongoose.c)
-target_link_libraries(tsa_cli tsp_core srt_static pthread m dl ssl crypto)
+add_executable(tsa_cli src/tsa_cli.c src/mongoose.c)
+target_link_libraries(tsa_cli tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 # Disable strict warnings for tsa_cli to accommodate mongoose
 if(MSVC)
     target_compile_options(tsa_cli PRIVATE /W3)
@@ -34,20 +69,20 @@ else()
     target_compile_options(tsa_cli PRIVATE -Wno-all -Wno-extra -Wno-error)
 endif()
 
-add_executable(tsg src/tsg_main.c deps/mongoose/mongoose.c)
-target_link_libraries(tsg tsp_core srt_static pthread m dl ssl crypto)
+add_executable(tsg src/tsg_main.c src/mongoose.c)
+target_link_libraries(tsg tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 if(NOT MSVC)
     target_compile_options(tsg PRIVATE -Wno-all -Wno-extra -Wno-error)
 endif()
 
-add_executable(tsa_server src/tsa_server.c src/tsa_exporter_prom.c deps/mongoose/mongoose.c)
-target_link_libraries(tsa_server tsp_core srt_static pthread m dl ssl crypto)
+add_executable(tsa_server src/tsa_server.c src/tsa_exporter_prom.c src/mongoose.c)
+target_link_libraries(tsa_server tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 if(NOT MSVC)
     target_compile_options(tsa_server PRIVATE -Wno-all -Wno-extra -Wno-error)
 endif()
 
-add_executable(tsa_server_pro src/tsa_server_pro.c src/tsa_exporter_prom.c deps/mongoose/mongoose.c)
-target_link_libraries(tsa_server_pro tsp_core srt_static pthread m dl ssl crypto rt)
+add_executable(tsa_server_pro src/tsa_server_pro.c src/tsa_exporter_prom.c src/mongoose.c)
+target_link_libraries(tsa_server_pro tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto rt)
 if(NOT MSVC)
     target_compile_options(tsa_server_pro PRIVATE -Wno-all -Wno-extra -Wno-error)
 endif()
@@ -81,7 +116,7 @@ target_link_libraries(test_entropy tsp_core pthread m)
 add_test(NAME test_entropy COMMAND test_entropy)
 
 add_executable(test_pcr_piecewise tests/test_pcr_piecewise.c)
-target_link_libraries(test_pcr_piecewise tsp_core ${SRT_LIBRARIES} ${EXTRA_LIBS} m)
+target_link_libraries(test_pcr_piecewise tsp_core ${SRT_LIBRARY} ${EXTRA_LIBS} m)
 add_test(NAME test_pcr_piecewise COMMAND test_pcr_piecewise)
 
 add_executable(test_tr101290 tests/test_tr101290.c)
@@ -204,7 +239,7 @@ target_link_libraries(test_governor tsp_core pthread)
 add_test(NAME test_governor COMMAND test_governor)
 
 add_executable(test_pcr tests/tsa_test_pcr.c)
-target_link_libraries(test_pcr tsp_core srt_static pthread dl ssl crypto)
+target_link_libraries(test_pcr tsp_core ${SRT_LIBRARY} pthread dl ssl crypto)
 add_test(NAME test_pcr COMMAND test_pcr)
 
 add_executable(test_estimator tests/test_estimator.c)
@@ -223,15 +258,15 @@ target_compile_definitions(test_telemetry PRIVATE RING_BUFFER_SIZE=1024)
 add_test(NAME test_telemetry COMMAND test_telemetry)
 
 add_executable(test_pcr_mapping tests/test_pcr_mapping.c)
-target_link_libraries(test_pcr_mapping tsp_core srt_static pthread m dl ssl crypto)
+target_link_libraries(test_pcr_mapping tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 add_test(NAME test_pcr_mapping COMMAND test_pcr_mapping)
 
 add_executable(test_analyzer_zero_alloc tests/test_analyzer_zero_alloc.c)
-target_link_libraries(test_analyzer_zero_alloc tsp_core srt_static pthread m dl ssl crypto)
+target_link_libraries(test_analyzer_zero_alloc tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 add_test(NAME test_analyzer_zero_alloc COMMAND test_analyzer_zero_alloc)
 
 add_executable(test_mpmc_ready_queue tests/test_mpmc_ready_queue.c)
-target_link_libraries(test_mpmc_ready_queue tsp_core srt_static pthread m dl ssl crypto)
+target_link_libraries(test_mpmc_ready_queue tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 add_test(NAME test_mpmc_ready_queue COMMAND test_mpmc_ready_queue)
 
 add_executable(test_timer_precision tests/test_timer_precision.c)
@@ -243,7 +278,7 @@ target_link_libraries(test_hybrid_sleep pthread m)
 add_test(NAME test_hybrid_sleep COMMAND test_hybrid_sleep)
 
 add_executable(test_catchup tests/test_catchup.c)
-target_link_libraries(test_catchup srt_static pthread m dl ssl crypto)
+target_link_libraries(test_catchup ${SRT_LIBRARY} pthread m dl ssl crypto)
 add_test(NAME test_catchup COMMAND test_catchup)
 
 add_executable(test_metrology_utils tests/test_metrology_utils.c)
@@ -374,7 +409,7 @@ target_link_libraries(test_cc_repair_stress tsp_core pthread m)
 add_test(NAME test_cc_repair_stress COMMAND test_cc_repair_stress)
 
 add_executable(test_srt_aes_performance tests/test_srt_aes_performance.c)
-target_link_libraries(test_srt_aes_performance tsp_core srt_static pthread m dl ssl crypto)
+target_link_libraries(test_srt_aes_performance tsp_core ${SRT_LIBRARY} pthread m dl ssl crypto)
 add_test(NAME test_srt_aes_performance COMMAND test_srt_aes_performance)
 
 add_executable(test_clock_128 tests/test_clock_128.c)

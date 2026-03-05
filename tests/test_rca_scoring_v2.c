@@ -37,7 +37,7 @@ void test_rca_ok() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("Fault Domain: %u\n", snap.predictive.fault_domain);
+    printf("Fault Domain: %lu\n", snap.predictive.fault_domain);
     assert(snap.predictive.fault_domain == 0);
 
     tsa_destroy(h);
@@ -59,7 +59,7 @@ void test_rca_network_fault() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("MLR: %.2f, Fault Domain: %u\n", snap.stats.mdi_mlr_pkts_s, snap.predictive.fault_domain);
+    printf("MLR: %.2f, Fault Domain: %lu\n", snap.stats.mdi_mlr_pkts_s, snap.predictive.fault_domain);
     assert(snap.predictive.fault_domain == 1);
 
     tsa_destroy(h);
@@ -83,7 +83,7 @@ void test_rca_encoder_fault() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("PCR Jitter Max: %ld ns, Fault Domain: %u\n", snap.stats.pcr_jitter_max_ns, snap.predictive.fault_domain);
+    printf("PCR Jitter Max: %ld ns, Fault Domain: %lu\n", snap.stats.pcr_jitter_max_ns, snap.predictive.fault_domain);
     assert(snap.predictive.fault_domain == 2);
 
     tsa_destroy(h);
@@ -114,7 +114,7 @@ void test_rca_multi_causal() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("MLR: %.2f, PCR Jitter Max: %ld ns, Fault Domain: %u\n", snap.stats.mdi_mlr_pkts_s,
+    printf("MLR: %.2f, PCR Jitter Max: %ld ns, Fault Domain: %lu\n", snap.stats.mdi_mlr_pkts_s,
            snap.stats.pcr_jitter_max_ns, snap.predictive.fault_domain);
     // score_net = 0.8 (MLR), score_enc = 0.8 (Jitter)
     // Both > 0.4 -> Domain 3

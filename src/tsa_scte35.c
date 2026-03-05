@@ -36,7 +36,7 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
 
     read_bits(&r, 8);  /* cw_index */
     read_bits(&r, 12); /* tier */
-    int splice_command_len = read_bits(&r, 12);
+    (void)read_bits(&r, 12);
     uint8_t splice_command_type = read_bits(&r, 8);
 
     const char* cmd_name = scte35_command_name(splice_command_type);

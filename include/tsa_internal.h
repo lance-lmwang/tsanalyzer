@@ -282,6 +282,14 @@ struct tsa_handle {
     size_t pool_size;
 
     tsa_event_ring_t* event_q;
+
+    /* --- Modular Engines --- */
+    #define MAX_TSA_ENGINES 16
+    struct {
+        void* instance;
+        struct tsa_engine_ops* ops;
+    } engines[MAX_TSA_ENGINES];
+    int engine_count;
 };
 
 /* --- Internal APIs --- */

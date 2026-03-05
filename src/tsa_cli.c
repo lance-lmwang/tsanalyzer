@@ -13,11 +13,13 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../deps/mongoose/mongoose.h"
+#include "mongoose.h"
 #include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
 
+
+#include "tsa_source.h"
 
 static volatile int g_keep_running = 1;
 
@@ -59,109 +61,22 @@ static void backoff_sleep(int count) {
     }
 }
 
-typedef struct {
-    tsa_config_t cfg;
-    char filename[512];
-} capture_args_t;
-
-/* 1. Capture Thread - Supports File, UDP, and SRT */
-static void* capture_thread(void* arg) {
-    capture_args_t* args = (capture_args_t*)arg;
-    tsa_config_t* cfg = &args->cfg;
-    set_thread_affinity(0);
+static void on_source_packets(void* user_data, const uint8_t* pkts, int count, uint64_t now_ns) {
+    (void)user_data;
+    if (now_ns == 0) now_ns = (uint64_t)ts_now_ns128();
     ts_packet_t pkt;
-    uint8_t raw_buf[1500];
-    int backoff_cnt = 0;
-
-    if (cfg->op_mode == TSA_MODE_REPLAY && strlen(args->filename) > 0) {
-        FILE* f = fopen(args->filename, "rb");
-        if (!f) {
-            fprintf(stderr, "[FATAL ERROR] Cannot open input TS file: '%s'\n", args->filename);
-            g_keep_running = 0;
-            return NULL;
-        }
-        printf("CLI: Replay Mode Active (File: %s)\n", args->filename);
-        uint64_t simulated_now_ns = 1704067200000000000ULL;
-        while (g_keep_running && fread(pkt.data, 1, 188, f) == 188) {
-            pkt.timestamp_ns = simulated_now_ns;
-            while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
-            backoff_cnt = 0;
-            simulated_now_ns += 188ULL * 8 * 1000000000 / 10000000;
-        }
-        fclose(f);
-    } else if (cfg->udp_port > 0) {
-        int fd = socket(AF_INET, SOCK_DGRAM, 0);
-        struct sockaddr_in sa = {0};
-        sa.sin_family = AF_INET;
-        sa.sin_port = htons(cfg->udp_port);
-        sa.sin_addr.s_addr = INADDR_ANY;
-        if (bind(fd, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
-            fprintf(stderr, "[FATAL] UDP Bind failed on %d\n", cfg->udp_port);
-            g_keep_running = 0;
-            return NULL;
-        }
-        printf("CLI: UDP Live Capture Active (Port: %d)\n", cfg->udp_port);
-        while (g_keep_running) {
-            ssize_t len = recv(fd, raw_buf, sizeof(raw_buf), MSG_DONTWAIT);
-            if (len > 0) {
-                uint64_t now = (uint64_t)ts_now_ns128();
-                for (int i = 0; i < len / 188; i++) {
-                    memcpy(pkt.data, raw_buf + (i * 188), 188);
-                    pkt.timestamp_ns = now;
-                    while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
-                    backoff_cnt = 0;
-                }
-            } else
-                usleep(1000);
-        }
-        close(fd);
-    } else if (strlen(cfg->url) > 0) {
-        srt_startup();
-        SRTSOCKET sock = srt_create_socket();
-        struct sockaddr_in sa = {0};
-        char addr_str[256];
-        int port = 9000;
-        sscanf(cfg->url, "srt://%[^:]:%d", addr_str, &port);
-        sa.sin_family = AF_INET;
-        sa.sin_port = htons(port);
-        sa.sin_addr.s_addr = (strlen(addr_str) == 0 || addr_str[0] == ':') ? INADDR_ANY : inet_addr(addr_str);
-        int yes = 1;
-        srt_setsockopt(sock, 0, SRTO_RCVSYN, &yes, sizeof(yes));
-        if (srt_bind(sock, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) {
-            srt_listen(sock, 1);
-            printf("CLI: SRT Live Capture Active (%s)\n", cfg->url);
-            while (g_keep_running) {
-                struct sockaddr_in cli;
-                int clen = sizeof(cli);
-                SRTSOCKET conn = srt_accept(sock, (struct sockaddr*)&cli, &clen);
-                if (conn == SRT_INVALID_SOCK) {
-                    usleep(100000);
-                    continue;
-                }
-                while (g_keep_running) {
-                    int len = srt_recvmsg(conn, (char*)raw_buf, sizeof(raw_buf));
-                    if (len > 0) {
-                        uint64_t now = (uint64_t)ts_now_ns128();
-                        for (int i = 0; i < len / 188; i++) {
-                            memcpy(pkt.data, raw_buf + (i * 188), 188);
-                            pkt.timestamp_ns = now;
-                            while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
-                            backoff_cnt = 0;
-                        }
-                    } else if (len == SRT_ERROR)
-                        break;
-                }
-                srt_close(conn);
-            }
-        }
-        srt_close(sock);
-        srt_cleanup();
+    for (int i = 0; i < count; i++) {
+        memcpy(pkt.data, pkts + (i * 188), 188);
+        pkt.timestamp_ns = now_ns;
+        int backoff_cnt = 0;
+        while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
     }
+}
 
-    pkt.timestamp_ns = 0;  // Poison pill
-    while (!spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(100);
-    printf("CLI: Capture finished.\n");
-    return NULL;
+static void on_source_status(void* user_data, int status_code, const char* msg) {
+    (void)user_data;
+    fprintf(stderr, "CLI: Source Status [%d] %s\n", status_code, msg);
+    if (status_code < 0) g_keep_running = 0;
 }
 
 /* 2. Decode Thread */
@@ -270,6 +185,7 @@ static void print_usage(const char* prog) {
     printf("Core Options:\n");
     printf("  -u, --udp <port>      Listen for incoming TS over UDP on specified port.\n");
     printf("  -s, --srt-url <url>   Listen for incoming SRT stream (e.g., srt://:9000).\n");
+    printf("  -i, --interface <if>  PCAP/NIC Monitoring interface (e.g., eth0).\n");
     printf("  -m, --mode <mode>     Operation mode: live, replay, forensic, certification.\n");
     printf("                        - live: Real-time analysis with system clock mapping.\n");
     printf("                        - replay: Fastest possible analysis from file (simulated time).\n");
@@ -289,58 +205,84 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    capture_args_t cap_args;
-    memset(&cap_args, 0, sizeof(cap_args));
-    cap_args.cfg.is_live = true;
-    cap_args.cfg.pcr_ema_alpha = 0.1;
-    cap_args.cfg.op_mode = TSA_MODE_LIVE;
+    tsa_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.is_live = true;
+    cfg.pcr_ema_alpha = 0.1;
+    cfg.op_mode = TSA_MODE_LIVE;
 
+    char filename[512] = "";
     int opt;
+    char interface[64] = "";
     static struct option long_options[] = {{"udp", required_argument, 0, 'u'},
                                            {"srt-url", required_argument, 0, 's'},
+                                           {"interface", required_argument, 0, 'i'},
                                            {"mode", required_argument, 0, 'm'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
-    while ((opt = getopt_long(argc, argv, "u:s:m:h", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "u:s:i:m:h", long_options, NULL)) != -1) {
         switch (opt) {
             case 'h':
                 print_usage(argv[0]);
                 return 0;
             case 'u':
-                cap_args.cfg.udp_port = atoi(optarg);
+                cfg.udp_port = atoi(optarg);
                 break;
             case 's':
-                strncpy(cap_args.cfg.url, optarg, sizeof(cap_args.cfg.url) - 1);
+                strncpy(cfg.url, optarg, sizeof(cfg.url) - 1);
+                break;
+            case 'i':
+                strncpy(interface, optarg, sizeof(interface) - 1);
                 break;
             case 'm':
                 if (strcmp(optarg, "live") == 0)
-                    cap_args.cfg.op_mode = TSA_MODE_LIVE;
+                    cfg.op_mode = TSA_MODE_LIVE;
                 else if (strcmp(optarg, "replay") == 0)
-                    cap_args.cfg.op_mode = TSA_MODE_REPLAY;
+                    cfg.op_mode = TSA_MODE_REPLAY;
                 else if (strcmp(optarg, "forensic") == 0)
-                    cap_args.cfg.op_mode = TSA_MODE_FORENSIC;
+                    cfg.op_mode = TSA_MODE_FORENSIC;
                 else if (strcmp(optarg, "certification") == 0)
-                    cap_args.cfg.op_mode = TSA_MODE_CERTIFICATION;
+                    cfg.op_mode = TSA_MODE_CERTIFICATION;
                 break;
         }
     }
     if (optind < argc) {
-        strncpy(cap_args.filename, argv[optind], sizeof(cap_args.filename) - 1);
-        strncpy(cap_args.cfg.input_label, "CLI-FILE", sizeof(cap_args.cfg.input_label) - 1);
+        strncpy(filename, argv[optind], sizeof(filename) - 1);
+        strncpy(cfg.input_label, "CLI-FILE", sizeof(cfg.input_label) - 1);
     } else {
-        strncpy(cap_args.cfg.input_label, "CLI-NET", sizeof(cap_args.cfg.input_label) - 1);
+        strncpy(cfg.input_label, "CLI-NET", sizeof(cfg.input_label) - 1);
     }
 
-    if (cap_args.cfg.op_mode == TSA_MODE_CERTIFICATION) printf("CLI: Certification Mode Active.\n");
+    if (cfg.op_mode == TSA_MODE_CERTIFICATION) printf("CLI: Certification Mode Active.\n");
 
-    tsa_handle_t* h = tsa_create(&cap_args.cfg);
+    tsa_handle_t* h = tsa_create(&cfg);
     q_cap_to_dec = spsc_queue_create(16384);
     q_dec_to_met = spsc_queue_create(16384);
 
+    /* Initialize Source */
+    tsa_source_callbacks_t source_cbs = { .on_packets = on_source_packets, .on_status = on_source_status };
+    tsa_source_t* source = NULL;
+    
+    if (interface[0]) {
+        source = tsa_source_create(TSA_SOURCE_PCAP, interface, &source_cbs, NULL);
+    } else if (cfg.udp_port > 0) {
+        char url[64]; snprintf(url, sizeof(url), "udp://0.0.0.0:%d", cfg.udp_port);
+        source = tsa_source_create(TSA_SOURCE_UDP, url, &source_cbs, NULL);
+    } else if (cfg.url[0]) {
+        source = tsa_source_create(TSA_SOURCE_SRT, cfg.url, &source_cbs, NULL);
+    } else if (filename[0]) {
+        source = tsa_source_create(TSA_SOURCE_FILE, filename, &source_cbs, NULL);
+    }
+
+    if (!source) {
+        fprintf(stderr, "Error: No valid input source specified.\n");
+        return 1;
+    }
+
     signal(SIGINT, sig_handler);
-    pthread_t t_cap, t_dec, t_met, t_http;
-    pthread_create(&t_cap, NULL, capture_thread, &cap_args);
+    pthread_t t_dec, t_met, t_http;
+    tsa_source_start(source);
     pthread_create(&t_dec, NULL, decode_thread, h);
     pthread_create(&t_met, NULL, metrology_thread, h);
 
@@ -352,10 +294,11 @@ int main(int argc, char** argv) {
     printf("CLI: 4-Thread Pipeline Started. Core Affinity [0,1,2,3]\n");
     while (g_keep_running) usleep(100000);
 
-    pthread_join(t_cap, NULL);
+    tsa_source_stop(source);
     pthread_join(t_dec, NULL);
     pthread_join(t_met, NULL);
     pthread_join(t_http, NULL);
+    tsa_source_destroy(source);
 
     // Dump final report
     tsa_snapshot_full_t snap;

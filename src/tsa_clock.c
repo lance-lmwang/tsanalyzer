@@ -77,7 +77,7 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
         double residual = actual_incr - predicted_pcr_incr;
         
         // Alpha-Beta Update (tuned for stability)
-        const double alpha = 0.05;
+        (void)0; // const double alpha = 0.05;
         const double beta = 0.005;
         
         // Update estimate

@@ -1,3 +1,9 @@
+# Dependencies
+deps/srt/
+deps/libpcap/
+deps/*.tar.gz
+deps/srs/
+
 build/
 *.o
 *.a

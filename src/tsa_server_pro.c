@@ -18,7 +18,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#include "../deps/mongoose/mongoose.h"
+#include "mongoose.h"
 #include "mpmc_queue.h"
 #include "spsc_queue.h"
 #include "tsa.h"

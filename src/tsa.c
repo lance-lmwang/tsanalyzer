@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "tsa_internal.h"
+#include "tsa_engine.h"
 
 /* --- Macros --- */
 #define ALLOC_OR_GOTO(p, t, n)    \
@@ -289,6 +290,11 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     }
     /* Assign first 32 potential PES buffers to a pool */
     h->pes_pool_used = 0;
+    
+    /* Register default engines */
+    extern tsa_engine_ops_t tsa_scte35_engine;
+    tsa_register_engine(h, &tsa_scte35_engine);
+
     return h;
 fail:
     tsa_destroy(h);
@@ -297,6 +303,7 @@ fail:
 
 void tsa_destroy(tsa_handle_t* h) {
     if (!h) return;
+    tsa_destroy_engines(h);
     ts_pcr_window_destroy(&h->pcr_window);
     ts_pcr_window_destroy(&h->pcr_long_window);
     if (h->pool_base) free(h->pool_base);
@@ -793,8 +800,28 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
     }
 }
 
+/* --- Engine Management --- */
+
+void tsa_register_engine(tsa_handle_t* h, struct tsa_engine_ops* ops) {
+    if (h->engine_count >= MAX_TSA_ENGINES) return;
+    h->engines[h->engine_count].ops = ops;
+    h->engines[h->engine_count].instance = ops->create(h);
+    h->engine_count++;
+}
+
+void tsa_destroy_engines(tsa_handle_t* h) {
+    for (int i = 0; i < h->engine_count; i++) {
+        if (h->engines[i].ops->destroy) {
+            h->engines[i].ops->destroy(h->engines[i].instance);
+        }
+    }
+    h->engine_count = 0;
+}
+
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     if (!h || !p) return;
+    uint64_t start = ts_now_ns128();
+
     if (!h->engine_started) {
         h->start_ns = n;
         h->engine_started = true;
@@ -826,9 +853,19 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     } else {
         h->stc_ns = n;
     }
+    
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
     tsa_metrology_process(h, p, n, &r);
+
+    /* Dispatch to modular engines */
+    for (int i = 0; i < h->engine_count; i++) {
+        if (h->engines[i].ops->process_packet) {
+            h->engines[i].ops->process_packet(h->engines[i].instance, p, &r, n);
+        }
+    }
+
+    h->live->engine_processing_latency_ns = (uint64_t)(ts_now_ns128() - start);
 }
 
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {

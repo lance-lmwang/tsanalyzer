@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
 
     init_crc32();
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(port) };
+    struct sockaddr_in addr = {0}; addr.sin_family = AF_INET; addr.sin_port = htons(port);
     inet_pton(AF_INET, ip, &addr.sin_addr);
 
     signal(SIGINT, sig_handler);
