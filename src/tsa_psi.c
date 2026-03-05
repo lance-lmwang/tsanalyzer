@@ -110,44 +110,6 @@ static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     }
 }
 
-static void process_scte35(tsa_handle_t* h, uint16_t pid, const uint8_t* p) {
-    // SCTE-35 Splice Info Section
-    // p[0]: table_id (0xFC)
-    // p[1..2]: section_length
-    // p[3]: protocol_version (0)
-    // p[4]: encrypted_packet (1 bit), encryption_algorithm (6 bits), pts_adjustment (33 bits)
-    // ...
-    // p[13]: splice_command_type
-    if (p[0] != 0xFC) return;
-    int sl = ((p[1] & 0x0F) << 8) | p[2];
-    if (sl < 11) return; // Minimal SCTE-35 header is ~11 bytes + CRC
-
-    uint8_t cmd_type = p[13];
-    const char* cmd_name = "Unknown";
-    switch (cmd_type) {
-        case 0x00:
-            cmd_name = "Splice Null";
-            break;
-        case 0x04:
-            cmd_name = "Splice Schedule";
-            break;
-        case 0x05:
-            cmd_name = "Splice Insert";
-            break;
-        case 0x06:
-            cmd_name = "Time Signal";
-            break;
-        case 0x07:
-            cmd_name = "Bandwidth Reservation";
-            break;
-        case 0xff:
-            cmd_name = "Private Command";
-            break;
-    }
-    printf("[%s] SCTE-35: Detected %s on PID 0x%04x\n", h->config.input_label[0] ? h->config.input_label : "Unknown",
-           cmd_name, pid);
-}
-
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
     if (!res->has_payload) return;
     ts_section_filter_t* f = &h->pid_filters[pid];
@@ -176,8 +138,8 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
 
                 if (tsa_crc32_check(full_section, section_len + 3) == 0) {
                     if (full_section[0] == 0xFC) {
-                        process_scte35(h, pid, full_section);
-                    } else {
+                    tsa_scte35_process(h, pid, full_section, section_len + 3);
+                } else {
                         if (pid == 0) process_pat(h, full_section, h->stc_ns);
                         else if (h->pid_is_pmt[pid]) process_pmt(h, pid, full_section, h->stc_ns);
                         else if (pid == 0x11) process_sdt(h, full_section, h->stc_ns);
@@ -247,7 +209,7 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         if (tsa_crc32_check(f->payload, f->section_length + 3) == 0) {
             f->version_number = ver;
             if (f->table_id == 0xFC) {
-                process_scte35(h, pid, f->payload);
+                tsa_scte35_process(h, pid, f->payload, f->section_length + 3);
             } else {
                 if (pid == 0)
                     process_pat(h, f->payload, h->stc_ns);

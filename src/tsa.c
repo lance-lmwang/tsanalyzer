@@ -346,7 +346,6 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_last_pts_33);
     FREE_IF(h->pid_pts_offset_64);
     FREE_IF(h->pid_has_cea708);
-    FREE_IF(h->pid_is_pmt);
     FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]);
     FREE_IF(h->double_buffer.buffers[1]);

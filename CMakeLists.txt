@@ -21,7 +21,7 @@ set(USE_STATIC_LIBSTDCXX ON CACHE BOOL "Use static libstdc++ for air-gapped depl
 add_subdirectory(deps/srt)
 include_directories(include deps/mongoose deps/srt/srtcore ${CMAKE_CURRENT_BINARY_DIR}/deps/srt)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c)
 target_link_libraries(tsp_core srt_static pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
@@ -144,6 +144,10 @@ add_test(NAME test_pid_tracker COMMAND test_pid_tracker)
 add_executable(test_pid_protection tests/test_pid_protection.c)
 target_link_libraries(test_pid_protection tsp_core pthread)
 add_test(NAME test_pid_protection COMMAND test_pid_protection)
+
+add_executable(test_scte35 tests/test_scte35.c)
+target_link_libraries(test_scte35 tsp_core pthread m)
+add_test(NAME test_scte35 COMMAND test_scte35)
 
 add_executable(test_regress tests/test_regress.c)
 target_link_libraries(test_regress tsp_core pthread m)
@@ -468,8 +472,10 @@ add_test(NAME test_qoe_pro COMMAND test_qoe_pro)
 add_executable(test_mem_guard tests/test_mem_guard.c)
 target_link_libraries(test_mem_guard tsp_core m pthread)
 
-# --- Built-in Tools ---
-add_executable(tsa_iat_tester src/tsa_iat_tester.c)
-add_executable(tsa_generator src/tsa_generator.c)
-add_executable(tsa_top src/tsa_top.c)
+# --- Standalone Utilities ---
+add_executable(tsa_iat_tester tools/tsa_iat_tester.c)
+add_executable(tsa_generator tools/tsa_generator.c)
+add_executable(tsa_top tools/tsa_top.c)
 target_link_libraries(tsa_top ncurses rt)
+add_executable(tsa_slicer tools/tsa_slicer.c)
+target_link_libraries(tsa_slicer tsp_core pthread m)

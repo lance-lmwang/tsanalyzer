@@ -335,6 +335,7 @@ int128_t ts_now_ns128(void);
 
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len, uint64_t now_ns);
 void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64_t val);
+void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len);
 
 /* --- Test/Utility Helpers --- */
 double calculate_shannon_entropy(const uint32_t* counts, int n);

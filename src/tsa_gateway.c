@@ -7,6 +7,10 @@
 #include "tsa_internal.h"
 #include "tsp.h"
 
+#ifndef VIDEO_PID
+#define VIDEO_PID 0x0100
+#endif
+
 struct tsa_gateway {
     tsa_gateway_config_t cfg;
     tsa_handle_t* tsa;
@@ -63,9 +67,32 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
 
     if (gw->bypassing) return tsp_enqueue(gw->tsp, pkt, 1);
 
+    uint8_t output_pkt[188];
+    memcpy(output_pkt, pkt, 188);
+
     tsa_process_packet(gw->tsa, pkt, now_ns);
 
     if (gw->ring) tsa_packet_ring_push(gw->ring, pkt, now_ns);
+
+    /* Active Grooming: PCR Re-stamping */
+    if (gw->cfg.enable_pcr_restamp) {
+        uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
+        if (pid == VIDEO_PID && (pkt[3] & 0x20) && (pkt[4] > 0) && (pkt[5] & 0x10)) {
+            /* This packet has a PCR. Calculate the ideal PCR based on bytes sent. */
+            uint64_t bytes_sent = tsp_get_total_packets(gw->tsp) * 188ULL;
+            uint64_t ideal_pcr_27m = (bytes_sent * 8ULL * 27000000ULL) / gw->cfg.pacing.bitrate;
+
+            /* Encode ideal PCR back into the adaptation field */
+            uint64_t base = ideal_pcr_27m / 300;
+            uint16_t ext = ideal_pcr_27m % 300;
+            output_pkt[6] = (base >> 25) & 0xFF;
+            output_pkt[7] = (base >> 17) & 0xFF;
+            output_pkt[8] = (base >> 9) & 0xFF;
+            output_pkt[9] = (base >> 1) & 0xFF;
+            output_pkt[10] = ((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01);
+            output_pkt[11] = ext & 0xFF;
+        }
+    }
 
     if (now_ns - gw->last_rst_check_ns > 100000000ULL) {
         tsa_snapshot_lite_t snap;
@@ -116,7 +143,7 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
     }
 
     gw->last_process_ns = effective_now;
-    return tsp_enqueue(gw->tsp, pkt, 1);
+    return tsp_enqueue(gw->tsp, output_pkt, 1);
 }
 
 tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw) {
