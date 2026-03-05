@@ -216,8 +216,12 @@ target_link_libraries(test_rca_scoring_v2 tsp_core pthread m)
 add_test(NAME test_rca_scoring_v2 COMMAND test_rca_scoring_v2)
 
 add_executable(test_snapshot_consistency tests/test_snapshot_consistency.c)
-target_link_libraries(test_snapshot_consistency tsp_core pthread)
+target_link_libraries(test_snapshot_consistency tsp_core pthread m)
 add_test(NAME test_snapshot_consistency COMMAND test_snapshot_consistency)
+
+add_executable(test_stream_tree tests/test_stream_tree.c)
+target_link_libraries(test_stream_tree tsp_core pthread m)
+add_test(NAME test_stream_tree COMMAND test_stream_tree)
 
 add_executable(test_stc_reconstruction tests/test_stc_reconstruction.c)
 target_link_libraries(test_stc_reconstruction tsp_core pthread m)
