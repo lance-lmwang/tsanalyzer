@@ -491,9 +491,9 @@ add_executable(test_crc_pro tests/test_crc_pro.c)
 target_link_libraries(test_crc_pro tsp_core pthread)
 add_test(NAME test_crc_pro COMMAND test_crc_pro)
 
-# add_executable(test_tstd_btvhd tests/test_tstd_btvhd.c)
-# target_link_libraries(test_tstd_btvhd tsp_core)
-# add_test(NAME test_tstd_btvhd COMMAND test_tstd_btvhd)
+add_executable(test_tstd_btvhd tests/test_tstd_btvhd.c)
+target_link_libraries(test_tstd_btvhd tsp_core)
+add_test(NAME test_tstd_btvhd COMMAND test_tstd_btvhd)
 
 add_executable(test_tstd_hevc tests/test_tstd_hevc.c)
 target_link_libraries(test_tstd_hevc tsp_core m pthread)
