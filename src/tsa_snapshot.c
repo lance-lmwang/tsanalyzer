@@ -185,6 +185,10 @@ static uint32_t tsa_update_pid_metrics(tsa_handle_t* h, tsa_snapshot_full_t* sn,
         sn->pids[ai].width = h->pid_width[p];
         sn->pids[ai].height = h->pid_height[p];
         sn->pids[ai].profile = h->pid_profile[p];
+        sn->pids[ai].level = h->pid_level[p];
+        sn->pids[ai].chroma_format = h->pid_chroma_format[p];
+        sn->pids[ai].bit_depth = h->pid_bit_depth[p];
+        sn->pids[ai].exact_fps = h->pid_exact_fps[p];
         sn->pids[ai].audio_sample_rate = h->pid_audio_sample_rate[p];
         sn->pids[ai].audio_channels = h->pid_audio_channels[p];
         sn->pids[ai].gop_n = h->pid_last_gop_n[p];

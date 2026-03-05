@@ -27,17 +27,19 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
     int section_len = ((p[1] & 0x0F) << 8) | p[2];
     if (section_len + 3 > len) return;
 
-    bit_reader_t r = {p, len, 3 * 8}; /* Skip table_id and section_length */
+    bit_reader_t r;
+    br_init(&r, p, len);
+    br_skip(&r, 3 * 8); /* Skip table_id and section_length */
 
-    read_bits(&r, 8);  /* protocol_version */
-    read_bits(&r, 1);  /* encrypted_packet */
-    read_bits(&r, 6);  /* encryption_algorithm */
-    uint64_t pts_adjust = ((uint64_t)read_bits(&r, 1) << 32) | read_bits(&r, 32);
+    br_read(&r, 8);  /* protocol_version */
+    br_read(&r, 1);  /* encrypted_packet */
+    br_read(&r, 6);  /* encryption_algorithm */
+    uint64_t pts_adjust = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
 
-    read_bits(&r, 8);  /* cw_index */
-    read_bits(&r, 12); /* tier */
-    (void)read_bits(&r, 12);
-    uint8_t splice_command_type = read_bits(&r, 8);
+    br_read(&r, 8);  /* cw_index */
+    br_read(&r, 12); /* tier */
+    (void)br_read(&r, 12);
+    uint8_t splice_command_type = br_read(&r, 8);
 
     const char* cmd_name = scte35_command_name(splice_command_type);
 
@@ -46,35 +48,35 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
            pid, cmd_name, splice_command_type, pts_adjust);
 
     if (splice_command_type == 0x05) { /* Splice Insert */
-        uint32_t event_id = read_bits(&r, 32);
-        bool cancel = read_bits(&r, 1);
-        read_bits(&r, 7); /* Reserved */
+        uint32_t event_id = br_read(&r, 32);
+        bool cancel = br_read(&r, 1);
+        br_read(&r, 7); /* Reserved */
         if (!cancel) {
-            bool out_of_network = read_bits(&r, 1);
-            bool program_splice = read_bits(&r, 1);
-            bool duration_flag = read_bits(&r, 1);
-            bool immediate = read_bits(&r, 1);
-            read_bits(&r, 4); /* Reserved */
+            bool out_of_network = br_read(&r, 1);
+            bool program_splice = br_read(&r, 1);
+            bool duration_flag = br_read(&r, 1);
+            bool immediate = br_read(&r, 1);
+            br_read(&r, 4); /* Reserved */
 
             printf("  EventID: 0x%08x | Out-of-Net: %d | Program-Splice: %d | Immediate: %d\n",
                    event_id, out_of_network, program_splice, immediate);
 
             if (program_splice && !immediate) {
-                if (read_bits(&r, 1)) { /* time_specified_flag */
-                    uint64_t pts_time = ((uint64_t)read_bits(&r, 1) << 32) | read_bits(&r, 32);
+                if (br_read(&r, 1)) { /* time_specified_flag */
+                    uint64_t pts_time = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
                     printf("  Scheduled PTS: %lu\n", pts_time);
                 }
             }
 
             if (duration_flag) {
-                read_bits(&r, 6); /* auto_return (1), reserved (5) */
-                uint64_t duration = ((uint64_t)read_bits(&r, 1) << 32) | read_bits(&r, 32);
+                br_read(&r, 6); /* auto_return (1), reserved (5) */
+                uint64_t duration = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
                 printf("  Break Duration: %.3f sec\n", (double)duration / 90000.0);
             }
         }
     } else if (splice_command_type == 0x06) { /* Time Signal */
-        if (read_bits(&r, 1)) { /* time_specified_flag */
-            uint64_t pts_time = ((uint64_t)read_bits(&r, 1) << 32) | read_bits(&r, 32);
+        if (br_read(&r, 1)) { /* time_specified_flag */
+            uint64_t pts_time = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
             printf("  Time Signal PTS: %lu\n", pts_time);
         }
     }

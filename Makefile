@@ -61,16 +61,16 @@ full-test: release
 	@echo "$(GREEN)=== Running Full Validation Suite ===$(RESET)"
 	@echo "1. Unit Tests (Timeout: 30s)..."
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
-	# @echo "2. Determinism Verification..."
-	# @chmod +x scripts/verify_determinism.sh
-	# @./scripts/verify_determinism.sh ./sample/test_1m.ts
-	# @echo "3. Functional E2E (CLI-based)..."
-	# @chmod +x scripts/verify_realtime_metrology.sh scripts/verify_pcr_repetition.sh
-	# @./scripts/verify_realtime_metrology.sh
-	# @./scripts/verify_pcr_repetition.sh
-	# @echo "4. Integration E2E (Server-based)..."
-	# @chmod +x scripts/test-e2e.sh
-	# @./scripts/test-e2e.sh
+	@echo "2. Determinism Verification..."
+	@chmod +x scripts/verify_determinism.sh
+	@./scripts/verify_determinism.sh ./sample/test_1m.ts
+	@echo "3. Functional E2E (CLI-based)..."
+	@chmod +x scripts/verify_realtime_metrology.sh scripts/verify_pcr_repetition.sh
+	@./scripts/verify_realtime_metrology.sh
+	@./scripts/verify_pcr_repetition.sh
+	@echo "4. Integration E2E (Server-based)..."
+	@chmod +x scripts/test-e2e.sh
+	@./scripts/test-e2e.sh
 
 rt-test: release
 	@echo "$(GREEN)=== Running Real-time Metrology Test (30s) ===$(RESET)"

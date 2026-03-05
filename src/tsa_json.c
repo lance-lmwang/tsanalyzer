@@ -70,9 +70,9 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
 
         const char* p_st = tsa_get_pid_type_name(h, p->pid);
         if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0) {
-            SAFE_JSON(",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"gop_n\":%u,\"gop_ms\":%u,\"has_cea708\":"
+            SAFE_JSON(",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"level\":%u,\"chroma_format\":%u,\"bit_depth\":%u,\"exact_fps\":%.3f,\"gop_n\":%u,\"gop_ms\":%u,\"has_cea708\":"
                       "%s,\"has_scte35\":%s}",
-                      p->width, p->height, p->profile, p->gop_n, p->gop_ms, p->has_cea708 ? "true" : "false",
+                      p->width, p->height, p->profile, p->level, p->chroma_format, p->bit_depth, p->exact_fps, p->gop_n, p->gop_ms, p->has_cea708 ? "true" : "false",
                       p->has_scte35 ? "true" : "false");
         }
 

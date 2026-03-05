@@ -66,7 +66,7 @@ static void on_source_packets(void* user_data, const uint8_t* pkts, int count, u
         /* Poison pill: signal end of stream */
         pkt.timestamp_ns = 0;
         int backoff_cnt = 0;
-        while (g_keep_running && !spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
+        while (!spsc_queue_push(q_cap_to_dec, &pkt)) backoff_sleep(backoff_cnt++);
         return;
     }
     if (now_ns == 0) now_ns = (uint64_t)ts_now_ns128();
@@ -81,7 +81,7 @@ static void on_source_packets(void* user_data, const uint8_t* pkts, int count, u
 static void on_source_status(void* user_data, int status_code, const char* msg) {
     (void)user_data;
     fprintf(stderr, "CLI: Source Status [%d] %s\n", status_code, msg);
-    if (status_code < 0) g_keep_running = 0;
+    if (status_code <= 0) g_keep_running = 0;
 }
 
 static void* decode_thread(void* arg) {

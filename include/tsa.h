@@ -126,6 +126,10 @@ typedef struct {
     uint16_t width;
     uint16_t height;
     uint8_t profile;
+    uint8_t level;
+    uint8_t chroma_format;
+    uint8_t bit_depth;
+    float exact_fps;
     uint32_t audio_sample_rate;
     uint8_t audio_channels;
     uint32_t gop_n;

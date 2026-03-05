@@ -7,6 +7,7 @@
 
 #include "mpmc_queue.h"
 #include "tsa.h"
+#include "tsa_bitstream.h"
 #include "tsa_clock.h"
 
 /* --- Fundamental Types --- */
@@ -45,11 +46,6 @@ typedef struct {
     uint32_t head;
 } ts_pcr_window_t;
 
-typedef struct {
-    const uint8_t* buf;
-    int size;
-    int pos;
-} bit_reader_t;
 
 typedef struct {
     union { char* ptr; char* base; };
@@ -251,6 +247,10 @@ struct tsa_handle {
     uint16_t* pid_width;
     uint16_t* pid_height;
     uint8_t* pid_profile;
+    uint8_t* pid_level;
+    uint8_t* pid_chroma_format;
+    uint8_t* pid_bit_depth;
+    float* pid_exact_fps;
     uint32_t* pid_audio_sample_rate;
     uint8_t* pid_audio_channels;
     uint8_t* pid_log2_max_frame_num;
@@ -301,23 +301,6 @@ void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t sz);
 void ts_pcr_window_destroy(ts_pcr_window_t* w);
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t sys, uint64_t pcr, uint64_t off);
 int ts_pcr_window_regress(ts_pcr_window_t* w, double* slope, double* intercept, int64_t* peak_accuracy_ns);
-
-static inline uint32_t read_bits(bit_reader_t* r, int n) {
-    uint32_t val = 0;
-    for (int i = 0; i < n; i++) {
-        if (r->pos / 8 >= r->size) break;
-        val = (val << 1) | ((r->buf[r->pos / 8] >> (7 - (r->pos % 8))) & 1);
-        r->pos++;
-    }
-    return val;
-}
-
-static inline uint32_t read_ue(bit_reader_t* r) {
-    int count = 0;
-    while (read_bits(r, 1) == 0 && count < 32) count++;
-    if (count >= 32) return 0;
-    return (1 << count) - 1 + read_bits(r, count);
-}
 
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
 void tsa_decode_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t now_ns, ts_decode_result_t* res);

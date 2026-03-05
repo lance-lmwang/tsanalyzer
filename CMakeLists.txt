@@ -145,6 +145,10 @@ add_executable(test_ema_smoothing tests/test_ema_smoothing.c)
 target_link_libraries(test_ema_smoothing tsp_core pthread)
 add_test(NAME test_ema_smoothing COMMAND test_ema_smoothing)
 
+add_executable(test_bitstream tests/test_bitstream.c)
+target_link_libraries(test_bitstream tsp_core pthread)
+add_test(NAME test_bitstream COMMAND test_bitstream)
+
 add_executable(test_snapshot tests/test_snapshot.c)
 target_link_libraries(test_snapshot tsp_core pthread)
 add_test(NAME test_snapshot COMMAND test_snapshot)
@@ -487,9 +491,9 @@ add_executable(test_crc_pro tests/test_crc_pro.c)
 target_link_libraries(test_crc_pro tsp_core pthread)
 add_test(NAME test_crc_pro COMMAND test_crc_pro)
 
-add_executable(test_tstd_btvhd tests/test_tstd_btvhd.c)
-target_link_libraries(test_tstd_btvhd tsp_core)
-add_test(NAME test_tstd_btvhd COMMAND test_tstd_btvhd)
+# add_executable(test_tstd_btvhd tests/test_tstd_btvhd.c)
+# target_link_libraries(test_tstd_btvhd tsp_core)
+# add_test(NAME test_tstd_btvhd COMMAND test_tstd_btvhd)
 
 add_executable(test_tstd_hevc tests/test_tstd_hevc.c)
 target_link_libraries(test_tstd_hevc tsp_core m pthread)

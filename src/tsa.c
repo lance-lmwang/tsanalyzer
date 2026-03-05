@@ -187,6 +187,10 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_width, uint16_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_height, uint16_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_profile, uint8_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_level, uint8_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_chroma_format, uint8_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_bit_depth, uint8_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_exact_fps, float, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_audio_sample_rate, uint32_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_audio_channels, uint8_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_log2_max_frame_num, uint8_t, TS_PID_MAX);
@@ -291,6 +295,10 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_width);
     FREE_IF(h->pid_height);
     FREE_IF(h->pid_profile);
+    FREE_IF(h->pid_level);
+    FREE_IF(h->pid_chroma_format);
+    FREE_IF(h->pid_bit_depth);
+    FREE_IF(h->pid_exact_fps);
     FREE_IF(h->pid_audio_sample_rate);
     FREE_IF(h->pid_audio_channels);
     FREE_IF(h->pid_log2_max_frame_num);
