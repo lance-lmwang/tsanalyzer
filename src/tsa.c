@@ -27,7 +27,7 @@
     } while (0)
 
 /* --- Forward Declarations --- */
-static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid);
+// moved to tsa_internal.h
 
 /* --- High-precision Time Utilities --- */
 int128_t ts_time_to_ns128(struct timespec ts) {
@@ -363,7 +363,7 @@ void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->pid_status[pid] = TSA_STATUS_VALID;
 }
 
-static int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
+int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
     int16_t idx = h->pid_to_active_idx[p];
     if (idx == -1) {
         if (h->pid_tracker_count < MAX_ACTIVE_PIDS) {
@@ -638,49 +638,7 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
         }
     }
     h->last_cc[pid] = res->cc;
-    if (res->payload_len > 0) {
-        if (res->pusi) {
-            if (h->live->pid_is_referenced[pid] && h->pid_pes_len[pid] > 0) {
-                uint8_t tail = h->pid_au_tail[pid];
-                uint8_t next_tail = (tail + 1) % 32;
-                if (next_tail != h->pid_au_head[pid]) {
-                    h->pid_au_q[pid][tail].dts_ns = h->pid_pending_dts[pid];
-                    h->pid_au_q[pid][tail].size = h->pid_pes_len[pid];
-                    h->pid_au_tail[pid] = next_tail;
-                }
-                tsa_handle_es_payload(h, pid, h->pid_pes_buf[pid], h->pid_pes_len[pid], h->stc_ns);
-            }
-            h->pid_pes_len[pid] = 0;
 
-            // Use pre-parsed PES header and PTS from ts_decode_result_t
-            if (res->has_pes_header) {
-                h->pid_pending_dts[pid] = (res->dts * 1000000ULL) / 90;
-
-                const char* st = tsa_get_pid_type_name(h, pid);
-                if (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0) {
-                    h->last_v_pts = res->pts;
-                    if (h->last_a_pts > 0)
-                        h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
-                } else if (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 ||
-                           strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0) {
-                    h->last_a_pts = res->pts;
-                    if (h->last_v_pts > 0)
-                        h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
-                }
-            }
-
-            /* If no buffer assigned yet, grab one from the pool */
-            if (h->pid_pes_buf[pid] == NULL && h->pes_pool_used < 32) {
-                h->pid_pes_buf[pid] = tsa_mem_pool_alloc(h, 65536);
-                h->pid_pes_cap[pid] = 65536;
-                h->pes_pool_used++;
-            }
-        }
-        if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + res->payload_len <= h->pid_pes_cap[pid]) {
-            memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], pkt + 4 + res->af_len, res->payload_len);
-            h->pid_pes_len[pid] += res->payload_len;
-        }
-    }
     if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
         h->live->pid_is_referenced[pid] = true;
         tsa_update_pid_tracker(h, pid);

@@ -361,3 +361,5 @@ int tsa_fast_ftoa(char* buf, float val, int prec);
 
 #endif
 void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid);
+int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t pid);
+void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns);
