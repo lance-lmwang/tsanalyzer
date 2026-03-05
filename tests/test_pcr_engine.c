@@ -42,15 +42,14 @@ void test_regression() {
         ts_pcr_window_add(&w, i * 1000, i * 2000 + 100, i * 5);
     }
 
-    q64_64 slope;
-    int128_t intercept;
+    double slope;
+    double intercept;
     int ret = ts_pcr_window_regress(&w, &slope, &intercept, NULL);
 
     assert(ret == 0);
-    double slope_d = FROM_Q64_64(slope);
     // Slope should be 2.0
-    assert(slope_d > 1.99 && slope_d < 2.01);
-    assert(intercept == 100);
+    assert(slope > 1.99 && slope < 2.01);
+    assert(intercept > 99.0 && intercept < 101.0);
 
     ts_pcr_window_destroy(&w);
     printf("PCR slope regression tests passed.\n");
@@ -71,11 +70,11 @@ void test_jitter() {
     int128_t pcr_now = 9 * 1000 + 50;
     ts_pcr_window_add(&w, sys_now, pcr_now, 9);
 
-    q64_64 slope;
-    int128_t intercept;
+    double slope;
+    double intercept;
     ts_pcr_window_regress(&w, &slope, &intercept, NULL);
 
-    int128_t predicted = (int128_t)((slope * sys_now) >> Q_SHIFT) + intercept;
+    int128_t predicted = (int128_t)(slope * sys_now + intercept);
     int64_t residual = (int64_t)(pcr_now - predicted);
 
     // Residual should be positive and roughly 50ns (minus the slope pull)
