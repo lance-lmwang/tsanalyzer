@@ -5,7 +5,7 @@ cd "$PROJECT_ROOT"
 
 # Configuration
 SRT_PORT=9002
-SAMPLE_FILE="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE_FILE="sample/test.ts"
 PASSPHRASE="top-secret-123"
 
 echo "=== [1/3] Building Project ==="

@@ -3,7 +3,7 @@
 set -u
 
 PORT_API=8082
-SAMPLE_TS="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE_TS="sample/test.ts"
 STREAMS=4
 
 echo ">>> TsAnalyzer PRO: Stable Release Validation"

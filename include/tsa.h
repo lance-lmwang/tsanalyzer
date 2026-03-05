@@ -17,6 +17,7 @@ typedef struct tsa_handle tsa_handle_t;
 
 typedef struct {
     uint64_t count;
+    uint64_t first_timestamp_ns;
     uint64_t last_timestamp_ns;
     uint64_t triggering_vstc;
     uint64_t absolute_byte_offset;
@@ -143,6 +144,7 @@ typedef struct {
     tsa_tr101290_stats_t stats;
     tsa_srt_stats_t srt;
     tsa_predictive_stats_t predictive;
+    char network_name[256];
     char service_name[256];
     char provider_name[256];
     uint32_t active_pid_count;

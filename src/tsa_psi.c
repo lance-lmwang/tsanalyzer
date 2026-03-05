@@ -60,6 +60,26 @@ static void process_pmt(tsa_handle_t* h, uint16_t pmt_pid, const uint8_t* p, uin
     }
 }
 
+static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
+    (void)now;
+    int sl = ((p[1] & 0x0F) << 8) | p[2];
+    if (sl < 10) return;
+
+    uint16_t network_descriptors_length = ((p[8] & 0x0F) << 8) | p[9];
+    const uint8_t* d = p + 10;
+    for (int j = 0; j < network_descriptors_length;) {
+        uint8_t tag = d[j];
+        uint8_t len = d[j + 1];
+        if (tag == 0x40) { // Network Name Descriptor
+            if (len < 255) {
+                memcpy(h->network_name, d + j + 2, len);
+                h->network_name[len] = '\0';
+            }
+        }
+        j += 2 + len;
+    }
+}
+
 static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     (void)now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
@@ -138,6 +158,41 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         uint8_t pointer = payload[0];
         if (pointer + 1 > len) return;
 
+        // Optimization: Fast-path for single-packet sections
+        // If pointer is 0 and the whole section fits in this packet, 
+        // we can process it directly if it's not currently reassembling.
+        if (pointer == 0 && !f->active) {
+            int section_len = ((payload[2] & 0x0F) << 8) | payload[3];
+            if (section_len + 3 <= len - 1) {
+                // Entire section is in this packet
+                const uint8_t* full_section = payload + 1;
+                
+                bool is_long = (full_section[1] & 0x80);
+                uint8_t ver = is_long ? ((full_section[5] & 0x3E) >> 1) : 0xFF;
+                
+                if (is_long && f->seen_before && f->last_version == ver && f->table_id == full_section[0]) {
+                    return;
+                }
+
+                if (tsa_crc32_check(full_section, section_len + 3) == 0) {
+                    if (full_section[0] == 0xFC) {
+                        process_scte35(h, pid, full_section);
+                    } else {
+                        if (pid == 0) process_pat(h, full_section, h->stc_ns);
+                        else if (h->pid_is_pmt[pid]) process_pmt(h, pid, full_section, h->stc_ns);
+                        else if (pid == 0x11) process_sdt(h, full_section, h->stc_ns);
+                        f->last_version = ver;
+                        f->seen_before = true;
+                        f->table_id = full_section[0];
+                    }
+                } else {
+                    h->live->crc_error.count++;
+                    tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
+                }
+                return;
+            }
+        }
+
         if (f->active && !f->complete && pointer > 0) {
             int to_copy = (pointer < (f->section_length + 3 - f->assembled_len))
                               ? pointer
@@ -176,19 +231,33 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
     }
 
     if (f->complete) {
+        // Fast Version Check: 
+        // For long-form sections (PAT, PMT, SDT), the version_number is in byte 5.
+        // Bit format: | reserved (2) | version_number (5) | current_next_indicator (1) |
+        bool is_long_section = (f->payload[1] & 0x80);
+        uint8_t ver = is_long_section ? ((f->payload[5] & 0x3E) >> 1) : 0xFF;
+        
+        if (is_long_section && f->seen_before && f->last_version == ver && f->table_id == f->payload[0]) {
+            // Skip redundant CRC and processing
+            f->active = false;
+            f->complete = false;
+            return;
+        }
+
         if (tsa_crc32_check(f->payload, f->section_length + 3) == 0) {
-            uint8_t ver = (f->payload[5] & 0x3E) >> 1;
             f->version_number = ver;
             if (f->table_id == 0xFC) {
                 process_scte35(h, pid, f->payload);
-            } else if (!f->seen_before || f->version_number != f->last_version) {
+            } else {
                 if (pid == 0)
                     process_pat(h, f->payload, h->stc_ns);
                 else if (h->pid_is_pmt[pid])
                     process_pmt(h, pid, f->payload, h->stc_ns);
+                else if (pid == 0x10)
+                    process_nit(h, f->payload, h->stc_ns);
                 else if (pid == 0x11)
                     process_sdt(h, f->payload, h->stc_ns);
-                f->last_version = f->version_number;
+                f->last_version = ver;
                 f->seen_before = true;
             }
         } else {

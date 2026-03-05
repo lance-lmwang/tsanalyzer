@@ -3,7 +3,7 @@
 
 PORT=8082
 BASE_UDP_PORT=19001
-SAMPLE_FILE="/home/lmwang/sample/cctvhd.ts"
+SAMPLE_FILE="sample/test.ts"
 
 function cleanup() {
     echo "Stopping..."

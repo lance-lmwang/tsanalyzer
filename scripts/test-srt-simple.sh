@@ -20,7 +20,7 @@ sleep 2
 
 # 3. 启动 tsp 发流器 (Caller 模式，打向物理 IP)
 echo -e "TSP: Pushing cctv5.ts to ${GREEN}srt://$IP:$PORT${NC}"
-./build/tsp -f ./sample/cctv5.ts -b 10000000 --srt-url "srt://$IP:$PORT?mode=caller" -l > tsp_simple.log 2>&1 &
+./build/tsp -f ./sample/test.ts -b 10000000 --srt-url "srt://$IP:$PORT?mode=caller" -l > tsp_simple.log 2>&1 &
 TSP_PID=$!
 
 echo "WAIT: Transferring data for 15 seconds..."

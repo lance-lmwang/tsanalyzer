@@ -5,7 +5,7 @@ cd "$PROJECT_ROOT"
 
 # Configuration
 SRT_PORT=9001
-SAMPLE_FILE="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE_FILE="sample/test.ts"
 METRICS_URL="http://localhost:8001/metrics"
 
 echo "=== [1/4] Building Project ==="

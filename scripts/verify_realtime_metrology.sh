@@ -4,9 +4,7 @@ set -u
 
 PORT_API=12345
 PORT_UDP=19001
-SAMPLE_TS="./sample/test_1m.ts"
-if [ ! -f "$SAMPLE_TS" ]; then SAMPLE_TS="./sample/btvhd.ts"; fi
-if [ ! -f "$SAMPLE_TS" ]; then SAMPLE_TS="../sample/test_1m.ts"; fi
+SAMPLE_TS="sample/test.ts"
 
 echo ">>> TsAnalyzer: Professional Metrology Test (Dual-Rate Monitor via CLI)"
 

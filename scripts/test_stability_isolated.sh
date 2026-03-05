@@ -4,7 +4,7 @@
 PORT_API=8100
 DURATION=300
 STREAMS=7
-SAMPLE="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE="sample/test.ts"
 
 echo "=================================================="
 echo " 🏭 v9.1 PRODUCTION ACCEPTANCE: 7-STREAM STRESS"

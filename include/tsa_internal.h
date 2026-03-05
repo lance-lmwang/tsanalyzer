@@ -148,6 +148,9 @@ struct tsa_handle {
     uint64_t last_snap_ns;
 
     tsa_measurement_status_t* pid_status;  // Dynamic [TS_PID_MAX]
+    uint32_t* pid_cc_error_suppression;    // Dynamic [TS_PID_MAX]
+    uint32_t pat_error_suppression;
+    uint32_t sync_error_suppression;
     tsa_clock_inspector_t* clock_inspectors; // Dynamic [TS_PID_MAX]
 
     bool seen_pat, seen_pmt;
@@ -218,6 +221,7 @@ struct tsa_handle {
     uint32_t program_count;
     ts_program_info_t programs[MAX_PROGRAMS];
 
+    char network_name[256];
     char service_name[256];
     char provider_name[256];
 

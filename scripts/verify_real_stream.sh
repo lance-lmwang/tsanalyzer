@@ -8,7 +8,7 @@ GREEN='\033[32m'
 RED='\033[31m'
 NC='\033[0m'
 
-SAMPLE="./sample/cctv5.ts"
+SAMPLE="./sample/test.ts"
 [ ! -f "$SAMPLE" ] && echo "Err: $SAMPLE not found" && exit 1
 
 echo -e "${BLUE}=== STEP 1: Running Offline Baseline (DNA Audit) ===${NC}"

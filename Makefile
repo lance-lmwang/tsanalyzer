@@ -100,7 +100,7 @@ demo: release
 	@echo "$(GREEN)=== Starting Live Stream Analysis Demo ===$(RESET)"
 	@pkill -9 tsa || true
 	@pkill -9 tsp || true
-	@./build/tsp -i 127.0.0.1 -p 19001 -b 10000000 -l -f sample/test_1m.ts > /dev/null 2>&1 &
+	@./build/tsp -i 127.0.0.1 -p 19001 -b 10000000 -l -f ./sample/test_1m.ts > /dev/null 2>&1 &
 	@./build/tsa --mode=live --udp 19001 > tsa_live.log 2>&1 &
 	@echo "Waiting for engine warmup..."
 	@sleep 2
@@ -115,7 +115,7 @@ tsa_cli_monitor: release
 	@echo "$(GREEN)=== Starting TsAnalyzer CLI Live Monitor (PCR-Locked) ===$(RESET)"
 	@pkill -9 tsa || true
 	@pkill -9 tsp || true
-	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/cctvhd.ts > /dev/null 2>&1 &
+	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/test.ts > /dev/null 2>&1 &
 	@./build/tsa --mode=live --udp 19001 > tsa_live.log 2>&1 &
 	@echo "Waiting for engine warmup..."
 	@sleep 5
@@ -124,6 +124,45 @@ tsa_cli_monitor: release
 	@pkill -9 tsa || true
 	@pkill -9 tsp || true
 	@echo "$(GREEN)Monitor Session Complete.$(RESET)"
+
+# --- Real-time Server Monitor (Multi-Stream) ---
+tsa_server_monitor: release
+	@echo "$(GREEN)=== Starting TsAnalyzer Server Multi-Stream Monitor (PCR-Locked) ===$(RESET)"
+	@pkill -9 tsa || true
+	@pkill -9 tsp || true
+	@cat << EOF > test_server.conf
+	{
+	    "http_port": 8088,
+	    "metrics_path": "/metrics",
+	    "expert_mode": false,
+	    "nodes": [
+	        {
+	            "name": "STREAM_1",
+	            "url": "udp://@:19001"
+	        },
+	        {
+	            "name": "STREAM_2",
+	            "url": "udp://@:19002"
+	        }
+	    ]
+	}
+	EOF
+	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/test.ts > /dev/null 2>&1 &
+	@./build/tsp -i 127.0.0.1 -p 19002 -P -l -f sample/test.ts > /dev/null 2>&1 &
+	@./build/tsa_server test_server.conf > tsa_server.log 2>&1 &
+	@echo "Waiting for engine warmup..."
+	@sleep 5
+	@./scripts/tsa_monitor.py --url http://localhost:8088/api/v1/snapshot --duration 40
+	@pkill -9 tsa || true
+	@pkill -9 tsp || true
+	@rm test_server.conf
+	@echo "$(GREEN)Server Monitor Session Complete.$(RESET)"
+
+# --- Offline File Analysis (Replay Mode) ---
+tsa_file_report: release
+	@echo "$(GREEN)=== Starting TsAnalyzer Offline Forensic Analysis ===$(RESET)"
+	@./build/tsa --mode=replay sample/test.ts
+	@echo "$(GREEN)Analysis Complete.$(RESET)"
 
 help:
 	@echo "$(GREEN)TsAnalyzer Build System$(RESET)"

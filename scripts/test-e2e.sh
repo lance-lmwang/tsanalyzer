@@ -15,9 +15,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # --- Test Parameters ---
-API_URL="http://localhost:8000/api/v1/streams"
+API_URL="http://localhost:8088/api/v1/streams"
 TOKEN="header.eyJ0ZW5hbnQiOiAiZDJlMi10ZXN0In0.signature"
-SAMPLE_FILE="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE_FILE="sample/test.ts"
 LOG_DIR="build/e2e_logs"
 
 # --- Helper Functions ---
@@ -45,12 +45,39 @@ sleep 1
 
 print_header "PHASE 1: SaaS API & SRT-AES Transport Test"
 echo "-> Starting SaaS Daemon in background..."
-./build/tsa_server > "$LOG_DIR/saas_daemon.log" 2>&1 &
+# Create a minimal config to ensure the HTTP server starts
+cat << EOF > build/e2e_config.conf
+{
+    "http_port": 8088,
+    "metrics_path": "/metrics",
+    "expert_mode": true,
+    "nodes": []
+}
+EOF
+./build/tsa_server build/e2e_config.conf > "$LOG_DIR/saas_daemon.log" 2>&1 &
 SAAS_PID=$!
-sleep 2 # Wait for server to initialize
+
+echo "-> Waiting for SaaS API to become ready..."
+MAX_WAIT=15
+READY=0
+for i in $(seq 1 $MAX_WAIT); do
+    if curl -s http://localhost:8088/api/v1/streams > /dev/null; then
+        READY=1
+        break
+    fi
+    echo "   Attempt $i/$MAX_WAIT: still waiting..."
+    sleep 1
+done
+
+if [ $READY -eq 0 ]; then
+    echo "❌ FATAL: Server failed to start or bind to port 8088 within ${MAX_WAIT}s"
+    cat "$LOG_DIR/saas_daemon.log"
+    exit 1
+fi
+echo "   ✅ API Ready."
 
 echo "-> Creating secure stream 'e2e_stream_1' via API..."
-curl -s -X POST "$API_URL" \
+curl -s --connect-timeout 5 --max-time 10 -X POST "$API_URL" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"id":"e2e_stream_1","srt_out":"srt://:9100?mode=listener&passphrase=e2e-secret"}' > "$LOG_DIR/api_create.log"

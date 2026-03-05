@@ -36,7 +36,7 @@ def run():
     for i in range(STREAMS):
         core = i + 1
         port = UDP_START_PORT + i
-        cmd = ["taskset", "-c", str(core), "./build/tsp", "-P", "-l", "-t", "7", "-i", "127.0.0.1", "-p", str(port), "-f", "/home/lmwang/dev/sample/cctvhd.ts"]
+        cmd = ["taskset", "-c", str(core), "./build/tsp", "-P", "-l", "-t", "7", "-i", "127.0.0.1", "-p", str(port), "-f", "../sample/test.ts"]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     print(f"[*] Production Acceptance Test starting. Logging to {REPORT_FILE}")

@@ -7,7 +7,7 @@ CHECK_INTERVAL = 5
 PORT = 8090
 UDP_PORT = 12345
 URL_BASE = f"http://localhost:{PORT}"
-SAMPLE = "/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE = "../sample/test.ts"
 
 def cleanup():
     subprocess.run(f"fuser -k -9 {PORT}/tcp", shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)

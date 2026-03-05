@@ -206,6 +206,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (!h) return NULL;
     ALLOC_OR_GOTO(h->pid_filters, ts_section_filter_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_status, tsa_measurement_status_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_cc_error_suppression, uint32_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->clock_inspectors, tsa_clock_inspector_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_eb_fill_q64, int128_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_tb_fill_q64, int128_t, TS_PID_MAX);
@@ -295,6 +296,7 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_filters);
     FREE_IF(h->pid_pes_buf);
     FREE_IF(h->pid_status);
+    FREE_IF(h->pid_cc_error_suppression);
     FREE_IF(h->clock_inspectors);
     FREE_IF(h->pid_eb_fill_q64);
     FREE_IF(h->pid_tb_fill_q64);
@@ -495,7 +497,7 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
     tsa_update_pid_tracker(h, r->pid);
     h->live->pid_packet_count[r->pid]++;
     h->live->pid_last_seen_vstc[r->pid] = h->stc_ns;
-    if (r->pid == 0 || h->pid_is_pmt[r->pid] || r->pid == 0x11 || h->pid_is_scte35[r->pid]) {
+    if (r->pid == 0 || r->pid == 0x10 || r->pid == 0x11 || h->pid_is_pmt[r->pid] || h->pid_is_scte35[r->pid]) {
         tsa_section_filter_push(h, r->pid, p, r);
     }
 }
@@ -632,22 +634,32 @@ void tsa_metrology_process(tsa_handle_t* h, const uint8_t* pkt, uint64_t now, co
             ts_cc_status_t s =
                 cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
             if (s == TS_CC_LOSS) {
-                h->live->cc_error.count++;
-                h->live->cc_error.last_timestamp_ns = now;
-                h->live->cc_error.triggering_vstc = h->stc_ns;
-                h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
-                h->live->pid_cc_errors[pid]++;
-                h->live->latched_cc_error = 1;
-                h->pid_status[pid] = TSA_STATUS_DEGRADED;
-                h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
-                tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, res->cc);
-            } else if (s == TS_CC_DUPLICATE)
+                h->pid_cc_error_suppression[pid]++;
+                if (h->pid_cc_error_suppression[pid] >= 3) { // Threshold: 3 consecutive errors
+                    if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
+                    h->live->cc_error.count++;
+                    h->live->cc_error.last_timestamp_ns = now;
+                    h->live->cc_error.triggering_vstc = h->stc_ns;
+                    h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
+                    h->live->pid_cc_errors[pid]++;
+                    h->live->latched_cc_error = 1;
+                    h->pid_status[pid] = TSA_STATUS_DEGRADED;
+                    h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
+                    tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, res->cc);
+                }
+            } else if (s == TS_CC_DUPLICATE) {
                 h->live->cc_duplicate_count++;
-            else if (s == TS_CC_OUT_OF_ORDER) {
+            } else if (s == TS_CC_OUT_OF_ORDER) {
+                if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
                 h->live->cc_error.count++;
                 h->live->cc_error.last_timestamp_ns = now;
                 h->pid_status[pid] = TSA_STATUS_DEGRADED;
                 tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, res->cc);
+            } else {
+                // Stable packets: Reset suppression counter after 100 good packets
+                if (h->live->pid_packet_count[pid] % 100 == 0) {
+                    h->pid_cc_error_suppression[pid] = 0;
+                }
             }
         }
     }
@@ -1046,6 +1058,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->summary.signal_lock = h->signal_lock;
     sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
 
+    strncpy(sn->network_name, h->network_name, 255);
     strncpy(sn->service_name, h->service_name, 255);
     strncpy(sn->provider_name, h->provider_name, 255);
 
@@ -1219,9 +1232,11 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
     SAFE_JSON("{");
     // Tier 0/1: Master Control Console (SIGNAL STATUS)
     SAFE_JSON(
-        "\"status\":{\"signal_lock\":%s,\"service_name\":\"%s\",\"provider_name\":\"%s\",\"master_health\":%.1f,"
+        "\"status\":{\"signal_lock\":%s,\"network_name\":\"%s\",\"service_name\":\"%s\",\"provider_name\":\"%s\","
+        "\"master_health\":%.1f,"
         "\"engine_determinism\":{\"drops\":%llu,\"overruns\":%llu}},",
-        sn->summary.signal_lock ? "true" : "false", sn->service_name, sn->provider_name, sn->predictive.master_health,
+        sn->summary.signal_lock ? "true" : "false", sn->network_name, sn->service_name, sn->provider_name,
+        sn->predictive.master_health,
         (unsigned long long)st->internal_analyzer_drop, (unsigned long long)st->worker_slice_overruns);
 
     // Tier 2: Transport & Link Integrity (SRT/MDI)
@@ -1233,11 +1248,13 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
 
     // Tier 3/4: ETR 290 P1 & P2
     SAFE_JSON(
-        "\"tier2_compliance\":{\"p1\":{\"sync_loss\":%llu,\"pat_error\":%llu,\"cc_error\":%llu,\"pmt_error\":%llu,"
+        "\"tier2_compliance\":{\"p1\":{\"sync_loss\":%llu,\"pat_error\":%llu,\"cc_error\":{\"count\":%llu,\"first_occur\":"
+        "%llu,\"last_occur\":%llu},\"pmt_error\":%llu,"
         "\"pid_error\":%llu},\"p2\":{\"pcr_jitter_ms\":%.3f,\"pcr_accuracy_piecewise_ms\":%.3f,\"piecewise_pcr_bitrate_"
         "bps\":%llu,\"pcr_repetition\":%llu,\"pts_error\":%llu,\"crc_error\":%llu,\"transport_error\":%llu}},",
         (unsigned long long)st->sync_loss.count, (unsigned long long)st->pat_error.count,
-        (unsigned long long)st->cc_error.count, (unsigned long long)st->pmt_error.count,
+        (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.first_timestamp_ns,
+        (unsigned long long)st->cc_error.last_timestamp_ns, (unsigned long long)st->pmt_error.count,
         (unsigned long long)st->pid_error.count, st->pcr_jitter_avg_ns / 1000000.0,
         st->pcr_accuracy_ns_piecewise / 1000000.0, (unsigned long long)st->last_pcr_interval_bitrate_bps,
         (unsigned long long)st->pcr_repetition_error.count, (unsigned long long)st->pts_error.count,

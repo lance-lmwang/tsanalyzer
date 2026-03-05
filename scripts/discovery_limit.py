@@ -3,7 +3,7 @@ import time, requests, subprocess, sys
 
 PORT_API = 8100
 MAX_STREAMS = 7
-SAMPLE = "/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE = "../sample/test.ts"
 
 def cleanup():
     subprocess.run("pkill -9 tsa_server; pkill -9 tsp; fuser -k -9 8100/tcp", shell=True, stderr=subprocess.DEVNULL)

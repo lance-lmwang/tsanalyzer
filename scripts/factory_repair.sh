@@ -13,7 +13,7 @@ sleep 5
 
 echo "--- [3/3] INJECTING TRAFFIC ---"
 for i in {1..8}; do
-    nohup ./build/tsp -i 127.0.0.1 -p $((19000+i)) -l -f /home/lmwang/sample/cctvhd.ts -b 2000000 > /dev/null 2>&1 &
+    nohup ./build/tsp -i 127.0.0.1 -p $((19000+i)) -l -f sample/test.ts -b 2000000 > /dev/null 2>&1 &
 done
 
 echo "Waiting for metrics to stabilize..."

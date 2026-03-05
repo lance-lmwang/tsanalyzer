@@ -7,7 +7,7 @@ cd "$PROJECT_ROOT"
 
 PORT_API=8082
 PORT_UDP=12345
-SAMPLE="/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE="sample/test.ts"
 DURATION=300
 
 echo "--- STEP 1: Industrial Setup ---"

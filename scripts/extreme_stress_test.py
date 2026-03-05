@@ -4,7 +4,7 @@ import time, requests, subprocess, sys
 STREAMS = 8
 DURATION = 30
 PORT_API = 8099
-SAMPLE = "/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE = "../sample/test.ts"
 
 def get_stats():
     try:

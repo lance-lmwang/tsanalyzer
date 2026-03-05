@@ -2,7 +2,7 @@
 # TsAnalyzer Pro - E2E 8-Stream High-Perf Stability Test
 
 BASE_UDP_PORT=19001
-SAMPLE_FILE="/home/lmwang/sample/cctvhd.ts"
+SAMPLE_FILE="sample/test.ts"
 TEST_DURATION=60 # 1 minute
 
 if [ ! -f "$SAMPLE_FILE" ]; then

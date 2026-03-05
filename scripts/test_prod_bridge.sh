@@ -21,7 +21,7 @@ sleep 2
 
 # 3. Start Pushing real cctv5.ts (via SRT Caller)
 echo "TSP: Pushing cctv5.ts to SRT Bridge..."
-./build/tsp -f ./sample/cctv5.ts -b 10000000 --srt-url "srt://127.0.0.1:10080?mode=caller" -l > /dev/null 2>&1 &
+./build/tsp -f ./sample/test.ts -b 10000000 --srt-url "srt://127.0.0.1:10080?mode=caller" -l > /dev/null 2>&1 &
 TSP_PID=$!
 
 echo "WAIT: Waiting 15s for analysis lock..."

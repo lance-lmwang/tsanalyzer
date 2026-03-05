@@ -33,7 +33,7 @@ python3 scripts/deploy_dashboard.py
 
 echo "--- [5/6] INJECTING 8-STREAM TRAFFIC (10s WARMUP) ---"
 for i in {1..8}; do
-    nohup ./build/tsp -i 127.0.0.1 -p $((19000+i)) -l -f /home/lmwang/sample/cctvhd.ts -b 2000000 > /dev/null 2>&1 &
+    nohup ./build/tsp -i 127.0.0.1 -p $((19000+i)) -l -f sample/test.ts -b 2000000 > /dev/null 2>&1 &
 done
 sleep 15
 

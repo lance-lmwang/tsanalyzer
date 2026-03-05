@@ -67,8 +67,9 @@ int main() {
     if (access(binary, X_OK) != 0) binary = "./build/tsa_cli";
     if (access(binary, X_OK) != 0) binary = "../build/tsa_cli";
 
-    const char* sample = "sample/btvhd.ts";
-    if (access(sample, R_OK) != 0) sample = "../sample/btvhd.ts";
+    const char* sample = "sample/test.ts";
+    if (access(sample, R_OK) != 0) sample = "../sample/test.ts";
+    if (access(sample, R_OK) != 0) sample = "../../sample/test.ts";
 
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "%s --mode=replay %s", binary, sample);

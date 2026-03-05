@@ -14,7 +14,7 @@ else
     PROM_PORT=9090
 fi
 
-SAMPLE_FILE=${1:-sample/cctv5.ts}
+SAMPLE_FILE=${1:-sample/test.ts}
 
 if [ ! -f "$SAMPLE_FILE" ]; then
     echo "================================================================================"

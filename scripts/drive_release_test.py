@@ -6,7 +6,7 @@ import os
 # TsAnalyzer Stable Release Drive
 SERVER_BIN = os.path.abspath("./build/tsa_server")
 PACER_BIN = os.path.abspath("./build/tsp")
-SAMPLE_TS = "/home/lmwang/dev/sample/cctvhd.ts"
+SAMPLE_TS = "../sample/test.ts"
 
 print(">>> Release Validation: Starting Server...")
 srv = subprocess.Popen([SERVER_BIN], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
