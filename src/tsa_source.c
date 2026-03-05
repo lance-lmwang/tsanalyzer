@@ -21,6 +21,8 @@
 struct tsa_source {
     tsa_source_type_t type;
     char url[256];
+    char filter_ip[64];
+    int filter_port;
     tsa_source_callbacks_t cbs;
     void* user_data;
     
@@ -38,39 +40,65 @@ struct tsa_source {
 };
 
 #ifdef HAVE_PCAP
+static int get_rtp_header_len(const uint8_t* p, int len) {
+    if (len < 12) return 0;
+    int size = 12;
+    size += 4 * (p[0] & 0x0F); // CSRC count
+    if (p[0] & 0x10) { // Extension bit
+        if (len < size + 4) return size;
+        size += 4 + 4 * ((p[size + 2] << 8) | p[size + 3]);
+    }
+    return size;
+}
+
 static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, const u_char *pkt) {
     tsa_source_t* src = (tsa_source_t*)user;
     int offset = 0;
     int link_type = pcap_datalink(src->handle.pcap_hdl);
 
     if (link_type == DLT_EN10MB) {
-        offset = 14; // Ethernet
+        offset = 14; 
         if (h->caplen < 14) return;
         uint16_t eth_type = ntohs(*(uint16_t *)(pkt + 12));
-        if (eth_type == 0x8100) offset += 4; // Skip VLAN tag
+        if (eth_type == 0x8100) {
+            if (h->caplen < 18) return;
+            offset += 4; // Skip VLAN
+        }
     } else if (link_type == DLT_NULL) {
-        offset = 4; // Loopback
+        offset = 4;
+    } else if (link_type == 113) { // DLT_LINUX_SLL
+        offset = 16;
     } else {
-        return; // Unsupported link type
+        return; // Unsupported
     }
 
     if (h->caplen < offset + 20 + 8) return; 
 
     struct iphdr *ip = (struct iphdr *)(pkt + offset);
-    if (ip->protocol != IPPROTO_UDP) return;
+    if (ip->version != 4 || ip->protocol != IPPROTO_UDP) return;
 
     int ip_hdr_len = ip->ihl * 4;
+    if (h->caplen < offset + ip_hdr_len + 8) return;
+
     struct udphdr *udp = (struct udphdr *)(pkt + offset + ip_hdr_len);
     uint8_t *payload = (uint8_t *)udp + 8;
     int payload_len = ntohs(udp->len) - 8;
+    
+    // Safety check for payload length vs capture length
+    if (payload_len <= 0 || (offset + ip_hdr_len + 8 + payload_len) > (int)h->caplen) return;
 
-    if (payload_len > 0 && payload_len % 188 == 0) {
-        uint64_t now_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
+    uint64_t now_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
+
+    // TS over UDP (Raw)
+    if (payload_len % 188 == 0) {
         src->cbs.on_packets(src->user_data, payload, payload_len / 188, now_ns);
-    } else if (payload_len > 12 && (payload_len - 12) % 188 == 0) {
-        /* RTP Decapsulation */
-        uint64_t now_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
-        src->cbs.on_packets(src->user_data, payload + 12, (payload_len - 12) / 188, now_ns);
+    } 
+    // TS over RTP
+    else {
+        int rtp_len = get_rtp_header_len(payload, payload_len);
+        if (rtp_len > 0 && rtp_len < payload_len && (payload_len - rtp_len) % 188 == 0) {
+            src->cbs.on_packets(src->user_data, payload + rtp_len, (payload_len - rtp_len) / 188, now_ns);
+        }
     }
 }
 
@@ -165,10 +193,12 @@ static void* srt_thread(void* arg) {
     return NULL;
 }
 
-tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const tsa_source_callbacks_t* cbs, void* user_data) {
+tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port, const tsa_source_callbacks_t* cbs, void* user_data) {
     tsa_source_t* src = calloc(1, sizeof(tsa_source_t));
     src->type = type;
     strncpy(src->url, url, sizeof(src->url)-1);
+    if (filter_ip) strncpy(src->filter_ip, filter_ip, sizeof(src->filter_ip)-1);
+    src->filter_port = filter_port;
     src->cbs = *cbs;
     src->user_data = user_data;
     return src;
@@ -210,7 +240,6 @@ int tsa_source_start(tsa_source_t* src) {
     } else if (src->type == TSA_SOURCE_SRT) {
         srt_startup();
         src->handle.srt_sock = srt_create_socket();
-        // Simplified SRT init for example
         pthread_create(&src->thread, NULL, srt_thread, src);
     } else if (src->type == TSA_SOURCE_PCAP) {
 #ifdef HAVE_PCAP
@@ -218,24 +247,16 @@ int tsa_source_start(tsa_source_t* src) {
         if (strstr(src->url, ".pcap")) {
             src->handle.pcap_hdl = pcap_open_offline(src->url, errbuf);
         } else {
-            // Professional Live Capture Setup
             src->handle.pcap_hdl = pcap_create(src->url, errbuf);
             if (src->handle.pcap_hdl) {
                 pcap_set_snaplen(src->handle.pcap_hdl, 65535);
                 pcap_set_promisc(src->handle.pcap_hdl, 1);
                 pcap_set_timeout(src->handle.pcap_hdl, 10);
                 pcap_set_immediate_mode(src->handle.pcap_hdl, 1);
-                pcap_set_buffer_size(src->handle.pcap_hdl, 16 * 1024 * 1024); // 16MB kernel buffer
+                pcap_set_buffer_size(src->handle.pcap_hdl, 16 * 1024 * 1024);
                 if (pcap_activate(src->handle.pcap_hdl) != 0) {
                     src->cbs.on_status(src->user_data, -1, pcap_geterr(src->handle.pcap_hdl));
                     return -1;
-                }
-
-                // Set default BPF filter to reduce CPU load
-                struct bpf_program fp;
-                if (pcap_compile(src->handle.pcap_hdl, &fp, "udp", 1, PCAP_NETMASK_UNKNOWN) == 0) {
-                    pcap_setfilter(src->handle.pcap_hdl, &fp);
-                    pcap_freecode(&fp);
                 }
             }
         }
@@ -243,6 +264,24 @@ int tsa_source_start(tsa_source_t* src) {
             src->cbs.on_status(src->user_data, -1, errbuf);
             return -1;
         }
+
+        // Professional BPF Filtering
+        char bpf_buf[256] = "udp";
+        if (src->filter_ip[0] && src->filter_port > 0) {
+            snprintf(bpf_buf, sizeof(bpf_buf), "host %s and udp port %d", src->filter_ip, src->filter_port);
+        } else if (src->filter_ip[0]) {
+            snprintf(bpf_buf, sizeof(bpf_buf), "host %s and udp", src->filter_ip);
+        } else if (src->filter_port > 0) {
+            snprintf(bpf_buf, sizeof(bpf_buf), "udp port %d", src->filter_port);
+        }
+
+        struct bpf_program fp;
+        if (pcap_compile(src->handle.pcap_hdl, &fp, bpf_buf, 1, PCAP_NETMASK_UNKNOWN) == 0) {
+            pcap_setfilter(src->handle.pcap_hdl, &fp);
+            pcap_freecode(&fp);
+            printf("PCAP: BPF filter applied: '%s'\n", bpf_buf);
+        }
+
         pthread_create(&src->thread, NULL, pcap_thread, src);
 #else
         src->cbs.on_status(src->user_data, -1, "PCAP support not compiled in");
@@ -261,6 +300,6 @@ int tsa_source_start(tsa_source_t* src) {
 
 int tsa_source_stop(tsa_source_t* src) {
     src->running = false;
-    pthread_join(src->thread, NULL);
+    if (src->thread) pthread_join(src->thread, NULL);
     return 0;
 }

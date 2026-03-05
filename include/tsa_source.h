@@ -35,7 +35,7 @@ typedef struct {
  * @param cbs Callbacks for data and status.
  * @param user_data Opaque pointer passed to callbacks.
  */
-tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const tsa_source_callbacks_t* cbs, void* user_data);
+tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port, const tsa_source_callbacks_t* cbs, void* user_data);
 
 /**
  * Destroy the source and release resources.
