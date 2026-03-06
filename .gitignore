@@ -27,3 +27,4 @@ test.ts
 # sample/ directory is now allowed for small test files, but large .ts files should be ignored
 sample/*.ts
 !sample/test_1m.ts
+*.tar.gz
