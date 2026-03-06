@@ -3,30 +3,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "tsa_internal.h"
-
-/* Local implementation of missing TR 101 290 helper logic for testing */
-static int check_cc_error(uint8_t last_cc, uint8_t current_cc, bool has_payload, bool disc_indicator) {
-    if (disc_indicator) return 0;
-    if (!has_payload) return 0;
-    if (current_cc == last_cc) return 0; // Duplicate packets allowed
-    if (current_cc == ((last_cc + 1) & 0x0F)) return 0;
-    return 1; // Error
-}
 
 void test_cc_logic() {
     printf("Testing CC error logic...\n");
     // Standard increment
-    assert(check_cc_error(0, 1, true, false) == 0);
+    assert(cc_classify_error(0, 1, true, false) == 0);
     // Wrap around
-    assert(check_cc_error(15, 0, true, false) == 0);
+    assert(cc_classify_error(15, 0, true, false) == 0);
     // Discontinuity indicator
-    assert(check_cc_error(0, 5, true, true) == 0);
+    assert(cc_classify_error(0, 5, true, true) == 0);
     // Duplicate allowed
-    assert(check_cc_error(0, 0, true, false) == 0);
+    assert(cc_classify_error(0, 0, true, false) == 1);
     // Real error
-    assert(check_cc_error(0, 2, true, false) != 0);
+    assert(cc_classify_error(0, 2, true, false) > 1);
 }
 
 void test_pcr_jitter() {
@@ -34,6 +26,7 @@ void test_pcr_jitter() {
     double drift = 0;
     calculate_pcr_jitter(0, 0, &drift);
     double jitter = calculate_pcr_jitter(2700000, 100000000, &drift);
+    (void)jitter;
     assert(fabs(jitter) < 1.0);
 }
 

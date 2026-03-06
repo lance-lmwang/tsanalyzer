@@ -32,6 +32,7 @@ static tsa_stream_t* scte35_get_stream(void* engine) {
 }
 
 static void scte35_on_ts(void* self, const uint8_t* pkt) {
+    (void)pkt;
     scte35_engine_t* e = (scte35_engine_t*)self;
     const ts_decode_result_t* r = &e->h->current_res;
 

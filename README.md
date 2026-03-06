@@ -13,7 +13,7 @@ TsAnalyzer is a professional-grade **Software-Defined Measurement Instrument** d
 
 ## 📊 Metrology Architecture
 
-TsAnalyzer follows a strict **7-Tier Metrology Architecture** for full-stack signal visibility, as defined in the **[NOC Dashboard Spec](./docs/44_grafana_dashboard_spec.md)**.
+TsAnalyzer follows a strict **7-Tier Metrology Architecture** for full-stack signal visibility, as defined in the **[Server & API Spec](./docs/server_and_api.md)**.
 
 - **Tier 1 (Master)**: Signal Presence, Fidelity (0-100%), and Engine Determinism.
 - **Tier 2 (Link)**: SRT RTT/Loss, MDI Delay Factor (DF), and Media Loss Rate (MLR).
@@ -91,9 +91,10 @@ The project uses a simplified Makefile wrapping CMake commands.
 
 ```bash
 make           # Build Release version (-O3)
+make package   # Create a portable .tar.gz release for customers
+make docker-image # Build the production Docker image
 make test      # Run all unit tests (100+ cases)
 make full-test # Run Unit + Determinism + Functional (CLI) + Integration (Server)
-make rt-test   # Run Real-time Metrology Verification (CLI-based)
 ```
 
 ---
@@ -108,9 +109,9 @@ TsAnalyzer uses a **27MHz Alpha-Beta Filter Clock** for professional jitter anal
 ## 📖 Technical Documentation
 
 ### Strategy & Overview
-- **[Product Overview](./docs/00_product_overview.md)** | **[Timing Model](./docs/02_timing_model.md)** | **[Buffer Model](./docs/03_buffer_model.md)**
-- **[Determinism Contract](./docs/05_determinism_contract.md)** | **[Validation Methodology](./docs/08_validation_methodology.md)**
+- **[Product Blueprint](./docs/blueprint.md)** | **[Metrology Core](./docs/metrology_core.md)** | **[Analytics Intelligence](./docs/analytics_intelligence.md)**
+- **[Functional Matrix](./docs/functional_capability_matrix.md)** | **[Performance & Verification](./docs/performance_and_verification.md)**
 
-### Technical Specifications
-- **[TR 101 290 Metrology](./docs/16_tr101290_analysis_spec.md)** | **[NOC Dashboard Spec](./docs/44_grafana_dashboard_spec.md)**
-- **[High-Performance Design](./docs/34_server_high_performance_design.md)** | **[Engine Verification](./docs/21_engine_verification_matrix.md)**
+### Operational Guides
+- **[Installation Guide](./docs/installation_guide.md)** | **[Industrial Monitoring](./docs/industrial_monitoring_guide.md)**
+- **[Professional QoE](./docs/professional_qoe_design.md)** | **[Maintenance Guardrails](./docs/troubleshooting_and_guardrails.md)**

@@ -96,6 +96,7 @@ int main(int argc, char** argv) {
     uint64_t pkts_written = 0;
     bool in_range = false;
     uint64_t last_known_pcr = first_pcr;
+    (void)last_known_pcr;
 
     while (fread(pkt, 1, 188, ifh) == 1) {
         if (pkt[0] != 0x47) continue;

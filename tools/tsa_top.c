@@ -29,6 +29,7 @@ static volatile sig_atomic_t g_keep_running = 1;
  * @brief Renders a single stream's metrics across two lines.
  */
 static void draw_stream_row(int row, int max_x, const tsa_top_stream_info_t* s) {
+    (void)max_x;
     if (!s->is_active) return;
 
     /* Line 1: Primary Transmission Metrics */

@@ -21,6 +21,7 @@ void test_perfect_sync() {
     double slope, intercept;
     int64_t max_err;
     int ret = ts_pcr_window_regress(&w, &slope, &intercept, &max_err);
+    (void)ret;
 
     assert(ret == 0);
     printf("  Slope: %f (expected 1.0)\n", slope);
@@ -52,6 +53,7 @@ void test_drift_positive() {
     double slope, intercept;
     int64_t max_err;
     int ret = ts_pcr_window_regress(&w, &slope, &intercept, &max_err);
+    (void)ret;
 
     assert(ret == 0);
     double drift_calc = (slope - 1.0) * 1000000.0;
@@ -82,6 +84,7 @@ void test_jitter() {
     double slope, intercept;
     int64_t max_err;
     int ret = ts_pcr_window_regress(&w, &slope, &intercept, &max_err);
+    (void)ret;
 
     assert(ret == 0);
     printf("  Slope: %f\n", slope);

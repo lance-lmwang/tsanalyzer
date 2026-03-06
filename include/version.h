@@ -1,0 +1,9 @@
+#ifndef TSA_VERSION_H
+#define TSA_VERSION_H
+
+#define TSA_VERSION_MAJOR 2
+#define TSA_VERSION_MINOR 3
+#define TSA_VERSION_PATCH 0
+#define TSA_VERSION_STR "2.3.0-PRO"
+
+#endif

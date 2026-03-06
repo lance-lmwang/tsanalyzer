@@ -167,20 +167,6 @@ static void udp_on_read(void* arg) {
     }
 }
 
-static void srt_on_read(void* arg) {
-    tsa_source_t* src = (tsa_source_t*)arg;
-    uint8_t buf[1316 * 7];
-    int n = srt_recv(src->handle.srt_sock, (char*)buf, sizeof(buf));
-    if (n > 0) {
-        int count = n / 188;
-        if (count > 0) {
-            src->cbs.on_packets(src->user_data, buf, count, 0);
-        }
-    } else if (n == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCRCV) {
-        src->cbs.on_status(src->user_data, -1, "SRT receive error");
-    }
-}
-
 static void* file_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
     uint8_t buf[188 * 7];

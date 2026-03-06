@@ -59,6 +59,7 @@ int main() {
     // Test API cache query
     tsp_stats_t snap;
     int rc = tsp_get_stats_snapshot(h, &snap);
+    (void)rc;
     assert(rc == 0);
     assert(snap.total_packets == g_last_stats.total_packets);
 

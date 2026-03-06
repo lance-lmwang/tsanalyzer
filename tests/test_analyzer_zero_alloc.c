@@ -34,6 +34,7 @@ int main() {
 
     tsa_commit_snapshot(h, ts);
     uint64_t cc_errors_before = h->live->cc_error.count;
+    (void)cc_errors_before;
 
     // Inject a discontinuity (CC error)
     create_ts_packet(pkt, 0x100, 15);  // Gap!
@@ -66,6 +67,7 @@ int main() {
 
     tsa_commit_snapshot(h, ts);
     uint64_t cc_errors_after_drop = h->live->cc_error.count;
+    (void)cc_errors_after_drop;
 
     // CC errors should NOT have increased because of the drop resync
     assert(cc_errors_after_drop == cc_errors_after_gap);

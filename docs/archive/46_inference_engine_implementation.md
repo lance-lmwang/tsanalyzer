@@ -24,11 +24,11 @@ groups:
       # C_net_01: Media Loss Rate (MLR)
       - record: tsa_factor_net_loss
         expr: clamp_max(mdi_mlr > 0, 1.0)
-      
+
       # C_net_02: SRT Retransmit Tax
       - record: tsa_factor_net_retransmit
         expr: clamp_max(srt_retransmit_rate / 0.20, 1.0) # 20% tax = 1.0 score
-      
+
       # C_net_03: MDI-DF Jitter Spike
       - record: tsa_factor_net_jitter
         expr: clamp_max(mdi_df / 50, 1.0) # 50ms jitter = 1.0 score
@@ -55,14 +55,14 @@ groups:
       # Network Score: (Loss * 0.5) + (Retransmit * 0.3) + (Jitter * 0.2)
       - record: tsa_score_network
         expr: >
-          (tsa_factor_net_loss * 0.5) + 
-          (tsa_factor_net_retransmit * 0.3) + 
+          (tsa_factor_net_loss * 0.5) +
+          (tsa_factor_net_retransmit * 0.3) +
           (tsa_factor_net_jitter * 0.2)
 
       # Encoder Score: (PCR Jitter * 0.6) + (Buffer Overflow * 0.4)
       - record: tsa_score_encoder
         expr: >
-          (tsa_factor_enc_pcr_jitter * 0.6) + 
+          (tsa_factor_enc_pcr_jitter * 0.6) +
           (tsa_factor_enc_buffer_overflow * 0.4)
 ```
 

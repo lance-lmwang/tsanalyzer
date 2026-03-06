@@ -20,6 +20,7 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
     }
 
     bool is_h264 = (strcmp(st, "H.264") == 0);
+    (void)is_h264;
     bool is_h265 = (strcmp(st, "HEVC") == 0);
 
     const uint8_t* p = pay;

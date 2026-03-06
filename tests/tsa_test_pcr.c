@@ -43,6 +43,7 @@ void test_pcr_extraction() {
     pcr = extract_pcr(pkt);
     printf("Extracted PCR (large): %lu\n", pcr);
     uint64_t expected = (0x1FFFFFFFFULL * 300) + 299;
+    (void)expected;
     assert(pcr == expected);
 
     printf("PCR extraction tests passed!\n");

@@ -1,6 +1,6 @@
 # TsAnalyzer Pro: COTS Software-Based Inline Broadcast Assurance Appliance
 
-`tsa_server_pro` represents a paradigm shift from traditional media servers and offline analyzers. It is engineered as an **Inline Deterministic Inspection Engine**—a system capable of simultaneously performing ultra-stable, low-latency stream forwarding alongside CPU-bound, deep protocol inspection (TR 101 290, nanosecond PCR jitter). 
+`tsa_server_pro` represents a paradigm shift from traditional media servers and offline analyzers. It is engineered as an **Inline Deterministic Inspection Engine**—a system capable of simultaneously performing ultra-stable, low-latency stream forwarding alongside CPU-bound, deep protocol inspection (TR 101 290, nanosecond PCR jitter).
 
 The ultimate architectural mandate is: **Forwarding stability must never be compromised by analysis complexity.**
 
@@ -20,7 +20,7 @@ Ingress ───→│  TX Forward   │───→ Egress (O(1) latency, high
 ```
 
 *   **Forward Path (Primary)**: The main artery. It only handles packet routing and socket writes. It operates in strict $O(1)$ time per packet and is entirely immune to the CPU load of the analysis engine.
-*   **Analysis Path (Side-Car)**: The inspection engine operates as a decoupled observer processing a mirrored copy of the traffic. 
+*   **Analysis Path (Side-Car)**: The inspection engine operates as a decoupled observer processing a mirrored copy of the traffic.
 
 ## 2. Stream Registry & "Plugin" Architecture
 
@@ -45,7 +45,7 @@ To implement the Side-Car model without doubling memory bandwidth overhead, the 
 
 ### 4.1 The Two Queues & Zero-Impact Enqueue
 1.  **TX Queue (Egress)**: Small, high-priority queue.
-2.  **ANA Queue (Analysis)**: Larger queue dedicated to the Worker Pool. 
+2.  **ANA Queue (Analysis)**: Larger queue dedicated to the Worker Pool.
 
 The I/O thread must write to both. To ensure the Forward path is not degraded by ANA enqueue failures (e.g., branch mispredictions or head/tail lock contention):
 *   **Best-Effort Analysis**: After the TX enqueue, the ANA enqueue is a fast-path pointer copy.

@@ -34,6 +34,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
     tsa_handle_t* h = ctx->h;
     const ts_decode_result_t* res = &h->current_res;
     uint64_t now = h->current_ns;
+    (void)now;
     uint16_t pid = res->pid;
 
     if (res->payload_len > 0) {

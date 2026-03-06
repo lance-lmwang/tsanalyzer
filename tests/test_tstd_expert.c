@@ -93,18 +93,21 @@ void test_tstd_dts_removal() {
     h->stc_ns = now_ns + 2000000;
 
     uint32_t eb_initial = h->live->pid_eb_fill_bytes[pid];
+    (void)eb_initial;
     assert(eb_initial > 0);
 
     // Now move time forward to just before DTS (1.5s absolute)
     h->stc_ns = now_ns + 500000000ULL;
     tsa_commit_snapshot(h, now_ns + 500000000ULL);
     uint32_t eb_mid = h->live->pid_eb_fill_bytes[pid];
+    (void)eb_mid;
     assert(eb_mid == eb_initial);
 
     // Move time forward past DTS (2.1s absolute)
     h->stc_ns = now_ns + 1100000000ULL;
     tsa_commit_snapshot(h, now_ns + 1100000000ULL);
     uint32_t eb_after = h->live->pid_eb_fill_bytes[pid];
+    (void)eb_after;
     assert(eb_after == 0);
 
     tsa_destroy(h);

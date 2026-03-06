@@ -44,6 +44,7 @@ void test_high_freq_pcr_stc_lock() {
     assert(h->stc_locked == true);
     // Ensure slope is reasonable (around 1.0)
     double slope = FROM_Q64_64(h->stc_slope_q64);
+    (void)slope;
     assert(slope > 0.9 && slope < 1.1);
 
     tsa_destroy(h);

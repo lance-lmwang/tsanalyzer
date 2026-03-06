@@ -183,7 +183,7 @@ void tsa_nalu_sniff(const uint8_t* buf, int size, bool is_h265, tsa_nalu_info_t*
             out_info->nalu_type_abstract = NALU_TYPE_IDR;
             out_info->is_slice = true;
             out_info->slice_type = 2; // I-slice
-        } else if (out_info->nalu_type_raw >= 0 && out_info->nalu_type_raw <= 9) {
+        } else if (out_info->nalu_type_raw <= 9) {
             out_info->nalu_type_abstract = NALU_TYPE_NON_IDR;
             out_info->is_slice = true;
             // Sniff slice type from slice segment header
