@@ -16,7 +16,24 @@ $$RST_{enc} = \min(RST_{underflow}, RST_{overflow})$$
 
 ---
 
-## 2. Buffer Safety Margin (BSM)
+## 2. Mux Buffer & Burst Model (DVB T-STD)
+
+TsAnalyzer simulates the **virtual decoder buffer** defined in DVB T-STD to detect multiplexing anomalies.
+
+### 2.1 Buffer Evolution Formula
+For every incoming TS packet:
+*   **Fill**: `buffer_level += packet_size`
+*   **Drain**: `buffer_level -= drain_rate * delta_time` (where drain_rate is the ES bitrate)
+*   **Constraint**: $0 \le buffer\_level \le buffer\_size$
+
+### 2.2 Burst Pattern Detection
+The engine identifies **Burst Clusters** (large packet groups followed by silence):
+*   **Root Causes**: Encoder mux scheduling errors, statistical multiplex imbalance, or network burst shaping.
+*   **Operational Risk**: Sudden buffer spikes leading to imminent **Overflow** risk.
+
+---
+
+## 3. Buffer Safety Margin (BSM)
 
 While RST provides a time-based horizon, the **Buffer Safety Margin %** provides an instantaneous health ratio.
 

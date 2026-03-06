@@ -21,6 +21,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[PCR Math & PLL](./docs/02_metrology/pcr_math.md)**: 27MHz clock reconstruction and 3D jitter decomposition.
 *   **[PCR Root Cause Engine](./docs/02_metrology/pcr_root_cause.md)**: Distinguishing Encoder vs. Network jitter.
 *   **[GOP Structure Analyzer](./docs/02_metrology/gop_analysis.md)**: Content-layer GOP stability and IDR auditing.
+*   **[Entropy Analyzer](./docs/02_metrology/entropy_analysis.md)**: Information density and freeze/black frame detection.
 *   **[RST+ & Safety Models](./docs/02_metrology/rst_model.md)**: Predictive telemetry and buffer safety margins.
 
 ### 🧠 Pillar 3: Analytics & Intelligence

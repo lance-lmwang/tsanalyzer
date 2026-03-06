@@ -41,8 +41,21 @@ All slope and clock calculations use **Q64.64 Fixed-Point Arithmetic** to ensure
 TsAnalyzer is unique in decomposing raw jitter into three diagnostic vectors:
 
 1.  **PCR_AC (Accuracy)**: The deviation of the PCR sample from the piecewise-constant bitrate model. Represents encoder multiplexing precision.
-2.  **PCR_DR (Drift Rate)**: The long-term linear slope of STC vs. physical wall-clock. Revels clock crystal aging (measured in ppm).
-3.  **PCR_OJ (Overall Jitter)**: The combined phase jitter introduced by the transport network.
+### 2.2 PCR_DR (Drift Rate) & Walltime Drift
+The long-term linear slope of STC vs. physical wall-clock. Reveals clock crystal aging or reference frequency deviation.
+
+**Drift Calculation**:
+$$\Delta PCR = PCR[n] - PCR[n-1]$$
+$$\Delta Local = T[n] - T[n-1]$$
+$$Drift_{ppm} = \frac{\Delta PCR - \Delta Local}{\Delta Local} \times 10^6$$
+
+**Operational Interpretation**:
+| Drift (ppm) | Meaning | Status |
+| :--- | :--- | :--- |
+| **± 5 ppm** | Excellent master clock | **NOMINAL** |
+| **± 20 ppm** | Normal consumer-grade encoder | **NOMINAL** |
+| **> 50 ppm** | Unstable or non-compliant clock | **WARNING** |
+| **> 100 ppm** | Severe clock slewing / imminent desync | **CRITICAL** |
 
 ---
 

@@ -16,11 +16,12 @@ $$S_{net} = (0.4 \times MLR) + (0.3 \times DF) + (0.2 \times RTT_{var}) + (0.1 \
 
 ### 1.2 Encoder Domain Score ($S_{enc}$)
 Attributes the fault to the source/encoder.
-$$S_{enc} = (0.4 \times PCR_{jitter}) + (0.3 \times PTS_{drift}) + (0.2 \times TSTD_{overflow}) + (0.1 \times GOP_{break})$$
+$$S_{enc} = (0.3 \times PCR_{jitter}) + (0.2 \times PTS_{drift}) + (0.2 \times TSTD_{overflow}) + (0.2 \times H_{var}) + (0.1 \times Drift_{ppm})$$
 *   **PCR_jitter**: Real-time jitter vs. the 27MHz Software PLL.
 *   **PTS_drift**: Differential drift between audio and video PTS.
 *   **TSTD_overflow**: Violations of the ISO Annex D buffer model.
-*   **GOP_break**: Missing or malformed GOP boundaries (detected via NALU sniffer).
+*   **$H_{var}$**: Variance in Payload Entropy (detects frozen frames).
+*   **Drift_ppm**: Absolute clock frequency deviation in ppm.
 
 ---
 
