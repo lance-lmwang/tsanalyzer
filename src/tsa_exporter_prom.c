@@ -246,6 +246,17 @@ void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t
             }
             SAFE_APPEND("tsa_pid_has_cea708%s %d\n", pid_labels, snap->pids[j].has_cea708 ? 1 : 0);
             SAFE_APPEND("tsa_pid_has_scte35%s %d\n", pid_labels, snap->pids[j].has_scte35 ? 1 : 0);
+
+            // Tier 4: Deep Content & Metrology
+            if (snap->pids[j].width > 0) {
+                SAFE_APPEND("tsa_pid_video_width%s %u\n", pid_labels, snap->pids[j].width);
+                SAFE_APPEND("tsa_pid_video_height%s %u\n", pid_labels, snap->pids[j].height);
+                SAFE_APPEND("tsa_pid_video_profile%s %u\n", pid_labels, snap->pids[j].profile);
+                SAFE_APPEND("tsa_pid_video_level%s %u\n", pid_labels, snap->pids[j].level);
+                SAFE_APPEND("tsa_pid_video_chroma_format%s %u\n", pid_labels, snap->pids[j].chroma_format);
+                SAFE_APPEND("tsa_pid_video_gop_n%s %u\n", pid_labels, snap->pids[j].gop_n);
+                SAFE_APPEND("tsa_pid_video_gop_ms%s %u\n", pid_labels, snap->pids[j].gop_ms);
+            }
         }
     }
 #undef SAFE_APPEND
