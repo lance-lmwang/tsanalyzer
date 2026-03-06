@@ -9,7 +9,7 @@ This plan details the step-by-step approach to building the Lua pipeline engine.
   - Create a global `tsa` module table in Lua to hold all factory functions.
   - Implement the CLI entry point `tsanalyzer run <script.lua>`.
 
-## Step 2: Stream Object Binding (Input & Output)
+## Step 2: Stream Object Binding (Input & Output) (DONE)
 - **Goal**: Expose basic network I/O to Lua.
 - **Tasks**:
   - Create Lua userdata bindings for `tsa_source_t` (UDP/SRT input) and `tsp_handle_t` (UDP/SRT output).
