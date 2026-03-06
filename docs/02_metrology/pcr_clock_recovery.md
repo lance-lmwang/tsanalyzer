@@ -84,7 +84,21 @@ PCR may jump due to stream switching or encoder resets.
 
 ---
 
-## 8. Derived Industrial Metrics
+## 8. Measurement Precision & Hardware Authority
+
+The accuracy of jitter and drift metrology is fundamentally limited by the resolution of the arrival timestamp source.
+
+| Timestamp Source | Resolution | Determinism Level |
+| :--- | :--- | :--- |
+| **Software Clock** | ~1 µs | **LOW**: Heavily affected by OS scheduling. |
+| **Kernel Timestamp**| ~100 ns | **MEDIUM**: Affected by IRQ jitter. |
+| **NIC Hardware (HAT)**| **~10 ns** | **HIGH**: Bit-exact and deterministic. |
+
+TsAnalyzer integrates hardware-assisted timestamping (HAT) to achieve the nanosecond-level precision required for professional broadcast auditing.
+
+---
+
+## 9. Derived Industrial Metrics
 
 Once the clock is reconstructed, the engine computes:
 *   **PCR Jitter**: Peak-to-peak deviation ($max |J_i|$).

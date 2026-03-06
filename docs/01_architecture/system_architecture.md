@@ -127,7 +127,17 @@ Instead of byte-by-byte state machines, v3 uses SIMD vectors to perform "dimensi
 *   **Header Gathering**: Uses Gather/Shuffle instructions to extract 13-bit PIDs from multiple packets simultaneously.
 *   **Register-level Drop**: Non-analyzed PIDs are masked at the register level to prevent unnecessary memory writes.
 
-### 6.2 1000+ Stream Scheduler (Run-to-Completion)
+### 6.2 Throughput Characteristics
+The expected analytical throughput varies based on the SIMD width and hardware generation:
+
+| CPU Architecture | SIMD ISA | Expected Throughput |
+| :--- | :--- | :--- |
+| **Intel/AMD Core** | **AVX2** | **6 – 8 Gbps** |
+| **Intel/AMD Xeon** | **AVX-512** | **10 – 16 Gbps** |
+
+Performance targets assume NUMA locality and kernel-bypass (AF_XDP) are correctly enforced.
+
+### 6.3 1000+ Stream Scheduler (Run-to-Completion)
 To eliminate OS context-switch overhead:
 *   **Worker-per-Core**: A fixed pool of worker threads equals the physical core count.
 *   **Time-Wheel QoS**: Employs an **O(1) Time-Wheel algorithm** for deferred analysis tasks (e.g., TR 101 290 P1 timeouts).
