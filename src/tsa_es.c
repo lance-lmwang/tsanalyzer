@@ -63,6 +63,25 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                     h->pid_last_idr_ns[pid] = now;
                     h->pid_gop_n[pid] = 0;
                     h->pid_i_frames[pid]++;
+
+                    // SCTE-35 Alignment Audit
+                    if (h->scte35_target_pts[pid] != 0xFFFFFFFFFFFFFFFFULL) {
+                        if (h->pid_last_pts_33[pid] != 0x1FFFFFFFFULL) {
+                            uint64_t frame_pts = h->pid_last_pts_33[pid];
+                            uint64_t scte_pts = h->scte35_target_pts[pid];
+                            // PTS is 90kHz
+                            int64_t diff_90k = (int64_t)frame_pts - (int64_t)scte_pts;
+
+                            // Handle rollover delta (if diff is wildly huge)
+                            if (diff_90k > ((int64_t)1 << 32)) diff_90k -= ((int64_t)1 << 33);
+                            else if (diff_90k < -((int64_t)1 << 32)) diff_90k += ((int64_t)1 << 33);
+
+                            h->scte35_alignment_error_ns[pid] = diff_90k * 1000000000LL / 90000LL;
+
+                            // Consume the target
+                            h->scte35_target_pts[pid] = 0xFFFFFFFFFFFFFFFFULL;
+                        }
+                    }
                 } else {
                     h->pid_gop_n[pid]++;
                     if (info.slice_type == 1) {

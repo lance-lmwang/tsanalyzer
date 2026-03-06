@@ -20,7 +20,7 @@ This plan breaks down the `spec.md` into actionable, incremental steps.
   - Export these histogram buckets to the shared memory and Prometheus JSON.
 - **Validation**: Use `tc qdisc` (netem) to inject artificial network delay bursts and verify the histogram reflects the injected jitter.
 
-## Step 3: NALU Sparse Sniffer & PES Deep Inspection
+## Step 3: NALU Sparse Sniffer & PES Deep Inspection (DONE)
 - **Goal**: Detect video frame types (I/P/B) and GOP boundaries without decoding the video.
 - **Tasks**:
   - Implement `src/metrology/nalu_sniffer.c`.

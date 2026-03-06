@@ -116,6 +116,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pid_last_pts_33[i] = 0x1FFFFFFFFULL;
         h->clock_inspectors[i].pid = i;
         h->last_cc[i] = 0x10;
+        h->scte35_target_pts[i] = 0xFFFFFFFFFFFFFFFFULL;
     }
     h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
     h->last_health_score = 100.0f;

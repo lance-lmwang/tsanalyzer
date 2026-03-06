@@ -164,6 +164,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].gop_ms = h->pid_gop_ms[p]; sn->pids[ai].i_frames = h->pid_i_frames[p];
         sn->pids[ai].p_frames = h->pid_p_frames[p]; sn->pids[ai].b_frames = h->pid_b_frames[p];
         sn->pids[ai].has_cea708 = h->pid_has_cea708[p]; sn->pids[ai].has_scte35 = h->pid_is_scte35[p];
+        sn->pids[ai].scte35_alignment_error_ns = h->scte35_alignment_error_ns[p];
         sn->pids[ai].eb_fill_pct = (float)((double)(h->pid_eb_fill_q64[p] >> 64) * 100.0 / 1200000.0);
         ai++;
     }

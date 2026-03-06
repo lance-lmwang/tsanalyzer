@@ -26,5 +26,5 @@ Elevate TsAnalyzer from a basic packet-counter to a **World-Class, Software-Defi
 ## Success Criteria
 - [x] `pcr_walltime_drift` is mathematically stable and accurately reflects clock drift.
 - [x] IAT Histograms are actively tracking packet micro-bursts at 1Gbps line rate.
-- [ ] The engine correctly identifies GOP boundaries and frame types via the NALU sniffer without full decoding.
+- [x] The engine correctly identifies GOP boundaries and frame types via the NALU sniffer without full decoding.
 - [ ] Micro-capture successfully dumps a `.ts` file capturing the exact moment of an injected P1 error.

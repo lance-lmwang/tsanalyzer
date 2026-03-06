@@ -290,6 +290,10 @@ struct tsa_handle {
 
     uint64_t last_packet_rx_ns;
 
+    // SCTE-35 Audit State
+    uint64_t scte35_target_pts[TS_PID_MAX];
+    int64_t scte35_alignment_error_ns[TS_PID_MAX];
+
     ts_section_filter_t* pid_filters;
     uint32_t program_count;
     tsa_program_info_t programs[MAX_PROGRAMS];

@@ -157,6 +157,7 @@ typedef struct {
     uint64_t b_frames;
     bool has_cea708;
     bool has_scte35;
+    int64_t scte35_alignment_error_ns;
     float eb_fill_pct;
     float tb_fill_pct;
     float mb_fill_pct;
