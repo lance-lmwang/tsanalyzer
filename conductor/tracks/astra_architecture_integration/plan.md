@@ -12,7 +12,7 @@
 - [x] **Step 3:** Implement conditional parsing in the root ingest node to immediately drop TS packets corresponding to un-subscribed PIDs.
 
 ## Phase 3: Reactor Pattern & Event Loop (Astra Highlight 3)
-- [ ] **Step 1:** Prototype a lightweight Reactor event loop using `epoll` or equivalent.
+- [x] **Step 1:** Prototype a lightweight Reactor event loop using `epoll` or equivalent.
 - [ ] **Step 2:** Move socket/input reading logic from blocking threads to the event loop.
 
 ## Phase 4: Lua-C Hybrid Scripting (Astra Highlight 4)

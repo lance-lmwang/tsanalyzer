@@ -62,7 +62,7 @@ endif()
 
 include_directories(include)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c)
 target_link_libraries(tsp_core ${SRT_LIBRARY} ${PCAP_LINK_LIBS} pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)
@@ -222,6 +222,10 @@ add_test(NAME test_snapshot_consistency COMMAND test_snapshot_consistency)
 add_executable(test_stream_tree tests/test_stream_tree.c)
 target_link_libraries(test_stream_tree tsp_core pthread m)
 add_test(NAME test_stream_tree COMMAND test_stream_tree)
+
+add_executable(test_event_loop tests/test_event_loop.c)
+target_link_libraries(test_event_loop tsp_core pthread m)
+add_test(NAME test_event_loop COMMAND test_event_loop)
 
 add_executable(test_stc_reconstruction tests/test_stc_reconstruction.c)
 target_link_libraries(test_stc_reconstruction tsp_core pthread m)
