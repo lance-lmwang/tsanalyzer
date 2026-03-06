@@ -107,6 +107,7 @@ static void* tx_loop(void* arg) {
 
     struct timespec next_tx_time;
     clock_gettime(CLOCK_MONOTONIC, &next_tx_time);
+    time_t last_stats_sec = next_tx_time.tv_sec;
 
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
@@ -134,6 +135,13 @@ static void* tx_loop(void* arg) {
 
         // Precise sleep until next_tx_time
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_tx_time, NULL);
+
+        if (h->cfg.stats_cb && next_tx_time.tv_sec != last_stats_sec) {
+            tsp_stats_t snap;
+            tsp_get_stats_snapshot(h, &snap);
+            h->cfg.stats_cb(h, &snap, h->cfg.user_data);
+            last_stats_sec = next_tx_time.tv_sec;
+        }
 
         // Prepare 1316-byte batch
         for (int i = 0; i < BATCH_SIZE; i++) {

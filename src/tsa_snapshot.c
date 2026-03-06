@@ -37,6 +37,7 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
 
     uint64_t pat_vstc_dt = (h->live->pid_last_seen_vstc[0] > 0) ? (stc - h->live->pid_last_seen_vstc[0]) : 0;
     if (h->pid_seen[0] && pat_vstc_dt > 500000000ULL) {
+        if (h->live->pat_error.count == 0) h->live->pat_error.first_timestamp_ns = n;
         h->live->pat_error.count++;
         h->live->pat_error.last_timestamp_ns = n;
         h->live->alarm_pat_error = true;
@@ -60,6 +61,7 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
     }
     h->live->alarm_pmt_error = pmt_missing;
     if (pmt_missing) {
+        if (h->live->pmt_error.count == 0) h->live->pmt_error.first_timestamp_ns = n;
         h->live->pmt_error.count++;
         h->live->pmt_error.last_timestamp_ns = n;
     }

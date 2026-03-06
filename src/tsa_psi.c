@@ -74,6 +74,23 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
     }
 }
 
+static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
+    (void)now;
+    int sl = ((p[1] & 0x0F) << 8) | p[2];
+    int ndl = ((p[8] & 0x0F) << 8) | p[9];
+
+    // Parse network descriptors
+    for (int j = 10; j < 10 + ndl && j < sl + 3 - 4;) {
+        uint8_t dt = p[j], dl = p[j + 1];
+        if (dt == 0x40 && dl > 0) { // network_name_descriptor
+            int nl = dl;
+            memcpy(h->network_name, p + j + 2, (nl < 255) ? nl : 255);
+            h->network_name[(nl < 255) ? nl : 255] = '\0';
+        }
+        j += 2 + dl;
+    }
+}
+
 static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     (void)now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
@@ -194,19 +211,37 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         if (f->len >= (uint32_t)sl + 3) f->complete = true;
     }
     if (f->complete) {
-        uint32_t crc = tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
-        if (crc == 0) {
-            uint8_t tid = f->buffer[0];
-            uint8_t ver = (f->buffer[5] >> 1) & 0x1F;
-            if (!f->seen_before || f->last_ver != ver) {
+        uint8_t tid = f->buffer[0];
+        bool has_version = (tid == 0x00 || tid == 0x02 || tid == 0x40 || tid == 0x42);
+        uint8_t ver = 0;
+        bool skip_parsing = false;
+
+        // Fast path: skip CRC and parsing if version is unchanged
+        if (has_version && f->len >= 6) {
+            ver = (f->buffer[5] >> 1) & 0x1F;
+            if (f->seen_before && f->last_ver == ver) {
+                skip_parsing = true;
+            }
+        }
+
+        if (!skip_parsing) {
+            uint32_t crc = tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
+            if (crc == 0) {
                 if (tid == 0x00) process_pat(h, f->buffer, h->stc_ns);
                 else if (tid == 0x02) process_pmt(h, pid, f->buffer, h->stc_ns);
+                else if (tid == 0x40) process_nit(h, f->buffer, h->stc_ns);
                 else if (tid == 0x42) process_sdt(h, f->buffer, h->stc_ns);
-                f->last_ver = ver; f->seen_before = true;
+
+                if (has_version) {
+                    f->last_ver = ver;
+                    f->seen_before = true;
+                }
+            } else {
+                if (h->live->crc_error.count == 0) h->live->crc_error.first_timestamp_ns = h->current_ns;
+                h->live->crc_error.count++;
+                h->live->crc_error.last_timestamp_ns = h->current_ns;
+                tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
             }
-        } else {
-            h->live->crc_error.count++;
-            tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
         }
         f->active = false; f->complete = false;
     }

@@ -38,6 +38,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 
     // 1. Transport Error Check
     if (pkt[1] & 0x80) {
+        if (h->live->transport_error.count == 0) h->live->transport_error.first_timestamp_ns = now;
         h->live->transport_error.count++;
         h->live->transport_error.last_timestamp_ns = now;
     }
