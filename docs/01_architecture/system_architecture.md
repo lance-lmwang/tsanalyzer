@@ -57,19 +57,24 @@ The Ingestion layer utilizes **Receive Side Scaling (RSS)** to distribute load w
 
 ---
 
-## 4. TS Processing Pipeline
+## 4. Reactor Stream Model
 
-The per-packet analytical pipeline is strictly **O(1)** to maintain deterministic latency (< 1ms processing delay).
+Unlike v2 which used "Thread-per-Stream," v3 treats **Streams as State Machines** multiplexed inside a fixed number of **Reactor Threads**.
 
-### 4.1 Pipeline Stages
-1.  **NIC Ingress**: Hardware RX Timestamping.
-2.  **Packet Classification**: Stream Hash & Flow identification.
-3.  **TS Header Parser**: Branchless PUSI/PID/CC extraction.
-4.  **Continuity Counter Audit**: Sequence verification per PID.
-5.  **PCR Processor**: Software PLL & jitter metrology.
-6.  **Bitrate Model**: Piecewise constant bitrate estimation.
-7.  **TR 101 290 Engine**: State machine updates (P1/P2/P3).
-8.  **Metrics Bus**: Atomic push to the Reactor Core.
+### 4.1 Event Loop Logic
+Each Reactor manages ~100 streams. The loop performs wait-free polling:
+```c
+while(running) {
+    batch = ring_pop_batch();
+    for(pkt in batch) {
+        stream = flow_table[pkt.flow];
+        process_ts_packet(stream, pkt); // Updates state machines
+    }
+}
+```
+
+### 4.2 Cache Residency
+The `ts_stream_t` context is carefully packed to reside within a single cache line (64-128 bytes) where possible, ensuring that all metrology math (PCR PLL, VBV) happens in L1/L2 cache.
 
 ---
 
