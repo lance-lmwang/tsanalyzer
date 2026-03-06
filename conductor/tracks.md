@@ -13,7 +13,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: Exporter Performance Optimization**
   *Link: [./tracks/exporter_performance_20260303/](./tracks/exporter_performance_20260303/)*
 
-- [ ] **Track: ES & T-STD Extension (Expert Analysis)**
+- [x] **Track: ES & T-STD Extension (Expert Analysis)**
   *Link: [./tracks/expert-analysis/](./tracks/expert-analysis/)*
 
 - [x] **Track: Professional Parity & Professional Robustness**
