@@ -1,59 +1,84 @@
 # TsAnalyzer Pro: v3 System Architecture
 
-TsAnalyzer v3 is not a traditional server application, but a **Deterministic Dataflow Machine**. Its primary mission is to transform raw NIC packets into high-fidelity metrology with hardware-level precision.
+TsAnalyzer v3 is designed as a **Three-Plane Architecture**, separating packet processing, timing analysis, and control orchestration. This separation ensures deterministic throughput while maintaining flexibility for large-scale deployments.
 
 ---
 
 ## 1. Core Design Philosophy
 
-1.  **NUMA Locality First**: Packet data and processing state must never cross physical CPU socket boundaries (zero QPI/UPI latency).
-2.  **Lock-Free Data Plane**: 0 mutex, 0 malloc, 0 blocking in the fast path.
-3.  **Batch Processing Everywhere**: Utilize `recvmmsg` and vector instructions to process packets in groups.
-4.  **Streams are State Machines**: A stream is not a thread; it is a compact state machine that must fit within the CPU's L1/L2 cache.
+1.  **Plane Isolation**: The **Data Plane** is strictly decoupled from the **Control Plane**. Slow control operations (e.g., generating a large JSON report) are never allowed to stall the packet ingestion or analysis worker threads.
+2.  **NUMA Locality First**: Packet data and processing state must never cross physical CPU socket boundaries (zero QPI/UPI latency).
+3.  **Lock-Free Data Plane**: 0 mutex, 0 malloc, 0 blocking in the hot path. All packets move via Single-Producer Single-Consumer (SPSC) ring buffers.
+4.  **Streams are State Machines**: A stream is not a thread; it is a compact state machine multiplexed inside a fixed number of **Reactor Threads**.
 5.  **Branchless Logic**: Eliminate conditional branches in the TS parser to maximize pipeline efficiency.
 
 ---
 
 ## 2. Global System Architecture
 
-The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **500+ streams**:
+The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **1000+ streams**:
 
 ```text
-            NIC (10G / 40G)
-                 │
-          recvmmsg Ingest (Batch)
-                 │
-           RX Worker (Per-Queue)
-                 │
-            Flow Hash (RSS-like)
-                 │
-   ┌─────────────┼─────────────┐
-   │             │             │
-Reactor 0      Reactor 1      Reactor N
- 100 streams    100 streams    100 streams
-   │             │             │
-Lock-Free SPSC Rings (Wait-free handoff)
-   │
-   ├─► TS Analysis Core (Real-time P1/P2/Math)
-   │
-   ├─► Low-Priority Sidecar (Thumbnails / Audio Audit)
-   │
-   └─► Asynchronous Signaling (Webhooks / Incident Dispatch)
+                 +--------------------------------------+
+                 |        Control Plane (REST/gRPC)     |
+                 |  - Stream configuration              |
+                 |  - Monitoring API / Telemetry        |
+                 +------------------+-------------------+
+                                    |
+                                    v
++-------------------------------------------------------------------+
+|                        Analysis Plane                              |
+|                                                                   |
+|   +-------------------+     +--------------------+                |
+|   | Timing Engine     |     | Semantic Analyzer  |                |
+|   | - PCR reconstruction |  | - TR 101 290 checks|                |
+|   | - Jitter modeling   |   | - StatMux detection |               |
+|   +----------+----------+   +----------+----------+               |
++--------------+-------------------------+--------------------------+
+               |
+               v
++-------------------------------------------------------------------+
+|                        Data Plane                                  |
+|                                                                   |
+| +--------------------+    +----------------------+                |
+| | NIC Capture        | -> | SIMD TS Parser       | -> SPSC Ring   |
+| | (DPDK / AF_XDP)    |    | (AVX2 / AVX-512)     |                |
+| +--------------------+    +----------------------+                |
++-------------------------------------------------------------------+
 ```
 
 ---
 
-## 3. The NUMA Pipeline
+## 3. Layered Implementation Stack
 
-NUMA awareness is the difference between a tool and an instrument at 10 Gbps.
+While the Planes define logical isolation, the engine code is implemented as a 4-layer deterministic pipeline.
 
-### 3.1 Data Residency Rule
-**Packet data must never cross NUMA nodes.** Crossing the interconnect (QPI/UPI) introduces non-deterministic latency spikes that pollute jitter measurements.
+| Layer | Responsibility | Implementation Primitives |
+| :--- | :--- | :--- |
+| **4. Interface** | External Comms | JSON (Bit-exact), Prometheus, `tsa_top` TUI. |
+| **3. Metrology** | Simulation | ETSI TR 101 290, 3D PCR Math, T-STD VBV. |
+| **2. Structural** | Protocol | Multi-standard SI/PSI, 27MHz STC, NALU Sniff. |
+| **1. Ingestion** | Physical | **HAT (Hardware Timing)**, recvmmsg, SPSC Rings. |
 
-### 3.2 RSS Queue & Core Affinity
-The Ingestion layer utilizes **Receive Side Scaling (RSS)** to distribute load while maintaining stream affinity.
-*   **RSS Hash**: Based on `UDP Destination IP` and `UDP Destination Port`.
-*   **Affinity Guarantee**: Ensures **Same Stream → Same RX Queue → Same CPU Core**, preventing out-of-order delivery and cache invalidation.
+---
+
+## 4. The NUMA Pipeline
+
+NUMA awareness is critical for maintaining the **8M pps** data plane throughput.
+
+### 4.1 Data Residency Rule
+**Packet data must never cross NUMA nodes.** Crossing the interconnect (QPI/UPI) introduces non-deterministic latency spikes. Each physical CPU socket manages an independent hardware-to-software pipeline.
+
+### 4.2 CPU Layout Example (32-Core Appliance)
+*   **NUMA Node 0 (Cores 0-15)**:
+    *   Core 0: Ingest RX Worker (NIC0).
+    *   Cores 1-15: Analysis Workers (Stream Group A).
+*   **NUMA Node 1 (Cores 16-31)**:
+    *   Core 16: Ingest RX Worker (NIC1).
+    *   Cores 17-31: Analysis Workers (Stream Group B).
+
+### 4.3 RSS Queue & Core Affinity
+The Ingestion layer utilizes **Receive Side Scaling (RSS)** based on `UDP Destination IP + Port` to ensure **Same Stream → Same Core** affinity.
 
 ---
 
@@ -75,10 +100,10 @@ The per-packet analytical pipeline is strictly **O(1)** to maintain deterministi
 
 ## 5. Reactor Stream Model
 
-Unlike v2 which used "Thread-per-Stream," v3 treats **Streams as State Machines** multiplexed inside a fixed number of **Reactor Threads**.
+v3 treats **Streams as State Machines** multiplexed inside **Reactor Threads**. Each Reactor manages ~100 streams.
 
 ### 5.1 Event Loop Logic
-Each Reactor manages ~100 streams. The loop performs wait-free polling:
+The loop performs wait-free polling:
 ```c
 while(running) {
     batch = ring_pop_batch();
@@ -96,19 +121,16 @@ The `ts_stream_t` context is carefully packed to reside within a single cache li
 
 ## 6. High-Performance Execution Primitives
 
-To achieve the 8M pps target, the engine utilizes hardware-intrinsic optimizations.
-
-### 6.1 TS SIMD Parser (AVX-512)
+### 6.1 TS SIMD Parser (AVX-512 / AVX2)
 Instead of byte-by-byte state machines, v3 uses SIMD vectors to perform "dimensional reduction" on the 188-byte TS packets.
-*   **Vectorized Sync Detection**: Uses `_mm512_cmpeq_epi8_mask` to scan entire cache lines for the `0x47` sync byte in a single instruction.
+*   **Vectorized Sync Detection**: Uses `_mm512_cmpeq_epi8_mask` (or `_mm256_cmpeq_epi8`) to scan entire cache lines for the `0x47` sync byte in a single instruction.
 *   **Header Gathering**: Uses Gather/Shuffle instructions to extract 13-bit PIDs from multiple packets simultaneously.
-*   **Register-level Drop**: Non-analyzed PIDs (like 0x1FFF Null packets) are masked at the register level to prevent unnecessary memory writes.
+*   **Register-level Drop**: Non-analyzed PIDs are masked at the register level to prevent unnecessary memory writes.
 
 ### 6.2 1000+ Stream Scheduler (Run-to-Completion)
-To eliminate OS context-switch overhead for massive stream counts:
+To eliminate OS context-switch overhead:
 *   **Worker-per-Core**: A fixed pool of worker threads equals the physical core count.
-*   **Time-Wheel QoS**: Employs an **O(1) Time-Wheel algorithm** for deferred analysis tasks (e.g., TR 101 290 P1 timeouts), ensuring that thousands of concurrent timers do not block the high-speed data plane.
-*   **NUMA Affinity**: NIC interrupts, Ring Buffers, and Worker threads are hard-bound to the same NUMA node to eliminate Infinity Fabric/UPI cross-talk.
+*   **Time-Wheel QoS**: Employs an **O(1) Time-Wheel algorithm** for deferred analysis tasks (e.g., TR 101 290 P1 timeouts).
 
 ---
 
@@ -117,6 +139,6 @@ To eliminate OS context-switch overhead for massive stream counts:
 TsAnalyzer v3 offloads all non-deterministic external communication to a dedicated thread pool to ensure core timing integrity.
 
 ### 7.1 Dispatch Mechanism
-1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the **Signal Queue** (Lock-free MPMC).
-2.  **Signaling Thread**: Consumes the queue, performs JSON serialization, and executes the Webhook POST (using a non-blocking IO loop).
+1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the **Signal Queue**.
+2.  **Signaling Thread**: Consumes the queue and executes the Webhook POST (non-blocking).
 3.  **Isolation**: Prevents network latency spikes during HTTP POSTs from contaminating the 27MHz clock reconstruction.

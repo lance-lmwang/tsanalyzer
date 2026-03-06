@@ -5,10 +5,10 @@ This document formalizes the software clock reconstruction logic used for all te
 ## 1. High-Precision Software PLL
 
 TsAnalyzer reconstructs a local System Time Clock (STC) from sparse PCR samples using a digital lock-loop.
-
 ### 1.1 42-bit PCR Reconstruction
 To ensure precision, the engine reconstructs the full 27MHz timeline using 64-bit integer arithmetic, strictly avoiding floating-point rounding errors.
-$$PCR_{value} = (PCR_{base} \times 300) + PCR_{ext}$$
+$$PCR_{time} = \frac{PCR_{base}}{90,000} + \frac{PCR_{ext}}{27,000,000}$$
+(Note: Internally calculated as $PCR_{value} = (PCR_{base} \times 300) + PCR_{ext}$ in 27MHz units).
 
 **Implementation Reference**:
 ```c
@@ -35,8 +35,11 @@ void pll_update(pcr_pll_t *pll, double arrival, double pcr) {
 }
 ```
 
-### 1.4 Precision Handling
-All slope and clock calculations use **Q64.64 Fixed-Point Arithmetic** to ensure:
+### 1.4 Jitter Mathematical Model
+PCR jitter is the deviation between expected arrival time and actual arrival time.
+$$J = (t_{arrival\_i} - t_{arrival\_i-1}) - \frac{PCR_i - PCR_{i-1}}{27,000,000}$$
+Calculated in 27MHz ticks and normalized to nanoseconds for reporting.
+
 1.  **Bit-Identical results** across x86 and ARM.
 2.  **No accumulation of rounding errors** over long runs (24h+).
 

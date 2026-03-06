@@ -1,37 +1,61 @@
 # TsAnalyzer Pro: Technical Vision
 
-TsAnalyzer Pro is designed to set a new industry benchmark for modern broadcast-grade instruments. Our mission is to break the monopoly of proprietary hardware analyzers by achieving—and exceeding—hardware-level speed and precision using a pure software architecture on commodity servers.
+TsAnalyzer Pro is engineered to provide a **software-defined alternative** to proprietary hardware analyzers. It achieves hardware-level speed and precision through a deterministic architecture optimized for high-performance commodity servers.
 
 ## Core Mission
-To extract every ounce of processing power from modern multi-core CPUs and SIMD instruction sets. By utilizing a lock-free, zero-copy modern software architecture, TsAnalyzer Pro provides an industrial-grade analysis platform with massive throughput, nanosecond precision, and deep semantic insight for broadcast networks and high-end streaming.
+To maximize the utilization of modern multi-core CPUs and SIMD instruction sets. Utilizing a lock-free, zero-copy architecture, TsAnalyzer Pro serves as an industrial-grade metrology platform capable of sustaining massive throughput and nanosecond-level precision for critical broadcast and streaming infrastructure.
 
 ---
 
 ## The Four Pillars of TsAnalyzer Pro
 
 ### 1. Performance at the Edge of Silicon
-Traditional TS software is often throttled by inefficient byte-by-byte state machines. TsAnalyzer Pro utilizes modern micro-architectures (AVX-512) for dimensional reduction.
-*   **Vectorized Parsing**: Full deployment of SIMD instructions for single-cycle batch validation and PID filtering of 188-byte packets.
-*   **End-to-End Zero-Copy**: An 8M pps lock-free pipeline that eliminates data duplication and kernel-to-user context switching.
+TsAnalyzer Pro bypasses the limitations of traditional state machines by leveraging **SIMD (AVX2 / AVX-512)** for dimensional reduction.
+*   **Vectorized Parsing**: Single-cycle batch validation and PID filtering of 188-byte packets.
+*   **End-to-End Zero-Copy**: An 8M pps (10Gbps+) lock-free pipeline utilizing kernel-bypass (XDP/DPDK) to eliminate context switching and memory bottlenecks.
 
 ### 2. Nanosecond-Level Metrology
-In broadcasting, timing jitter is a catastrophe. TsAnalyzer Pro is not just a parser; it is a digital vernier caliper.
-*   **High-Precision PCR Modeling**: Moving beyond coarse system timestamps to hardware-level NIC PTP integration for real-time mathematical演算 of Jitter and Drift.
-*   **Strict TR 101 290 Enforcement**: Built-in O(1) time-wheel algorithms ensure microsecond-accurate alerting even under 1000+ concurrent stream loads.
+In professional broadcasting, timing is the ultimate truth. TsAnalyzer Pro functions as a high-precision digital vernier caliper.
+*   **High-Fidelity Clock Modeling**: Moving beyond system-level timestamps to hardware-level NIC PTP/HAT integration for absolute PCR Jitter and Drift metrology.
+*   **Standard Compliance**: Built-in O(1) time-wheel algorithms ensure TR 101 290 compliance with microsecond-level accuracy across 1000+ concurrent streams.
 
-### 3. Massive Scalability & Modern Architecture
-Scaling to 1000+ streams requires hardware-aware orchestration.
-*   **NUMA Affinity & Coroutine Scheduling**: Data plane cores are hard-bound to NUMA nodes, while the control plane provides modern APIs for seamless microservice integration.
-*   **Adaptive Resource Management**: Replaces the "Thread-per-Stream" model with a Run-to-Completion event mechanism to minimize OS scheduler overhead.
+### 3. Massive Scalability & Resilient Architecture
+*   **NUMA-Aware Data Plane**: Ensuring all data processing and memory residency remains local to the physical CPU socket to eliminate QPI/UPI latency.
+*   **Run-to-Completion Model**: Replaces traditional multi-threading with an asynchronous event-driven mechanism to maximize cache efficiency and CPU utilization.
 
 ### 4. Deep Semantic Inspection
-Moving beyond syntax to understand the logic of multimedia delivery.
-*   **Panoramic StatMux Detection**: Reverse-engineering the dynamic bitrate strategies of upstream multiplexers, monitoring VBR fluctuations and phase alignment.
-*   **Ecosystem Symbiosis**: Acting as the "Eagle Eye" of the media pipeline, providing high-fidelity telemetry to downstream transcoders and decoders.
+*   **StatMux & VBR Analytics**: Real-time reverse-engineering of upstream multiplexer strategies, monitoring Null Packet displacement and GOP phase alignment.
+*   **Ecosystem Integration**: Providing high-density telemetry to downstream professional transcoders and decoders via bit-exact JSON/Prometheus interfaces.
 
 ---
 
-## 1. Product Line Definition
+## 1. System Architecture Overview
+
+```text
+    +-----------------------+
+    |   Network Ingress     | (10G/25G NIC via AF_XDP/DPDK)
+    +-----------+-----------+
+                |
+    +-----------v-----------+
+    |   TS SIMD Parser      | (AVX2/AVX-512 Vectorized)
+    +-----------+-----------+
+                |
+    +-----------v-----------+
+    |   Timing Engine       | (27MHz Software PLL / Metrology)
+    +-----------+-----------+
+                |
+    +-----------v-----------+
+    |   Analytics & Alarms  | (TR 101 290 / RCA / RST)
+    +-----------+-----------+
+                |
+    +-----------v-----------+
+    |   Metrics Dispatch    | (JSON / Prometheus / Webhook)
+    +-----------------------+
+```
+
+---
+
+## 2. Product Line Definition
 
 | Product | Target User | Role |
 | :--- | :--- | :--- |
@@ -41,27 +65,27 @@ Moving beyond syntax to understand the logic of multimedia delivery.
 
 ---
 
-## 2. Positioning & Vision
+## 3. Positioning & Vision
 
-### 2.1 TsAnalyzer Engine (The Brain)
+### 3.1 TsAnalyzer Engine (The Brain)
 A bit-exact, deterministic C library and CLI tool. It treats Transport Streams as physical entities, providing nanosecond-level clock reconstruction and strict ETSI TR 101 290 compliance. It is designed to be embedded into larger broadcast systems.
 
-### 2.2 TsAnalyzer Appliance (The Surface)
+### 3.2 TsAnalyzer Appliance (The Surface)
 A multi-channel server architecture that aggregates metrology from multiple Engines. It provides situational awareness through a 7-tier NOC dashboard, long-term SLA tracking, and Root Cause Analysis (RCA) inference.
 
-### 2.3 Smart Assurance Gateway (The Shield)
+### 3.3 Smart Assurance Gateway (The Shield)
 An inline processing node that monitors signal health in real-time and takes active measures (Pacing, Shaping, or Fail-safe Bypass) to preserve service continuity across unpredictable IP networks.
 
 ---
 
-## 3. Core Philosophical Pillars
+## 4. Core Philosophical Pillars
 1.  **Deterministic Measurement**: Identical input must yield bit-identical analytical results.
 2.  **Predictive Telemetry**: Use Buffer Safety Margins and Remaining Safe Time (RST) to alert *before* viewer impact.
 3.  **Causal Explainability**: Every fault must be attributable to either the Network or the Encoder via quantifiable scoring.
 
 ---
 
-## 4. Performance Targets (Scalability Model)
+## 5. Performance Targets (Scalability Model)
 
 | Total Streams | Average Bitrate | Aggregate Throughput | Target Hardware |
 | :--- | :--- | :--- | :--- |
@@ -72,7 +96,7 @@ An inline processing node that monitors signal health in real-time and takes act
 
 ---
 
-## 5. Industrial Verification Gates
+## 6. Industrial Verification Gates
 *   **G1 (Throughput)**: 1.0 Gbps - 10.0 Gbps aggregate throughput with zero kernel drops.
 *   **G2 (Metrology)**: 100% TR 101 290 P1/P2 coverage; ±10ns PCR jitter precision.
 *   **G3 (Determinism)**: MD5-consistent JSON output for identical PCAP input.
