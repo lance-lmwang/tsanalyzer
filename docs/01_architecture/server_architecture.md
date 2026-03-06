@@ -17,7 +17,7 @@ TsAnalyzer Appliance employs a **Side-Car Inspection** model to ensure that deep
 
 ## 2. Asynchronous Audit Pipelines
 
-Inspired by the modular architecture of `opensrthub`, TsAnalyzer v3 offloads compute-intensive content auditing to specialized asynchronous queues.
+TsAnalyzer v3 offloads compute-intensive content auditing to specialized asynchronous queues to maintain deterministic performance.
 
 ### 2.1 Sidecar Workers & Queues
 To maintain 10Gbps line-rate metrology, the engine uses a multi-queue handoff system:

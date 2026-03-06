@@ -4,11 +4,11 @@ TsAnalyzer is a tiered ecosystem of software-defined measurement and delivery to
 
 ## 1. Product Line Definition
 
-| Product | Target User | Role | Competitive Benchmark |
-| :--- | :--- | :--- | :--- |
-| **TsAnalyzer Engine** | Developers / SI | Extreme Performance Metrology Probe | TSDuck, ffprobe |
-| **TsAnalyzer Appliance** | NOC Operators | High-Density Monitoring Platform | BridgeTech VB330, Sencore |
-| **Smart Assurance Gateway**| Network Engineers | Inline Signal Repair & Fail-safe Relay | Zixi, OpenSrtHub |
+| Product | Target User | Role |
+| :--- | :--- | :--- |
+| **TsAnalyzer Engine** | Developers / SI | Extreme Performance Metrology Probe |
+| **TsAnalyzer Appliance** | NOC Operators | High-Density Monitoring Platform |
+| **Smart Assurance Gateway**| Network Engineers | Inline Signal Repair & Fail-safe Relay |
 
 ---
 

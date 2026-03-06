@@ -7,7 +7,7 @@ The SLA Engine aggregates incidents into long-term business metrics.
 Availability is defined as the percentage of time the service is free of **ACTIVE** Priority 1 faults.
 $$Availability \% = \frac{T_{window} - \sum T_{P1\_Incidents}}{T_{window}} \times 100$$
 
-## 2. Compliance Grading (The Sencore Model)
+## 2. Compliance Grading Model
 
 Streams are graded based on their 24-hour SLA performance:
 *   **Grade A**: 99.99% - 100% (Nominal)

@@ -1,6 +1,6 @@
 # Interactive HTML Forensic Reports
 
-To bridge the gap between bit-exact engineering data and high-level incident resolution, TsAnalyzer generates standalone, interactive HTML forensic reports (inspired by `libEasyIce` and `tsetr290`).
+To bridge the gap between bit-exact engineering data and high-level incident resolution, TsAnalyzer generates standalone, interactive HTML forensic reports.
 
 ---
 

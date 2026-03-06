@@ -40,7 +40,7 @@ The "Banner Truth" is determined by comparing the two scores.
 
 ## 3. Cross-Layer Correlation Logic
 
-To isolate faults with 99.9% certainty, the engine correlates transport-layer behavior with content-layer symptoms (inspired by `ltntstools`).
+To isolate faults with 99.9% certainty, the engine correlates transport-layer behavior with content-layer symptoms.
 
 ### 3.1 The Correlation Matrix
 | Transport Event | Content Symptom | Conclusion |

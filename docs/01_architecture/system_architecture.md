@@ -114,7 +114,7 @@ To eliminate OS context-switch overhead for massive stream counts:
 
 ## 7. Asynchronous Signaling Pipeline
 
-Inspired by the signaling architecture of `opensrthub`, TsAnalyzer v3 offloads all non-deterministic external communication to a dedicated thread pool.
+TsAnalyzer v3 offloads all non-deterministic external communication to a dedicated thread pool to ensure core timing integrity.
 
 ### 7.1 Dispatch Mechanism
 1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the **Signal Queue** (Lock-free MPMC).

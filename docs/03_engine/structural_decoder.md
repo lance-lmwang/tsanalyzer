@@ -4,7 +4,7 @@ Layer 2 performs protocol decomposition and content-layer sniffing without the o
 
 ## 1. Multi-Standard SI/PSI Engine
 
-Inspired by the universal parser logic of `TsDuck`, Layer 2 implements a generic table decomposition framework capable of handling DVB, ATSC, and ISDB standards.
+Layer 2 implements a generic table decomposition framework capable of handling DVB, ATSC, and ISDB standards.
 
 *   **Recursive Decomposition**: Tables are reassembled from sections across multiple packets.
 *   **Plug-and-Play Descriptors**: Utilizes a metadata registry to parse descriptors based on the detected standard (e.g., handling ATSC AC-3 descriptors vs. DVB AAC descriptors).

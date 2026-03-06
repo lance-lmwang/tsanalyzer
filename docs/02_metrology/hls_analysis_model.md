@@ -1,6 +1,6 @@
 # HLS & OTT Delivery Analysis Model
 
-To achieve industrial parity with tools like `libEasyIce`, TsAnalyzer extends its metrology beyond the Transport Stream into the HTTP Adaptive Streaming (HAS) layer.
+TsAnalyzer extends its metrology beyond the Transport Stream into the HTTP Adaptive Streaming (HAS) layer to provide full-stack visibility.
 
 ---
 
