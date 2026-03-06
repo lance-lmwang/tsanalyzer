@@ -48,6 +48,17 @@ The analyzer maps every frame detected by the `NALU Sniffer` into a temporal GOP
 *   **Analysis**: Sudden B-frame burst. Status: **WARNING**.
 *   **Impact**: Potential decoder buffer overflow or high playback latency.
 
-### 4.3 Switching Issue
-*   **Observation**: IDR Interval expected 2s, observed 6s.
-*   **Impact**: Slow channel zapping and DVR seek failures.
+---
+
+## 5. Real-time Frame Rate (FPS) Estimation
+
+TsAnalyzer calculates the frame rate of video streams by correlating GOP frame counts with physical arrival times.
+
+### 5.1 Calculation Logic
+Instead of relying on metadata flags (which can be incorrect), the engine measures the **Actual Observed FPS**:
+$$FPS = \frac{GOP\_Frame\_Count \times 1000}{GOP\_Duration\_ms}$$
+
+### 5.2 Metrics Hierarchy
+1.  **Exact FPS**: High-precision floating point value reported per PID (e.g., 23.976, 59.94).
+2.  **Cadence Jitter**: Fluctuations in the inter-frame duration that indicate unstable capture or encoding.
+3.  **Frame Rate Mismatch**: Alarm triggered if the observed FPS deviates from the signaled value in the Sequence Parameter Set (SPS).
