@@ -14,7 +14,7 @@
 #define PCR_TICKS_PER_MS (PCR_27MHZ_HZ / 1000)
 
 /**
- * TR 101 290 P1.1 (PCR_error) threshold: 
+ * TR 101 290 P1.1 (PCR_error) threshold:
  * The repetition interval of PCR shall be less than or equal to 40ms.
  * 40ms = 1,080,000 ticks at 27MHz.
  */
@@ -35,8 +35,8 @@ typedef struct {
     /* TR 101 290 Metrics */
     uint64_t pcr_interval_max_ticks; /* Maximum observed PCR repetition interval */
     double pcr_jitter_ms;            /* PCR Overall Jitter (PCR_OJ) in milliseconds */
-    
-    /* Alpha-Beta Filter for Drift Estimation 
+
+    /* Alpha-Beta Filter for Drift Estimation
      * filtered_offset: estimated ticks offset
      * filtered_rate: estimated ticks per nanosecond (nominal is 0.027)
      */
@@ -47,7 +47,7 @@ typedef struct {
     uint64_t pcr_count;
     uint32_t priority_1_errors;
       /* TR 101 290 1.1 (PCR_error) repetition violation count */
-    
+
     /* Discontinuity handling */
     bool pending_discontinuity;      /* Set if a discontinuity was detected, waiting for next PCR */
 } tsa_clock_inspector_t;
@@ -55,7 +55,7 @@ typedef struct {
 /**
  * Extracts and updates PCR state from a TS packet.
  * Handles discontinuity flags and PCR repetition interval checks.
- * 
+ *
  * @param packet 188-byte TS packet buffer.
  * @param inspector Pointer to the clock inspector instance for this PID.
  * @param now_ns Current local timestamp in nanoseconds.
@@ -63,7 +63,7 @@ typedef struct {
 void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns);
 
 /**
- * Resets the inspector state. Useful when a stream changes or 
+ * Resets the inspector state. Useful when a stream changes or
  * a discontinuity is explicitly signalled.
  */
 void tsa_clock_reset(tsa_clock_inspector_t *inspector);

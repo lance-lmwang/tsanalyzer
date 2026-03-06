@@ -93,7 +93,7 @@ static void* decode_thread(void* arg) {
         if (spsc_queue_pop(q_cap_to_dec, &pkt)) {
             if (pkt.timestamp_ns == 0) break;
             tsa_feed_data(h, pkt.data, 188, pkt.timestamp_ns);
-            pkt.stc_ns = h->stc_ns; 
+            pkt.stc_ns = h->stc_ns;
             while (g_keep_running && !spsc_queue_push(q_dec_to_met, &pkt)) backoff_sleep(backoff_cnt++);
             backoff_cnt = 0;
         } else {

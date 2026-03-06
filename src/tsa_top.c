@@ -2,7 +2,7 @@
  * @file tsa_top.c
  * @brief High-Density Terminal UI for TsAnalyzer Pro.
  *
- * Provides a real-time monitor using ncurses, reading metrics from 
+ * Provides a real-time monitor using ncurses, reading metrics from
  * shared memory with sequence-lock protection for data consistency.
  */
 
@@ -44,14 +44,14 @@ static void draw_stream_row(int row, int max_x, const tsa_top_stream_info_t* s) 
     snprintf(err_p123, sizeof(err_p123), "%lu/%lu/%lu", s->p1_errors, s->p2_errors, s->p3_errors);
     snprintf(flags, sizeof(flags), "%s%s", s->has_scte35 ? "S35 " : "", s->has_cea708 ? "CC " : "");
 
-    mvprintw(row, 0, "%-20.20s %7.2fM %9.1f%% %10lu %12s %5.1fms %5.1fms %8s", 
-             s->stream_id, s->current_bitrate_mbps, s->master_health, 
+    mvprintw(row, 0, "%-20.20s %7.2fM %9.1f%% %10lu %12s %5.1fms %5.1fms %8s",
+             s->stream_id, s->current_bitrate_mbps, s->master_health,
              s->cc_errors, err_p123, s->pcr_jitter_p99_ms, s->mdi_df_ms, flags);
     attroff(COLOR_PAIR(color_pair));
 
     /* Line 2: Deep Diagnostics & Metadata (Indented) */
     attron(COLOR_PAIR(6)); /* Magenta for Timing/Drift */
-    mvprintw(row + 1, 2, "RST(N/E): %5.1fs / %5.1fs  Drift(S/L): %5.1f / %5.1f ppm", 
+    mvprintw(row + 1, 2, "RST(N/E): %5.1fs / %5.1fs  Drift(S/L): %5.1f / %5.1f ppm",
              s->rst_net_s, s->rst_enc_s, s->drift_ppm, s->drift_long_ppm);
     attroff(COLOR_PAIR(6));
 
@@ -65,7 +65,7 @@ static void draw_stream_row(int row, int max_x, const tsa_top_stream_info_t* s) 
 int main(void) {
     int fd = shm_open(TSA_TOP_SHM_NAME, O_RDONLY, 0666);
     if (fd < 0) {
-        fprintf(stderr, "Error: Unable to access shared memory (%s). Ensure tsa_server_pro is running.\n", 
+        fprintf(stderr, "Error: Unable to access shared memory (%s). Ensure tsa_server_pro is running.\n",
                 TSA_TOP_SHM_NAME);
         return EXIT_FAILURE;
     }
@@ -102,7 +102,7 @@ int main(void) {
 
         /* Sequence Lock Check: Only read if data is stable (even) and new */
         uint64_t seq_start = atomic_load_explicit((_Atomic uint64_t*)&shm->seq_lock, memory_order_acquire);
-        
+
         if (seq_start != last_rendered_seq && (seq_start % 2 == 0)) {
             tsa_top_shm_block_t local;
             memcpy(&local, shm, sizeof(tsa_top_shm_block_t));
@@ -110,21 +110,21 @@ int main(void) {
             uint64_t seq_end = atomic_load_explicit((_Atomic uint64_t*)&shm->seq_lock, memory_order_acquire);
             if (seq_start == seq_end) {
                 last_rendered_seq = seq_start;
-                
+
                 int max_y, max_x;
                 getmaxyx(stdscr, max_y, max_x);
                 clear();
 
                 /* Render Banner */
                 attron(COLOR_PAIR(1) | A_BOLD);
-                mvprintw(0, 0, " TsAnalyzer Pro [Top] | Active Streams: %lu | System Health: %.1f%% ", 
+                mvprintw(0, 0, " TsAnalyzer Pro [Top] | Active Streams: %lu | System Health: %.1f%% ",
                          local.num_active_streams, local.global_health);
                 for (int i = getcurx(stdscr); i < max_x; i++) addch(' ');
                 attroff(COLOR_PAIR(1) | A_BOLD);
 
                 /* Render Header Labels */
                 attron(A_BOLD);
-                mvprintw(1, 0, "%-20s %10s %10s %10s %12s %8s %8s %8s", 
+                mvprintw(1, 0, "%-20s %10s %10s %10s %12s %8s %8s %8s",
                          "STREAM ID", "BITRATE", "HEALTH", "CC_ERR", "TR_P1/2/3", "PCR_JIT", "MDI_DF", "FLAGS");
                 attroff(A_BOLD);
 

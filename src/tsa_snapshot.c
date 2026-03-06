@@ -93,7 +93,7 @@ static void tsa_eval_pcr_drift(tsa_handle_t* h, double* out_sl, double* out_l_sl
     int64_t pa = 0;
     double sl = 1.0, ic_d = 0.0;
     const double Q64 = 18446744073709551616.0;
-    
+
     if (ts_pcr_window_regress(&h->pcr_window, &sl, &ic_d, &pa) == 0) {
         double instant_drift = (sl - 1.0) * 1000000.0;
         h->live->pcr_drift_ppm = (h->live->pcr_drift_ppm * 0.99) + (instant_drift * 0.01);
@@ -110,7 +110,7 @@ static void tsa_eval_pcr_drift(tsa_handle_t* h, double* out_sl, double* out_l_sl
         h->live->pcr_drift_ppm = 0.0;
         h->stc_wall_drift_ppm = 0.0;
     }
-    
+
     double l_sl = sl, l_ic = 0.0;
     int64_t l_pa = 0;
     if (ts_pcr_window_regress(&h->pcr_long_window, &l_sl, &l_ic, &l_pa) == 0) {
@@ -260,7 +260,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->predictive.stc_drift_slope = sl;
     sn->predictive.pcr_jitter_ns = h->live->pcr_jitter_max_ns;
     sn->predictive.stc_locked_bool = h->stc_locked ? 1 : 0;
-    
+
     sn->predictive.fault_domain = (cn > 0.6 && ce < 0.2)   ? 1
                                   : (ce > 0.6 && cn < 0.2) ? 2
                                   : (cn > 0.4 && ce > 0.4) ? 3

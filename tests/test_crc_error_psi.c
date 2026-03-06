@@ -31,7 +31,7 @@ void test_crc_error_pat() {
     tsa_decode_packet(h, pkt, 1000, &res);
     assert(h->seen_pat == true);
     assert(h->program_count == 2);
-    assert(h->pid_filters[0].last_version == 0);
+    assert(h->pid_filters[0].last_ver == 0);
 
     // Corrupted PAT (Version 1, but bad CRC)
     uint8_t pat_v1_bad[20] = {
@@ -48,7 +48,7 @@ void test_crc_error_pat() {
     // Should NOT have updated programs
     assert(h->program_count == 2);
     assert(h->programs[0].pmt_pid == 0x100);
-    assert(h->pid_filters[0].last_version == 0);
+    assert(h->pid_filters[0].last_ver == 0);
 
     tsa_destroy(h);
     printf("test_crc_error_pat passed\n");

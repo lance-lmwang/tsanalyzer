@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
             else write_video_pkt(p, &cc_v, (pkts % 1000 == 10), (stream_ns * 9) / 100000);
             pkts++;
         }
-        
+
         struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
         double elapsed = (now.tv_sec - start.tv_sec) * 1e9 + now.tv_nsec - start.tv_nsec;
         if (pkts * ns_per_pkt > elapsed) {

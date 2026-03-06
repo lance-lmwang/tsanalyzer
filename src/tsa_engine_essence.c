@@ -55,7 +55,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
 
                 const char* st = tsa_get_pid_type_name(h, pid);
                 bool is_video = (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0);
-                bool is_audio = (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || 
+                bool is_audio = (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 ||
                                  strcmp(st, "MPEG1-A") == 0 || strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0);
 
                 if (is_video) {
@@ -68,7 +68,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
                         h->live->av_sync_ms = (int32_t)((int64_t)h->last_v_pts - (int64_t)h->last_a_pts) / 90;
                 }
             }
-            
+
             if (h->pid_pes_buf[pid] == NULL && h->pes_pool_used < 32) {
                 h->pid_pes_buf[pid] = tsa_mem_pool_alloc(h, 65536);
                 h->pid_pes_cap[pid] = 65536;
@@ -83,7 +83,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
     }
 }
 
-static tsa_plugin_ops_t essence_ops = {
+tsa_plugin_ops_t essence_ops = {
     .name = "ESSENCE_ANALYSIS",
     .create = essence_create,
     .destroy = essence_destroy,

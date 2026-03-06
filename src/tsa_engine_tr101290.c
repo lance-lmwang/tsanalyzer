@@ -48,10 +48,10 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
             h->ignore_next_cc[pid] = false;
         } else {
             ts_cc_status_t s = cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
-            
+
             if (s == TS_CC_LOSS) {
                 h->pid_cc_error_suppression[pid]++;
-                if (h->pid_cc_error_suppression[pid] >= 3) { 
+                if (h->pid_cc_error_suppression[pid] >= 3) {
                     if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
                     h->live->cc_error.count++;
                     h->live->cc_error.last_timestamp_ns = now;
@@ -81,7 +81,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
     h->last_cc[pid] = res->cc;
 }
 
-static tsa_plugin_ops_t tr101290_ops = {
+tsa_plugin_ops_t tr101290_ops = {
     .name = "TR101290_CORE",
     .create = tr_create,
     .destroy = tr_destroy,

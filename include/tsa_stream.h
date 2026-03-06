@@ -38,8 +38,8 @@ int tsa_stream_detach(tsa_stream_t* parent, tsa_stream_t* child);
 void tsa_stream_send(tsa_stream_t* stream, const uint8_t* ts);
 
 // Reactive Demux APIs
-void tsa_stream_demux_set_callbacks(tsa_stream_t* stream, 
-                                    void (*join_pid)(void*, uint16_t), 
+void tsa_stream_demux_set_callbacks(tsa_stream_t* stream,
+                                    void (*join_pid)(void*, uint16_t),
                                     void (*leave_pid)(void*, uint16_t));
 void tsa_stream_demux_join_pid(tsa_stream_t* stream, uint16_t pid);
 void tsa_stream_demux_leave_pid(tsa_stream_t* stream, uint16_t pid);

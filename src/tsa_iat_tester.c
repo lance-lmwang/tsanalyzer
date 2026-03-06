@@ -1,6 +1,6 @@
 /*
  * tsa_iat_tester.c - Pure Network & CPU Scheduling Jitter Tester
- * 
+ *
  * Sends 7x188 null TS packets over UDP at precisely controlled intervals
  * to measure baseline OS scheduling and network layer jitter, completely
  * independent of TS payload parsing logic.

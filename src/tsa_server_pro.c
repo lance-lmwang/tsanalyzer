@@ -484,7 +484,7 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
 
     while (atomic_load(&g_run)) {
         mg_mgr_poll(mgr, 50);
-        
+
         // Global Heartbeat Sweeper: Enqueue inactive connections to trigger timeout analysis
         uint64_t now = (uint64_t)ts_now_ns128();
         int total = atomic_load(&g_conn_count);
@@ -523,20 +523,20 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
                         info->total_packets = snap.summary.total_packets;
                         info->current_bitrate_mbps = snap.summary.physical_bitrate_bps / 1000000.0;
                         info->master_health = snap.summary.master_health;
-                        
+
                         info->cc_errors = snap.stats.cc_loss_count + snap.stats.cc_duplicate_count;
                         info->p1_errors = snap.stats.alarm_sync_loss + snap.stats.alarm_pat_error + snap.stats.alarm_cc_error + snap.stats.alarm_pmt_error;
                         info->p2_errors = snap.stats.alarm_pcr_repetition_error + snap.stats.alarm_pcr_accuracy_error + snap.stats.alarm_crc_error;
                         info->p3_errors = snap.stats.alarm_sdt_error;
-                        
+
                         info->pcr_jitter_p99_ms = snap.stats.pcr_jitter_max_ns / 1000000.0;
                         info->mdi_df_ms = snap.stats.mdi_df_ms;
-                        
+
                         info->rst_net_s = snap.predictive.rst_network_s;
                         info->rst_enc_s = snap.predictive.rst_encoder_s;
                         info->drift_ppm = snap.predictive.stc_wall_drift_ppm;
                         info->drift_long_ppm = snap.predictive.long_term_drift_ppm;
-                        
+
                         for (uint32_t j = 0; j < snap.active_pid_count; j++) {
                             if (snap.pids[j].width > 0 && info->width == 0) {
                                 info->width = (double)snap.pids[j].width;
@@ -559,7 +559,7 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
             } else {
                 shm_block->global_health = 0.0;
             }
-            
+
             atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 2, memory_order_release); // Back to even
             last_shm_update = now;
         }

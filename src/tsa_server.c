@@ -54,7 +54,7 @@ static void *worker(void *arg) {
 
     while (atomic_load(&g_run)) {
         ssize_t len = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
-        
+
         struct timespec ts_now;
         clock_gettime(CLOCK_MONOTONIC, &ts_now);
         uint64_t now = (uint64_t)ts_now.tv_sec * 1000000000ULL + ts_now.tv_nsec;

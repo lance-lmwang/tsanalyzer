@@ -43,7 +43,7 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 
         // Update the ClockInspector
         tsa_clock_update(pkt, &h->clock_inspectors[pid], now);
-        
+
         // Sync metrics to snapshot
         h->live->pcr_jitter_max_ns = (uint64_t)(fabs(h->clock_inspectors[pid].pcr_jitter_ms) * 1000000.0);
         h->live->pcr_repetition_max_ms = h->clock_inspectors[pid].pcr_interval_max_ticks / (PCR_TICKS_PER_MS);
@@ -75,6 +75,7 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 
         if (h->last_pcr_ticks > 0) {
             uint64_t dt_ticks = (pt - h->last_pcr_ticks);
+            if (dt_ticks == 0) dt_ticks = 1;
             if (dt_ticks < ((uint64_t)1 << 41)) {
                 uint64_t interval_br = (h->pkts_since_pcr * 1504 * 27000000ULL) / dt_ticks;
                 if (h->live->pcr_bitrate_bps == 0)
@@ -89,7 +90,7 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
     }
 }
 
-static tsa_plugin_ops_t pcr_ops = {
+tsa_plugin_ops_t pcr_ops = {
     .name = "PCR_ANALYSIS",
     .create = pcr_create,
     .destroy = pcr_destroy,

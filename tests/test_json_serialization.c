@@ -21,7 +21,7 @@ int main() {
 
     tsa_config_t cfg = {0};
     tsa_handle_t *h = tsa_create(&cfg);
-    
+
     char buffer[4096];
     size_t len = tsa_snapshot_to_json(h, &snap, buffer, sizeof(buffer));
 

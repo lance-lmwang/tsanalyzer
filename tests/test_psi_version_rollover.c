@@ -31,7 +31,7 @@ void test_pat_version_rollover() {
     tsa_decode_packet(h, pkt, 1000, &res);
     assert(h->seen_pat == true);
     assert(h->program_count == 2);
-    assert(h->pid_filters[0].last_version == 0);
+    assert(h->pid_filters[0].last_ver == 0);
 
     // PAT Version 1 (Update program list)
     uint8_t pat_v1[20] = {0x00, 0xB0, 0x11, 0x00, 0x01, 0xC3, 0x00, 0x00,  // 0xC3 is version 1
@@ -46,7 +46,7 @@ void test_pat_version_rollover() {
     memcpy(pkt + 5, pat_v1, 20);
     tsa_decode_packet(h, pkt, 2000, &res);
 
-    assert(h->pid_filters[0].last_version == 1);
+    assert(h->pid_filters[0].last_ver == 1);
     assert(h->program_count == 2);
     assert(h->programs[0].pmt_pid == 0x300);  // Should be updated
     assert(h->programs[1].pmt_pid == 0x400);
@@ -63,14 +63,14 @@ void test_pat_version_rollover() {
     pkt[3] = 0x12;  // CC 2
     memcpy(pkt + 5, pat_v31, 20);
     tsa_decode_packet(h, pkt, 3000, &res);
-    assert(h->pid_filters[0].last_version == 31);
+    assert(h->pid_filters[0].last_ver == 31);
     assert(h->programs[0].pmt_pid == 0x500);
 
     // PAT Version 0 again (Rollover)
     pkt[3] = 0x13;  // CC 3
     memcpy(pkt + 5, pat_v0, 20);
     tsa_decode_packet(h, pkt, 4000, &res);
-    assert(h->pid_filters[0].last_version == 0);
+    assert(h->pid_filters[0].last_ver == 0);
     assert(h->programs[0].pmt_pid == 0x100);
 
     tsa_destroy(h);

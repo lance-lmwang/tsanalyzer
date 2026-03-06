@@ -8,106 +8,157 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     (void)now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     h->seen_pat = true;
-    h->program_count = 0;
     for (int i = 8; i < sl + 3 - 4; i += 4) {
-        uint16_t pn = (p[i] << 8) | p[i + 1], pp = ((p[i + 2] & 0x1F) << 8) | p[i + 3];
-        if (pn != 0 && h->program_count < MAX_PROGRAMS) {
-            h->pid_is_pmt[pp] = true;
-            h->live->pid_is_referenced[pp] = true;
-            h->programs[h->program_count].pmt_pid = pp;
-            h->programs[h->program_count].stream_count = 0;
-            h->program_count++;
+        uint16_t pn = (p[i] << 8) | p[i + 1];
+        uint16_t ppid = ((p[i + 2] & 0x1F) << 8) | p[i + 3];
+        if (pn != 0) {
+            bool found = false;
+            for (uint32_t j = 0; j < h->program_count; j++)
+                if (h->programs[j].program_number == pn) {
+                    h->programs[j].pmt_pid = ppid;
+                    found = true;
+                    break;
+                }
+            if (!found && h->program_count < MAX_PROGRAMS) {
+                h->programs[h->program_count].program_number = pn;
+                h->programs[h->program_count].pmt_pid = ppid;
+                h->program_count++;
+            }
+            if (ppid < TS_PID_MAX) h->pid_is_pmt[ppid] = true;
         }
     }
 }
 
-static void process_pmt(tsa_handle_t* h, uint16_t pmt_pid, const uint8_t* p, uint64_t now) {
+static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now) {
     (void)now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
+    uint16_t pn = (p[3] << 8) | p[4];
     uint16_t pcr = ((p[8] & 0x1F) << 8) | p[9];
-    int pi = ((p[10] & 0x0F) << 8) | p[11];
-    ts_program_info_t* pr = NULL;
-    for (uint32_t i = 0; i < h->program_count; i++)
-        if (h->programs[i].pmt_pid == pmt_pid) {
-            pr = &h->programs[i];
+    tsa_program_info_t* pr = NULL;
+    for (uint32_t j = 0; j < h->program_count; j++)
+        if (h->programs[j].program_number == pn) {
+            pr = &h->programs[j];
             break;
         }
+    if (!pr && h->program_count < MAX_PROGRAMS) {
+        pr = &h->programs[h->program_count++];
+        pr->program_number = pn;
+    }
     if (pr) {
-        for (uint32_t i = 0; i < pr->stream_count; i++) {
-            h->live->pid_is_referenced[pr->streams[i].pid] = false;
-            tsa_reset_pid_stats(h, pr->streams[i].pid);
-        }
+        pr->pmt_pid = pid;
         pr->pcr_pid = pcr;
-        if (!h->live->pid_is_referenced[pcr]) tsa_reset_pid_stats(h, pcr);
-        h->live->pid_is_referenced[pcr] = true;
+        if (pcr < TS_PID_MAX) {
+            if (!h->live->pid_is_referenced[pcr]) tsa_reset_pid_stats(h, pcr);
+            h->live->pid_is_referenced[pcr] = true;
+        }
         pr->stream_count = 0;
     }
+    int pi = ((p[10] & 0x0F) << 8) | p[11];
     for (int i = 12 + pi; i < sl + 3 - 4;) {
         uint8_t ty = p[i];
-        uint16_t pid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
+        uint16_t spid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
         int es = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        h->pid_stream_type[pid] = ty;
-        if (ty == 0x86) h->pid_is_scte35[pid] = true;
-        tsa_precompile_pid_labels(h, pid);
+        h->pid_stream_type[spid] = ty;
+        if (ty == 0x86) h->pid_is_scte35[spid] = true;
         if (pr && pr->stream_count < MAX_STREAMS_PER_PROG) {
-            pr->streams[pr->stream_count].pid = pid;
+            pr->streams[pr->stream_count].pid = spid;
             pr->streams[pr->stream_count].stream_type = ty;
             pr->stream_count++;
         }
-        if (!h->live->pid_is_referenced[pid]) tsa_reset_pid_stats(h, pid);
-        h->live->pid_is_referenced[pid] = true;
+        if (!h->live->pid_is_referenced[spid]) tsa_reset_pid_stats(h, spid);
+        h->live->pid_is_referenced[spid] = true;
+        tsa_precompile_pid_labels(h, spid);
         i += 5 + es;
-    }
-}
-
-static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
-    (void)now;
-    int sl = ((p[1] & 0x0F) << 8) | p[2];
-    if (sl < 10) return;
-
-    uint16_t network_descriptors_length = ((p[8] & 0x0F) << 8) | p[9];
-    const uint8_t* d = p + 10;
-    for (int j = 0; j < network_descriptors_length;) {
-        uint8_t tag = d[j];
-        uint8_t len = d[j + 1];
-        if (tag == 0x40) { // Network Name Descriptor
-            if (len < 255) {
-                memcpy(h->network_name, d + j + 2, len);
-                h->network_name[len] = '\0';
-            }
-        }
-        j += 2 + len;
     }
 }
 
 static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     (void)now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
-    if (sl < 8) return;
-
     for (int i = 11; i < sl + 3 - 4;) {
-        uint16_t descriptors_loop_length = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        const uint8_t* d = p + i + 5;
-        for (int j = 0; j < descriptors_loop_length;) {
-            uint8_t tag = d[j];
-            uint8_t len = d[j + 1];
-            if (tag == 0x48) {  // Service Descriptor
-                uint8_t provider_len = d[j + 3];
-                if (provider_len < 255) {
-                    memcpy(h->provider_name, d + j + 4, provider_len);
-                    h->provider_name[provider_len] = '\0';
-                }
-                uint8_t service_len = d[j + 4 + provider_len];
-                if (service_len < 255) {
-                    memcpy(h->service_name, d + j + 5 + provider_len, service_len);
-                    h->service_name[service_len] = '\0';
-                }
+        int esl = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
+        for (int j = i + 5; j < i + 5 + esl;) {
+            uint8_t dt = p[j], dl = p[j + 1];
+            if (dt == 0x48 && dl > 3) {
+                int nl = p[j + 3];
+                memcpy(h->provider_name, p + j + 4, (nl < 255) ? nl : 255);
+                h->provider_name[(nl < 255) ? nl : 255] = '\0';
+                int pnl = p[j + 4 + nl + 1];
+                memcpy(h->service_name, p + j + 4 + nl + 2, (pnl < 255) ? pnl : 255);
+                h->service_name[(pnl < 255) ? pnl : 255] = '\0';
             }
-            j += 2 + len;
+            j += 2 + dl;
         }
-        i += 5 + descriptors_loop_length;
-        break;  // Just process the first service for now
+        i += 5 + esl;
+        break;
     }
+}
+
+/* --- PID Management & Tracking --- */
+
+void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
+    if (!h || pid >= TS_PID_MAX) return;
+    const char* codec = tsa_get_pid_type_name(h, pid);
+    const char* type = "Other";
+    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0) type = "Video";
+    else if (strcmp(codec, "AAC") == 0 || strcmp(codec, "ADTS-AAC") == 0 || strcmp(codec, "MPEG1-A") == 0 ||
+               strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0) type = "Audio";
+    snprintf(h->pid_labels[pid], 128, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\",codec=\"%s\"}",
+             h->config.input_label[0] ? h->config.input_label : "unknown", pid, type, codec);
+}
+
+void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
+    h->pid_seen[pid] = false; h->live->pid_packet_count[pid] = 0; h->live->pid_bitrate_bps[pid] = 0;
+    h->live->pid_cc_errors[pid] = 0; h->pid_bitrate_min[pid] = 0; h->pid_bitrate_max[pid] = 0;
+    h->ignore_next_cc[pid] = false; h->pid_width[pid] = 0; h->pid_height[pid] = 0;
+    h->pid_profile[pid] = 0; h->pid_audio_sample_rate[pid] = 0; h->pid_audio_channels[pid] = 0;
+    h->pid_gop_n[pid] = 0; h->pid_gop_min[pid] = 0xFFFFFFFF; h->pid_gop_max[pid] = 0;
+    h->pid_gop_ms[pid] = 0; h->pid_last_idr_ns[pid] = 0; h->pid_frame_num_valid[pid] = false;
+    if (h->pid_pes_buf[pid]) h->pid_pes_len[pid] = 0;
+    h->pid_eb_fill_q64[pid] = 0; h->pid_tb_fill_q64[pid] = 0; h->pid_mb_fill_q64[pid] = 0;
+    h->live->pid_eb_fill_bytes[pid] = 0; h->live->pid_eb_fill_pct[pid] = 0;
+    h->last_buffer_leak_vstc[pid] = 0; h->pid_status[pid] = TSA_STATUS_VALID;
+}
+
+int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
+    int16_t idx = h->pid_to_active_idx[p];
+    if (idx == -1) {
+        if (h->pid_tracker_count < MAX_ACTIVE_PIDS) {
+            h->pid_active_list[h->pid_tracker_count] = p;
+            h->pid_to_active_idx[p] = h->pid_tracker_count;
+            idx = h->pid_tracker_count++;
+        } else {
+            int ev = -1;
+            for (int i = 0; i < MAX_ACTIVE_PIDS; i++) {
+                bool prot = false; uint16_t c = h->pid_active_list[i];
+                if (c <= 1 || h->pid_is_pmt[c]) prot = true;
+                else for (int j = 0; j < 16; j++) if (h->config.protected_pids[j] == c) { prot = true; break; }
+                if (!prot) { ev = i; break; }
+            }
+            if (ev == -1) ev = 0;
+            uint16_t ep = h->pid_active_list[ev]; h->pid_to_active_idx[ep] = -1;
+            tsa_reset_pid_stats(h, ep);
+            for (int i = ev; i < MAX_ACTIVE_PIDS - 1; i++) {
+                h->pid_active_list[i] = h->pid_active_list[i + 1];
+                h->pid_to_active_idx[h->pid_active_list[i]] = i;
+            }
+            h->pid_active_list[MAX_ACTIVE_PIDS - 1] = p;
+            h->pid_to_active_idx[p] = MAX_ACTIVE_PIDS - 1;
+            idx = MAX_ACTIVE_PIDS - 1;
+        }
+        h->pid_seen[p] = true;
+    }
+    if (idx != (int16_t)h->pid_tracker_count - 1) {
+        uint16_t cur = h->pid_active_list[idx];
+        for (uint32_t i = (uint32_t)idx; i < h->pid_tracker_count - 1; i++) {
+            h->pid_active_list[i] = h->pid_active_list[i + 1];
+            h->pid_to_active_idx[h->pid_active_list[i]] = i;
+        }
+        h->pid_active_list[h->pid_tracker_count - 1] = cur;
+        h->pid_to_active_idx[cur] = h->pid_tracker_count - 1;
+        idx = h->pid_tracker_count - 1;
+    }
+    return idx;
 }
 
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
@@ -115,118 +166,41 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
     ts_section_filter_t* f = &h->pid_filters[pid];
     const uint8_t* payload = pkt + 4 + res->af_len;
     int len = res->payload_len;
-
     if (res->pusi) {
-        uint8_t pointer = payload[0];
-        if (pointer + 1 > len) return;
-
-        // Optimization: Fast-path for single-packet sections
-        // If pointer is 0 and the whole section fits in this packet, 
-        // we can process it directly if it's not currently reassembling.
-        if (pointer == 0 && !f->active) {
-            int section_len = ((payload[2] & 0x0F) << 8) | payload[3];
-            if (section_len + 3 <= len - 1) {
-                // Entire section is in this packet
-                const uint8_t* full_section = payload + 1;
-                
-                bool is_long = (full_section[1] & 0x80);
-                uint8_t ver = is_long ? ((full_section[5] & 0x3E) >> 1) : 0xFF;
-                
-                if (is_long && f->seen_before && f->last_version == ver && f->table_id == full_section[0]) {
-                    return;
-                }
-
-                if (tsa_crc32_check(full_section, section_len + 3) == 0) {
-                    if (full_section[0] == 0xFC) {
-                    tsa_scte35_process(h, pid, full_section, section_len + 3);
-                } else {
-                        if (pid == 0) process_pat(h, full_section, h->stc_ns);
-                        else if (h->pid_is_pmt[pid]) process_pmt(h, pid, full_section, h->stc_ns);
-                        else if (pid == 0x11) process_sdt(h, full_section, h->stc_ns);
-                        f->last_version = ver;
-                        f->seen_before = true;
-                        f->table_id = full_section[0];
-                    }
-                } else {
-                    h->live->crc_error.count++;
-                    tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
-                }
-                return;
+        int pointer = payload[0];
+        if (pointer + 1 < len) {
+            if (f->active && f->len > 0) {
+                memcpy(f->buffer + f->len, payload + 1, pointer);
+                f->len += pointer; f->complete = true;
             }
+            f->active = true; f->len = len - 1 - pointer;
+            memcpy(f->buffer, payload + 1 + pointer, f->len);
         }
-
-        if (f->active && !f->complete && pointer > 0) {
-            int to_copy = (pointer < (f->section_length + 3 - f->assembled_len))
-                              ? pointer
-                              : (f->section_length + 3 - f->assembled_len);
-            memcpy(f->payload + f->assembled_len, payload + 1, to_copy);
-            f->assembled_len += to_copy;
-            if (f->assembled_len >= f->section_length + 3) f->complete = true;
-        }
-
-        payload += 1 + pointer;
-        len -= 1 + pointer;
-        if (len < 3) {
-            f->active = false;
-            return;
-        }
-
-        f->table_id = payload[0];
-        f->section_length = ((payload[1] & 0x0F) << 8) | payload[2];
-        if (f->section_length > 4093) {
-            f->active = false;
-            return;
-        }
-
-        f->assembled_len = 0;
-        int to_copy = (len < f->section_length + 3) ? len : f->section_length + 3;
-        memcpy(f->payload, payload, to_copy);
-        f->assembled_len = to_copy;
-        f->active = true;
-        f->complete = (f->assembled_len >= f->section_length + 3);
-    } else if (f->active && !f->complete) {
-        int need = (f->section_length + 3) - f->assembled_len;
-        int to_copy = (len < need) ? len : need;
-        memcpy(f->payload + f->assembled_len, payload, to_copy);
-        f->assembled_len += to_copy;
-        if (f->assembled_len >= f->section_length + 3) f->complete = true;
+    } else if (f->active) {
+        if (f->len + len < 4096) {
+            memcpy(f->buffer + f->len, payload, len);
+            f->len += len;
+        } else f->active = false;
     }
-
+    if (f->active && f->len >= 3) {
+        int sl = ((f->buffer[1] & 0x0F) << 8) | f->buffer[2];
+        if (f->len >= (uint32_t)sl + 3) f->complete = true;
+    }
     if (f->complete) {
-        // Fast Version Check: 
-        // For long-form sections (PAT, PMT, SDT), the version_number is in byte 5.
-        // Bit format: | reserved (2) | version_number (5) | current_next_indicator (1) |
-        bool is_long_section = (f->payload[1] & 0x80);
-        uint8_t ver = is_long_section ? ((f->payload[5] & 0x3E) >> 1) : 0xFF;
-        
-        if (is_long_section && f->seen_before && f->last_version == ver && f->table_id == f->payload[0]) {
-            // Skip redundant CRC and processing
-            f->active = false;
-            f->complete = false;
-            return;
-        }
-
-        if (tsa_crc32_check(f->payload, f->section_length + 3) == 0) {
-            f->version_number = ver;
-            if (f->table_id == 0xFC) {
-                tsa_scte35_process(h, pid, f->payload, f->section_length + 3);
-            } else {
-                if (pid == 0)
-                    process_pat(h, f->payload, h->stc_ns);
-                else if (h->pid_is_pmt[pid])
-                    process_pmt(h, pid, f->payload, h->stc_ns);
-                else if (pid == 0x10)
-                    process_nit(h, f->payload, h->stc_ns);
-                else if (pid == 0x11)
-                    process_sdt(h, f->payload, h->stc_ns);
-                f->last_version = ver;
-                f->seen_before = true;
+        uint32_t crc = tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
+        if (crc == 0) {
+            uint8_t tid = f->buffer[0];
+            uint8_t ver = (f->buffer[5] >> 1) & 0x1F;
+            if (!f->seen_before || f->last_ver != ver) {
+                if (tid == 0x00) process_pat(h, f->buffer, h->stc_ns);
+                else if (tid == 0x02) process_pmt(h, pid, f->buffer, h->stc_ns);
+                else if (tid == 0x42) process_sdt(h, f->buffer, h->stc_ns);
+                f->last_ver = ver; f->seen_before = true;
             }
         } else {
             h->live->crc_error.count++;
             tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
         }
-        f->active = false;
-        f->complete = false;
+        f->active = false; f->complete = false;
     }
 }

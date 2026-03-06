@@ -7,7 +7,7 @@
  * Input 'p' should point directly to the 6-byte PCR field in the AF.
  */
 static uint64_t parse_pcr_27mhz(const uint8_t *p) {
-    uint64_t base = ((uint64_t)p[0] << 25) | ((uint64_t)p[1] << 17) | 
+    uint64_t base = ((uint64_t)p[0] << 25) | ((uint64_t)p[1] << 17) |
                     ((uint64_t)p[2] << 9) | ((uint64_t)p[3] << 1) | (p[4] >> 7);
     uint16_t ext = ((uint16_t)(p[4] & 0x01) << 8) | p[5];
     return base * 300 + ext;
@@ -38,10 +38,10 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
         inspector->first_pcr_local_ns = now_ns;
         inspector->last_pcr_val = current_pcr;
         inspector->last_pcr_local_ns = now_ns;
-        
+
         inspector->filtered_offset = 0;
         inspector->filtered_rate = 0.027; // 27MHz / 1e9 ns
-        
+
         inspector->initialized = true;
         inspector->pcr_count = 1;
         inspector->pending_discontinuity = false;
@@ -49,10 +49,10 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
     }
 
     /* 5. PCR Interval (TR 101 290 P1.1) */
-    uint64_t interval = (current_pcr >= inspector->last_pcr_val) ? 
-                        (current_pcr - inspector->last_pcr_val) : 
+    uint64_t interval = (current_pcr >= inspector->last_pcr_val) ?
+                        (current_pcr - inspector->last_pcr_val) :
                         (current_pcr + (PCR_MAX_VALUE - inspector->last_pcr_val));
-    
+
     if (interval > TR101290_P1_1_THRESHOLD_TICKS) {
         inspector->priority_1_errors++;
     }
@@ -67,22 +67,22 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
     if (dt_ns > 0) {
         // Prediction
         double predicted_pcr_incr = (inspector->filtered_rate * dt_ns);
-        
+
         // Measurement
         double actual_incr = (current_pcr >= inspector->last_pcr_val) ?
                                (double)(current_pcr - inspector->last_pcr_val) :
                                (double)(current_pcr + (PCR_MAX_VALUE - inspector->last_pcr_val));
-        
+
         // Innovation (Residual)
         double residual = actual_incr - predicted_pcr_incr;
-        
+
         // Alpha-Beta Update (tuned for stability)
         (void)0; // const double alpha = 0.05;
         const double beta = 0.005;
-        
+
         // Update estimate
         inspector->filtered_rate += (beta / dt_ns) * residual;
-        
+
         // Jitter is the deviation from the expected arrival
         double instant_jitter_ms = residual / PCR_TICKS_PER_MS;
         inspector->pcr_jitter_ms = (inspector->pcr_jitter_ms * 0.9) + (instant_jitter_ms * 0.1);

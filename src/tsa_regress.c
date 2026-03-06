@@ -9,7 +9,7 @@ int ts_pcr_window_regress(ts_pcr_window_t* w, double* out_slope, double* out_int
 
     uint32_t n = w->count;
     double avg_x = 0, avg_y = 0;
-    
+
     /* 1. Scale to Seconds to avoid float64 precision collapse with large ns values */
     for (uint32_t k = 0; k < n; k++) {
         uint32_t idx = (w->head - n + k + w->size) % w->size;

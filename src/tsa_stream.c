@@ -20,10 +20,10 @@ void tsa_stream_destroy(tsa_stream_t* stream) {
 int tsa_stream_attach(tsa_stream_t* parent, tsa_stream_t* child) {
     if (!parent || !child) return -1;
     if (parent->child_count >= TSA_MAX_STREAM_CHILDREN) return -1;
-    
+
     parent->children[parent->child_count++] = child;
     child->parent = parent;
-    
+
     // When attaching, child might need to inform parent about its existing PIDs
     for (int i = 0; i < TSA_MAX_PID; ++i) {
         if (child->pid_list[i] > 0) {
@@ -33,7 +33,7 @@ int tsa_stream_attach(tsa_stream_t* parent, tsa_stream_t* child) {
             }
         }
     }
-    
+
     return 0;
 }
 
@@ -47,7 +47,7 @@ int tsa_stream_detach(tsa_stream_t* parent, tsa_stream_t* child) {
                     parent->leave_pid(parent->self, p);
                 }
             }
-            
+
             // Shift array
             for (int j = i; j < parent->child_count - 1; ++j) {
                 parent->children[j] = parent->children[j + 1];
@@ -70,8 +70,8 @@ void tsa_stream_send(tsa_stream_t* stream, const uint8_t* ts) {
     }
 }
 
-void tsa_stream_demux_set_callbacks(tsa_stream_t* stream, 
-                                    void (*join_pid)(void*, uint16_t), 
+void tsa_stream_demux_set_callbacks(tsa_stream_t* stream,
+                                    void (*join_pid)(void*, uint16_t),
                                     void (*leave_pid)(void*, uint16_t)) {
     if (!stream) return;
     stream->join_pid = join_pid;
@@ -80,7 +80,7 @@ void tsa_stream_demux_set_callbacks(tsa_stream_t* stream,
 
 void tsa_stream_demux_join_pid(tsa_stream_t* stream, uint16_t pid) {
     if (!stream || pid >= TSA_MAX_PID) return;
-    
+
     stream->pid_list[pid]++;
     if (stream->pid_list[pid] == 1 && stream->parent && stream->parent->join_pid) {
         stream->parent->join_pid(stream->parent->self, pid);
@@ -89,7 +89,7 @@ void tsa_stream_demux_join_pid(tsa_stream_t* stream, uint16_t pid) {
 
 void tsa_stream_demux_leave_pid(tsa_stream_t* stream, uint16_t pid) {
     if (!stream || pid >= TSA_MAX_PID) return;
-    
+
     if (stream->pid_list[pid] > 0) {
         stream->pid_list[pid]--;
         if (stream->pid_list[pid] == 0 && stream->parent && stream->parent->leave_pid) {

@@ -62,7 +62,7 @@ endif()
 
 include_directories(include)
 
-add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c)
+add_library(tsp_core STATIC src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c)
 target_link_libraries(tsp_core ${SRT_LIBRARY} ${PCAP_LINK_LIBS} pthread m dl ssl crypto)
 
 add_executable(tsp src/tsp_main.c)

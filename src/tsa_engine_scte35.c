@@ -34,10 +34,10 @@ static tsa_stream_t* scte35_get_stream(void* engine) {
 static void scte35_on_ts(void* self, const uint8_t* pkt) {
     scte35_engine_t* e = (scte35_engine_t*)self;
     const ts_decode_result_t* r = &e->h->current_res;
-    
+
     if (r->pid == 0x1FC || e->h->pid_is_scte35[r->pid]) {
-        // Here we'd call the existing tsa_scte35_process, 
-        // but it needs a gathered section. 
+        // Here we'd call the existing tsa_scte35_process,
+        // but it needs a gathered section.
         // This is where the modularity shines: the engine can have its own section filter.
     }
 }

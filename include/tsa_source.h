@@ -22,7 +22,7 @@ typedef struct {
      * @param count Number of 188-byte packets in the buffer.
      */
     void (*on_packets)(void* user_data, const uint8_t* pkts, int count, uint64_t now_ns);
-    
+
     /**
      * Called on source errors or status changes (e.g., EOF, connection lost).
      */

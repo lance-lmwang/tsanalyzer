@@ -27,16 +27,16 @@ struct tsa_source {
     bool pacing;
     tsa_source_callbacks_t cbs;
     void* user_data;
-    
+
     tsa_reactor_t* reactor;
     tsa_reactor_event_t ev;
-    
+
     pthread_t thread;
     volatile bool running;
-    
+
     uint64_t first_pkt_ns;
     uint64_t first_wall_ns;
-    
+
     union {
         int udp_fd;
         SRTSOCKET srt_sock;
@@ -61,7 +61,7 @@ static int get_rtp_header_len(const uint8_t* p, int len) {
 
 static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, const u_char *pkt) {
     tsa_source_t* src = (tsa_source_t*)user;
-    
+
     // Pacing Logic: Simulate original capture speed
     uint64_t pkt_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
     if (src->pacing) {
@@ -73,7 +73,7 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
             uint64_t wall_elapsed = (uint64_t)ts_now_ns128() - src->first_wall_ns;
             if (stream_elapsed > wall_elapsed) {
                 uint64_t delay_us = (stream_elapsed - wall_elapsed) / 1000;
-                if (delay_us > 1000000) delay_us = 1000000; 
+                if (delay_us > 1000000) delay_us = 1000000;
                 usleep(delay_us);
             }
         }
@@ -83,22 +83,22 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
     int link_type = pcap_datalink(src->handle.pcap_hdl);
 
     if (link_type == DLT_EN10MB) {
-        offset = 14; 
+        offset = 14;
         if (h->caplen < 14) return;
         uint16_t eth_type = ntohs(*(uint16_t *)(pkt + 12));
         if (eth_type == 0x8100) {
             if (h->caplen < 18) return;
-            offset += 4; 
+            offset += 4;
         }
     } else if (link_type == DLT_NULL) {
         offset = 4;
     } else if (link_type == 113) {
         offset = 16;
     } else {
-        return; 
+        return;
     }
 
-    if (h->caplen < offset + 20 + 8) return; 
+    if (h->caplen < offset + 20 + 8) return;
 
     struct iphdr *ip = (struct iphdr *)(pkt + offset);
     if (ip->version != 4 || ip->protocol != IPPROTO_UDP) return;
@@ -109,7 +109,7 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
     struct udphdr *udp = (struct udphdr *)(pkt + offset + ip_hdr_len);
     uint8_t *payload = (uint8_t *)udp + 8;
     int payload_len = ntohs(udp->len) - 8;
-    
+
     if (payload_len <= 0 || (offset + ip_hdr_len + 8 + payload_len) > (int)h->caplen) return;
 
     uint64_t now_ns = (uint64_t)h->ts.tv_sec * 1000000000ULL + h->ts.tv_usec * 1000ULL;
@@ -127,7 +127,7 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
 static void* pcap_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
     bool is_offline = strstr(src->url, ".pcap") != NULL;
-    
+
     while (src->running) {
         int ret = pcap_dispatch(src->handle.pcap_hdl, 100, pcap_packet_callback, (u_char*)src);
         if (ret < 0) {
@@ -148,7 +148,7 @@ static void* pcap_thread(void* arg) {
             usleep(1000);
         }
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
+    src->cbs.on_packets(src->user_data, NULL, 0, 0);
     return NULL;
 }
 #endif
@@ -197,7 +197,7 @@ static void* file_thread(void* arg) {
             break;
         }
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
+    src->cbs.on_packets(src->user_data, NULL, 0, 0);
     return NULL;
 }
 
@@ -207,7 +207,7 @@ static void* udp_thread(void* arg) {
     while (src->running) {
         ssize_t n = recv(src->handle.udp_fd, buf, sizeof(buf), 0);
         if (n > 0) {
-            uint64_t now = 0; 
+            uint64_t now = 0;
             int count = n / 188;
             if (count > 0) {
                 src->cbs.on_packets(src->user_data, buf, count, now);
@@ -218,7 +218,7 @@ static void* udp_thread(void* arg) {
         }
         if (n <= 0) usleep(1000);
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
+    src->cbs.on_packets(src->user_data, NULL, 0, 0);
     return NULL;
 }
 
@@ -239,7 +239,7 @@ static void* srt_thread(void* arg) {
         }
         if (n <= 0) usleep(1000);
     }
-    src->cbs.on_packets(src->user_data, NULL, 0, 0); 
+    src->cbs.on_packets(src->user_data, NULL, 0, 0);
     return NULL;
 }
 
@@ -291,7 +291,7 @@ int tsa_source_start(tsa_source_t* src) {
         src->handle.udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
         struct sockaddr_in sa = {0};
         sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = INADDR_ANY; 
+        sa.sin_addr.s_addr = INADDR_ANY;
         sa.sin_port = htons(port);
         if (bind(src->handle.udp_fd, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
             fprintf(stderr, "Source: Failed to bind UDP to port %d: %s\n", port, strerror(errno));
@@ -299,7 +299,7 @@ int tsa_source_start(tsa_source_t* src) {
             return -1;
         }
         fcntl(src->handle.udp_fd, F_SETFL, O_NONBLOCK);
-        
+
         if (src->reactor) {
             src->ev.fd = src->handle.udp_fd;
             src->ev.on_read = udp_on_read;

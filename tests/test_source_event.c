@@ -31,7 +31,7 @@ static void* reactor_thread(void* arg) {
 
 void test_source_with_reactor() {
     printf("Testing Source with Reactor Event Loop...\n");
-    
+
     tsa_reactor_t* reactor = tsa_reactor_create();
     assert(reactor != NULL);
 
@@ -83,7 +83,7 @@ void test_source_with_reactor() {
     tsa_source_stop(src);
     tsa_source_destroy(src);
     tsa_reactor_destroy(reactor);
-    
+
     printf("Source with Reactor OK.\n");
 }
 
