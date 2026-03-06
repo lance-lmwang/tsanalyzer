@@ -38,5 +38,29 @@ The "Banner Truth" is determined by comparing the two scores.
 
 ---
 
-## 3. Explainability Audit
+## 3. Cross-Layer Correlation Logic
+
+To isolate faults with 99.9% certainty, the engine correlates transport-layer behavior with content-layer symptoms (inspired by `ltntstools`).
+
+### 3.1 The Correlation Matrix
+| Transport Event | Content Symptom | Conclusion |
+| :--- | :--- | :--- |
+| **SRT RTT Spike** | **PCR Jitter Increase** | **Network Congestion**: Jitter is a byproduct of transport latency. |
+| **Stable RTT/MLR**| **PCR Jitter Increase** | **Encoder Fault**: Clock instability is originating at the source. |
+| **UDP Burst Loss** | **GOP Discontinuity** | **Signal Degradation**: Packet loss destroyed structural integrity. |
+| **Zero Loss** | **Entropy Variance -> 0** | **Source Freeze**: The encoder is producing static/repeated frames. |
+
+---
+
+## 4. Machine Learning Ready (MLR) Data Streams
+
+TsAnalyzer v3 targets automated predictive maintenance by providing high-density, structured data streams for external AI models.
+
+1.  **Metric Serialization**: Every 100ms, a full state vector is pushed to the Metrics Bus.
+2.  **Feature Engineering**: Raw metrics (e.g., Jitter) are pre-calculated into statistical derivatives (Moving Variance, Kurtosis, Skewness).
+3.  **Labeling**: Real-time alarm states serve as "Ground Truth" labels for training failure-prediction models.
+
+---
+
+## 5. Explainability Audit
 For every RCA decision, the engine exposes the weighted factors in the JSON report, allowing engineers to verify *why* the system made a particular attribution.

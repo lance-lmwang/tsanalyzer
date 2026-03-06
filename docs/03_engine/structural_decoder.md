@@ -2,11 +2,23 @@
 
 Layer 2 performs protocol decomposition and content-layer sniffing without the overhead of full decoding.
 
-## 1. Fast PSI/SI Parsing
+## 1. Multi-Standard SI/PSI Engine
 
-The engine parses the full DVB/MPEG table set (PAT, PMT, NIT, SDT, CAT, EIT).
+Inspired by the universal parser logic of `TsDuck`, Layer 2 implements a generic table decomposition framework capable of handling DVB, ATSC, and ISDB standards.
+
 *   **Recursive Decomposition**: Tables are reassembled from sections across multiple packets.
+*   **Plug-and-Play Descriptors**: Utilizes a metadata registry to parse descriptors based on the detected standard (e.g., handling ATSC AC-3 descriptors vs. DVB AAC descriptors).
 *   **Version Tracking**: To save CPU, the engine uses a fast-path version check. If the `version_number` remains unchanged, the engine skips redundant parsing and CRC32 checks.
+
+### 1.1 Support Matrix
+| Standard | Critical Tables | Status |
+| :--- | :--- | :--- |
+| **DVB** | PAT, PMT, SDT, NIT, EIT, CAT | Full Support |
+| **ATSC** | PAT, PMT, MGT, TVCT, CVCT | Planned |
+| **ISDB** | PAT, PMT, NIT, SDT (ARIB) | Planned |
+
+---
+
 ## 2. Branchless TS Parser (Fast Path)
 
 To achieve 10 Gbps (8.3M PPS), the TS packet header parser must execute in ≤ 40 CPU cycles. v3 utilizes branchless logic to avoid pipeline stalls.

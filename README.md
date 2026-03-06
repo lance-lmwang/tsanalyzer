@@ -22,6 +22,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[PCR Root Cause Engine](./docs/02_metrology/pcr_root_cause.md)**: Distinguishing Encoder vs. Network jitter.
 *   **[GOP Structure Analyzer](./docs/02_metrology/gop_analysis.md)**: Content-layer GOP stability and IDR auditing.
 *   **[Entropy Analyzer](./docs/02_metrology/entropy_analysis.md)**: Information density and freeze/black frame detection.
+*   **[HLS/OTT Model](./docs/02_metrology/hls_analysis_model.md)**: Manifest auditing and fragment download metrology.
 *   **[RST+ & Safety Models](./docs/02_metrology/rst_model.md)**: Predictive telemetry and buffer safety margins.
 
 ### 🧠 Pillar 3: Analytics & Intelligence
@@ -37,6 +38,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 ### 🔌 Pillar 5: Interfaces & Validation
 *   **[REST API](./docs/06_interfaces/rest_api.md)** | **[Prometheus](./docs/06_interfaces/prometheus.md)** | **[CLI (tsa_top)](./docs/06_interfaces/cli.md)**
+*   **[HTML Forensic Reports](./docs/06_interfaces/forensic_reports.md)**: Portable, interactive incident audit trails.
 *   **[Performance Targets](./docs/07_validation/performance_targets.md)**: Success gates and engineering verification.
 
 ---
