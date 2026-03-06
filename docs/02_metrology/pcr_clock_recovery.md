@@ -11,8 +11,17 @@ In MPEG Transport Streams, the Program Clock Reference (PCR) values appear only 
 ### 1.1 42-bit PCR Reconstruction
 To ensure precision, the full 27MHz timeline is reconstructed using 64-bit integer arithmetic:
 $$PCR_{total} = (PCR_{base} \times 300) + PCR_{ext}$$
-*   $PCR_{base}$: 33-bit 90kHz base.
-*   $PCR_{ext}$: 9-bit 27MHz remainder.
+
+**Implementation Reference**:
+```c
+uint64_t parse_pcr(uint8_t *af) {
+    uint64_t base = ((uint64_t)af[0] << 25) | ((uint64_t)af[1] << 17) |
+                    ((uint64_t)af[2] << 9)  | ((uint64_t)af[3] << 1)  |
+                    ((uint64_t)af[4] >> 7);
+    uint16_t ext  = ((af[4] & 1) << 8) | af[5];
+    return base * 300 + ext; // 27 MHz ticks
+}
+```
 
 ### 1.2 Q64.64 Fixed-Point Mandate
 All slope and clock calculations MUST use **Q64.64 Fixed-Point Arithmetic** to ensure bit-identical results across architectures and prevent rounding error accumulation over 24h+ runs.
