@@ -24,7 +24,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[Entropy Analyzer](./docs/02_metrology/entropy_analysis.md)**: Information density and freeze/black frame detection.
 *   **[StatMux Detection](./docs/02_metrology/statmux_analysis.md)**: Reverse-engineering multiplexer strategies.
 *   **[HLS/OTT Model](./docs/02_metrology/hls_analysis_model.md)**: Manifest auditing and fragment download metrology.
-*   **[RST+ & Safety Models](./docs/02_metrology/rst_model.md)**: Predictive telemetry and buffer safety margins.
+*   **[T-STD Buffer Model](./docs/02_metrology/tstd_buffer_model.md)**: Predictive telemetry and buffer safety margins.
 
 ### 🧠 Pillar 3: Analytics & Intelligence
 *   **[Alarm & Incident Engine](./docs/04_operations/alarm_engine.md)**: FSM lifecycles, suppression, and incident merging.
