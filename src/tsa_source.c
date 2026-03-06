@@ -246,7 +246,7 @@ static void* srt_thread(void* arg) {
 tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port, const tsa_source_callbacks_t* cbs, void* user_data) {
     tsa_source_t* src = calloc(1, sizeof(tsa_source_t));
     src->type = type;
-    strncpy(src->url, url, sizeof(src->url)-1);
+    if (url) strncpy(src->url, url, sizeof(src->url)-1);
     if (filter_ip) strncpy(src->filter_ip, filter_ip, sizeof(src->filter_ip)-1);
     src->filter_port = filter_port;
     src->cbs = *cbs;
@@ -286,8 +286,11 @@ int tsa_source_start(tsa_source_t* src) {
     if (!src) return -1;
     src->running = true;
     if (src->type == TSA_SOURCE_UDP) {
-        char* p = strrchr(src->url, ':');
-        int port = p ? atoi(p + 1) : 1234;
+        int port = src->filter_port;
+        if (port == 0) {
+            char* p = strrchr(src->url, ':');
+            port = p ? atoi(p + 1) : 1234;
+        }
         src->handle.udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
         struct sockaddr_in sa = {0};
         sa.sin_family = AF_INET;

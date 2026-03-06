@@ -11,7 +11,7 @@
 int128_t ts_now_ns128(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (int128_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+    return (int128_t)ts.tv_sec * NS_PER_SEC + ts.tv_nsec;
 }
 #include <stdio.h>
 #include <stdlib.h>
@@ -348,11 +348,11 @@ void tsa_forensic_generate_json(tsa_handle_t* h, char* b, size_t s) {
 /* --- 6. Time Utilities --- */
 
 int128_t ts_time_to_ns128(struct timespec ts) {
-    return (int128_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+    return (int128_t)ts.tv_sec * NS_PER_SEC + ts.tv_nsec;
 }
 struct timespec ns128_to_timespec(int128_t ns) {
     struct timespec ts;
-    ts.tv_sec = (time_t)(ns / 1000000000ULL);
-    ts.tv_nsec = (long)(ns % 1000000000ULL);
+    ts.tv_sec = (time_t)(ns / NS_PER_SEC);
+    ts.tv_nsec = (long)(ns % NS_PER_SEC);
     return ts;
 }

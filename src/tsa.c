@@ -108,6 +108,8 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->pool_size = 1024 * 1024 + 32 * 65536;
     if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
 
+    memset(h->network_name, 0, 256); memset(h->service_name, 0, 256); memset(h->provider_name, 0, 256);
+
     for (int i = 0; i < TS_PID_MAX; i++) {
         h->pid_to_active_idx[i] = -1;
         h->pid_gop_min[i] = 0xFFFFFFFF;
@@ -116,10 +118,10 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->last_cc[i] = 0x10;
     }
     h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
+    h->last_health_score = 100.0f;
     h->last_pcr_ticks = INVALID_PCR;
     h->stc_slope_q64 = ((int128_t)1 << 64);
 
-    /* Register default plugins */
     tsa_plugin_register(&tsa_scte35_engine);
     tsa_plugin_register(&tr101290_ops);
     tsa_plugin_register(&codec_ops);
@@ -246,10 +248,9 @@ void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64
 
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     if (!h || !p) return;
-    uint64_t start = (uint64_t)ts_now_ns128();
     if (!h->engine_started) {
         h->start_ns = n; h->engine_started = true; h->last_snap_ns = n;
-        h->last_pcr_arrival_ns = n; h->stc_ns = n;
+        h->last_snap_wall_ns = n; h->last_pcr_arrival_ns = n; h->stc_ns = n;
     }
     if (p[0] != 0x47) {
         h->consecutive_sync_errors++; h->consecutive_good_syncs = 0;
@@ -262,47 +263,43 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
         h->consecutive_good_syncs++; h->consecutive_sync_errors = 0;
         if (h->consecutive_good_syncs >= 2) h->signal_lock = true;
     }
-    if (h->stc_locked) h->stc_ns = (uint64_t)((h->stc_intercept_q64 + (int128_t)n * h->stc_slope_q64) >> 64);
-    else h->stc_ns = n;
+
+    /* VIRTUAL STC UPDATE */
+    if (h->op_mode == TSA_MODE_REPLAY) {
+        /* In Replay mode, advance STC by packet steps to ensure determinism.
+         * Priority: 1. Regressed slope, 2. Configured CBR, 3. 10Mbps fallback. */
+        double bits_per_pkt = (double)TS_PACKET_BITS;
+        uint64_t step_ns = (uint64_t)(bits_per_pkt * FROM_Q64_64(h->stc_slope_q64));
+
+        /* If slope is uninitialized (1.0 in Q64 leads to step_ns ~TS_PACKET_BITS) or invalid,
+         * calculate from bitrate. Default is 10Mbps. */
+        if (step_ns < 10000 || step_ns > 1000000) {
+            uint64_t target_br = h->config.forced_cbr_bitrate ? h->config.forced_cbr_bitrate : DEFAULT_REPLAY_BITRATE;
+            step_ns = (uint64_t)(bits_per_pkt * NS_PER_SEC / target_br);
+        }
+        h->stc_ns += step_ns;
+
+    } else {
+        if (h->stc_locked) h->stc_ns = (uint64_t)((h->stc_intercept_q64 + (int128_t)n * h->stc_slope_q64) >> 64);
+        else h->stc_ns = n;
+    }
 
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
     if (h->config.enable_reactive_pid_filter && !tsa_stream_demux_check_pid(&h->root_stream, r.pid)) return;
 
     h->live->total_ts_packets++;
-    h->pkts_since_pcr++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
     h->live->pid_last_seen_vstc[r.pid] = h->stc_ns;
     h->live->pid_last_seen_ns[r.pid] = n;
-
-    if (h->last_cc[r.pid] != 0x10) {
-        ts_cc_status_t status = cc_classify_error(h->last_cc[r.pid], r.cc, r.has_payload, (r.af_len > 0 && !r.has_payload));
-        if (status == TS_CC_LOSS || status == TS_CC_OUT_OF_ORDER) {
-            if (!h->ignore_next_cc[r.pid]) {
-                h->live->cc_error.count++;
-                h->live->pid_cc_errors[r.pid]++;
-                tsa_push_event(h, TSA_EVENT_CC_ERROR, r.pid, r.cc);
-            }
-        }
-        h->ignore_next_cc[r.pid] = false;
-    }
-    h->last_cc[r.pid] = r.cc;
-
-    uint64_t pcr = extract_pcr(p);
-    if (pcr != INVALID_PCR) {
-        uint64_t pcr_ns = pcr * 1000 / 27;
-        ts_pcr_window_add(&h->pcr_window, n, pcr_ns, 0);
-        h->last_pcr_ticks = pcr;
-        h->last_pcr_arrival_ns = n;
-    }
+    h->pkts_since_pcr++;
 
     if (r.pid == 0 || r.pid == 0x10 || r.pid == 0x11 || h->pid_is_pmt[r.pid] || h->pid_is_scte35[r.pid])
         tsa_section_filter_push(h, r.pid, p, &r);
 
     h->current_ns = n; h->current_res = r;
     tsa_stream_send(&h->root_stream, p);
-    h->live->engine_processing_latency_ns = (uint64_t)((uint64_t)ts_now_ns128() - start);
     if (h->pending_snapshot) { tsa_commit_snapshot(h, h->snapshot_stc); h->pending_snapshot = false; }
 }
 

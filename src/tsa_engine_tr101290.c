@@ -43,40 +43,27 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
     }
 
     // 2. Continuity Counter (CC) Check
-    if (h->live->pid_packet_count[pid] > 1 && !res->has_discontinuity) {
-        if (h->ignore_next_cc[pid]) {
-            h->ignore_next_cc[pid] = false;
-        } else {
-            ts_cc_status_t s = cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
+    if (h->last_cc[pid] != 0x10 && !res->has_discontinuity) {
+        ts_cc_status_t s = cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
 
-            if (s == TS_CC_LOSS) {
-                h->pid_cc_error_suppression[pid]++;
-                if (h->pid_cc_error_suppression[pid] >= 3) {
-                    if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
-                    h->live->cc_error.count++;
-                    h->live->cc_error.last_timestamp_ns = now;
-                    h->live->cc_error.triggering_vstc = h->stc_ns;
-                    h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
-                    h->live->pid_cc_errors[pid]++;
-                    h->live->latched_cc_error = 1;
-                    h->pid_status[pid] = TSA_STATUS_DEGRADED;
-                    h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
-                    tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, (uint64_t)res->cc);
-                }
-            } else if (s == TS_CC_DUPLICATE) {
-                h->live->cc_duplicate_count++;
-            } else if (s == TS_CC_OUT_OF_ORDER) {
+        if (s == TS_CC_LOSS || s == TS_CC_OUT_OF_ORDER) {
+            if (!h->ignore_next_cc[pid]) {
                 if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
                 h->live->cc_error.count++;
                 h->live->cc_error.last_timestamp_ns = now;
+                h->live->cc_error.triggering_vstc = h->stc_ns;
+                h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
+                h->live->pid_cc_errors[pid]++;
+                h->live->latched_cc_error = 1;
                 h->pid_status[pid] = TSA_STATUS_DEGRADED;
-                tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, (uint64_t)res->cc);
-            } else {
-                if (h->live->pid_packet_count[pid] % 100 == 0) {
-                    h->pid_cc_error_suppression[pid] = 0;
+
+                if (s == TS_CC_LOSS) {
+                    h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
                 }
+                tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, (uint64_t)res->cc);
             }
         }
+        h->ignore_next_cc[pid] = false;
     }
     h->last_cc[pid] = res->cc;
 }

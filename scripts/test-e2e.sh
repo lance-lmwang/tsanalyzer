@@ -38,10 +38,11 @@ function assert_success {
 
 # --- Test Execution ---
 print_header "SETUP: Cleaning up environment"
-pkill -f tsa_server || true
-pkill -f tsp || true
+pkill -9 -x tsa_server || true
+pkill -9 -x tsp || true
+pkill -9 -x tsg || true
 rm -rf "$LOG_DIR" && mkdir -p "$LOG_DIR"
-sleep 1
+sleep 2
 
 print_header "PHASE 1: SaaS API & SRT-AES Transport Test"
 echo "-> Starting SaaS Daemon in background..."

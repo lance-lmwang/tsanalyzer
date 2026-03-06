@@ -1,61 +1,62 @@
 #!/bin/bash
-# TsAnalyzer Pro - E2E 8-Stream High-Perf Stability Test
+# TsAnalyzer Pro - High-Concurrency Multi-Stream Stress Test (8-Stream @ 80Mbps Total)
 
 BASE_UDP_PORT=19001
+API_URL="http://localhost:8088/api/v1/streams"
 SAMPLE_FILE="sample/test.ts"
-TEST_DURATION=60 # 1 minute
+TEST_DURATION=60
+STREAMS=8
 
-if [ ! -f "$SAMPLE_FILE" ]; then
-    echo "Error: Sample file $SAMPLE_FILE not found."
-    # Try to find any TS file in samples
-    SAMPLE_FILE=$(find /home/lmwang/sample -name "*.ts" | head -n 1)
-    if [ -z "$SAMPLE_FILE" ]; then
-        echo "No TS file found. Creating dummy TS file..."
-        SAMPLE_FILE="/tmp/dummy.ts"
-        dd if=/dev/zero bs=188 count=10000 > "$SAMPLE_FILE"
-        # Put sync bytes
-        for i in {0..9999}; do
-            printf '\x47' | dd of="$SAMPLE_FILE" bs=1 seek=$((i*188)) conv=notrunc 2>/dev/null
-        done
-    fi
-fi
-
-echo "Using sample file: $SAMPLE_FILE"
+echo ">>> Initializing 8-Stream Performance Test..."
 
 function cleanup() {
-    echo "Stopping simulation..."
-    pkill -9 tsa_server
-    pkill -9 tsp
-    sleep 1
+    echo ">>> Cleaning up processes..."
+    pkill -9 tsa_server || true
+    pkill -9 tsp || true
 }
 trap cleanup EXIT
 
-echo "=== [1/2] STARTING HIGH-PERF SERVER ==="
-./build/tsa_server > e2e_8_streams.log 2>&1 &
-SERVER_PID=$!
+# 1. Start Server
+echo ">>> [Phase 1] Starting Server on Port 8088..."
+./build/tsa_server > server_stress.log 2>&1 &
 sleep 2
 
-echo "=== [2/2] INJECTING 8 STREAMS AT 10MBPS EACH ==="
-for i in {1..8}; do
-    UDP_PORT=$((BASE_UDP_PORT + i - 1))
-    BR=10000000 # 10 Mbps
-
-    echo "  -> Stream $i on port $UDP_PORT (10 Mbps)"
-    ./build/tsp -i 127.0.0.1 -p $UDP_PORT -l -f "$SAMPLE_FILE" -b $BR > /dev/null 2>&1 &
+# 2. Register Streams via API
+echo ">>> [Phase 2] Registering $STREAMS Dynamic Streams..."
+for i in $(seq 1 $STREAMS); do
+    PORT=$((BASE_UDP_PORT + i - 1))
+    ID="STRESS_STREAM_$i"
+    curl -s -X POST "$API_URL" -H "Content-Type: application/json" -d "{\"id\":\"$ID\"}" > /dev/null
+    echo "    Registered $ID (UDP Target: $PORT)"
 done
 
-echo "===================================================="
-echo "STABILITY MONITORING ACTIVE (Duration: ${TEST_DURATION}s)"
-echo "===================================================="
+# 3. Inject Traffic
+echo ">>> [Phase 3] Injecting 10Mbps Traffic per Stream (80Mbps Total)..."
+for i in $(seq 1 $STREAMS); do
+    PORT=$((BASE_UDP_PORT + i - 1))
+    ./build/tsp -i 127.0.0.1 -p $PORT -l -f "$SAMPLE_FILE" -b 10000000 > /dev/null 2>&1 &
+done
 
-# Monitor the output of tsa_server
-tail -f e2e_8_streams.log &
-TAIL_PID=$!
+# 4. Monitoring Loop
+echo ">>> [Phase 4] Monitoring Load & Internal Drops..."
+echo "Time | Total Drops | Avg Health | Aggregated Bitrate"
+echo "----------------------------------------------------"
 
-sleep $TEST_DURATION
+for t in $(seq 5 5 $TEST_DURATION); do
+    sleep 5
+    METRICS=$(curl -s http://localhost:8088/metrics)
 
-kill $TAIL_PID
-echo "===================================================="
-echo "TEST COMPLETE. CHECKING FINAL STATUS..."
-echo "===================================================="
-grep "STR-" e2e_8_streams.log | tail -n 8
+    # Aggregate stats across all streams
+    DROPS=$(echo "$METRICS" | grep "tsa_internal_analyzer_drop" | awk '{sum+=$2} END {print sum}')
+    HEALTH=$(echo "$METRICS" | grep "tsa_health_score" | awk '{sum+=$2; n++} END {if(n>0) print sum/n; else print 0}')
+    BITRATE=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | awk '{sum+=$2} END {printf "%.2f Mbps\n", sum/1000000}')
+
+    printf "%3ds  | %11d | %10.1f | %s\n" $t "${DROPS:-0}" "$HEALTH" "$BITRATE"
+
+    if [ "${DROPS:-0}" -gt 0 ]; then
+        echo ">>> [WARNING] Internal packet drops detected!"
+    fi
+done
+
+echo "----------------------------------------------------"
+echo ">>> Stress Test Complete."

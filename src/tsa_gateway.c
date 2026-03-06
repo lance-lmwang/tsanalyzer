@@ -80,7 +80,7 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
         if (pid == VIDEO_PID && (pkt[3] & 0x20) && (pkt[4] > 0) && (pkt[5] & 0x10)) {
             /* This packet has a PCR. Calculate the ideal PCR based on bytes sent. */
             uint64_t bytes_sent = tsp_get_total_packets(gw->tsp) * 188ULL;
-            uint64_t ideal_pcr_27m = (bytes_sent * 8ULL * 27000000ULL) / gw->cfg.pacing.bitrate;
+            uint64_t ideal_pcr_27m = (bytes_sent * 8ULL * TS_SYSTEM_CLOCK_HZ) / gw->cfg.pacing.bitrate;
 
             /* Encode ideal PCR back into the adaptation field */
             uint64_t base = ideal_pcr_27m / 300;

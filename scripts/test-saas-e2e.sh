@@ -5,7 +5,7 @@
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-API_URL="http://localhost:8000/api/v1/streams"
+API_URL="http://localhost:8088/api/v1/streams"
 SAMPLE_FILE="sample/test.ts"
 
 # JWTs for two tenants

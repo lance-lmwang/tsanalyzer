@@ -66,14 +66,14 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_mdi_delay_factor_ms%s %.2f\n", labels, (float)s->mdi_df_ms);
 
         // Tier 3: ETR 290 P1 (CRITICAL COMPLIANCE)
-        SAFE_APPEND("tsa_tr101290_p1_sync_loss%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
-        SAFE_APPEND("tsa_tr101290_p1_pat_error%s %llu\n", labels, (unsigned long long)s->pat_error.count);
-        SAFE_APPEND("tsa_tr101290_p1_pmt_error%s %llu\n", labels, (unsigned long long)s->pmt_error.count);
-        SAFE_APPEND("tsa_tr101290_p1_cc_error%s %llu\n", labels, (unsigned long long)s->cc_error.count);
-        SAFE_APPEND("tsa_tr101290_p1_pid_error%s %llu\n", labels, (unsigned long long)s->pid_error.count);
-        SAFE_APPEND("tsa_tr101290_p2_pts_error%s %llu\n", labels, (unsigned long long)s->pts_error.count);
-        SAFE_APPEND("tsa_tr101290_p2_crc_error%s %llu\n", labels, (unsigned long long)s->crc_error.count);
-        SAFE_APPEND("tsa_tr101290_p2_transport_error%s %llu\n", labels, (unsigned long long)s->transport_error.count);
+        SAFE_APPEND("tsa_etr290_p1_sync_loss_total%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_etr290_p1_pat_errors_total%s %llu\n", labels, (unsigned long long)s->pat_error.count);
+        SAFE_APPEND("tsa_etr290_p1_pmt_errors_total%s %llu\n", labels, (unsigned long long)s->pmt_error.count);
+        SAFE_APPEND("tsa_etr290_p1_cc_errors_total%s %llu\n", labels, (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_etr290_p1_pid_errors_total%s %llu\n", labels, (unsigned long long)s->pid_error.count);
+        SAFE_APPEND("tsa_etr290_p2_pts_errors_total%s %llu\n", labels, (unsigned long long)s->pts_error.count);
+        SAFE_APPEND("tsa_etr290_p2_crc_errors_total%s %llu\n", labels, (unsigned long long)s->crc_error.count);
+        SAFE_APPEND("tsa_etr290_p2_transport_errors_total%s %llu\n", labels, (unsigned long long)s->transport_error.count);
 
         SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
                     (unsigned long long)s->sync_loss.count);

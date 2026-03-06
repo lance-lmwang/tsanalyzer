@@ -58,7 +58,10 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
         uint8_t ty = p[i];
         uint16_t spid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
         int es = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        h->pid_stream_type[spid] = ty;
+        if (h->pid_stream_type[spid] != ty) {
+            h->pid_stream_type[spid] = ty;
+            tsa_precompile_pid_labels(h, spid);
+        }
         if (ty == 0x86) h->pid_is_scte35[spid] = true;
         if (pr && pr->stream_count < MAX_STREAMS_PER_PROG) {
             pr->streams[pr->stream_count].pid = spid;
@@ -67,7 +70,6 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
         }
         if (!h->live->pid_is_referenced[spid]) tsa_reset_pid_stats(h, spid);
         h->live->pid_is_referenced[spid] = true;
-        tsa_precompile_pid_labels(h, spid);
         i += 5 + es;
     }
 }
@@ -81,10 +83,10 @@ static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
             uint8_t dt = p[j], dl = p[j + 1];
             if (dt == 0x48 && dl > 3) {
                 int nl = p[j + 3];
-                memcpy(h->provider_name, p + j + 4, (nl < 255) ? nl : 255);
+                memcpy(h->provider_name, p + j + 4, (nl < 255) ? nl : 255); h->provider_name[(nl < 255) ? nl : 255] = 0;
                 h->provider_name[(nl < 255) ? nl : 255] = '\0';
                 int pnl = p[j + 4 + nl + 1];
-                memcpy(h->service_name, p + j + 4 + nl + 2, (pnl < 255) ? pnl : 255);
+                memcpy(h->service_name, p + j + 4 + nl + 2, (pnl < 255) ? pnl : 255); h->service_name[(pnl < 255) ? pnl : 255] = 0;
                 h->service_name[(pnl < 255) ? pnl : 255] = '\0';
             }
             j += 2 + dl;
@@ -122,6 +124,10 @@ void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
 
 int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
     int16_t idx = h->pid_to_active_idx[p];
+
+    // Fast path: PID is already at the end of the LRU list
+    if (idx != -1 && idx == (int16_t)h->pid_tracker_count - 1) return idx;
+
     if (idx == -1) {
         if (h->pid_tracker_count < MAX_ACTIVE_PIDS) {
             h->pid_active_list[h->pid_tracker_count] = p;
@@ -147,8 +153,9 @@ int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
             idx = MAX_ACTIVE_PIDS - 1;
         }
         h->pid_seen[p] = true;
-    }
-    if (idx != (int16_t)h->pid_tracker_count - 1) {
+        tsa_precompile_pid_labels(h, p);
+    } else {
+        // Move to back
         uint16_t cur = h->pid_active_list[idx];
         for (uint32_t i = (uint32_t)idx; i < h->pid_tracker_count - 1; i++) {
             h->pid_active_list[i] = h->pid_active_list[i + 1];

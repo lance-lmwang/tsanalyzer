@@ -199,6 +199,7 @@ struct tsa_handle {
     bool engine_started;
     uint64_t start_ns;
     uint64_t last_snap_ns;
+    uint64_t last_snap_wall_ns;
     uint64_t stc_ns;
     bool stc_locked;
     int128_t stc_slope_q64;

@@ -43,9 +43,9 @@ for i in {1..6}; do
         continue
     fi
 
-    P_BPS=$(echo "$METRICS" | grep "^tsa_physical_bitrate_bps" | head -n 1 | awk '{print $2}' || echo "0")
-    C_BPS=$(echo "$METRICS" | grep "^tsa_pcr_bitrate_bps" | head -n 1 | awk '{print $2}' || echo "0")
-    JITTER=$(echo "$METRICS" | grep "^tsa_pcr_jitter_ms" | head -n 1 | awk '{print $2}' || echo "0.0")
+    P_BPS=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | head -n 1 | awk '{print $2}' || echo "0")
+    C_BPS=$(echo "$METRICS" | grep "tsa_pcr_bitrate_bps" | head -n 1 | awk '{print $2}' || echo "0")
+    JITTER=$(echo "$METRICS" | grep "tsa_pcr_jitter_ms" | head -n 1 | awk '{print $2}' || echo "0.0")
 
     if [ "$C_BPS" == "0" ] || [ -z "$C_BPS" ]; then
         echo "[$((i*5+5))s] | PCR NOT LOCKED | -- | $JITTER ms | ⚠️ LOCKING"
