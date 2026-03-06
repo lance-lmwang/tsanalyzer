@@ -47,7 +47,7 @@ This plan breaks down the `spec.md` into actionable, incremental steps.
   - Upon trigger, freeze the capture buffer, spawn a background thread (or asynchronous task) to flush it to `/tmp/tsa_capture_<timestamp>.ts`, and resume.
 - **Validation**: Use a chaos script to drop packets. Verify that a `.ts` file is generated and contains the exact packet drop moment.
 
-## Step 6: Bitrate Smoother (Optional/Stretch)
+## Step 6: Bitrate Smoother (Optional/Stretch) (DONE)
 - **Goal**: De-jittering capability.
 - **Tasks**:
-  - Build an output module `tsa_smoother.c` that consumes the internal ring buffer and paces UDP transmission perfectly spaced by the calculated `pcr_expected` time.
+  - Build an output module `tsa_smoother.c` that consumes the internal ring buffer and paces UDP transmission perfectly spaced by the calculated `pcr_expected` time. (Implemented directly inside `tsp.c` and integrated into `tsa_gateway.c`)

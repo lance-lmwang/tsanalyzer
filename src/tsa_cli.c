@@ -18,6 +18,7 @@
 #include "tsa.h"
 #include "tsa_internal.h"
 #include "tsa_source.h"
+#include "tsa_lua.h"
 
 static _Atomic int g_keep_running = 1;
 static spsc_queue_t* g_pkt_queue = NULL;
@@ -141,9 +142,33 @@ static void print_usage(const char* prog) {
     printf("  -l, --label <id>          Set stream label (default: unknown)\n");
     printf("  -H, --http <port>         Set HTTP server port (default: 12345)\n");
     printf("  -a, --alpha <val>         Set PCR EMA alpha (default: 0.1)\n");
+    printf("\nAdvanced Mode:\n");
+    printf("  %s run <script.lua>       Execute a dynamic Lua pipeline script\n", prog);
 }
 
 int main(int argc, char** argv) {
+    if (argc >= 3 && strcmp(argv[1], "run") == 0) {
+        signal(SIGINT, sig_handler);
+        signal(SIGTERM, sig_handler);
+
+        const char* script_file = argv[2];
+        tsa_handle_t* h = tsa_create(NULL);
+        tsa_lua_t* lua = tsa_lua_create(h);
+
+        printf("Starting Lua runtime for script: %s\n", script_file);
+        if (tsa_lua_run_file(lua, script_file) == 0) {
+            // Keep the main thread alive while Lua pipeline runs in background (if async)
+            // or simply wait if Lua script is blocking
+            while (g_keep_running) {
+                usleep(100000);
+            }
+        }
+
+        tsa_lua_destroy(lua);
+        tsa_destroy(h);
+        return 0;
+    }
+
     tsa_config_t cfg;
     memset(&cfg, 0, sizeof(cfg));
     cfg.pcr_ema_alpha = 0.1;

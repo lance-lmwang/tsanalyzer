@@ -59,10 +59,28 @@ else
     echo "WARNING: libpcap build failed (probably missing flex/bison). PCAP support will be limited."
 fi
 
+# 3. Build Lua (Static)
+LUA_VERSION="5.4.6"
+LUA_DIR="$DEPS_DIR/lua"
+if [ ! -d "$LUA_DIR" ]; then
+    echo "--- Downloading Lua $LUA_VERSION ---"
+    cd "$DEPS_DIR"
+    curl -L -R -O https://www.lua.org/ftp/lua-$LUA_VERSION.tar.gz
+    tar -zxf lua-$LUA_VERSION.tar.gz
+    mv "lua-$LUA_VERSION" lua
+    rm lua-$LUA_VERSION.tar.gz
+fi
+if [ ! -f "$LUA_DIR/src/liblua.a" ]; then
+    echo "--- Building Lua (Static) ---"
+    cd "$LUA_DIR"
+    make linux -j$(nproc)
+fi
+
 echo "=== TSA: Dependencies Built ==="
 [ -f "$SRT_INSTALL_DIR/lib/libsrt.a" ] || [ -f "$SRT_INSTALL_DIR/lib64/libsrt.a" ] || { echo "SRT build failed!"; exit 1; }
 
 echo "SRT Static lib: Found"
 [ -f "$PCAP_INSTALL_DIR/lib/libpcap.a" ] && echo "PCAP Static lib: Found" || echo "PCAP Static lib: NOT FOUND (Optional)"
+[ -f "$LUA_DIR/src/liblua.a" ] && echo "Lua Static lib: Found" || { echo "Lua build failed!"; exit 1; }
 
 exit 0

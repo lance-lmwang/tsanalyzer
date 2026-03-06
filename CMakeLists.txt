@@ -32,6 +32,12 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include/srt")
     set(SRT_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib/libsrt.a")
 endif()
 
+set(LUA_LINK_LIBS "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/src")
+    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/src")
+    set(LUA_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/src/liblua.a")
+endif()
+
 # Core Library
 add_library(tsp_core STATIC
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c
@@ -41,14 +47,14 @@ add_library(tsp_core STATIC
     src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
-    src/mongoose.c src/metrology/nalu_sniffer.c
+    src/mongoose.c src/metrology/nalu_sniffer.c src/tsa_lua.c
 )
-target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 
 # Main Executables
 macro(tsa_exe name src)
     add_executable(${name} ${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 endmacro()
 
 tsa_exe(tsp src/tsp_main.c)

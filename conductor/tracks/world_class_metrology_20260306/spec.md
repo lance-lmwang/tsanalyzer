@@ -28,3 +28,4 @@ Elevate TsAnalyzer from a basic packet-counter to a **World-Class, Software-Defi
 - [x] IAT Histograms are actively tracking packet micro-bursts at 1Gbps line rate.
 - [x] The engine correctly identifies GOP boundaries and frame types via the NALU sniffer without full decoding.
 - [x] Micro-capture successfully dumps a `.ts` file capturing the exact moment of an injected P1 error.
+- [x] Bitrate Smoother eliminates system timer jitter and outputs a perfect CBR stream using `clock_nanosleep`.
