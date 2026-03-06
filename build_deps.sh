@@ -28,6 +28,7 @@ cd "$SRT_DIR"
 mkdir -p build
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX="$SRT_INSTALL_DIR" \
+         -DCMAKE_INSTALL_LIBDIR=lib \
          -DENABLE_SHARED=OFF \
          -DENABLE_STATIC=ON \
          -DENABLE_APPS=OFF \
