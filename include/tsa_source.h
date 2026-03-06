@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include "tsa_event.h"
 
 typedef enum {
     TSA_SOURCE_UDP,
@@ -36,6 +37,12 @@ typedef struct {
  * @param user_data Opaque pointer passed to callbacks.
  */
 tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port, const tsa_source_callbacks_t* cbs, void* user_data);
+
+/**
+ * Set a reactor for the source. If set, the source will use the reactor
+ * instead of creating its own thread.
+ */
+void tsa_source_set_reactor(tsa_source_t* src, tsa_reactor_t* reactor);
 
 /**
  * Destroy the source and release resources.

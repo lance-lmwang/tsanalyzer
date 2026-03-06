@@ -28,6 +28,9 @@ struct tsa_source {
     tsa_source_callbacks_t cbs;
     void* user_data;
     
+    tsa_reactor_t* reactor;
+    tsa_reactor_event_t ev;
+    
     pthread_t thread;
     volatile bool running;
     
@@ -150,6 +153,34 @@ static void* pcap_thread(void* arg) {
 }
 #endif
 
+static void udp_on_read(void* arg) {
+    tsa_source_t* src = (tsa_source_t*)arg;
+    uint8_t buf[1504];
+    ssize_t n = recv(src->handle.udp_fd, buf, sizeof(buf), 0);
+    if (n > 0) {
+        int count = n / 188;
+        if (count > 0) {
+            src->cbs.on_packets(src->user_data, buf, count, 0);
+        }
+    } else if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+        src->cbs.on_status(src->user_data, -1, "UDP receive error");
+    }
+}
+
+static void srt_on_read(void* arg) {
+    tsa_source_t* src = (tsa_source_t*)arg;
+    uint8_t buf[1316 * 7];
+    int n = srt_recv(src->handle.srt_sock, (char*)buf, sizeof(buf));
+    if (n > 0) {
+        int count = n / 188;
+        if (count > 0) {
+            src->cbs.on_packets(src->user_data, buf, count, 0);
+        }
+    } else if (n == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCRCV) {
+        src->cbs.on_status(src->user_data, -1, "SRT receive error");
+    }
+}
+
 static void* file_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
     uint8_t buf[188 * 7];
@@ -223,6 +254,10 @@ tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const c
     return src;
 }
 
+void tsa_source_set_reactor(tsa_source_t* src, tsa_reactor_t* reactor) {
+    if (src) src->reactor = reactor;
+}
+
 void tsa_source_set_pacing(tsa_source_t* src, bool enabled) {
     if (src) src->pacing = enabled;
 }
@@ -248,6 +283,7 @@ void tsa_source_destroy(tsa_source_t* src) {
 }
 
 int tsa_source_start(tsa_source_t* src) {
+    if (!src) return -1;
     src->running = true;
     if (src->type == TSA_SOURCE_UDP) {
         char* p = strrchr(src->url, ':');
@@ -255,11 +291,23 @@ int tsa_source_start(tsa_source_t* src) {
         src->handle.udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
         struct sockaddr_in sa = {0};
         sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = INADDR_ANY;
+        sa.sin_addr.s_addr = INADDR_ANY; 
         sa.sin_port = htons(port);
-        bind(src->handle.udp_fd, (struct sockaddr*)&sa, sizeof(sa));
+        if (bind(src->handle.udp_fd, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+            fprintf(stderr, "Source: Failed to bind UDP to port %d: %s\n", port, strerror(errno));
+            close(src->handle.udp_fd);
+            return -1;
+        }
         fcntl(src->handle.udp_fd, F_SETFL, O_NONBLOCK);
-        pthread_create(&src->thread, NULL, udp_thread, src);
+        
+        if (src->reactor) {
+            src->ev.fd = src->handle.udp_fd;
+            src->ev.on_read = udp_on_read;
+            src->ev.arg = src;
+            tsa_reactor_add(src->reactor, &src->ev);
+        } else {
+            pthread_create(&src->thread, NULL, udp_thread, src);
+        }
     } else if (src->type == TSA_SOURCE_SRT) {
         srt_startup();
         src->handle.srt_sock = srt_create_socket();
@@ -321,6 +369,12 @@ int tsa_source_start(tsa_source_t* src) {
 
 int tsa_source_stop(tsa_source_t* src) {
     src->running = false;
-    if (src->thread) pthread_join(src->thread, NULL);
+    if (src->reactor && src->type == TSA_SOURCE_UDP) {
+        tsa_reactor_del(src->reactor, &src->ev);
+    }
+    if (src->thread) {
+        pthread_join(src->thread, NULL);
+        src->thread = 0;
+    }
     return 0;
 }

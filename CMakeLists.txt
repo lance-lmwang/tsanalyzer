@@ -227,6 +227,10 @@ add_executable(test_event_loop tests/test_event_loop.c)
 target_link_libraries(test_event_loop tsp_core pthread m)
 add_test(NAME test_event_loop COMMAND test_event_loop)
 
+add_executable(test_source_event tests/test_source_event.c)
+target_link_libraries(test_source_event tsp_core pthread m)
+add_test(NAME test_source_event COMMAND test_source_event)
+
 add_executable(test_stc_reconstruction tests/test_stc_reconstruction.c)
 target_link_libraries(test_stc_reconstruction tsp_core pthread m)
 add_test(NAME test_stc_reconstruction COMMAND test_stc_reconstruction)

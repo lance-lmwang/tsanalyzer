@@ -1,4 +1,5 @@
 #include "tsa_event.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -7,93 +8,93 @@
 
 #define MAX_EVENTS 1024
 
-struct tsa_event_loop_s {
+struct tsa_reactor_s {
     int epoll_fd;
     bool running;
     int event_count;
 };
 
-tsa_event_loop_t* tsa_event_loop_create(void) {
-    tsa_event_loop_t* loop = calloc(1, sizeof(tsa_event_loop_t));
-    if (!loop) return NULL;
+tsa_reactor_t* tsa_reactor_create(void) {
+    tsa_reactor_t* reactor = calloc(1, sizeof(tsa_reactor_t));
+    if (!reactor) return NULL;
     
-    loop->epoll_fd = epoll_create1(EPOLL_CLOEXEC);
-    if (loop->epoll_fd < 0) {
-        free(loop);
+    reactor->epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    if (reactor->epoll_fd < 0) {
+        free(reactor);
         return NULL;
     }
-    return loop;
+    return reactor;
 }
 
-void tsa_event_loop_destroy(tsa_event_loop_t* loop) {
-    if (!loop) return;
-    if (loop->epoll_fd >= 0) close(loop->epoll_fd);
-    free(loop);
+void tsa_reactor_destroy(tsa_reactor_t* reactor) {
+    if (!reactor) return;
+    if (reactor->epoll_fd >= 0) close(reactor->epoll_fd);
+    free(reactor);
 }
 
-void tsa_event_loop_stop(tsa_event_loop_t* loop) {
-    if (loop) loop->running = false;
+void tsa_reactor_stop(tsa_reactor_t* reactor) {
+    if (reactor) reactor->running = false;
 }
 
-static uint32_t get_epoll_events(tsa_event_t* event) {
+static uint32_t get_epoll_events(tsa_reactor_event_t* event) {
     uint32_t ev = 0;
     if (event->on_read) ev |= EPOLLIN;
     if (event->on_write) ev |= EPOLLOUT;
     return ev;
 }
 
-int tsa_event_add(tsa_event_loop_t* loop, tsa_event_t* event) {
-    if (!loop || !event || loop->epoll_fd < 0) return -1;
+int tsa_reactor_add(tsa_reactor_t* reactor, tsa_reactor_event_t* event) {
+    if (!reactor || !event || reactor->epoll_fd < 0) return -1;
     
     struct epoll_event ev = {0};
     ev.events = get_epoll_events(event);
     ev.data.ptr = event;
     
-    if (epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, event->fd, &ev) < 0) {
+    if (epoll_ctl(reactor->epoll_fd, EPOLL_CTL_ADD, event->fd, &ev) < 0) {
         return -1;
     }
-    loop->event_count++;
+    reactor->event_count++;
     return 0;
 }
 
-int tsa_event_del(tsa_event_loop_t* loop, tsa_event_t* event) {
-    if (!loop || !event || loop->epoll_fd < 0) return -1;
+int tsa_reactor_del(tsa_reactor_t* reactor, tsa_reactor_event_t* event) {
+    if (!reactor || !event || reactor->epoll_fd < 0) return -1;
     
-    if (epoll_ctl(loop->epoll_fd, EPOLL_CTL_DEL, event->fd, NULL) < 0) {
+    if (epoll_ctl(reactor->epoll_fd, EPOLL_CTL_DEL, event->fd, NULL) < 0) {
         return -1;
     }
-    loop->event_count--;
+    reactor->event_count--;
     return 0;
 }
 
-int tsa_event_mod(tsa_event_loop_t* loop, tsa_event_t* event) {
-    if (!loop || !event || loop->epoll_fd < 0) return -1;
+int tsa_reactor_mod(tsa_reactor_t* reactor, tsa_reactor_event_t* event) {
+    if (!reactor || !event || reactor->epoll_fd < 0) return -1;
     
     struct epoll_event ev = {0};
     ev.events = get_epoll_events(event);
     ev.data.ptr = event;
     
-    if (epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, event->fd, &ev) < 0) {
+    if (epoll_ctl(reactor->epoll_fd, EPOLL_CTL_MOD, event->fd, &ev) < 0) {
         return -1;
     }
     return 0;
 }
 
-void tsa_event_loop_run(tsa_event_loop_t* loop) {
-    if (!loop || loop->epoll_fd < 0) return;
+void tsa_reactor_run(tsa_reactor_t* reactor) {
+    if (!reactor || reactor->epoll_fd < 0) return;
     
     struct epoll_event events[MAX_EVENTS];
-    loop->running = true;
+    reactor->running = true;
     
-    while (loop->running && loop->event_count > 0) {
-        int n = epoll_wait(loop->epoll_fd, events, MAX_EVENTS, -1);
+    while (reactor->running && reactor->event_count > 0) {
+        int n = epoll_wait(reactor->epoll_fd, events, MAX_EVENTS, 100);
         if (n < 0) {
             if (errno == EINTR) continue;
             break; // Error
         }
         
         for (int i = 0; i < n; i++) {
-            tsa_event_t* event = (tsa_event_t*)events[i].data.ptr;
+            tsa_reactor_event_t* event = (tsa_reactor_event_t*)events[i].data.ptr;
             uint32_t ev = events[i].events;
             
             if (ev & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
