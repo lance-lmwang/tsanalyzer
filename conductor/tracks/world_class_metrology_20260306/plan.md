@@ -29,7 +29,7 @@ This plan breaks down the `spec.md` into actionable, incremental steps.
   - Track GOP sizes (number of frames between I-frames) and report them.
 - **Validation**: Analyze a known H.264 stream and verify the reported GOP length and I-frame intervals match `ffprobe` output.
 
-## Step 4: High-Precision SCTE-35 Audit
+## Step 4: High-Precision SCTE-35 Audit (DONE)
 - **Goal**: Calculate the precise error between Ad-Insertion markers and video I-frames.
 - **Tasks**:
   - Enhance `tsa_engine_scte35.c` to store the latest `pts_time` associated with an upcoming splice event.
@@ -38,7 +38,7 @@ This plan breaks down the `spec.md` into actionable, incremental steps.
   - Report `scte35_pts_alignment_offset_ms`.
 - **Validation**: Inject SCTE-35 markers into a test stream and verify the offset is calculated.
 
-## Step 5: Forensic Triggered Micro-Capture
+## Step 5: Forensic Triggered Micro-Capture (DONE)
 - **Goal**: Automatically save the "crime scene" when critical errors occur.
 - **Tasks**:
   - Implement a global lock-free ring buffer `tsa_micro_capture.c` (e.g., allocating ~5MB to hold ~500ms of TS packets).

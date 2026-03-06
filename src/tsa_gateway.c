@@ -95,19 +95,20 @@ int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) 
     }
 
     if (now_ns - gw->last_rst_check_ns > 100000000ULL) {
-        tsa_snapshot_lite_t snap;
-        if (tsa_take_snapshot_lite(gw->tsa, &snap) == 0) {
-            if (snap.rst_network_s < 5.0 && !gw->is_throttling) {
+        tsa_snapshot_full_t snap;
+        if (tsa_take_snapshot_full(gw->tsa, &snap) == 0) {
+            if (snap.summary.rst_network_s < 5.0 && !gw->is_throttling) {
                 tsp_update_bitrate(gw->tsp, (uint64_t)(gw->cfg.pacing.bitrate * 0.9));
                 gw->is_throttling = true;
-            } else if (snap.rst_network_s > 10.0 && gw->is_throttling) {
+            } else if (snap.summary.rst_network_s > 10.0 && gw->is_throttling) {
                 tsp_update_bitrate(gw->tsp, gw->cfg.pacing.bitrate);
                 gw->is_throttling = false;
             }
 
-            if (gw->cfg.enable_dynamic_grooming && snap.physical_bitrate_bps > 0) {
-                // Smoothly track input bitrate
-                tsp_update_bitrate(gw->tsp, snap.physical_bitrate_bps);
+            if (gw->cfg.enable_dynamic_grooming && snap.stats.pcr_bitrate_bps > 0) {
+                // Smoothly track input bitrate via PCR rather than raw physical bits
+                // PCR bitrate is much more stable and accurate for CBR output
+                tsp_update_bitrate(gw->tsp, snap.stats.pcr_bitrate_bps);
             }
 
             if (gw->cfg.enable_auto_forensics && tsa_forensic_trigger(gw->tsa, 0)) {

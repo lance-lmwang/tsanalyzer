@@ -100,41 +100,40 @@ static void* tx_loop(void* arg) {
         CPU_SET(h->cfg.cpu_core, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
     }
-    uint64_t last_token_ns = 0;
-    double tokens = 0;
 
-    // Batching: Standard 7 TS packets (1316 bytes) per SRT message
-    const int BATCH_SIZE = 7;
+    // Batching: Standard 7 TS packets (1316 bytes) per UDP message
+    const int BATCH_SIZE = h->cfg.ts_per_udp ? h->cfg.ts_per_udp : 7;
     uint8_t batch_buf[TS_PACKET_SIZE * BATCH_SIZE];
+
+    struct timespec next_tx_time;
+    clock_gettime(CLOCK_MONOTONIC, &next_tx_time);
 
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
 
-        if (head - tail < BATCH_SIZE) {
-            usleep(100);
+        if (head - tail < (uint64_t)BATCH_SIZE) {
+            usleep(100); // Wait for enough packets to form a batch
+            clock_gettime(CLOCK_MONOTONIC, &next_tx_time); // Reset pacing clock on underflow
             continue;
         }
-
-        struct timespec ts_now;
-        clock_gettime(CLOCK_MONOTONIC, &ts_now);
-        uint64_t now = (uint64_t)ts_now.tv_sec * 1e9 + ts_now.tv_nsec;
-        if (last_token_ns == 0) last_token_ns = now;
 
         uint64_t br = atomic_load(&h->detected_bitrate);
         if (br == 0) br = h->cfg.bitrate ? h->cfg.bitrate : 8000000;
 
-        tokens += (double)(now - last_token_ns) * br / 1e9;
-        last_token_ns = now;
-
-        double max_tokens = (double)br * 0.05;  // 50ms burst cap
-        if (tokens > max_tokens) tokens = max_tokens;
-
         uint64_t batch_bits = TS_PACKET_SIZE * BATCH_SIZE * 8;
-        if (tokens < (double)batch_bits) {
-            usleep(100);
-            continue;
+        // Calculate nanoseconds required to transmit one batch at current bitrate
+        uint64_t batch_ns = (batch_bits * 1000000000ULL) / br;
+
+        // Add to absolute next transmit time
+        next_tx_time.tv_nsec += batch_ns;
+        while (next_tx_time.tv_nsec >= 1000000000) {
+            next_tx_time.tv_nsec -= 1000000000;
+            next_tx_time.tv_sec++;
         }
+
+        // Precise sleep until next_tx_time
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_tx_time, NULL);
 
         // Prepare 1316-byte batch
         for (int i = 0; i < BATCH_SIZE; i++) {
@@ -149,7 +148,6 @@ static void* tx_loop(void* arg) {
             sendto(h->fd, batch_buf, sizeof(batch_buf), 0, (struct sockaddr*)&h->dest_addr, sizeof(h->dest_addr));
         }
 
-        tokens -= (double)batch_bits;
         atomic_store_explicit(&h->tail, tail + BATCH_SIZE, memory_order_release);
         atomic_fetch_add(&h->total_udp_packets, BATCH_SIZE);
     }
