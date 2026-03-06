@@ -1,106 +1,76 @@
-# PCR Clock Recovery & Metrology Model
+# PCR Clock Recovery & 3D Metrology Model
 
-This document defines the core analytical engine used to reconstruct the sender's continuous system clock from discrete PCR samples. This model serves as the mathematical foundation for jitter analysis, drift estimation, and buffer safety auditing.
-
----
-
-## 1. Problem Definition
-
-In MPEG Transport Streams, the Program Clock Reference (PCR) provides the timing reference for decoders to synchronize video/audio playback and manage buffers. However, PCR values are sparse:
-*   **Typical Interval**: 20 ms.
-*   **Maximum Allowed**: 40 ms.
-
-The analyzer must reconstruct the **continuous encoder clock function $C(t)$** from these discrete samples to detect micro-instabilities.
+This document defines the core analytical engine used to reconstruct the sender's continuous system clock from discrete PCR samples. It serves as the mathematical foundation for 3D jitter decomposition, drift estimation, and buffer safety auditing.
 
 ---
 
-## 2. PCR Representation & Sender Time
+## 1. The Timing Reconstruction Problem
 
-PCR consists of a 33-bit Base (90kHz) and a 9-bit Extension (27MHz).
-*   **Total PCR Value**: $PCR_{total} = (PCR_{base} \times 300) + PCR_{ext}$
-*   **Sender Time**: $T_{sender} = \frac{PCR_{total}}{27,000,000}$ (seconds)
+In MPEG Transport Streams, the Program Clock Reference (PCR) values appear only periodically (typically every 20ms). To achieve laboratory-grade metrology, the analyzer must reconstruct the **continuous encoder clock function $C(t)$** and correlate it with the **Hardware Arrival Time (HAT)**.
 
----
+### 1.1 42-bit PCR Reconstruction
+To ensure precision, the full 27MHz timeline is reconstructed using 64-bit integer arithmetic:
+$$PCR_{total} = (PCR_{base} \times 300) + PCR_{ext}$$
+*   $PCR_{base}$: 33-bit 90kHz base.
+*   $PCR_{ext}$: 9-bit 27MHz remainder.
 
-## 3. Dual-Clock Correlation Model
-
-When a PCR packet arrives, the analyzer records a tuple: $(T_{arrival,i}, PCR_i)$.
-We track two distinct timelines:
-1.  **Encoder Clock (PCR)**: Reflects the multiplexer's internal intent.
-2.  **Network Clock (Arrival)**: Reflects physical delivery as measured by the Hardware Timestamp (HAT).
-
-### 3.1 Instantaneous Jitter
-The deviation between expected and actual arrival deltas:
-$$\Delta T_{sender} = \frac{PCR_i - PCR_{i-1}}{27,000,000}$$
-$$\Delta T_{arrival} = T_{arrival,i} - T_{arrival,i-1}$$
-$$J_i = \Delta T_{arrival} - \Delta T_{sender}$$
+### 1.2 Q64.64 Fixed-Point Mandate
+All slope and clock calculations MUST use **Q64.64 Fixed-Point Arithmetic** to ensure bit-identical results across architectures and prevent rounding error accumulation over 24h+ runs.
 
 ---
 
-## 4. Continuous Clock Reconstruction (Linear Regression)
+## 2. 3D PCR Jitter Decomposition
 
-To filter out transport noise, the engine assumes the encoder clock is approximately linear over short windows:
+TsAnalyzer unique value proposition is the decomposition of raw jitter into three orthogonal diagnostic vectors:
+
+1.  **PCR_AC (Accuracy)**:
+    *   **Source**: Encoder Multiplexer.
+    *   **Meaning**: The deviation of the PCR sample from the piecewise-constant bitrate model. Represents the precision of the encoder's PCR insertion logic.
+2.  **PCR_DR (Drift Rate)**:
+    *   **Source**: Encoder Clock Crystal.
+    *   **Meaning**: The long-term linear frequency deviation of the STC vs. the physical wall-clock.
+    *   **Calculation**: $Drift_{ppm} = \frac{\Delta PCR - \Delta HAT}{\Delta HAT} \times 10^6$.
+3.  **PCR_OJ (Overall Jitter)**:
+    *   **Source**: Transport Network.
+    *   **Meaning**: The combined phase jitter introduced by network transit, congestion, and buffering.
+
+---
+
+## 3. Continuous Clock Recovery (The Math)
+
+The engine assumes the encoder clock is linear over a sliding window ($N=128$):
 $$PCR(t) = a \times t + b$$
-Where:
-*   **$a$**: Clock frequency scaling (Drift).
-*   **$b$**: Phase offset.
 
-### 4.1 Least Squares Estimation
-Given a window of $N$ samples (default $N=128$), the engine solves for $a$:
-$$a = \frac{Covariance(T_{arrival}, PCR)}{Variance(T_{arrival})}$$
-This provides a highly stable estimate of the true encoder frequency, immune to individual packet jitter.
+### 3.1 Least Squares Regression
+The frequency scaling factor $a$ is solved using:
+$$a = \frac{Covariance(HAT, PCR)}{Variance(HAT)}$$
+
+### 3.2 Kahan Compensated Summation
+For long-term stability, linear regression accumulators employ the Kahan algorithm to maintain floating-point precision during delta accumulation.
 
 ---
 
-## 5. Drift Estimation (ppm)
+## 4. Two-Stage Jitter Filtering
 
-Encoder clocks are rarely perfect. Long-term drift causes buffer overflows or AV desync.
-$$Drift_{ppm} = \frac{a_{estimated} - 27,000,000}{27,000,000} \times 10^6$$
+1.  **Stage 1: Median Filter (N=5)**: Strips outliers caused by OS scheduling spikes.
+2.  **Stage 2: EMA Filter ($\alpha=0.1$)**: Produces a smooth, reliable jitter trend for NOC visualization.
 
-| Drift (ppm) | Meaning | Status |
+---
+
+## 5. Measurement Precision & Authority
+
+| Timestamp Source | Resolution | Determinism |
 | :--- | :--- | :--- |
-| **± 5 ppm** | Excellent master clock | **NOMINAL** |
-| **± 20 ppm** | Normal encoder | **NOMINAL** |
-| **> 50 ppm** | Unstable clock | **WARNING** |
+| **Software Clock** | ~1 µs | Low |
+| **Kernel Timestamp**| ~100 ns | Medium |
+| **NIC Hardware (HAT)**| **~10 ns** | **High (Instrument Grade)** |
 
 ---
 
-## 6. Two-Stage Jitter Filtering
+## 6. Operational Diagnostics
 
-To ensure measurement precision, raw jitter is processed through a robust filtering pipeline:
+### 6.1 Discontinuity Epochs
+If $| \Delta PCR - \Delta HAT | > 100\text{ms}$, the engine triggers an **Analytical Epoch Reset**, clearing the regression model to prevent contaminated averages.
 
-1.  **Stage 1: Median Filter**: A window of 5 samples removes statistical outliers caused by OS scheduling spikes or NIC buffer delays.
-2.  **Stage 2: Exponential Moving Average (EMA)**:
-    $$J_{filtered,i} = \alpha \times J_i + (1 - \alpha) \times J_{filtered,i-1}$$
-    *Default $\alpha = 0.1$* provides a smooth, reliable jitter trend.
-
----
-
-## 7. Handling Discontinuities
-
-PCR may jump due to stream switching or encoder resets.
-*   **Detection Rule**: $| \Delta PCR - \Delta T_{arrival} | > 100\text{ms}$.
-*   **Action**: Immediately reset the regression model and start a new **Analytical Epoch**.
-
----
-
-## 8. Measurement Precision & Hardware Authority
-
-The accuracy of jitter and drift metrology is fundamentally limited by the resolution of the arrival timestamp source.
-
-| Timestamp Source | Resolution | Determinism Level |
-| :--- | :--- | :--- |
-| **Software Clock** | ~1 µs | **LOW**: Heavily affected by OS scheduling. |
-| **Kernel Timestamp**| ~100 ns | **MEDIUM**: Affected by IRQ jitter. |
-| **NIC Hardware (HAT)**| **~10 ns** | **HIGH**: Bit-exact and deterministic. |
-
-TsAnalyzer integrates hardware-assisted timestamping (HAT) to achieve the nanosecond-level precision required for professional broadcast auditing.
-
----
-
-## 9. Derived Industrial Metrics
-
-Once the clock is reconstructed, the engine computes:
-*   **PCR Jitter**: Peak-to-peak deviation ($max |J_i|$).
-*   **PCR Accuracy**: The difference between the intended PCR value and the reconstructed linear baseline.
-*   **Remaining Safe Time (RST)**: Predicting the time until the T-STD buffer reaches underflow/overflow based on current drift and arrival rate.
+### 6.2 Remaining Safe Time (RST)
+By correlating the reconstructed clock frequency ($a$) with the T-STD buffer fill rate, the engine predicts the **seconds remaining** before imminent underflow/overflow.
