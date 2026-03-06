@@ -14,7 +14,8 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 ### 🏛️ Pillar 1: Strategy & Architecture
 *   **[Product Overview](./docs/00_product/product_overview.md)**: Positioning, vision, and core pillars.
-*   **[System Architecture](./docs/01_architecture/system_architecture.md)**: High-performance data flow and NUMA-local threading.
+*   **[Overall System Architecture](./docs/03_deployment/system_architecture.md)**: Layered topology (Gateway, Engine, Appliance).
+*   **[Internal System Architecture](./docs/01_architecture/system_architecture.md)**: High-performance data flow and NUMA-local threading.
 
 ### 🧬 Pillar 2: Metrology & Math (The Bible)
 *   **[TR 101 290 Standard](./docs/02_metrology/tr101290.md)**: Signal health levels and compliance implementation.
