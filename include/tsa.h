@@ -171,6 +171,7 @@ typedef struct {
     tsa_op_mode_t op_mode;
     double pcr_ema_alpha;
     bool enable_forensics;
+    bool enable_reactive_pid_filter;
     uint64_t forced_cbr_bitrate;
     uint16_t protected_pids[16];
     uint32_t entropy_window_packets;

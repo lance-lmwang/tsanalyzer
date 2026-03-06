@@ -790,10 +790,17 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     } else {
         h->stc_ns = n;
     }
-    
+
+    uint16_t current_pid = ((p[1] & 0x1F) << 8) | p[2];
+    if (h->config.enable_reactive_pid_filter && current_pid < TSA_MAX_PID) {
+        if (!tsa_stream_demux_check_pid(&h->root_stream, current_pid)) {
+            // Astra Reactive PID Drop: avoid further parsing, decoding, and plugin routing
+            return;
+        }
+    }
+
     ts_decode_result_t r;
-    tsa_decode_packet(h, p, n, &r);
-    tsa_metrology_process(h, p, n, &r);
+    tsa_decode_packet(h, p, n, &r);    tsa_metrology_process(h, p, n, &r);
 
     /* Dispatch to modular plugins via Stream Tree */
     h->current_ns = n;
