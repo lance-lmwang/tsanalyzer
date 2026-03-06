@@ -76,11 +76,13 @@ static void http_handler(struct mg_connection* c, int ev, void* ev_data) {
         } else if (mg_match(hm->uri, mg_str("/json"), NULL)) {
             tsa_snapshot_full_t snap;
             if (tsa_take_snapshot_full(h, &snap) == 0) {
-                char* buf = malloc(1024 * 1024);
-                if (buf) {
-                    tsa_snapshot_to_json(h, &snap, buf, 1024 * 1024);
-                    mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", buf);
-                    free(buf);
+                static __thread char* json_buf = NULL;
+                const size_t json_buf_size = 1024 * 1024;
+                if (!json_buf) json_buf = malloc(json_buf_size);
+
+                if (json_buf) {
+                    tsa_snapshot_to_json(h, &snap, json_buf, json_buf_size);
+                    mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s", json_buf);
                 } else {
                     mg_http_reply(c, 500, NULL, "Out of memory");
                 }
