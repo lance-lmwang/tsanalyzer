@@ -41,7 +41,7 @@ add_library(tsp_core STATIC
     src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
-    src/mongoose.c
+    src/mongoose.c src/metrology/nalu_sniffer.c
 )
 target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 
@@ -127,6 +127,7 @@ tsa_test(test_metric_bench test_metric_bench.c)
 tsa_test(test_metric_buffer test_metric_buffer.c)
 tsa_test(test_metrology_utils test_metrology_utils.c)
 tsa_test(test_mpmc_ready_queue test_mpmc_ready_queue.c)
+tsa_test(test_nalu_sniffer test_nalu_sniffer.c)
 tsa_test(test_normalization test_normalization.c)
 tsa_test(test_packet_ring test_packet_ring.c)
 tsa_test(test_pcr_engine test_pcr_engine.c)
