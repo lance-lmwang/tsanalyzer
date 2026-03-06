@@ -6,12 +6,30 @@ This document formalizes the software clock reconstruction logic used for all te
 
 TsAnalyzer reconstructs a local System Time Clock (STC) from sparse PCR samples using a digital lock-loop.
 
-### 1.1 Interpolation Formula
-Between two PCR samples ($P_1, P_2$) arriving at hardware times ($H_1, H_2$):
-*   **Calculated Slope**: $M = \frac{P_2 - P_1}{H_2 - H_1}$
-*   **Virtual STC at time $t$**: $VSTC(t) = P_1 + M \times (t - H_1)$
+### 1.1 PCR Extraction
+PCR values are extracted using 64-bit integer arithmetic:
+```c
+uint64_t parse_pcr(uint8_t *af) {
+    uint64_t base = ((uint64_t)af[0] << 25) | ((uint64_t)af[1] << 17) |
+                    ((uint64_t)af[2] << 9)  | ((uint64_t)af[3] << 1)  |
+                    ((uint64_t)af[4] >> 7);
+    uint16_t ext  = ((af[4] & 1) << 8) | af[5];
+    return base * 300 + ext; // 27 MHz ticks
+}
+```
 
-### 1.2 Precision Handling
+### 1.2 PLL State Update
+The PLL filters network jitter to recover the encoder's true frequency:
+```c
+void pll_update(pcr_pll_t *pll, double arrival, double pcr) {
+    double err = arrival - pcr;
+    pll->phase += 0.01 * err;    // Phase correction
+    pll->freq  += 0.0001 * err;  // Frequency tracking
+    pll->jitter = 0.9 * pll->jitter + 0.1 * fabs(err); // Jitter estimation
+}
+```
+
+### 1.3 Precision Handling
 All slope and clock calculations use **Q64.64 Fixed-Point Arithmetic** to ensure:
 1.  **Bit-Identical results** across x86 and ARM.
 2.  **No accumulation of rounding errors** over long runs (24h+).

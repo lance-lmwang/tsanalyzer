@@ -2,18 +2,25 @@
 
 TsAnalyzer v3 follows a strict performance contract where throughput is a correctness requirement.
 
-## 1. Performance Targets (Per Node)
+## 1. Scaling Model & Performance Estimates
 
-| Target | Specification | Condition |
+The system is designed to scale from laboratory probes to ISP-scale monitoring appliances.
+
+| Capability | 1 Gbps Profile | 10 Gbps Profile |
 | :--- | :--- | :--- |
-| **Max Throughput** | 1.5 Gbps | Sustained, no loss. |
-| **Packet Density** | 1.2M PPS | Per physical core. |
-| **Analysis Latency**| < 800ns | Ingress to Metrology. |
-| **Measurement Jitter**| ≤ ±10ns | Relative to hardware. |
+| **RX Threads** | 1 | 8 |
+| **Reactor Nodes** | 2 | 8 |
+| **RSS Mapping** | Queue 0-1 | Queue 0-7 |
+| **Throughput** | ~830k PPS | ~8.3M PPS |
+| **Latency** | < 2ms | < 2ms |
+
+### 1.1 Efficiency Metrics
+*   **TS Analysis Cost**: ~250 CPU cycles per packet.
+*   **Cycle Budget**: A 10Gbps stream (8.3M PPS) requires approximately 2 billion cycles per second, equivalent to **1 modern physical CPU core** for the entire aggregate analysis logic.
 
 ---
 
-## 2. Engineering Verification Gates
+## 2. Performance Targets (Per Core)
 
 Before a build is certified for production, it must pass these automated gates:
 

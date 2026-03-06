@@ -24,14 +24,25 @@ While RST provides a time-based horizon, the **Buffer Safety Margin %** provides
 BSM represents the current buffer occupancy relative to its normative target or capacity.
 $$BSM \% = \left( \frac{Buffer_{current}}{Buffer_{target}} \right) \times 100$$
 
-### 2.2 Operational Interpreation
+### 2.2 Operational Interpretation
 *   **100%**: Perfectly aligned with the T-STD model.
 *   **< 20%**: Critical Starvation Risk. High probability of frame drops.
 *   **> 150%**: Critical Overflow Risk. Decoder memory pressure.
 
 ---
 
-## 3. The Predictive Horizon Chart
+## 3. Thresholds & Action Matrix
+
+| RST Value | Risk Level | Status | Gateway Action |
+| :--- | :--- | :--- | :--- |
+| **> 15s** | Low | **Optimal** | Direct Pass-through |
+| **10s - 15s** | Medium | **Degraded** | Warn / Tag Metadata |
+| **5s - 10s** | High | **Mitigation**| Engage Pacing Engine |
+| **< 5s** | Critical | **Critical** | Forensic Capture |
+
+---
+
+## 4. The Predictive Horizon Chart
 
 By combining RST and BSM, TsAnalyzer generates a **Predictive Horizon Chart**:
 *   **X-Axis**: Time (forward-looking).

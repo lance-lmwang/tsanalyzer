@@ -28,9 +28,36 @@ To prevent **Bitrate Inversion** (where a snapshot shows more bits arriving than
 3.  **Release**: Workers resume analysis.
 4.  **Compute**: The reporting thread calculates deltas from the Sampling Plane.
 
+## 3. Lock-Free Data Plane
+
+The fast path from ingestion to analysis is 100% wait-free.
+
+### 3.1 Packet Descriptor
+Every packet is represented by a small descriptor to keep the SPSC ring compact:
+```c
+typedef struct {
+    uint64_t hw_timestamp; // NIC-level nanoseconds
+    uint32_t flow_id;      // Unique stream identifier
+    uint16_t len;          // 188 for TS
+    uint8_t *data;         // Buffer pointer (NUMA-local)
+} tsa_packet_t;
+```
+
+### 3.2 SPSC Ring Structure
+Utilizes cache-line padding and C11 atomics:
+```c
+typedef struct {
+    alignas(64) _Atomic uint64_t head;
+    alignas(64) _Atomic uint64_t tail;
+    tsa_packet_t slots[4096];
+} tsa_ring_t;
+```
+*   **Producer (RX Worker)**: `store_release(head)` after writing packet.
+*   **Consumer (Reactor)**: `load_acquire(head)` before reading.
+
 ---
 
-## 3. Determinism Guardrails
+## 4. Determinism Guardrails
 
 *   **No Malloc**: Memory pools are allocated at startup.
 *   **No CLOCK_REALTIME**: The engine is "blind" to the wall-clock; it only sees HAT and PCR.

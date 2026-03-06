@@ -1,51 +1,77 @@
-# System Architecture & Data Flow
+# TsAnalyzer Pro: v3 System Architecture
 
-TsAnalyzer v3 utilizes a decoupled, high-concurrency architecture optimized for NUMA-local execution and cache residency.
-
-## 1. The 4-Layer Engine Architecture
-
-The core analysis engine follows a strict linear pipeline to ensure temporal fidelity.
-
-| Layer | Responsibility | Mechanism |
-| :--- | :--- | :--- |
-| **4. Interface** | Presentation | Bit-exact JSON, Prometheus Exporter, `tsa_top` TUI. |
-| **3. Metrology** | Mathematical Simulation | ETSI TR 101 290, 3D PCR Math, T-STD (Leaky Bucket). |
-| **2. Structural** | Protocol Decoding | SI/PSI Parsing, 27MHz STC Reconstruction, NALU Sniffing. |
-| **1. Ingestion** | Physical Capture | Hardware Timestamping, recvmmsg Batching, SPSC Rings. |
+TsAnalyzer v3 is not a traditional server application, but a **Deterministic Dataflow Machine**. Its primary mission is to transform raw NIC packets into high-fidelity metrology with hardware-level precision.
 
 ---
 
-## 2. Multi-Channel Threading Model (The Appliance)
+## 1. Core Design Philosophy
 
-To scale to 500+ streams, the Appliance employs a **Hybrid Reactor-Worker Model**:
-
-1.  **I/O Aggregator (The Reactor)**: A small set of threads using Epoll to listen to hundreds of sockets. They perform raw packet reception and dispatch to stream-specific queues.
-2.  **Metrology Worker (The Engine)**: One dedicated physical core per high-bitrate stream (or shared for proxy streams).
-    *   **Lock-Free Handoff**: Data moves from Aggregator to Worker via a wait-free SPSC ring buffer.
-    *   **CPU Pinning**: Workers are pinned to isolated cores to eliminate scheduling jitter.
+1.  **NUMA Locality First**: Packet data and processing state must never cross physical CPU socket boundaries (zero QPI/UPI latency).
+2.  **Lock-Free Data Plane**: 0 mutex, 0 malloc, 0 blocking in the fast path.
+3.  **Batch Processing Everywhere**: Utilize `recvmmsg` and vector instructions to process packets in groups.
+4.  **Streams are State Machines**: A stream is not a thread; it is a compact state machine that must fit within the CPU's L1/L2 cache.
+5.  **Branchless Logic**: Eliminate conditional branches in the TS parser to maximize pipeline efficiency.
 
 ---
 
-## 3. Data Flow: Ingress to Insight
+## 2. Global System Architecture
 
-```mermaid
-graph TD
-    Ingress[Network Ingress] -->|HW Timestamp| Aggregator[I/O Aggregator]
-    Aggregator -->|Wait-free Push| SPSC[SPSC Ring Buffer]
-    SPSC -->|Wait-free Pop| Worker[Metrology Worker]
+The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **500+ streams**:
 
-    subgraph Metrology_Worker [Metrology Worker Thread]
-        Worker --> Decode[Structural Decode]
-        Decode --> TR101[TR 101 290 Engine]
-        Decode --> PCR[PCR 3D Analytics]
-        TR101 --> VBV[T-STD VBV Simulation]
-    end
-
-    VBV --> Snapshot[Atomic Snapshot]
-    Snapshot --> Shm[POSIX Shared Memory]
-    Snapshot --> API[REST / Prometheus API]
+```text
+            NIC (10G / 40G)
+                 │
+          recvmmsg Ingest (Batch)
+                 │
+           RX Worker (Per-Queue)
+                 │
+            Flow Hash (RSS-like)
+                 │
+   ┌─────────────┼─────────────┐
+   │             │             │
+Reactor 0      Reactor 1      Reactor N
+ 100 streams    100 streams    100 streams
+   │             │             │
+Lock-Free SPSC Rings (Wait-free handoff)
+   │
+TS Analysis Core (Layer 2 & 3)
+   │
+Metrics Bus (Atomic Snapshots)
+   │
+Prometheus / tsa_top / JSON
 ```
 
-## 4. NUMA Integrity
-In professional deployments, the system enforces **Local-Node Consistency**:
-*   NIC Interrupts + Aggregator Thread + SPSC Buffers + Worker Threads + Metric Registry MUST all reside on the same physical CPU socket (NUMA node) to eliminate cross-bus Infinity Fabric/QPI latency.
+---
+
+## 3. The NUMA Pipeline
+
+NUMA awareness is the difference between a tool and an instrument at 10 Gbps.
+
+### 3.1 Data Residency Rule
+**Packet data must never cross NUMA nodes.** Crossing the interconnect (QPI/UPI) introduces non-deterministic latency spikes that pollute jitter measurements.
+
+### 3.2 Thread-to-Core Mapping
+*   **Ingest RX Worker**: Pinned to the same NUMA node as the NIC PCIe lane.
+*   **Reactor Workers**: Pinned to physical cores adjacent to the RX Worker.
+*   **Metrics Reporting**: Low-priority background threads on non-isolated management cores.
+
+---
+
+## 4. Reactor Stream Model
+
+Unlike v2 which used "Thread-per-Stream," v3 treats **Streams as State Machines** multiplexed inside a fixed number of **Reactor Threads**.
+
+### 4.1 Event Loop Logic
+Each Reactor manages ~100 streams. The loop performs wait-free polling:
+```c
+while(running) {
+    batch = ring_pop_batch();
+    for(pkt in batch) {
+        stream = flow_table[pkt.flow];
+        process_ts_packet(stream, pkt); // Updates state machines
+    }
+}
+```
+
+### 4.2 Cache Residency
+The `ts_stream_t` context is carefully packed to reside within a single cache line (64-128 bytes) where possible, ensuring that all metrology math (PCR PLL, VBV) happens in L1/L2 cache.
