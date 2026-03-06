@@ -73,21 +73,18 @@ The per-packet analytical pipeline is strictly **O(1)** to maintain deterministi
 
 ---
 
-## 5. Reactor Stream Model
+## 5. High-Performance Execution Primitives
 
-Unlike v2 which used "Thread-per-Stream," v3 treats **Streams as State Machines** multiplexed inside a fixed number of **Reactor Threads**.
+To achieve the 8M pps target, the engine utilizes hardware-intrinsic optimizations.
 
-### 4.1 Event Loop Logic
-Each Reactor manages ~100 streams. The loop performs wait-free polling:
-```c
-while(running) {
-    batch = ring_pop_batch();
-    for(pkt in batch) {
-        stream = flow_table[pkt.flow];
-        process_ts_packet(stream, pkt); // Updates state machines
-    }
-}
-```
+### 5.1 TS SIMD Parser (AVX-512)
+Instead of byte-by-byte state machines, v3 uses SIMD vectors to perform "dimensional reduction" on the 188-byte TS packets.
+*   **Vectorized Sync Detection**: Uses `_mm512_cmpeq_epi8_mask` to scan entire cache lines for the `0x47` sync byte in a single instruction.
+*   **Header Gathering**: Uses Gather/Shuffle instructions to extract 13-bit PIDs from multiple packets simultaneously.
+*   **Register-level Drop**: Non-analyzed PIDs (like 0x1FFF Null packets) are masked at the register level to prevent unnecessary memory writes.
 
-### 4.2 Cache Residency
-The `ts_stream_t` context is carefully packed to reside within a single cache line (64-128 bytes) where possible, ensuring that all metrology math (PCR PLL, VBV) happens in L1/L2 cache.
+### 5.2 1000+ Stream Scheduler (Run-to-Completion)
+To eliminate OS context-switch overhead for massive stream counts:
+*   **Worker-per-Core**: A fixed pool of worker threads equals the physical core count.
+*   **Time-Wheel QoS**: Employs an **O(1) Time-Wheel algorithm** for deferred analysis tasks (e.g., TR 101 290 P1 timeouts), ensuring that thousands of concurrent timers do not block the high-speed data plane.
+*   **NUMA Affinity**: NIC interrupts, Ring Buffers, and Worker threads are hard-bound to the same NUMA node to eliminate Infinity Fabric/UPI cross-talk.

@@ -44,16 +44,22 @@ typedef struct {
 ```
 
 ### 3.2 SPSC Ring Structure
-Utilizes cache-line padding and C11 atomics:
+Utilizes cache-line padding and C11 atomics to eliminate **False Sharing**.
 ```c
 typedef struct {
-    alignas(64) _Atomic uint64_t head;
-    alignas(64) _Atomic uint64_t tail;
+    alignas(128) _Atomic uint64_t head; // Producer cursor
+    alignas(128) _Atomic uint64_t tail; // Consumer cursor
     tsa_packet_t slots[4096];
 } tsa_ring_t;
 ```
-*   **Producer (RX Worker)**: `store_release(head)` after writing packet.
-*   **Consumer (Reactor)**: `load_acquire(head)` before reading.
+*   **Isolation**: `alignas(128)` ensures cursors reside on separate cache lines even on modern high-end CPUs (e.g., AMD Zen 4).
+*   **Memory Order**:
+    *   **Producer**: Uses `memory_order_release` when updating the head.
+    *   **Consumer**: Uses `memory_order_acquire` when polling the head.
+    *   *Significance*: Minimizes memory barrier stalls compared to the default sequential consistency.
+
+### 3.3 Zero-Copy Token Flow
+The analysis pipeline never copies the 188-byte TS payload. Instead, it passes **Tokens** (pointers or offsets) into pre-allocated NUMA-local memory pools.
 
 ---
 

@@ -6,19 +6,17 @@ This document formalizes the software clock reconstruction logic used for all te
 
 TsAnalyzer reconstructs a local System Time Clock (STC) from sparse PCR samples using a digital lock-loop.
 
-### 1.1 PCR Extraction
-PCR values are extracted using 64-bit integer arithmetic:
-```c
-uint64_t parse_pcr(uint8_t *af) {
-    uint64_t base = ((uint64_t)af[0] << 25) | ((uint64_t)af[1] << 17) |
-                    ((uint64_t)af[2] << 9)  | ((uint64_t)af[3] << 1)  |
-                    ((uint64_t)af[4] >> 7);
-    uint16_t ext  = ((af[4] & 1) << 8) | af[5];
-    return base * 300 + ext; // 27 MHz ticks
-}
-```
+### 1.1 42-bit PCR Reconstruction
+To ensure precision, the engine reconstructs the full 27MHz timeline using 64-bit integer arithmetic, strictly avoiding floating-point rounding errors.
+$$PCR_{value} = (PCR_{base} \times 300) + PCR_{ext}$$
+Where:
+*   $PCR_{base}$: 33-bit 90kHz counter.
+*   $PCR_{ext}$: 9-bit 27MHz remainder.
 
-### 1.2 PLL State Update
+### 1.2 Nanosecond-Precision Rx Time
+Arrival times are captured using **Hardware Timestamping** (SO_TIMESTAMPING) or `CLOCK_MONOTONIC_RAW` at the NIC driver boundary. This ensures that the measurement is immune to kernel interrupt latency and user-space scheduling jitter.
+
+### 1.3 PLL State Update
 The PLL filters network jitter to recover the encoder's true frequency:
 ```c
 void pll_update(pcr_pll_t *pll, double arrival, double pcr) {
@@ -29,10 +27,9 @@ void pll_update(pcr_pll_t *pll, double arrival, double pcr) {
 }
 ```
 
-### 1.3 Precision Handling
-All slope and clock calculations use **Q64.64 Fixed-Point Arithmetic** to ensure:
-1.  **Bit-Identical results** across x86 and ARM.
-2.  **No accumulation of rounding errors** over long runs (24h+).
+### 1.4 Jitter Mathematical Model
+$$Jitter = \Delta Arrival\_Time - \left( \frac{\Delta PCR_{value}}{27,000,000} \right)$$
+Calculated in 27MHz ticks and normalized to nanoseconds for reporting.
 
 ---
 

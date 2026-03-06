@@ -22,6 +22,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[PCR Root Cause Engine](./docs/02_metrology/pcr_root_cause.md)**: Distinguishing Encoder vs. Network jitter.
 *   **[GOP Structure Analyzer](./docs/02_metrology/gop_analysis.md)**: Content-layer GOP stability and IDR auditing.
 *   **[Entropy Analyzer](./docs/02_metrology/entropy_analysis.md)**: Information density and freeze/black frame detection.
+*   **[StatMux Detection](./docs/02_metrology/statmux_analysis.md)**: Reverse-engineering multiplexer strategies.
 *   **[HLS/OTT Model](./docs/02_metrology/hls_analysis_model.md)**: Manifest auditing and fragment download metrology.
 *   **[RST+ & Safety Models](./docs/02_metrology/rst_model.md)**: Predictive telemetry and buffer safety margins.
 
