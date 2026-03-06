@@ -35,6 +35,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 ### 🎛️ Pillar 4: Implementation & Operations
 *   **[Ingestion Engine](./docs/03_engine/ingestion_engine.md)**: Hardware timestamping and zero-copy data plane.
 *   **[Metrology Core](./docs/03_engine/metrology_core.md)**: Numerical stability, __int128, and sampling barriers.
+*   **[Server Architecture](./docs/01_architecture/server_architecture.md)**: Side-car workers and asynchronous audit pipelines.
 *   **[Smart Gateway](./docs/05_gateway/smart_gateway.md)**: Pacing engines, XDP bypass, and the smart action matrix.
 
 ### 🔌 Pillar 5: Interfaces & Validation
