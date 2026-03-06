@@ -84,7 +84,28 @@ To provide "Deep Static Analysis" alongside real-time metrology, the engine inte
 *   **Action**: The Analysis Plane spawns an asynchronous Task to run `libmediainfo` or `ffprobe` on a 500ms cached segment of the stream.
 *   **Result**: A comprehensive property report (Bit depth, HDR profile, Frame structure) is merged into the stream's JSON metadata.
 
+### 3.4 DVB Service Inventory
+The engine reconstructs the logical service hierarchy from the SDT (Service Description Table).
+*   **Metadata Extraction**: Captures `Service Name` and `ServiceProvider` for every program.
+*   **Character Set Decoding**: Implements **ISO-8859** and DVB-specific character table mapping to ensure correct UTF-8 representation of regional channel names.
+
+### 3.5 CAS & Scrambling Visibility
+To audit encrypted services, the engine monitors Conditional Access (CA) descriptors and transport-level flags.
+*   **Scrambling State**: Real-time monitoring of the `transport_scrambling_control` bits in every TS packet header.
+*   **CAID Audit**: Identifying the CA system IDs (e.g., Irdeto, Nagra, Viaccess) associated with every scrambled PID via the PMT/CAT.
+*   **Alarm**: Triggers `SERVICE_UNEXPECTEDLY_SCRAMBLED` if a service marked as Free-to-Air (FTA) starts using encryption.
+
+### 3.6 EPG & Content Signaling (EIT)
+The engine monitors the Event Information Table (EPG) to ensure that the broadcast schedule metadata is correctly populated.
+*   **Audit**: Verifies the presence of `present/following` events and the repetition rate of the EIT schedule.
+*   **Signaling Accuracy**: Cross-checks the EIT `start_time` and `duration` against the actual video stream discontinuities.
+
+### 3.7 T2-MI Interface Analysis
+For DVB-T2 distribution links, the engine decodes the T2-MI (T2 Modulator Interface) encapsulation.
+*   **Analysis**: Audits the T2-MI baseband frames, L1-signaling, and the consistency of the PLP (Physical Layer Pipe) distribution.
+*   **Detection**: Identifies packet loss within the T2-MI tunnel that might be hidden from standard TS analyzers.
+
 ---
 
-## 6. SCTE-35 & Metadata Audit
+## 4. SCTE-35 & Metadata Audit
 Decodes Digital Program Insertion markers and calculates the absolute PTS alignment error between the splice command and the actual video IDR frame.

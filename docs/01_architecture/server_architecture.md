@@ -43,12 +43,18 @@ Proactive notification is critical for sub-second incident response.
 
 The Appliance is **API-First**. All dashboards and management tools consume the same public endpoints.
 
-### 4.1 Management API (REST)
-*   `POST /api/v1/streams`: Dynamically add a monitored source (UDP/SRT).
-*   `DELETE /api/v1/streams/:id`: Gracefully stop and free engine resources.
-*   `GET /api/v1/metrology/full`: Global health snapshot of the entire appliance.
+### 4.1 Active Task Orchestration
+Unlike passive monitors, the Appliance manages the full lifecycle of monitoring tasks:
+*   **Dynamic Provisioning**: APIs to spawn/kill engine instances based on scheduled broadcast events.
+*   **Resource Balancing**: Automatically assigns monitoring tasks to specific NUMA nodes and CPU cores based on aggregate PPS load.
 
-### 4.2 Metrics API (Prometheus)
+### 4.2 Multiplex & Service Grouping
+Metrics are aggregated at multiple logical levels:
+*   **Physical Level**: Raw NIC and IP stats.
+*   **Multiplex Level**: Aggregated health of all programs within a single TS/MPTS.
+*   **Service Level**: End-to-end health of a specific logical channel across multiple delivery paths (e.g., comparing Main vs. Backup variant).
+
+### 4.3 Metrics API (Prometheus)
 Native exporter for high-density time-series data.
 *   **Target Interval**: 1s - 15s.
-*   **Labels**: Every metric is tagged with `stream_id` and `node_id`.
+*   **Labels**: Every metric is tagged with `stream_id`, `multiplex_id`, and `node_id`.

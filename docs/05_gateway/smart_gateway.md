@@ -2,6 +2,8 @@
 
 The Smart Assurance Gateway provides inline signal processing, repair, and fail-safe relay capabilities.
 
+---
+
 ## 1. The Smart Action Matrix
 
 The gateway automatically switches operational states based on the intersection of Remaining Safe Time (RST) and RCA attribution.
@@ -31,13 +33,40 @@ Unlike traditional muxers (like FFmpeg) that may clump audio packets, TsAnalyzer
 
 ---
 
-## 3. Fail-Safe: Watchdog Bypass
+## 3. Multi-Input Resilient Failover
+
+The gateway supports **Active-Standby** and **Threshold-Based Failover** to ensure 99.999% delivery uptime.
+
+### 3.1 Input Source Ranking
+Users can define multiple inputs (e.g., Primary SRT, Backup UDP).
+*   **Heartbeat Monitoring**: The Metrology Engine continuously monitors all inputs, even those in standby.
+*   **Switching Triggers**: A switch is initiated if the active source hits:
+    *   `Signal_Health_Level == INVALID`
+    *   `RST < 2.0s` (Predictive switching)
+    *   `CC_Error_Rate > Threshold`
+
+### 3.2 Seamless Handoff
+To prevent downstream decoder sync-loss during a switch:
+*   **PTS Alignment**: The gateway utilizes the **Clock Recovery Model** to align the PTS/DTS of the backup source with the outgoing timeline before committing the switch.
+*   **CC Continuity**: The `transport_continuity_counter` is restamped at the handoff point to maintain a perfect monotonic sequence.
+
+---
+
+## 4. Selective Stream Redirection (Demux-Routing)
+
+The gateway can perform dynamic PID-level routing and selective metrology.
+*   **Service Extraction**: Routing specific programs from an MPTS to different destinations.
+*   **Active PID Management**: Dynamically subscribing to (`join_pid`) or dropping (`leave_pid`) components based on real-time analysis needs or external API requests.
+
+---
+
+## 5. Fail-Safe: Watchdog Bypass
 
 Because the gateway operates inline, it must never become a point of failure.
 
-### 3.1 Bypass Thresholds
+### 5.1 Bypass Thresholds
 If processing latency $\Delta t_{proc} > 5ms$ for a contiguous window of 100 packets, the gateway panic-switches to **Transparent L4 Bypass**.
 
-### 3.2 Implementation (v3 Roadmap)
+### 5.2 Implementation (v3 Roadmap)
 *   **Current**: Userland copy-bypass (Fast thread-to-thread pointer transfer).
 *   **Planned (AF_XDP)**: Direct hardware-level redirection using **XDP_REDIRECT**. This allows the network card to forward traffic at the driver level if the analysis process hangs, achieving near-zero latency even during failure.

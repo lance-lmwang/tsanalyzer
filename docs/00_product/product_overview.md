@@ -24,6 +24,7 @@ In professional broadcasting, timing is the ultimate truth. TsAnalyzer Pro funct
 *   **Run-to-Completion Model**: Replaces traditional multi-threading with an asynchronous event-driven mechanism to maximize cache efficiency and CPU utilization.
 
 ### 4. Deep Semantic Inspection
+*   **Service Inventory & CAS Audit**: Automated mapping of PIDs to friendly channel names (SDT) and provider IDs. Monitoring of Conditional Access (CA) encryption states and CAID compliance.
 *   **StatMux & VBR Analytics**: Real-time reverse-engineering of upstream multiplexer strategies, monitoring Null Packet displacement and GOP phase alignment.
 *   **Ecosystem Integration**: Providing high-density telemetry to downstream professional transcoders and decoders via bit-exact JSON/Prometheus interfaces.
 
