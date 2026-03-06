@@ -1,0 +1,41 @@
+# Root Cause Analysis (RCA) Scoring Model
+
+TsAnalyzer uses a weighted superposition of discrete causal factors to attribute faults. This provides an explainable "Banner Truth" for the NOC.
+
+## 1. Score Calculation Logic
+
+The engine calculates two primary scores (0.0 to 1.0) for every anomalous event.
+
+### 1.1 Network Domain Score ($S_{net}$)
+Attributes the fault to the transport path.
+$$S_{net} = (0.4 \times MLR) + (0.3 \times DF) + (0.2 \times RTT_{var}) + (0.1 \times RETRANS)$$
+*   **MLR**: Media Loss Rate (RFC 4445).
+*   **DF**: Delay Factor (RFC 4445).
+*   **RTT_var**: Variance in SRT Round Trip Time.
+*   **RETRANS**: SRT Retransmission Tax.
+
+### 1.2 Encoder Domain Score ($S_{enc}$)
+Attributes the fault to the source/encoder.
+$$S_{enc} = (0.4 \times PCR_{jitter}) + (0.3 \times PTS_{drift}) + (0.2 \times TSTD_{overflow}) + (0.1 \times GOP_{break})$$
+*   **PCR_jitter**: Real-time jitter vs. the 27MHz Software PLL.
+*   **PTS_drift**: Differential drift between audio and video PTS.
+*   **TSTD_overflow**: Violations of the ISO Annex D buffer model.
+*   **GOP_break**: Missing or malformed GOP boundaries (detected via NALU sniffer).
+
+---
+
+## 2. Decision Boundary Matrix
+
+The "Banner Truth" is determined by comparing the two scores.
+
+| Dominant Score | Final Inference | NOC Banner Text |
+| :--- | :--- | :--- |
+| $S_{net} < 0.2$ and $S_{enc} < 0.2$ | **Optimal** | ✅ SIGNAL OPTIMAL |
+| $S_{net} > 0.6$ and $S_{enc} < 0.2$ | **Network** | ⚠️ NETWORK IMPAIRMENT |
+| $S_{enc} > 0.6$ and $S_{net} < 0.2$ | **Encoder** | ☢️ ENCODER INSTABILITY |
+| Both $> 0.4$ | **Complex** | 🚨 MULTI-CAUSAL CRITICAL |
+
+---
+
+## 3. Explainability Audit
+For every RCA decision, the engine exposes the weighted factors in the JSON report, allowing engineers to verify *why* the system made a particular attribution.

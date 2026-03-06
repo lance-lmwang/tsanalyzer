@@ -1,124 +1,58 @@
-# TsAnalyzer: Deterministic Transport Stream Metrology Platform
+# TsAnalyzer: Software-Defined Broadcast Metrology
 
-TsAnalyzer is a professional-grade **Software-Defined Measurement Instrument** designed for broadcast-grade TS analysis. It combines laboratory-grade protocol depth with high-performance real-time processing.
+TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement and delivery tools for Transport Streams. It combines laboratory-grade precision with industrial-scale concurrency.
 
-## 🚀 Key Features (v2.2.0 PRO)
-- **Metrology Grade Precision**: Verified **8.00 Mbps CBR** accuracy on broadcast samples with < 0.001% error.
-- **Deterministic Engine**: 100% Bit-identical results via 定点数 (Fixed-point) and 128-bit math.
-- **Micro-Smooth Pacing**: Integrated **Token Bucket Pacer** ensuring sub-10ms CBR stability.
-- **Industrial Robustness**: Dynamic heap memory model supporting high-density multi-stream analysis.
-- **Real-time Forensics**: RCA scoring, TR 101 290 P1/P2 monitoring, and MDI-DF calculation.
+## 🚀 The Product Line
+
+1.  **TsAnalyzer Engine**: Extreme-performance C probe for developers and system integrators.
+2.  **TsAnalyzer Appliance**: Multi-channel monitoring platform with 7-tier NOC visualization and SLA tracking.
+3.  **Smart Assurance Gateway**: Inline signal processing node with high-precision pacing and fail-safe bypass.
 
 ---
 
-## 📊 Metrology Architecture
+## 📖 Technical Documentation (v3 Architecture)
 
-TsAnalyzer follows a strict **7-Tier Metrology Architecture** for full-stack signal visibility, as defined in the **[Server & API Spec](./docs/server_and_api.md)**.
+### 🏛️ Pillar 1: Strategy & Architecture
+*   **[Product Overview](./docs/00_product/product_overview.md)**: Positioning, vision, and core pillars.
+*   **[System Architecture](./docs/01_architecture/system_architecture.md)**: High-performance data flow and NUMA-local threading.
 
-- **Tier 1 (Master)**: Signal Presence, Fidelity (0-100%), and Engine Determinism.
-- **Tier 2 (Link)**: SRT RTT/Loss, MDI Delay Factor (DF), and Media Loss Rate (MLR).
-- **Tier 3 (P1)**: TR 101 290 Priority 1 (Sync, PAT, PMT, CC Errors).
-- **Tier 4 (P2)**: TR 101 290 Priority 2 (PCR Jitter, PCR Repetition, PTS Error).
-- **Tier 5 (MUX)**: PID Bitrate Distribution and Null Packet Density.
-- **Tier 6 (Essence)**: FPS Stability, GOP Cadence, and AV Sync (Lip-Sync Offset).
-- **Tier 7 (Forensic)**: Millisecond-aligned event audit trails and RCA logs.
+### 🧬 Pillar 2: Metrology & Math (The Bible)
+*   **[TR 101 290 Standard](./docs/02_metrology/tr101290.md)**: Signal health levels and compliance implementation.
+*   **[PCR Math & PLL](./docs/02_metrology/pcr_math.md)**: 27MHz clock reconstruction and 3D jitter decomposition.
+*   **[RST+ & Safety Models](./docs/02_metrology/rst_model.md)**: Predictive telemetry and buffer safety margins.
+
+### 🧠 Pillar 3: Analytics & Intelligence
+*   **[Alarm & Incident Engine](./docs/04_operations/alarm_engine.md)**: FSM lifecycles, suppression, and incident merging.
+*   **[RCA Scoring Model](./docs/04_operations/rca_model.md)**: Explainable fault attribution (Network vs. Encoder).
+*   **[SLA Engine](./docs/04_operations/sla_engine.md)**: Long-term availability and compliance grading.
+
+### 🎛️ Pillar 4: Implementation & Operations
+*   **[Ingestion Engine](./docs/03_engine/ingestion_engine.md)**: Hardware timestamping and zero-copy data plane.
+*   **[Metrology Core](./docs/03_engine/metrology_core.md)**: Numerical stability, __int128, and sampling barriers.
+*   **[Smart Gateway](./docs/05_gateway/smart_gateway.md)**: Pacing engines, XDP bypass, and the smart action matrix.
+
+### 🔌 Pillar 5: Interfaces & Validation
+*   **[REST API](./docs/06_interfaces/rest_api.md)** | **[Prometheus](./docs/06_interfaces/prometheus.md)** | **[CLI (tsa_top)](./docs/06_interfaces/cli.md)**
+*   **[Performance Targets](./docs/07_validation/performance_targets.md)**: Success gates and engineering verification.
 
 ---
 
 ## 💻 Quick Start & Usage
 
-### 1. Docker Compose (Instant Full Stack)
-The easiest way to start TsAnalyzer along with Grafana and Prometheus:
+### 1. Standalone Probe (CLI)
+```bash
+./build/tsa_cli --mode live --srt-url srt://:9000
+```
+
+### 2. Full-Stack NOC (Docker Compose)
 ```bash
 docker-compose up -d
 ```
-Visit `http://localhost:3000` for the NOC Dashboard.
-
-### 2. Standalone Analysis (tsa)
-The `tsa` CLI is used for single-stream analysis. It defaults to Prometheus metrics on port `12345`.
-
-**Offline Replay (Maximum Speed):**
-```bash
-./build/tsa --mode=replay sample.ts
-```
-*Outputs `final_metrology.json` upon completion.*
-
-**Real-time Monitoring (UDP/SRT):**
-```bash
-# UDP Multicast/Unicast
-./build/tsa --mode=live --udp 1234
-
-# SRT Listener
-./build/tsa --mode=live --srt-url srt://:9000
-```
-
-### 2. Server Mode (tsa_server)
-For multi-stream NOC environments, `tsa_server` manages up to 16 streams via a centralized HTTP port (`8088` by default).
-
-```bash
-# Start server with config file
-./build/tsa_server tsa.conf
-```
-
-**Add Stream via API:**
-```bash
-curl -X POST http://localhost:8088/api/v1/config/streams \
-     -H "Content-Type: application/json" \
-     -d '{"stream_id":"CH-01","url":"udp://127.0.0.1:19001"}'
-```
-
-### 3. Accessing Metrics
-Metrics are exported via Prometheus (default `tsa` port: `12345`, `tsa_server` port: `8088`):
-- `tsa_pcr_bitrate_bps`: True content bitrate recovered from PCR clock.
-- `tsa_physical_bitrate_bps`: Physical arrival rate at the network interface.
-- `tsa_pcr_jitter_ms`: Microsecond-precision arrival jitter.
-- `tsa_mdi_df_ms`: MDI Delay Factor (Network Jitter).
-
----
-
-## 🧪 Stream Simulation & Testing
-
-To quickly verify the system, use the integrated real-time monitor demo:
-```bash
-make tsa_cli_monitor
-```
-*This command automates: `tsp` (streaming) -> `tsa` (analysis) -> `tsa_monitor.py` (CLI UI).*
-
-### Manual Simulation (tsp)
-Use the `tsp` (TS Pacer) tool to simulate custom broadcast sources:
-```bash
-# Send file at 5 Mbps to local analyzer
-./build/tsp -i 127.0.0.1 -p 19001 -b 5000000 -l -f sample.ts
-```
-
----
-
-## 🛠 Build & Verify
-The project uses a simplified Makefile wrapping CMake commands.
-
-```bash
-make           # Build Release version (-O3)
-make package   # Create a portable .tar.gz release for customers
-make docker-image # Build the production Docker image
-make test      # Run all unit tests (100+ cases)
-make full-test # Run Unit + Determinism + Functional (CLI) + Integration (Server)
-```
+Visit `http://localhost:3000` for the NOC visualization.
 
 ---
 
 ## ⚖️ Determinism & Metrology Contract
 > *Input (Packet Sequence + HW Timestamp) + Engine version (MD5) = Bit-identical JSON Analysis.*
 
-TsAnalyzer uses a **27MHz Alpha-Beta Filter Clock** for professional jitter analysis, ensuring immunity from system clock drift.
-
----
-
-## 📖 Technical Documentation
-
-### Strategy & Overview
-- **[Product Blueprint](./docs/blueprint.md)** | **[Metrology Core](./docs/metrology_core.md)** | **[Analytics Intelligence](./docs/analytics_intelligence.md)**
-- **[Functional Matrix](./docs/functional_capability_matrix.md)** | **[Performance & Verification](./docs/performance_and_verification.md)**
-
-### Operational Guides
-- **[Installation Guide](./docs/installation_guide.md)** | **[Industrial Monitoring](./docs/industrial_monitoring_guide.md)**
-- **[Professional QoE](./docs/professional_qoe_design.md)** | **[Maintenance Guardrails](./docs/troubleshooting_and_guardrails.md)**
+TsAnalyzer uses a **27MHz Software PLL** for professional jitter analysis, ensuring total immunity from system clock drift.
