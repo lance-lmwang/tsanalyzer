@@ -27,7 +27,14 @@ TsAnalyzer follows a strict **7-Tier Metrology Architecture** for full-stack sig
 
 ## 💻 Quick Start & Usage
 
-### 1. Standalone Analysis (tsa)
+### 1. Docker Compose (Instant Full Stack)
+The easiest way to start TsAnalyzer along with Grafana and Prometheus:
+```bash
+docker-compose up -d
+```
+Visit `http://localhost:3000` for the NOC Dashboard.
+
+### 2. Standalone Analysis (tsa)
 The `tsa` CLI is used for single-stream analysis. It defaults to Prometheus metrics on port `12345`.
 
 **Offline Replay (Maximum Speed):**

@@ -28,3 +28,4 @@ This documentation suite defines the architecture, metrology, and operational st
 *   **[Professional QoE Standards](./professional_qoe_design.md)**: Visual auditing and content-layer quality metrics.
 *   **[Design Review & Style Guide](./design_review_guide.md)**: Engineering standards for contributors.
 *   **[Maintenance & Guardrails](./troubleshooting_and_guardrails.md)**: Troubleshooting, redlines, and "No Data" prevention.
+*   **[维护守则与开发红线 (ZH)](./maintenance_guardrails_zh.md)**: 中文维护手册与诊断指南。

@@ -48,13 +48,14 @@ DIST_DIR := $(PKG_NAME)
 package: release
 	@echo "$(BLUE)=== Packaging TsAnalyzer v$(VERSION) ===$(RESET)"
 	@rm -rf $(DIST_DIR)
-	@mkdir -p $(DIST_DIR)/bin $(DIST_DIR)/docs $(DIST_DIR)/scripts $(DIST_DIR)/monitoring $(DIST_DIR)/sample
+	@mkdir -p $(DIST_DIR)/bin $(DIST_DIR)/docs $(DIST_DIR)/monitoring $(DIST_DIR)/sample
 	@cp build/tsa_cli $(DIST_DIR)/bin/tsa
 	@cp build/tsa_server_pro $(DIST_DIR)/bin/tsa_server
 	@cp build/tsa_top $(DIST_DIR)/bin/tsa_top
 	@cp tsa.conf $(DIST_DIR)/
+	@cp docker-compose.yml $(DIST_DIR)/
+	@cp Dockerfile $(DIST_DIR)/
 	@cp docs/*.md $(DIST_DIR)/docs/
-	@cp scripts/*.sh scripts/*.py $(DIST_DIR)/scripts/
 	@cp -r monitoring/* $(DIST_DIR)/monitoring/
 	@cp sample/test_1m.ts $(DIST_DIR)/sample/
 	@cp README.md LICENSE $(DIST_DIR)/ 2>/dev/null || true

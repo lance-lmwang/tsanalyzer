@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  tsanalyzer:
+    image: tsanalyzer:latest
+    container_name: ts-analyzer-pro
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./tsa.conf:/app/tsa.conf
+    # The image entrypoint is tsa_server /app/tsa.conf
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tsa-prometheus
+    network_mode: host
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/rules.yml:/etc/prometheus/rules.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tsa-grafana
+    network_mode: host
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/tsa_global_wall.json
+    restart: unless-stopped

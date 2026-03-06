@@ -53,21 +53,23 @@ make -j$(nproc)
 
 ---
 
-## 4. Docker Deployment
+## 4. Docker Deployment (Recommended for Production)
 
-For environments where containerization is preferred, TsAnalyzer provides a multi-stage Dockerfile.
+For environments where containerization is preferred, TsAnalyzer provides a unified Docker Compose orchestration.
 
 ### 4.1 Build the Image
 ```bash
 make docker-image
 ```
 
-### 4.2 Run with Docker Compose (Recommended)
-This launches the analyzer along with the full Prometheus/Grafana stack.
+### 4.2 Single-Command Start
+This launches the analyzer along with the full Prometheus/Grafana stack in one command.
 ```bash
-cd monitoring
-./monitoring-up.sh
+docker-compose up -d
 ```
+*   **TsAnalyzer**: Running on host network (configured via `tsa.conf`).
+*   **Grafana**: `http://localhost:3000` (Directly pre-configured with dashboards).
+*   **Prometheus**: `http://localhost:9090` (Collecting metrics from the local analyzer).
 
 ---
 
@@ -80,9 +82,12 @@ make package
 This will create a `tsanalyzer-2.3.0.tar.gz` file containing:
 *   **bin/**: Pre-compiled static binaries (`tsa`, `tsa_server`, `tsa_top`).
 *   **docs/**: Full technical documentation.
-*   **scripts/**: Operational and tuning scripts.
-*   **monitoring/**: Dockerized Grafana/Prometheus setup.
+*   **monitoring/**: Docker configuration for Grafana/Prometheus.
 *   **tsa.conf**: Default configuration template.
+*   **docker-compose.yml**: For instant stack deployment.
+*   **Dockerfile**: For local rebuilds.
+
+> **Note**: The `scripts/` directory is excluded from customer release packages as it contains internal development and verification tools.
 
 ---
 
