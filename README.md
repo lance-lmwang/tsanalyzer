@@ -6,16 +6,17 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 1.  **TsAnalyzer Engine**: Extreme-performance C probe for developers and system integrators.
 2.  **TsAnalyzer Appliance**: Multi-channel monitoring platform with 7-tier NOC visualization and SLA tracking.
-3.  **Smart Assurance Gateway**: Inline signal processing node with high-precision pacing and fail-safe bypass.
+3.  **Smart Assurance Gateway**: Inline signal processing node with high-precision pacing, fail-safe bypass, and T-STD compliant reshaping.
 
 ---
 
 ## 📖 Technical Documentation (v3 Architecture)
 
 ### 🏛️ Pillar 1: Strategy & Architecture
-*   **[Product Overview](./docs/00_product/product_overview.md)**: Positioning, vision, and core pillars.
+*   **[Product Vision](./docs/00_product/product_overview.md)**: Positioning, core mission, and the four technical pillars.
 *   **[Overall System Architecture](./docs/03_deployment/system_architecture.md)**: Layered topology (Gateway, Engine, Appliance).
 *   **[Internal System Architecture](./docs/01_architecture/system_architecture.md)**: High-performance data flow and NUMA-local threading.
+*   **[Functional Matrix](./docs/functional_capability_matrix.md)**: Current status vs. long-term roadmap.
 
 ### 🧬 Pillar 2: Metrology & Math (The Bible)
 *   **[TR 101 290 Standard](./docs/02_metrology/tr101290.md)**: Signal health levels and compliance implementation.
@@ -42,7 +43,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[Lock-free Data Plane](./docs/03_engine/v3_ring_buffer_deduction.md)**: Memory barriers and cache isolation.
 *   **[SIMD Vectorized Parser](./docs/03_engine/simd_parser_design.md)**: AVX-512 dimensional reduction.
 *   **[Server Architecture](./docs/01_architecture/server_architecture.md)**: Side-car workers and asynchronous audit pipelines.
-*   **[Smart Gateway](./docs/05_gateway/smart_gateway.md)**: Pacing engines, XDP bypass, and the smart action matrix.
+*   **[Smart Gateway](./docs/05_gateway/smart_gateway.md)**: Pacing engines, XDP bypass, and T-STD reshaping.
 
 ### 🔌 Pillar 5: Interfaces & Validation
 *   **[REST API](./docs/06_interfaces/rest_api.md)** | **[Prometheus](./docs/06_interfaces/prometheus.md)** | **[CLI (tsa_top)](./docs/06_interfaces/cli.md)**
