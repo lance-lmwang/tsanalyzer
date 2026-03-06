@@ -1,128 +1,141 @@
-# TsAnalyzer System Architecture
+# TsAnalyzer: Overall System Architecture
 
-This document describes the complete system architecture of **TsAnalyzer**, including the three primary product components:
-
-*   **TsAnalyzer Engine**: High-performance TS analysis core.
-*   **TsAnalyzer Appliance**: NOC monitoring and analytics platform.
-*   **Smart Assurance Gateway**: Inline protection and signal repair node.
-
-The architecture separates **data plane processing** from **control plane orchestration** to achieve high throughput and scalability.
+This document defines the high-level integration of the **Smart Assurance Gateway**, **Engine (Probe)**, and **NOC Appliance**. It serves as the master blueprint for deploying TsAnalyzer Pro in industrial-scale broadcast and high-fidelity streaming environments.
 
 ---
 
-## 1. High-Level System Architecture
+## 1. Global System Topology
 
 ```mermaid
 flowchart LR
+  subgraph External
+    encoders[Encoders / Upstream Mux]
+    cdn[CDN / WAN]
+    monitoring_src[Telemetry Sources]
+  end
 
-subgraph Broadcast_Network
-    A[Encoder / StatMux]
-    B[IP Network]
-    C[TS Streams]
-end
+  subgraph Inline_Gateway[Smart Assurance Gateway]
+    gw_nic[NIC (inline)]
+    gw_local_proc[Inline Processing
+    (Pacing / Shaping / Bypass)]
+    gw_ctrl[Gateway Control Plane
+    (gRPC/REST)]
+  end
 
-subgraph Gateway
-    G1[Smart Assurance Gateway]
-end
+  subgraph Data_Plane[Engine (Probe) - Data Plane]
+    dpdk[DPDK / AF_XDP Capture]
+    simd[SIMD TS Parser]
+    demux[Stream Demux & PID Routing]
+    timewheel[Time-Wheel Scheduler]
+    clockrec[Clock Recovery & PCR Modeling]
+    tstd[T-STD Buffer Simulation]
+    statmux[StatMux Inference]
+    metrics_rb[Lock-free Ring Buffers]
+  end
 
-subgraph Engine
-    E1[Packet Capture]
-    E2[SIMD TS Parser]
-    E3[Metric Engine]
-    E4[PCR Clock Model]
-    E5[T-STD Buffer Simulator]
-    E6[TR 101 290 Detector]
-end
+  subgraph Analysis_Plane[Engine - Analysis]
+    policy[Rule Engine (TR101290, RCA)]
+    exporter[Metrics Exporter
+    (Prometheus / OTLP / Kafka)]
+    pcap_store[PCAP / Archive]
+  end
 
-subgraph Appliance
-    A1[Metric Bus]
-    A2[Stream Aggregator]
-    A3[Root Cause Engine]
-    A4[Time-Series Database]
-    A5[NOC Dashboard]
-end
+  subgraph Appliance[NOC Appliance]
+    ingest[Metric Ingest (Kafka/OTLP)]
+    tsdb[Time Series DB
+    (Prometheus/TSDB)]
+    rca_srv[RCA / Correlation Service]
+    dashboard[NOC Dashboard & Alerts]
+    alerting[Alerting Bus (PagerDuty/Slack/Email)]
+    storage[Long-term storage (S3)]
+  end
 
-A --> B
-B --> C
-C --> G1
-G1 --> E1
+  subgraph Control_Plane[Management & Orchestration]
+    config[Config API
+    (gRPC/REST)]
+    auth[Auth & RBAC]
+    ui[Admin UI]
+  end
 
-E1 --> E2
-E2 --> E3
-E3 --> E4
-E4 --> E5
-E5 --> E6
+  encoders -->|IP / UDP| gw_nic
+  gw_nic --> gw_local_proc -->|pass-through or shaped| dpdk
 
-E6 --> A1
-A1 --> A2
-A2 --> A3
-A3 --> A4
-A4 --> A5
+  dpdk --> simd --> demux --> metrics_rb --> clockrec
+  metrics_rb --> tstd
+  metrics_rb --> statmux
+  clockrec --> policy
+  tstd --> policy
+  statmux --> policy
+  policy --> exporter
+  exporter --> ingest
+  ingest --> tsdb
+  tsdb --> dashboard
+  rca_srv --> dashboard
+  exporter --> pcap_store
+  pcap_store --> storage
+
+  config --> control_plane[Control Plane]
+  control_plane --> exporter
+  auth --> ui
+  dashboard --> alerting
+
+  monitoring_src --> ingest
+  cdn --> dpdk
 ```
 
 ---
 
-## 2. System Layer Breakdown
+## 2. Key Component Definitions
 
-### 2.1 Smart Assurance Gateway (Edge Protection Layer)
-The **Smart Assurance Gateway** sits inline in the network path and performs real-time monitoring and mitigation.
-*   **Responsibilities**: TS health monitoring, packet pacing and shaping, fail-safe bypass, and early anomaly detection.
-*   **Placement**: `Encoder → Gateway → Core Network → Decoder`.
-*   **Value**: Ensures signal continuity under unstable IP conditions by reshaping clumped traffic.
+### 2.1 Smart Assurance Gateway (The Shield)
+*   **Role**: An inline node performing real-time **Pacing**, **Shaping**, and **Fail-safe Bypass**.
+*   **Requirements**: Dual-NIC transparent forwarding with sub-millisecond latency. Reshapes clumped traffic to ensure T-STD compliance without introducing packet drops.
+*   **Interfaces**: gRPC/REST for control, PTP for time synchronization.
 
----
-
-## 3. TsAnalyzer Engine (Measurement Core)
-
-The **Engine** performs ultra-high-speed transport stream analysis at the "Edge of Silicon."
-
-### 3.1 Design Goals
-*   **Multi-Gbps Throughput**: Sustaining 10Gbps+ aggregate analysis.
-*   **Lock-free Processing**: 8M pps pipeline with zero mutex contention.
-*   **Deterministic Analysis**: Bit-identical results regardless of system load.
-
-### 3.2 Key Modules
-*   **Packet Capture**: High-speed acquisition using DPDK, AF_XDP, or PF_RING.
-*   **SIMD TS Parser**: Vectorized (AVX2/AVX-512) parsing of 188-byte packets, enabling tens of millions of packets per second.
-*   **PCR Clock Model**: Reconstructs encoder clocks with ±10ns precision for jitter and drift metrology.
-*   **T-STD Buffer Simulator**: Implements normative decoder behavior to predict underflow/overflow risk.
-*   **TR 101 290 Engine**: Event-driven $O(1)$ detection across thousands of concurrent streams.
+### 2.2 Engine (The Professional Probe)
+The Engine is split into an $O(1)$ **Data Plane** and a logic-heavy **Analysis Plane**:
+*   **Ingest Stage**: DPDK/AF_XDP kernel-bypass with NUMA locality and Hugepage support.
+*   **Parser Stage**: SIMD vectorized header extraction using AVX2/AVX-512.
+*   **Metrology Stage**: Clock recovery via high-precision PLL, T-STD buffer simulation, and StatMux inference.
+*   **Analytics Stage**: Localized event correlation and TR 101 290 state machine updates.
 
 ---
 
-## 4. TsAnalyzer Appliance (Observability Platform)
+## 3. Deployment Standards (Performance & HA)
 
-The **Appliance** aggregates metrics from multiple Engines into a unified operational view.
+To maintain deterministic measurement at scale, Probe nodes must be hardened to instrument-grade standards.
 
-*   **Metric Bus**: High-throughput telemetry pipeline (Kafka, NATS, or OTLP).
-*   **Stream Aggregator**: Groups raw metrics by service, program, and multiplex.
-*   **Root Cause Engine**: Correlates indicators (e.g., `Loss + Jitter → Network Fault`) to identify failure domains.
-*   **Time-Series Database**: Long-term storage (Prometheus, VictoriaMetrics, or ClickHouse) for SLA auditing.
-*   **NOC Dashboard**: Implements the **7-Layer Observability Model** for intuitive situational awareness.
+### 3.1 Probe Node Hardening
+*   **CPU**: 16–64 cores (AMD EPYC / Intel Xeon) with full AVX-512 support.
+*   **Mandatory Kernel Tuning**:
+    *   `isolcpus`: Isolate analysis cores from the general OS scheduler.
+    *   `nohz_full`: Enable full tickless mode on isolated cores.
+    *   `rcu_nocbs`: Offload RCU callbacks to management cores.
+    *   `intel_idle.max_cstate=0`: Disable deep sleep states to eliminate wake-up latency.
+*   **Memory**: High-speed ECC Registered RAM; 1GB Hugepages MUST be enabled for the ring buffers.
 
----
-
-## 5. Control Plane & Orchestration
-
-The control plane manages the fleet of probes and gateways.
-*   **Management**: REST/gRPC API for stream registration and configuration.
-*   **Registry**: Centralized directory of all active monitoring tasks.
-*   **Orchestration**: `Operator → API → Appliance → Engine`.
+### 3.2 High Availability (HA)
+*   **Active-Active Sampling**: Critical trunks are monitored by dual probes simultaneously for cross-check validation.
+*   **Kubernetes Core**: The NOC platform (Appliance) is deployed as a resilient microservice stack with TSDB replication and Kafka clusters.
 
 ---
 
-## 6. Scalability & Data Flow Summary
+## 4. Security & Observability Redlines
 
-### 6.1 Scaling Model
-A single deployment scales horizontally by adding Engine nodes to an Appliance cluster, supporting **1000+ concurrent streams**.
+### 4.1 Security Architecture
+*   **Plane Isolation**: Data Plane and Control Plane traffic MUST be physically or logically isolated via VLAN or VRF.
+*   **Encrypted Signaling**: All inter-node gRPC and REST communication must use mTLS with certificate rotation.
+*   **Forensic Protection**: PCAP forensic data must be encrypted at rest (AES-256) with strict RBAC access logs.
 
-### 6.2 Data Flow Logic
-`Transport Stream → Gateway Protection → Engine Measurement → Metric Aggregation → Analytics & RCA → NOC Visualization`
+### 4.2 Critical Monitoring Metrics
+*   **Packet Integrity**: Kernel-level drops, HW-TS accuracy, MDI-DF.
+*   **Metrology Fidelity**: PCR Jitter (Mean/Std/Max), Clock Drift (ppm), Buffer Safety Margin (BSM %).
+*   **Engine Health**: NIC Queue depth, SPSC ring occupancy, Core temperature variance.
 
 ---
 
-## 7. Core Design Principles
+## 5. Deployment Topologies
 
-1.  **Determinism**: Identical inputs produce identical analytical hashes.
-2.  **High Throughput**: Systems designed for 10Gbps+ line-rate metrology.
-3.  **Operational Visibility**: Technical metrics translated into human-actionable NOC insights.
+1.  **Distributed Edge**: Probes deployed near encoders/uplinks, pushing high-density telemetry to a central cloud Appliance.
+2.  **Inline Protection**: Gateway and Probe pairs at ISP handover points for real-time signal repair and SLA verification.
+3.  **Local Hybrid**: Converged deployment where Probe and Appliance share the same hardware cluster (for deployments < 200 streams).

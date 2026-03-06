@@ -54,7 +54,26 @@ For H.264 and HEVC, the engine implements a sparse scanner that operates directl
     *   Extracts GOP structure and cadence.
     *   Parses SPS for resolution, profile, and level.
 *   **Efficiency**: Uses a state-machine start-code scanner (`0x000001`) that requires no memory allocations or buffer copies.
+## 3. Advanced Metadata & Ancillary Audit
 
-## 3. SCTE-35 & Metadata Audit
+Beyond standard essence tracking, the engine performs deep-mining of the bitstream to ensure professional broadcast compliance.
 
+### 3.1 CEA-608/708 Caption Fidelity
+The `NALU Sniffer` identifies SEI messages containing Closed Caption (CC) data.
+*   **Audit**: Verifies the presence and continuity of CEA-708 service blocks synchronized with Video IDR frames.
+*   **Alarm**: Triggers `CAPTION_MISSING` or `CAPTION_STUTTER` if the payload cadence deviates from the frame rate.
+
+### 3.2 SEI Latency & Timing Marks
+Extracts raw timestamps embedded in H.264/HEVC SEI messages (e.g., Picture Timing SEI).
+*   **Measurement**: Correlates the encoder's internal timestamp with the reconstructed 27MHz STC.
+*   **Metric**: Detects **Encoding Latency Fluctuations** and source-side buffer instability.
+
+### 3.3 SMPTE 2038 Ancillary Data
+Identifies and audits PIDs containing SMPTE 2038 data structures.
+*   **VANC Detection**: Extracts Vertical Ancillary data such as AFD (Active Format Description) and SCTE-104 ad-triggers.
+*   **Compliance**: Ensures the ancillary data PID bitrate remains within the required operational window.
+
+---
+
+## 4. SCTE-35 & Metadata Audit
 Decodes Digital Program Insertion markers and calculates the absolute PTS alignment error between the splice command and the actual video IDR frame.

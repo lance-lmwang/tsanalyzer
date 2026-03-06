@@ -83,3 +83,8 @@ If $| \Delta PCR - \Delta HAT | > 100\text{ms}$, the engine triggers an **Analyt
 
 ### 6.2 Remaining Safe Time (RST)
 By correlating the reconstructed clock frequency ($a$) with the T-STD buffer fill rate, the engine predicts the **seconds remaining** before imminent underflow/overflow.
+
+### 6.3 System Latency Lag (PCR vs. Wallclock)
+While Drift measures frequency deviation, **Lag** measures the absolute temporal distance between the stream time and the physical world time.
+*   **Calculation**: $\Delta Lag = (Local\_Clock\_T_{now} - Local\_Clock\_T_{start}) - (PCR_{now} - PCR_{start})$.
+*   **Significance**: Detects "Encoder Slippage" where the encoder is processing slower than real-time, leading to eventual delivery failure or multi-site desync.
