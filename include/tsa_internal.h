@@ -288,6 +288,8 @@ struct tsa_handle {
     uint64_t last_v_pts;
     uint64_t last_a_pts;
 
+    uint64_t last_packet_rx_ns;
+
     ts_section_filter_t* pid_filters;
     uint32_t program_count;
     tsa_program_info_t programs[MAX_PROGRAMS];

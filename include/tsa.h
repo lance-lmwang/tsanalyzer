@@ -31,6 +31,15 @@ typedef struct {
 } tsa_alarm_t;
 
 typedef struct {
+    uint64_t bucket_under_1ms;
+    uint64_t bucket_1_2ms;
+    uint64_t bucket_2_5ms;
+    uint64_t bucket_5_10ms;
+    uint64_t bucket_10_100ms;
+    uint64_t bucket_over_100ms;
+} tsa_iat_histogram_t;
+
+typedef struct {
     tsa_alarm_t sync_loss;
     tsa_alarm_t sync_byte_error;
     tsa_alarm_t pat_error;
@@ -67,6 +76,7 @@ typedef struct {
     double pcr_drift_ppm;
     double mdi_df_ms;
     double mdi_mlr_pkts_s;
+    tsa_iat_histogram_t iat_hist;
     double video_fps;
     uint32_t gop_ms;
     int32_t av_sync_ms;

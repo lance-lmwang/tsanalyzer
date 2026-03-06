@@ -251,7 +251,20 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     if (!h->engine_started) {
         h->start_ns = n; h->engine_started = true; h->last_snap_ns = n;
         h->last_snap_wall_ns = n; h->last_pcr_arrival_ns = n; h->stc_ns = n;
+        h->last_packet_rx_ns = n;
     }
+
+    if (h->last_packet_rx_ns != 0 && n > h->last_packet_rx_ns) {
+        uint64_t delta_ns = n - h->last_packet_rx_ns;
+        if (delta_ns < 1000000ULL) h->live->iat_hist.bucket_under_1ms++;
+        else if (delta_ns < 2000000ULL) h->live->iat_hist.bucket_1_2ms++;
+        else if (delta_ns < 5000000ULL) h->live->iat_hist.bucket_2_5ms++;
+        else if (delta_ns < 10000000ULL) h->live->iat_hist.bucket_5_10ms++;
+        else if (delta_ns < 100000000ULL) h->live->iat_hist.bucket_10_100ms++;
+        else h->live->iat_hist.bucket_over_100ms++;
+    }
+    h->last_packet_rx_ns = n;
+
     if (p[0] != 0x47) {
         h->consecutive_sync_errors++; h->consecutive_good_syncs = 0;
         if (h->consecutive_sync_errors >= 5 && h->signal_lock) {

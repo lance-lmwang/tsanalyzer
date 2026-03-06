@@ -58,12 +58,19 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_internal_analyzer_drop%s %llu\n", labels, (unsigned long long)s->internal_analyzer_drop);
         SAFE_APPEND("tsa_worker_slice_overruns%s %llu\n", labels, (unsigned long long)s->worker_slice_overruns);
 
-        // Tier 2: Transport & Link Integrity (SRT/MDI)
+        // Tier 2: Transport & Link Integrity (SRT/MDI/IAT)
         SAFE_APPEND("tsa_srt_rtt_ms%s %lld\n", labels, (long long)snap->srt.rtt_ms);
         SAFE_APPEND("mdi_mlr%s %.2f\n", labels, (float)s->mdi_mlr_pkts_s);
         SAFE_APPEND("mdi_df%s %.2f\n", labels, (float)s->mdi_df_ms);
         SAFE_APPEND("srt_retransmit_rate%s %.4f\n", labels, (float)snap->srt.retransmit_tax);
         SAFE_APPEND("tsa_mdi_delay_factor_ms%s %.2f\n", labels, (float)s->mdi_df_ms);
+
+        SAFE_APPEND("tsa_iat_histogram_total{stream_id=\"%s\",le=\"1ms\"} %llu\n", sid, (unsigned long long)s->iat_hist.bucket_under_1ms);
+        SAFE_APPEND("tsa_iat_histogram_total{stream_id=\"%s\",le=\"2ms\"} %llu\n", sid, (unsigned long long)(s->iat_hist.bucket_under_1ms + s->iat_hist.bucket_1_2ms));
+        SAFE_APPEND("tsa_iat_histogram_total{stream_id=\"%s\",le=\"5ms\"} %llu\n", sid, (unsigned long long)(s->iat_hist.bucket_under_1ms + s->iat_hist.bucket_1_2ms + s->iat_hist.bucket_2_5ms));
+        SAFE_APPEND("tsa_iat_histogram_total{stream_id=\"%s\",le=\"10ms\"} %llu\n", sid, (unsigned long long)(s->iat_hist.bucket_under_1ms + s->iat_hist.bucket_1_2ms + s->iat_hist.bucket_2_5ms + s->iat_hist.bucket_5_10ms));
+        SAFE_APPEND("tsa_iat_histogram_total{stream_id=\"%s\",le=\"100ms\"} %llu\n", sid, (unsigned long long)(s->iat_hist.bucket_under_1ms + s->iat_hist.bucket_1_2ms + s->iat_hist.bucket_2_5ms + s->iat_hist.bucket_5_10ms + s->iat_hist.bucket_10_100ms));
+        SAFE_APPEND("tsa_iat_histogram_total{stream_id=\"%s\",le=\"+Inf\"} %llu\n", sid, (unsigned long long)(s->iat_hist.bucket_under_1ms + s->iat_hist.bucket_1_2ms + s->iat_hist.bucket_2_5ms + s->iat_hist.bucket_5_10ms + s->iat_hist.bucket_10_100ms + s->iat_hist.bucket_over_100ms));
 
         // Tier 3: ETR 290 P1 (CRITICAL COMPLIANCE)
         SAFE_APPEND("tsa_etr290_p1_sync_loss_total%s %llu\n", labels, (unsigned long long)s->sync_loss.count);
