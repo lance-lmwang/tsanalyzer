@@ -3,6 +3,8 @@ deps/srt/
 deps/libpcap/
 deps/*.tar.gz
 deps/srs/
+deps/lua/src/lua
+deps/lua/src/luac
 
 build/
 *.o
@@ -24,7 +26,13 @@ tests/test_pts_trajectory
 Testing/
 *.json
 test.ts
+stability_report.txt
+tsa.conf
+
 # sample/ directory is now allowed for small test files, but large .ts files should be ignored
 sample/*.ts
 !sample/test_1m.ts
+
+# Archives
 *.tar.gz
+conductor/setup_state.json
