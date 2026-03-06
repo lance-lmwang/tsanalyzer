@@ -69,6 +69,20 @@ This document provides a comprehensive overview of the current capabilities of T
 
 ---
 
+## 6. Advanced Automation & Intelligence (Roadmap)
+
+Inspired by enterprise-grade video management systems, these features target full-cycle automated monitoring.
+
+| Feature | Status | Description |
+| :--- | :--- | :--- |
+| **Scheduled Workflows** | 📅 Planned | Calendar-based monitoring profiles (e.g., High-fidelity mode during live events). |
+| **Multi-Stream Sync Audit**| 📅 Planned | Measuring the temporal alignment (Skew) between Main/Backup variants or ABR rungs. |
+| **Logo & Branding QC** | 📅 Planned | Vision-based detection of burned-in logos to ensure correct channel playout. |
+| **BITC OCR Correlation** | 📅 Planned | Extracting burned-in timecodes and correlating them with PCR/PTS timelines. |
+| **Enterprise Audit Trail** | ✅ Implemented | Full lifecycle logging of stream events, config changes, and operator acknowledgments. |
+
+---
+
 ## Legend
 *   ✅ **Implemented**: Fully functional and verified via automated tests.
 *   🔶 **Partial**: Basic logic exists, but full spec coverage is pending.
