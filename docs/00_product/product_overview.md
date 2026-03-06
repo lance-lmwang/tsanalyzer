@@ -29,3 +29,22 @@ An inline processing node that monitors signal health in real-time and takes act
 1.  **Deterministic Measurement**: Identical input must yield bit-identical analytical results.
 2.  **Predictive Telemetry**: Use Buffer Safety Margins and Remaining Safe Time (RST) to alert *before* viewer impact.
 3.  **Causal Explainability**: Every fault must be attributable to either the Network or the Encoder via quantifiable scoring.
+
+---
+
+## 4. Performance Targets (Scalability Model)
+
+| Total Streams | Average Bitrate | Aggregate Throughput | Target Hardware |
+| :--- | :--- | :--- | :--- |
+| **128** | 8 Mbps | 1 Gbps | 8 Core / 16GB |
+| **256** | 8 Mbps | 2 Gbps | 16 Core / 32GB |
+| **512** | 8 Mbps | 4 Gbps | 32 Core / 64GB |
+| **1000** | 8 Mbps | 8 Gbps | 64 Core / 128GB |
+
+---
+
+## 5. Industrial Verification Gates
+*   **G1 (Throughput)**: 1.0 Gbps - 10.0 Gbps aggregate throughput with zero kernel drops.
+*   **G2 (Metrology)**: 100% TR 101 290 P1/P2 coverage; ±10ns PCR jitter precision.
+*   **G3 (Determinism)**: MD5-consistent JSON output for identical PCAP input.
+*   **G4 (Stability)**: 24h stability with zero memory growth (RSS flat-line).

@@ -19,12 +19,15 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 ### 🧬 Pillar 2: Metrology & Math (The Bible)
 *   **[TR 101 290 Standard](./docs/02_metrology/tr101290.md)**: Signal health levels and compliance implementation.
 *   **[PCR Math & PLL](./docs/02_metrology/pcr_math.md)**: 27MHz clock reconstruction and 3D jitter decomposition.
+*   **[PCR Root Cause Engine](./docs/02_metrology/pcr_root_cause.md)**: Distinguishing Encoder vs. Network jitter.
+*   **[GOP Structure Analyzer](./docs/02_metrology/gop_analysis.md)**: Content-layer GOP stability and IDR auditing.
 *   **[RST+ & Safety Models](./docs/02_metrology/rst_model.md)**: Predictive telemetry and buffer safety margins.
 
 ### 🧠 Pillar 3: Analytics & Intelligence
 *   **[Alarm & Incident Engine](./docs/04_operations/alarm_engine.md)**: FSM lifecycles, suppression, and incident merging.
 *   **[RCA Scoring Model](./docs/04_operations/rca_model.md)**: Explainable fault attribution (Network vs. Encoder).
 *   **[SLA Engine](./docs/04_operations/sla_engine.md)**: Long-term availability and compliance grading.
+*   **[Forensic Time Machine](./docs/04_operations/forensic_time_machine.md)**: Post-mortem incident rewind and reconstruction.
 
 ### 🎛️ Pillar 4: Implementation & Operations
 *   **[Ingestion Engine](./docs/03_engine/ingestion_engine.md)**: Hardware timestamping and zero-copy data plane.

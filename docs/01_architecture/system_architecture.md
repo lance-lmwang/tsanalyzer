@@ -50,14 +50,30 @@ NUMA awareness is the difference between a tool and an instrument at 10 Gbps.
 ### 3.1 Data Residency Rule
 **Packet data must never cross NUMA nodes.** Crossing the interconnect (QPI/UPI) introduces non-deterministic latency spikes that pollute jitter measurements.
 
-### 3.2 Thread-to-Core Mapping
-*   **Ingest RX Worker**: Pinned to the same NUMA node as the NIC PCIe lane.
-*   **Reactor Workers**: Pinned to physical cores adjacent to the RX Worker.
-*   **Metrics Reporting**: Low-priority background threads on non-isolated management cores.
+### 3.2 RSS Queue & Core Affinity
+The Ingestion layer utilizes **Receive Side Scaling (RSS)** to distribute load while maintaining stream affinity.
+*   **RSS Hash**: Based on `UDP Destination IP` and `UDP Destination Port`.
+*   **Affinity Guarantee**: Ensures **Same Stream → Same RX Queue → Same CPU Core**, preventing out-of-order delivery and cache invalidation.
 
 ---
 
-## 4. Reactor Stream Model
+## 4. TS Processing Pipeline
+
+The per-packet analytical pipeline is strictly **O(1)** to maintain deterministic latency (< 1ms processing delay).
+
+### 4.1 Pipeline Stages
+1.  **NIC Ingress**: Hardware RX Timestamping.
+2.  **Packet Classification**: Stream Hash & Flow identification.
+3.  **TS Header Parser**: Branchless PUSI/PID/CC extraction.
+4.  **Continuity Counter Audit**: Sequence verification per PID.
+5.  **PCR Processor**: Software PLL & jitter metrology.
+6.  **Bitrate Model**: Piecewise constant bitrate estimation.
+7.  **TR 101 290 Engine**: State machine updates (P1/P2/P3).
+8.  **Metrics Bus**: Atomic push to the Reactor Core.
+
+---
+
+## 5. Reactor Stream Model
 
 Unlike v2 which used "Thread-per-Stream," v3 treats **Streams as State Machines** multiplexed inside a fixed number of **Reactor Threads**.
 
