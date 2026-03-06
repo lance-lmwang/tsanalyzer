@@ -18,6 +18,13 @@ The engine performs a multi-stage audit of the HLS session to ensure delivery co
 *   **Download Ratio**: $Ratio = \frac{Fragment\_Duration}{Download\_Time}$.
     *   *Constraint*: If $Ratio < 1.2$, the stream is at high risk of buffer starvation.
 *   **TTFB (Time to First Byte)**: Measuring the network responsiveness of the CDN/Origin.
+*   **Fragment Fetch Profiling**: Tracking the statistical distribution of download times to identify edge-node congestion.
+
+### 1.3 Adaptive Buffer Model
+Inspired by the dual-state buffer management in high-end OTT probes:
+*   **Pre-Buffer Tracking**: Monitoring the accumulation of content during the initial session join.
+*   **Live Buffer Duration**: Calculating the real-time "Seconds of Video" currently held in the client-side simulated buffer.
+*   **Sync Logic**: Correlating the playlist `#EXT-X-PROGRAM-DATE-TIME` with the internal VSTC to measure absolute end-to-end delivery latency.
 
 ---
 

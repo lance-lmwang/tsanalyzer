@@ -47,6 +47,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 ### 🔌 Pillar 5: Interfaces & Validation
 *   **[REST API](./docs/06_interfaces/rest_api.md)** | **[Prometheus](./docs/06_interfaces/prometheus.md)** | **[CLI (tsa_top)](./docs/06_interfaces/cli.md)**
+*   **[Native SDK Guide](./docs/06_interfaces/native_sdk_guide.md)**: Embedded C-ABI integration and language bindings.
 *   **[HTML Forensic Reports](./docs/06_interfaces/forensic_reports.md)**: Portable, interactive incident audit trails.
 *   **[Performance Targets](./docs/07_validation/performance_targets.md)**: Success gates and engineering verification.
 

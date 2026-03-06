@@ -75,5 +75,16 @@ Identifies and audits PIDs containing SMPTE 2038 data structures.
 
 ---
 
-## 4. SCTE-35 & Metadata Audit
+## 5. Deep Metadata Sidecars (MediaInfo/FFprobe)
+
+To provide "Deep Static Analysis" alongside real-time metrology, the engine integrates external metadata toolsets.
+
+### 5.1 Triggered Inspection
+*   **Event**: When a new PID is discovered or a significant codec change occurs.
+*   **Action**: The Analysis Plane spawns an asynchronous Task to run `libmediainfo` or `ffprobe` on a 500ms cached segment of the stream.
+*   **Result**: A comprehensive property report (Bit depth, HDR profile, Frame structure) is merged into the stream's JSON metadata.
+
+---
+
+## 6. SCTE-35 & Metadata Audit
 Decodes Digital Program Insertion markers and calculates the absolute PTS alignment error between the splice command and the actual video IDR frame.
