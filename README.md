@@ -27,6 +27,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[T-STD Buffer Model](./docs/02_metrology/tstd_buffer_model.md)**: Predictive telemetry and buffer safety margins.
 
 ### 🧠 Pillar 3: Analytics & Intelligence
+*   **[7-Layer Observability Model](./docs/04_operations/observability_model.md)**: Tiered abstraction from raw metrics to root cause insight.
 *   **[Alarm & Incident Engine](./docs/04_operations/alarm_engine.md)**: FSM lifecycles, suppression, and incident merging.
 *   **[RCA Scoring Model](./docs/04_operations/rca_model.md)**: Explainable fault attribution (Network vs. Encoder).
 *   **[SLA Engine](./docs/04_operations/sla_engine.md)**: Long-term availability and compliance grading.
