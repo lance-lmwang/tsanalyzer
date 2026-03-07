@@ -33,7 +33,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: HLS/HTTP Ingest Engine**
   *Link: [./tracks/hls-ingest/](./tracks/hls-ingest/)*
 
-- [ ] **Track: V3 Architecture - Programmable Pipeline**
+- [x] **Track: V3 Architecture - Programmable Pipeline**
   *Link: [./tracks/arch-v3-core/](./tracks/arch-v3-core/)*
 
 - [ ] **Track: Astra Architecture Integration (PAUSED - Postponed until Analyzer is fully mature)**
