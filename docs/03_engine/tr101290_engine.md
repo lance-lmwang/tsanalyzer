@@ -1,6 +1,6 @@
-# TR 101 290 Real-Time Monitoring Engine
+# TR 101 290 Compliance & Metrology Engine
 
-The TsAnalyzer Engine employs an event-driven, **$O(1)$ complexity monitoring model** designed to maintain sub-millisecond detection latency and stable CPU utilization across 1000+ concurrent Transport Streams.
+The TsAnalyzer Compliance Suite employs an event-driven, **$O(1)$ complexity monitoring model** designed to maintain sub-millisecond detection latency and stable CPU utilization across 1000+ concurrent Transport Streams.
 
 ---
 

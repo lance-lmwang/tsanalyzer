@@ -11,12 +11,12 @@ This document provides a comprehensive overview of the current capabilities of T
 | **UDP/RTP Ingest** | ✅ Implemented | High-performance raw UDP and RTP reception. |
 | **SRT Caller/Listener** | ✅ Implemented | Full support for Secure Reliable Transport protocol. |
 | **PCAP Offline Replay** | ✅ Implemented | Bit-accurate replay of network captures for forensic analysis. |
-| **HLS / HTTP Ingest** | 📅 Planned | Curl-based chunk downloading and M3U8 manifest auditing. |
+| **HLS / HTTP Ingest** | ✅ Implemented | Libcurl-based chunk downloading and M3U8 manifest auditing. |
 | **MDI (RFC 4445)** | ✅ Implemented | Media Delivery Index (Delay Factor & MLR) using hardware timestamps. |
 | **IAT Histograms** | ✅ Implemented | Real-time Inter-Arrival Time statistical profiling for micro-burst detection. |
 | **Bitrate Smoother** | ✅ Implemented | High-precision CBR reshaping using `clock_nanosleep` absolute timing. |
-| **Smart Failover** | 📅 Planned | Automatic switching between Primary/Backup inputs based on health. |
-| **I/O-Computing Decoupling** | 📅 Planned | Migration to a Hybrid Reactor model for 500+ concurrent stream support. |
+| **Smart Failover** | ✅ Implemented | Automatic switching between Primary/Backup inputs based on TR 101 290 health. |
+| **I/O-Computing Decoupling** | 🔶 Partial | Hybrid Reactor model for high-density concurrent stream support. |
 
 ---
 
@@ -65,7 +65,7 @@ This document provides a comprehensive overview of the current capabilities of T
 | **High-Performance TUI**| ✅ Implemented | `tsa_top` utility for real-time console-based local monitoring. |
 | **Triggered Micro-Capture**| ✅ Implemented | Rolling 500ms ring buffer automatically saved to `.ts` on P1 triggers. |
 | **HTML Forensic Reports** | 📅 Planned | Self-contained interactive incident replay files. |
-| **Webhook Signaling** | 📅 Planned | Proactive sub-second JSON notification for critical alarms. |
+| **Webhook Signaling** | ✅ Implemented | Asynchronous JSON notification with retry and aggregation logic. |
 
 ---
 
@@ -76,7 +76,7 @@ Inspired by enterprise-grade video management systems, these features target ful
 | Feature | Status | Description |
 | :--- | :--- | :--- |
 | **Scheduled Workflows** | 📅 Planned | Calendar-based monitoring profiles (e.g., High-fidelity mode during live events). |
-| **Multi-Stream Sync Audit**| 📅 Planned | Measuring the temporal alignment (Skew) between Main/Backup variants or ABR rungs. |
+| **ABR Group Audit** | 📅 Planned | Measuring temporal alignment (Skew) across multiple bitrate renditions. |
 | **Logo & Branding QC** | 📅 Planned | Vision-based detection of burned-in logos to ensure correct channel playout. |
 | **BITC OCR Correlation** | 📅 Planned | Extracting burned-in timecodes and correlating them with PCR/PTS timelines. |
 | **Enterprise Audit Trail** | ✅ Implemented | Full lifecycle logging of stream events, config changes, and operator acknowledgments. |
