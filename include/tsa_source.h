@@ -10,7 +10,8 @@ typedef enum {
     TSA_SOURCE_UDP,
     TSA_SOURCE_SRT,
     TSA_SOURCE_FILE,
-    TSA_SOURCE_PCAP
+    TSA_SOURCE_PCAP,
+    TSA_SOURCE_HLS
 } tsa_source_type_t;
 
 typedef struct tsa_source tsa_source_t;
@@ -29,6 +30,10 @@ typedef struct {
     void (*on_status)(void* user_data, int status_code, const char* msg);
 } tsa_source_callbacks_t;
 
+/* HLS Ingest Internal API */
+void* tsa_hls_ingest_start(const char *url, const tsa_source_callbacks_t *cbs, void *user_data);
+void tsa_hls_ingest_stop(void *handle);
+
 /**
  * Create a new source instance.
  * @param type The type of source (UDP, SRT, etc.)
@@ -43,6 +48,11 @@ tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const c
  * instead of creating its own thread.
  */
 void tsa_source_set_reactor(tsa_source_t* src, tsa_reactor_t* reactor);
+
+/**
+ * Set pacing for the source (useful for files/pcap).
+ */
+void tsa_source_set_pacing(tsa_source_t* src, bool enabled);
 
 /**
  * Destroy the source and release resources.

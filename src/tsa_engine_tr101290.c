@@ -41,6 +41,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
         if (h->live->transport_error.count == 0) h->live->transport_error.first_timestamp_ns = now;
         h->live->transport_error.count++;
         h->live->transport_error.last_timestamp_ns = now;
+        tsa_push_event(h, TSA_EVENT_TRANSPORT_ERROR, pid, 0);
     }
 
     // 2. Continuity Counter (CC) Check
@@ -66,6 +67,21 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
         }
         h->ignore_next_cc[pid] = false;
     }
+    // 3. PTS Error Check (P2.5)
+    if (res->has_pes_header) {
+        uint64_t last_pts_ns = h->pid_last_seen_vstc[pid];
+        if (last_pts_ns > 0) {
+            uint64_t diff_ns = h->stc_ns - last_pts_ns;
+            if (diff_ns > 700000000ULL) { // 700ms threshold
+                if (h->live->pts_error.count == 0) h->live->pts_error.first_timestamp_ns = now;
+                h->live->pts_error.count++;
+                h->live->pts_error.last_timestamp_ns = now;
+                tsa_push_event(h, TSA_EVENT_PTS_ERROR, pid, diff_ns / 1000000ULL);
+            }
+        }
+        h->pid_last_seen_vstc[pid] = h->stc_ns;
+    }
+
     h->last_cc[pid] = res->cc;
 }
 

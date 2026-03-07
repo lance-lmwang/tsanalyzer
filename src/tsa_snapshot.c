@@ -194,6 +194,9 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     h->last_snap_ns = stc;
     h->last_snap_wall_ns = n;
     h->live->pcr_jitter_max_ns = 0;
+
+    /* Check for alert resolutions (Edge-triggered stabilization) */
+    tsa_alert_check_resolutions(h);
 }
 
 int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s) {

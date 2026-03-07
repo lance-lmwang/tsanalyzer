@@ -11,6 +11,8 @@
 #include "tsa_clock.h"
 #include "tsa_stream.h"
 #include "tsa_plugin.h"
+#include "tsa_webhook.h"
+#include "tsa_alert.h"
 
 /* --- Fundamental Types --- */
 typedef __int128_t int128_t;
@@ -49,8 +51,11 @@ typedef enum {
     TSA_EVENT_PAT_TIMEOUT,
     TSA_EVENT_PMT_TIMEOUT,
     TSA_EVENT_CC_ERROR,
+    TSA_EVENT_TRANSPORT_ERROR,
+    TSA_EVENT_PTS_ERROR,
     TSA_EVENT_PCR_REPETITION,
-    TSA_EVENT_PCR_JITTER
+    TSA_EVENT_PCR_JITTER,
+    TSA_EVENT_SYNC_RECOVERED
 } tsa_event_type_t;
 
 typedef enum {
@@ -186,6 +191,7 @@ void tsa_forensic_generate_json(struct tsa_handle* h, char* buf, size_t sz);
 /* --- Core Structure --- */
 struct tsa_handle {
     tsa_config_t config;
+    tsa_alert_state_t alerts[TSA_ALERT_MAX];
 
     tsa_sync_state_t sync_state;
     uint32_t sync_confirm_count;
@@ -195,6 +201,7 @@ struct tsa_handle {
     uint32_t consecutive_sync_errors;
     uint32_t consecutive_good_syncs;
     bool signal_lock;
+    bool sync_loss_alert_active;
 
     bool engine_started;
     uint64_t start_ns;
@@ -321,6 +328,7 @@ struct tsa_handle {
     uint64_t last_forensic_alarm_count;
 
     tsa_event_ring_t* event_q;
+    tsa_webhook_engine_t* webhook;
 
     /* --- Stream Tree & Plugins --- */
     tsa_stream_t root_stream;
@@ -358,5 +366,8 @@ void tsa_decode_packet_pure(struct tsa_handle* h, const uint8_t* p, uint64_t n, 
 double calculate_shannon_entropy(const uint32_t* counts, int len);
 double calculate_pcr_jitter(uint64_t pcr, uint64_t now, double* drift);
 void tsa_scte35_process(struct tsa_handle* h, uint16_t pid, const uint8_t* data, int len);
+
+// Renamed from tsa_check_alert_resolutions
+void tsa_alert_check_resolutions(struct tsa_handle* h);
 
 #endif // TSANALYZER_INTERNAL_H

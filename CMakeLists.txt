@@ -38,6 +38,18 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/src")
     set(LUA_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/src/liblua.a")
 endif()
 
+set(ZLIB_LINK_LIBS "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/libz.a")
+    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib")
+    set(ZLIB_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/libz.a")
+endif()
+
+set(CURL_LINK_LIBS "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
+    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/include")
+    set(CURL_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
+endif()
+
 # Core Library
 add_library(tsp_core STATIC
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c
@@ -48,8 +60,10 @@ add_library(tsp_core STATIC
     src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
     src/mongoose.c src/metrology/nalu_sniffer.c src/tsa_lua.c
+    src/tsa_hls_parser.c src/tsa_hls_ingest.c
+    src/tsa_webhook.c src/tsa_alert.c
 )
-target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 
 # Main Executables
 macro(tsa_exe name src)
@@ -71,6 +85,7 @@ tsa_exe(tsa_generator tools/tsa_generator.c)
 tsa_exe(tsa_top tools/tsa_top.c)
 target_link_libraries(tsa_top ncurses rt)
 tsa_exe(tsa_slicer tools/tsa_slicer.c)
+tsa_exe(tsa_hls_test tools/tsa_hls_test.c)
 
 # Unit Tests
 enable_testing()
@@ -185,3 +200,7 @@ tsa_test(test_warmup test_warmup.c)
 tsa_test(test_pcr tsa_test_pcr.c)
 tsa_test(test_prometheus tsa_test_prometheus.c)
 tsa_test(test_pacing tsp_test_pacing.c)
+tsa_test(test_hls_parser test_hls_parser.c)
+tsa_test(test_gateway_failover test_gateway_failover.c)
+tsa_test(test_webhook_async test_webhook_async.c)
+tsa_test(test_alert_state_machine test_alert_state_machine.c)

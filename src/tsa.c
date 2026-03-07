@@ -100,6 +100,11 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (!h->live || !h->prev_snap_base || !h->double_buffer.buffers[0] || !h->double_buffer.buffers[1] || !h->event_q)
         goto fail;
     if (cfg) h->config = *cfg;
+
+    if (h->config.webhook_url[0]) {
+        h->webhook = tsa_webhook_init(h->config.webhook_url);
+    }
+
     if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 128);
@@ -177,6 +182,7 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_has_cea708); FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]); FREE_IF(h->double_buffer.buffers[1]);
     FREE_IF(h->event_q);
+    if (h->webhook) tsa_webhook_destroy(h->webhook);
     free(h);
 }
 
@@ -234,18 +240,39 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
     }
 }
 
-void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64_t val) {
-    if (!h || !h->event_q) return;
-    size_t head = atomic_load_explicit(&h->event_q->head, memory_order_relaxed);
-    size_t tail = atomic_load_explicit(&h->event_q->tail, memory_order_acquire);
-    if (head - tail >= MAX_EVENT_QUEUE) return;
-    size_t idx = head % MAX_EVENT_QUEUE;
-    h->event_q->events[idx].type = type;
-    h->event_q->events[idx].pid = pid;
-    h->event_q->events[idx].timestamp_ns = h->stc_ns;
-    h->event_q->events[idx].value = val;
-    atomic_store_explicit(&h->event_q->head, head + 1, memory_order_release);
-}
+    void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64_t val) {
+        if (!h || !h->event_q) return;
+        size_t head = atomic_load_explicit(&h->event_q->head, memory_order_relaxed);
+        size_t tail = atomic_load_explicit(&h->event_q->tail, memory_order_acquire);
+        if (head - tail >= MAX_EVENT_QUEUE) return;
+        size_t idx = head % MAX_EVENT_QUEUE;
+        h->event_q->events[idx].type = type;
+        h->event_q->events[idx].pid = pid;
+        h->event_q->events[idx].timestamp_ns = h->stc_ns;
+        h->event_q->events[idx].value = val;
+        atomic_store_explicit(&h->event_q->head, head + 1, memory_order_release);
+
+        /* Hierarchical Suppression: If we have sync loss, ignore minor protocol errors for the state machine and webhooks */
+        if (type != TSA_EVENT_SYNC_LOSS && !h->signal_lock) {
+            return;
+        }
+
+        /* Drive the Alert State Machine from events */
+        switch(type) {
+            case TSA_EVENT_SYNC_LOSS:   tsa_alert_update(h, TSA_ALERT_SYNC, true, "SYNC", pid); break;
+            case TSA_EVENT_PAT_TIMEOUT: tsa_alert_update(h, TSA_ALERT_PAT, true, "PAT", pid); break;
+            case TSA_EVENT_PMT_TIMEOUT: tsa_alert_update(h, TSA_ALERT_PMT, true, "PMT", pid); break;
+            case TSA_EVENT_CC_ERROR:    tsa_alert_update(h, TSA_ALERT_CC, true, "CC", pid); break;
+            case TSA_EVENT_CRC_ERROR:   tsa_alert_update(h, TSA_ALERT_CRC, true, "CRC", pid); break;
+            case TSA_EVENT_TRANSPORT_ERROR: tsa_alert_update(h, TSA_ALERT_TRANSPORT, true, "TRANSPORT", pid); break;
+            case TSA_EVENT_PTS_ERROR:   tsa_alert_update(h, TSA_ALERT_PTS, true, "PTS", pid); break;
+            case TSA_EVENT_PCR_REPETITION:
+
+            case TSA_EVENT_PCR_JITTER:  tsa_alert_update(h, TSA_ALERT_PCR, true, "PCR", pid); break;
+            default: break;
+        }
+    }
+
 
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     if (!h || !p) return;
@@ -275,7 +302,9 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
         return;
     } else {
         h->consecutive_good_syncs++; h->consecutive_sync_errors = 0;
-        if (h->consecutive_good_syncs >= 2) h->signal_lock = true;
+        if (h->consecutive_good_syncs >= 5) {
+            h->signal_lock = true;
+        }
     }
 
     /* VIRTUAL STC UPDATE */

@@ -16,6 +16,8 @@ extern void tsa_exporter_prom_v2(tsa_handle_t **handles, int count, char *buf, s
 
 #define MAX_STREAMS 16
 static int g_http_port = 8088;
+static char g_webhook_url[256] = "";
+static uint64_t g_alert_mask = 0;
 
 typedef struct {
     char id[32];
@@ -72,11 +74,15 @@ static void load_config(const char *file) {
         char *p = line;
         while (*p && (*p == ' ' || *p == '\t')) p++;
         if (*p == '#' || *p == '\n' || *p == '{' || *p == '}' || *p == '\0') continue;
+
         char key[64], val[256];
         if (sscanf(p, "GLOBAL %s %s", key, val) == 2) {
             if (strcmp(key, "http_port") == 0) g_http_port = atoi(val);
+            else if (strcmp(key, "webhook_url") == 0) strncpy(g_webhook_url, val, 255);
+            else if (strcmp(key, "alert_mask") == 0) g_alert_mask = strtoull(val, NULL, 0);
             continue;
         }
+
         char id[64], url[256];
         if (sscanf(p, "%s %s", id, url) == 2) {
             if (strchr(id, ':') || strchr(id, '"')) continue;
@@ -89,6 +95,8 @@ static void load_config(const char *file) {
                 n->active = true;
                 tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE, .pcr_ema_alpha = 0.1};
                 strncpy(cfg.input_label, n->id, 31);
+                strncpy(cfg.webhook_url, g_webhook_url, sizeof(cfg.webhook_url) - 1);
+                cfg.alert_filter_mask = g_alert_mask;
                 n->tsa = tsa_create(&cfg);
                 pthread_create(&n->thread, NULL, worker, n);
             }
@@ -114,8 +122,19 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/v1/streams"), NULL)) {
         if (mg_strcasecmp(hm->method, mg_str("POST")) == 0) {
             char id[64] = "";
+            char webhook[256] = "";
+            uint64_t mask = g_alert_mask;
+
             char *id_p = mg_json_get_str(hm->body, "$.id");
             if (id_p) { strncpy(id, id_p, 31); free(id_p); }
+
+            char *wh_p = mg_json_get_str(hm->body, "$.webhook_url");
+            if (wh_p) { strncpy(webhook, wh_p, 255); free(wh_p); }
+            else strncpy(webhook, g_webhook_url, 255);
+
+            char *mask_p = mg_json_get_str(hm->body, "$.alert_mask");
+            if (mask_p) { mask = strtoull(mask_p, NULL, 0); free(mask_p); }
+
             pthread_mutex_lock(&g_nodes_lock);
             if (g_node_count < MAX_STREAMS) {
                 node_t *n = &g_nodes[g_node_count++];
@@ -123,6 +142,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 n->port = 19000 + g_node_count; n->active = true;
                 tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE, .pcr_ema_alpha = 0.1};
                 strncpy(cfg.input_label, n->id, 31);
+                strncpy(cfg.webhook_url, webhook, sizeof(cfg.webhook_url) - 1);
+                cfg.alert_filter_mask = mask;
                 n->tsa = tsa_create(&cfg);
                 pthread_create(&n->thread, NULL, worker, n);
                 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\",\"port\":%d}", n->port);

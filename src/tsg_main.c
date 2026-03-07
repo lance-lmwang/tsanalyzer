@@ -78,7 +78,7 @@ void print_usage(const char* prog) {
 
 int main(int argc, char** argv) {
     tsa_gateway_config_t cfg = {0};
-    cfg.analysis.pcr_ema_alpha = 0.01;
+    cfg.analysis_primary.pcr_ema_alpha = 0.01;
     cfg.pacing.ts_per_udp = 7;
     cfg.pacing.mode = TSPACER_MODE_BASIC;
 
@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
                 cfg.enable_pcr_restamp = true;
                 break;
             case 9:
-                cfg.analysis.enable_forensics = true;
+                cfg.analysis_primary.enable_forensics = true;
                 break;
             case 10:
                 strncpy(g_http_url, optarg, sizeof(g_http_url) - 1);
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
 
     if (cfg.pacing.bitrate == 0) cfg.pacing.bitrate = 10000000;  // Default 10Mbps
 
-    cfg.analysis.is_live = true;
+    cfg.analysis_primary.is_live = true;
     cfg.enable_action_engine = (cfg.enable_null_substitution || cfg.enable_pcr_restamp || pacing_pcr);
     if (pacing_pcr) cfg.pacing.mode = TSPACER_MODE_PCR;
 

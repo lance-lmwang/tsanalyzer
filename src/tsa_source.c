@@ -41,6 +41,7 @@ struct tsa_source {
         int udp_fd;
         SRTSOCKET srt_sock;
         FILE* fp;
+        void* hls_hdl;
 #ifdef HAVE_PCAP
         pcap_t* pcap_hdl;
 #endif
@@ -352,12 +353,19 @@ int tsa_source_start(tsa_source_t* src) {
             return -1;
         }
         pthread_create(&src->thread, NULL, file_thread, src);
+    } else if (src->type == TSA_SOURCE_HLS) {
+        src->handle.hls_hdl = tsa_hls_ingest_start(src->url, &src->cbs, src->user_data);
+        if (!src->handle.hls_hdl) return -1;
     }
     return 0;
 }
 
 int tsa_source_stop(tsa_source_t* src) {
     src->running = false;
+    if (src->type == TSA_SOURCE_HLS) {
+        tsa_hls_ingest_stop(src->handle.hls_hdl);
+        return 0;
+    }
     if (src->reactor && src->type == TSA_SOURCE_UDP) {
         tsa_reactor_del(src->reactor, &src->ev);
     }

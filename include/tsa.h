@@ -183,18 +183,52 @@ typedef enum {
 } tsa_op_mode_t;
 
 typedef struct {
-    char input_label[32];
+    char input_label[64];
     bool is_live;
     tsa_op_mode_t op_mode;
-    double pcr_ema_alpha;
-    bool enable_forensics;
-    bool enable_reactive_pid_filter;
+
+    struct {
+        bool enabled;
+        bool tr101290;
+        bool pcr_jitter;
+        bool codec_sniff;
+        bool scte35;
+        bool entropy;
+        double pcr_ema_alpha;
+        bool enable_reactive_pid_filter;
+    } analysis;
+
+    struct {
+        bool enabled;
+        char output_url[256];
+        uint64_t bitrate;
+        tsp_pacing_mode_t pacing;
+        bool repair_cc;
+        bool repair_pcr;
+    } gateway;
+
+    struct {
+        bool enabled;
+        char backup_url[256];
+        float threshold;
+        uint32_t hold_time_ms;
+        tsa_failover_mode_t mode;
+    } failover;
+
+    struct {
+        char webhook_url[256];
+        uint64_t filter_mask;
+        uint32_t cooldown_ms;
+    } alert;
+
+    // Legacy fields for backward compatibility during transition
     uint64_t forced_cbr_bitrate;
     uint16_t protected_pids[16];
     uint32_t entropy_window_packets;
-
     int udp_port;
     char url[256];
+    char webhook_url[256];
+    uint64_t alert_filter_mask;
     int http_port;
 } tsa_config_t;
 
@@ -234,9 +268,24 @@ void tsa_forensic_writer_stop(tsa_forensic_writer_t* w);
 
 /* --- TSA Gateway API --- */
 typedef struct tsa_gateway tsa_gateway_t;
+
+typedef enum {
+    TSA_FAILOVER_MODE_AUTO,
+    TSA_FAILOVER_MODE_FORCE_PRIMARY,
+    TSA_FAILOVER_MODE_FORCE_BACKUP,
+    TSA_FAILOVER_MODE_MANUAL
+} tsa_failover_mode_t;
+
 typedef struct {
-    tsa_config_t analysis;
+    tsa_config_t analysis_primary;
+    tsa_config_t analysis_backup;
     tsp_config_t pacing;
+
+    bool enable_smart_failover;
+    float health_threshold;       /* 0.0 - 1.0, e.g. 0.7 triggers switch */
+    uint32_t switch_hold_ms;      /* Avoid flapping */
+    tsa_failover_mode_t failover_mode;
+
     bool enable_action_engine;
     bool enable_null_substitution;
     bool enable_pcr_restamp;
@@ -248,8 +297,22 @@ typedef struct {
 
 tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg);
 void tsa_gateway_destroy(tsa_gateway_t* gw);
+
+/**
+ * Process a single packet in single-input mode.
+ */
 int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns);
+
+/**
+ * Process dual packets in smart-failover mode.
+ * @param pkt_p Packet from Primary source (can be NULL if no data)
+ * @param pkt_b Packet from Backup source (can be NULL if no data)
+ */
+int tsa_gateway_process_dual(tsa_gateway_t* gw, const uint8_t* pkt_p, const uint8_t* pkt_b, uint64_t now_ns);
+
+uint32_t tsa_gateway_get_active_index(tsa_gateway_t* gw);
 tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw);
+tsa_handle_t* tsa_gateway_get_tsa_handle_backup(tsa_gateway_t* gw);
 struct tsp_handle* tsa_gateway_get_tsp_handle(tsa_gateway_t* gw);
 bool tsa_gateway_is_bypassing(tsa_gateway_t* gw);
 void tsa_gateway_debug_inject_stall(tsa_gateway_t* gw, uint64_t duration_ns);

@@ -14,6 +14,7 @@
 struct tsa_gateway {
     tsa_gateway_config_t cfg;
     tsa_handle_t* tsa;
+    tsa_handle_t* tsa_backup;
     tsp_handle_t* tsp;
     tsa_packet_ring_t* ring;
     uint8_t last_cc[TS_PID_MAX];
@@ -23,6 +24,10 @@ struct tsa_gateway {
     uint64_t last_process_ns;
     uint64_t last_rst_check_ns;
     uint64_t debug_stall_ns;
+
+    uint32_t active_index;
+    uint64_t last_switch_ns;
+    bool pending_discontinuity;
 };
 
 tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
@@ -31,7 +36,10 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
     if (!gw) return NULL;
     gw->cfg = *cfg;
 
-    gw->tsa = tsa_create(&cfg->analysis);
+    gw->tsa = tsa_create(&cfg->analysis_primary);
+    if (cfg->enable_smart_failover) {
+        gw->tsa_backup = tsa_create(&cfg->analysis_backup);
+    }
     gw->tsp = tsp_create(&cfg->pacing);
     if (gw->tsp) tsp_start(gw->tsp);
 
@@ -39,6 +47,7 @@ tsa_gateway_t* tsa_gateway_create(const tsa_gateway_config_t* cfg) {
         gw->ring = tsa_packet_ring_create(cfg->forensic_ring_size ? cfg->forensic_ring_size : 10000);
     }
 
+    gw->active_index = 0; /* Primary */
     gw->last_process_ns = 0;
     gw->bypassing = false;
     return gw;
@@ -51,100 +60,85 @@ void tsa_gateway_destroy(tsa_gateway_t* gw) {
         tsp_destroy(gw->tsp);
     }
     tsa_destroy(gw->tsa);
+    if (gw->tsa_backup) tsa_destroy(gw->tsa_backup);
     if (gw->ring) tsa_packet_ring_destroy(gw->ring);
     free(gw);
 }
 
-int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) {
-    if (!gw || !pkt) return -1;
+int tsa_gateway_process_dual(tsa_gateway_t* gw, const uint8_t* pkt_p, const uint8_t* pkt_b, uint64_t now_ns) {
+    if (!gw) return -1;
 
-    uint64_t effective_now = now_ns + gw->debug_stall_ns;
-    if (gw->last_process_ns > 0 && gw->cfg.watchdog_timeout_ns > 0) {
-        if (effective_now - gw->last_process_ns > gw->cfg.watchdog_timeout_ns) {
-            gw->bypassing = true;
-        }
-    }
+    /* Always analyze both streams if they are present */
+    if (pkt_p) tsa_process_packet(gw->tsa, pkt_p, now_ns);
+    if (pkt_b && gw->tsa_backup) tsa_process_packet(gw->tsa_backup, pkt_b, now_ns);
 
-    if (gw->bypassing) return tsp_enqueue(gw->tsp, pkt, 1);
+    /* Health assessment and switching logic */
+    if (gw->cfg.enable_smart_failover && (now_ns - gw->last_rst_check_ns > 100000000ULL)) {
+        tsa_snapshot_full_t snap_p, snap_b;
+        int res_p = tsa_take_snapshot_full(gw->tsa, &snap_p);
+        int res_b = gw->tsa_backup ? tsa_take_snapshot_full(gw->tsa_backup, &snap_b) : -1;
 
-    uint8_t output_pkt[188];
-    memcpy(output_pkt, pkt, 188);
+        if (res_p == 0) {
+            float health_p = snap_p.summary.master_health;
+            float health_b = (res_b == 0) ? snap_b.summary.master_health : 0.0f;
 
-    tsa_process_packet(gw->tsa, pkt, now_ns);
+            uint32_t target_index = gw->active_index;
 
-    if (gw->ring) tsa_packet_ring_push(gw->ring, pkt, now_ns);
-
-    /* Active Grooming: PCR Re-stamping */
-    if (gw->cfg.enable_pcr_restamp) {
-        uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-        if (pid == VIDEO_PID && (pkt[3] & 0x20) && (pkt[4] > 0) && (pkt[5] & 0x10)) {
-            /* This packet has a PCR. Calculate the ideal PCR based on bytes sent. */
-            uint64_t bytes_sent = tsp_get_total_packets(gw->tsp) * 188ULL;
-            uint64_t ideal_pcr_27m = (bytes_sent * 8ULL * TS_SYSTEM_CLOCK_HZ) / gw->cfg.pacing.bitrate;
-
-            /* Encode ideal PCR back into the adaptation field */
-            uint64_t base = ideal_pcr_27m / 300;
-            uint16_t ext = ideal_pcr_27m % 300;
-            output_pkt[6] = (base >> 25) & 0xFF;
-            output_pkt[7] = (base >> 17) & 0xFF;
-            output_pkt[8] = (base >> 9) & 0xFF;
-            output_pkt[9] = (base >> 1) & 0xFF;
-            output_pkt[10] = ((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01);
-            output_pkt[11] = ext & 0xFF;
-        }
-    }
-
-    if (now_ns - gw->last_rst_check_ns > 100000000ULL) {
-        tsa_snapshot_full_t snap;
-        if (tsa_take_snapshot_full(gw->tsa, &snap) == 0) {
-            if (snap.summary.rst_network_s < 5.0 && !gw->is_throttling) {
-                tsp_update_bitrate(gw->tsp, (uint64_t)(gw->cfg.pacing.bitrate * 0.9));
-                gw->is_throttling = true;
-            } else if (snap.summary.rst_network_s > 10.0 && gw->is_throttling) {
-                tsp_update_bitrate(gw->tsp, gw->cfg.pacing.bitrate);
-                gw->is_throttling = false;
+            if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_FORCE_PRIMARY) target_index = 0;
+            else if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_FORCE_BACKUP) target_index = 1;
+            else if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_AUTO) {
+                if (gw->active_index == 0 && health_p < gw->cfg.health_threshold && health_b > health_p) {
+                    target_index = 1;
+                } else if (gw->active_index == 1 && health_b < gw->cfg.health_threshold && health_p > health_b) {
+                    target_index = 0;
+                }
             }
 
-            if (gw->cfg.enable_dynamic_grooming && snap.stats.pcr_bitrate_bps > 0) {
-                // Smoothly track input bitrate via PCR rather than raw physical bits
-                // PCR bitrate is much more stable and accurate for CBR output
-                tsp_update_bitrate(gw->tsp, snap.stats.pcr_bitrate_bps);
-            }
+            if (target_index != gw->active_index && (now_ns - gw->last_switch_ns > (uint64_t)gw->cfg.switch_hold_ms * 1000000ULL)) {
+                gw->active_index = target_index;
+                gw->last_switch_ns = now_ns;
+                gw->pending_discontinuity = true;
+                printf("GATEWAY: Switched active source to %s (P:%.2f, B:%.2f)\n",
+                       target_index == 0 ? "PRIMARY" : "BACKUP", health_p, health_b);
 
-            if (gw->cfg.enable_auto_forensics && tsa_forensic_trigger(gw->tsa, 0)) {
-                char fname[64];
-                snprintf(fname, sizeof(fname), "forensic_%lu.ts", (unsigned long)time(NULL));
-                tsa_forensic_writer_t* tmp_w = tsa_forensic_writer_create(gw->ring, fname);
-                if (tmp_w) {
-                    tsa_forensic_writer_write_all(tmp_w);
-                    tsa_forensic_writer_destroy(tmp_w);
+                if (gw->tsa->webhook) {
+                    char switch_msg[256];
+                    snprintf(switch_msg, sizeof(switch_msg), "Source Switched to %s (PrimaryHealth:%.2f, BackupHealth:%.2f)",
+                             target_index == 0 ? "PRIMARY" : "BACKUP", health_p, health_b);
+                    tsa_webhook_push_event(gw->tsa->webhook, gw->cfg.analysis_primary.input_label, "FAILOVER", switch_msg);
                 }
             }
         }
         gw->last_rst_check_ns = now_ns;
     }
 
-    if (gw->cfg.enable_null_substitution) {
-        uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-        uint8_t cc = pkt[3] & 0x0F;
-        if (gw->pid_seen[pid]) {
-            uint8_t expected = (gw->last_cc[pid] + 1) & 0x0F;
-            if (cc != expected && cc != gw->last_cc[pid]) {
-                uint8_t loss_count = (cc - expected) & 0x0F;
-                uint8_t null_pkt[188];
-                memset(null_pkt, 0, 188);
-                null_pkt[0] = 0x47;
-                null_pkt[1] = 0x1F;
-                null_pkt[2] = 0xFF;
-                for (int i = 0; i < loss_count; i++) tsp_enqueue(gw->tsp, null_pkt, 1);
-            }
+    const uint8_t* active_pkt = (gw->active_index == 0) ? pkt_p : pkt_b;
+    if (!active_pkt) return 0; /* No data on active path */
+
+    uint8_t output_pkt[188];
+    memcpy(output_pkt, active_pkt, 188);
+
+    if (gw->pending_discontinuity) {
+        /* Set discontinuity indicator in adaptation field if present, or create one */
+        if (output_pkt[3] & 0x20) { /* Has adaptation field */
+            if (output_pkt[4] > 0) output_pkt[5] |= 0x80; /* Set bit 7: discontinuity_indicator */
         }
-        gw->last_cc[pid] = cc;
-        gw->pid_seen[pid] = true;
+        gw->pending_discontinuity = false;
     }
 
-    gw->last_process_ns = effective_now;
     return tsp_enqueue(gw->tsp, output_pkt, 1);
+}
+
+int tsa_gateway_process(tsa_gateway_t* gw, const uint8_t* pkt, uint64_t now_ns) {
+    return tsa_gateway_process_dual(gw, pkt, NULL, now_ns);
+}
+
+uint32_t tsa_gateway_get_active_index(tsa_gateway_t* gw) {
+    return gw ? gw->active_index : 0;
+}
+
+tsa_handle_t* tsa_gateway_get_tsa_handle_backup(tsa_gateway_t* gw) {
+    return gw ? gw->tsa_backup : NULL;
 }
 
 tsa_handle_t* tsa_gateway_get_tsa_handle(tsa_gateway_t* gw) {

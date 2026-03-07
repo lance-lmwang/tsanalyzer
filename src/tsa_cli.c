@@ -216,6 +216,9 @@ int main(int argc, char** argv) {
 
     if (optind < argc) {
         strncpy(filename, argv[optind], sizeof(filename)-1);
+        if (strncmp(filename, "http://", 7) == 0 || strncmp(filename, "https://", 8) == 0) {
+            cfg.op_mode = TSA_MODE_LIVE;
+        }
     }
 
     if (!filename[0] && udp_port == 0 && !srt_url[0] && !interface[0]) {
@@ -264,7 +267,13 @@ int main(int argc, char** argv) {
         if (interface[0]) src = tsa_source_create(TSA_SOURCE_PCAP, interface, NULL, 0, &cbs, h);
         else if (udp_port > 0) src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, udp_port, &cbs, h);
         else if (srt_url[0]) src = tsa_source_create(TSA_SOURCE_SRT, srt_url, NULL, 0, &cbs, h);
-        else if (filename[0]) src = tsa_source_create(TSA_SOURCE_FILE, filename, NULL, 0, &cbs, h);
+        else if (filename[0]) {
+            if (strncmp(filename, "http://", 7) == 0 || strncmp(filename, "https://", 8) == 0) {
+                src = tsa_source_create(TSA_SOURCE_HLS, filename, NULL, 0, &cbs, h);
+            } else {
+                src = tsa_source_create(TSA_SOURCE_FILE, filename, NULL, 0, &cbs, h);
+            }
+        }
 
         if (src) {
             tsa_source_set_pacing(src, pacing);
