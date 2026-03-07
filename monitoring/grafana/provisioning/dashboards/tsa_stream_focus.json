@@ -26,13 +26,94 @@
   },
   "panels": [
     {
+      "title": "GLOBAL MONITORING MATRIX (CLICK TO FOCUS)",
+      "type": "stat",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_system_health_score",
+          "legendFormat": "{{stream_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 90,
+                "to": 100,
+                "result": {
+                  "color": "green",
+                  "text": "STABLE"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 70,
+                "to": 90,
+                "result": {
+                  "color": "yellow",
+                  "text": "DEGRADED"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 70,
+                "result": {
+                  "color": "red",
+                  "text": "CRITICAL"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "color": "dark-red",
+                  "text": "LOST"
+                }
+              }
+            }
+          ],
+          "links": [
+            {
+              "title": "Jump to ${__series.name} Focus View",
+              "url": "/d/stream-focus?var-stream=${__series.name}",
+              "targetBlank": false
+            }
+          ]
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "justifyMode": "center",
+        "textMode": "name",
+        "orientation": "auto"
+      }
+    },
+    {
       "type": "row",
       "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 12
       },
       "collapsed": false
     },
@@ -43,7 +124,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 1
+        "y": 13
       },
       "datasource": {
         "type": "prometheus",
@@ -85,7 +166,7 @@
         "h": 4,
         "w": 12,
         "x": 6,
-        "y": 1
+        "y": 13
       },
       "datasource": {
         "type": "prometheus",
@@ -111,7 +192,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 1
+        "y": 13
       },
       "datasource": {
         "type": "prometheus",
@@ -135,7 +216,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 17
       },
       "collapsed": false
     },
@@ -146,7 +227,7 @@
         "h": 3,
         "w": 6,
         "x": 0,
-        "y": 6
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -165,7 +246,7 @@
         "h": 3,
         "w": 6,
         "x": 6,
-        "y": 6
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -184,7 +265,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 6
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -203,7 +284,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 6
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -222,7 +303,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 21
       },
       "collapsed": false
     },
@@ -233,7 +314,7 @@
         "h": 3,
         "w": 6,
         "x": 0,
-        "y": 10
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -252,7 +333,7 @@
         "h": 3,
         "w": 6,
         "x": 6,
-        "y": 10
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -271,7 +352,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 10
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -290,7 +371,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 10
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -309,7 +390,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 25
       },
       "collapsed": false
     },
@@ -320,7 +401,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 26
       },
       "datasource": {
         "type": "prometheus",
@@ -339,7 +420,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 30
       },
       "collapsed": false
     },
@@ -350,7 +431,7 @@
         "h": 15,
         "w": 18,
         "x": 0,
-        "y": 19
+        "y": 31
       },
       "datasource": {
         "type": "prometheus",
@@ -375,7 +456,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 46
       },
       "collapsed": false
     },
@@ -386,7 +467,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 56
       },
       "collapsed": false
     },
@@ -397,7 +478,7 @@
         "h": 16,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 57
       },
       "datasource": {
         "type": "prometheus",
