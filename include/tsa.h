@@ -182,6 +182,13 @@ typedef enum {
     TSA_MODE_CERTIFICATION = 3
 } tsa_op_mode_t;
 
+typedef enum {
+    TSA_FAILOVER_MODE_AUTO,
+    TSA_FAILOVER_MODE_FORCE_PRIMARY,
+    TSA_FAILOVER_MODE_FORCE_BACKUP,
+    TSA_FAILOVER_MODE_MANUAL
+} tsa_failover_mode_t;
+
 typedef struct {
     char input_label[64];
     bool is_live;
@@ -202,7 +209,7 @@ typedef struct {
         bool enabled;
         char output_url[256];
         uint64_t bitrate;
-        tsp_pacing_mode_t pacing;
+        tsp_mode_t pacing;
         bool repair_cc;
         bool repair_pcr;
     } gateway;
@@ -268,13 +275,6 @@ void tsa_forensic_writer_stop(tsa_forensic_writer_t* w);
 
 /* --- TSA Gateway API --- */
 typedef struct tsa_gateway tsa_gateway_t;
-
-typedef enum {
-    TSA_FAILOVER_MODE_AUTO,
-    TSA_FAILOVER_MODE_FORCE_PRIMARY,
-    TSA_FAILOVER_MODE_FORCE_BACKUP,
-    TSA_FAILOVER_MODE_MANUAL
-} tsa_failover_mode_t;
 
 typedef struct {
     tsa_config_t analysis_primary;

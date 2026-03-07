@@ -62,6 +62,7 @@ add_library(tsp_core STATIC
     src/mongoose.c src/metrology/nalu_sniffer.c src/tsa_lua.c
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
     src/tsa_webhook.c src/tsa_alert.c
+    src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
 )
 target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 
@@ -204,3 +205,5 @@ tsa_test(test_hls_parser test_hls_parser.c)
 tsa_test(test_gateway_failover test_gateway_failover.c)
 tsa_test(test_webhook_async test_webhook_async.c)
 tsa_test(test_alert_state_machine test_alert_state_machine.c)
+tsa_test(test_units test_units.c)
+tsa_test(test_conf test_conf.c)

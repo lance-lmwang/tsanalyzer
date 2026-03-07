@@ -34,8 +34,3 @@ This plan details the step-by-step approach to building the Lua pipeline engine.
   - When `tsa_push_event()` is fired in C, cross the boundary to call the registered Lua function.
   - Example: `analyzer:on("alarm", function(event) print("Alarm triggered!") end)`
 
-## Step 5: End-to-End Proof of Concept
-- **Goal**: Write a complex `router.lua` script and verify it processes streams identically to the C gateway.
-- **Tasks**:
-  - Write `sample/router.lua` that takes 1 UDP input, analyzes it, and splits it into 2 UDP outputs based on PIDs.
-  - Add this test to the standard integration test suite.

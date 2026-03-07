@@ -105,8 +105,8 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->webhook = tsa_webhook_init(h->config.webhook_url);
     }
 
-    if (h->config.pcr_ema_alpha <= 0) h->config.pcr_ema_alpha = 0.05;
-    h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.pcr_ema_alpha);
+    if (h->config.analysis.pcr_ema_alpha <= 0) h->config.analysis.pcr_ema_alpha = 0.05;
+    h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.analysis.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 128);
     ts_pcr_window_init(&h->pcr_long_window, 1024);
 
@@ -329,7 +329,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
 
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
-    if (h->config.enable_reactive_pid_filter && !tsa_stream_demux_check_pid(&h->root_stream, r.pid)) return;
+    if (h->config.analysis.enable_reactive_pid_filter && !tsa_stream_demux_check_pid(&h->root_stream, r.pid)) return;
 
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
