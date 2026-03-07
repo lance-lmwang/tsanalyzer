@@ -23,12 +23,12 @@ Migrate `tsanalyzer` to a carrier-grade programmable pipeline architecture with 
 ## 4. Phase 3: Metrology & Action Engine
 - [x] **Task 3.1: 4-Clock Domain Sync**
     - Implement drift calculation between Wall, Arrival, Reference, and Media domains.
-- [ ] **Task 3.2: Action Engine Refinement**
+- [x] **Task 3.2: Action Engine Refinement**
     - Implement modular CC Repair, PCR Restamping, and precision Pacer.
 
 ## 5. Phase 4: Observability & Cloud-Native
-- [ ] **Task 4.1: Unified Metrics & Logging**
+- [x] **Task 4.1: Unified Metrics & Logging**
     - Re-namespace all Prometheus metrics.
     - Implement JSON structured logging.
-- [ ] **Task 4.2: Health & Persistence**
+- [x] **Task 4.2: Health & Persistence**
     - Implement `/health` endpoint and `tsa_state.json` persistence.
