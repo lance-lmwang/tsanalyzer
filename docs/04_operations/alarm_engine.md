@@ -1,56 +1,60 @@
-# The Stateful Alarm & Incident Engine
+# Metrology Alarm Engine
 
-TsAnalyzer employs a sophisticated event management system designed to eliminate alert fatigue and provide actionable operational data.
-
-## 1. Alarm vs. Incident: The Grouping Model
-
-To prevent thousands of redundant alerts, the engine distinguishes between raw signals and logical events.
-
-*   **Alarm (Signal)**: An instantaneous violation of a threshold (e.g., "TS Packet #5423 has an invalid CC").
-*   **Incident (Event)**: A stateful grouping of related Alarms (e.g., "CC Error Incident on PID 0x100 starting at T1, lasting 3.2s, containing 1000 errors").
+TsAnalyzer Pro features a carrier-grade, stateful alarm engine designed to eliminate alert fatigue and ensure high-reliability signaling.
 
 ---
 
-## 2. The Finite State Machine (FSM)
+## 1. Stateful Monitoring Model (Edge-Triggered)
 
-Every Incident follows a strictly managed lifecycle.
+Instead of sending an alert for every error event, TsAnalyzer utilizes an internal **Edge-Triggered State Machine**. This separates the detection of an impairment from the notification policy.
 
-### 2.1 State Transitions
-```text
-  [OPEN] ----(T_persist)----> [ACTIVE] ----(Manual)----> [ACKNOWLEDGED]
-    |                            |                            |
-    +--------(T_absent)----------+------------+---------------+
-                                              |
-                                          [CLEARED]
-```
-
-### 2.2 The SUPPRESSED State
-An incident enters the **SUPPRESSED** state if its "Root Cause" is already covered by a higher-level fault.
-*   **Example**: If `Ingress_Link_Down` is ACTIVE, then a simultaneous `PAT_error` is marked as SUPPRESSED.
-*   **Visibility**: Suppressed incidents are logged for forensics but do not trigger NOC notifications or contribute to the Compliance Grade penalty.
+### 1.1 Alert Lifecycles
+*   **OFF (Normal)**: The default state.
+*   **FIRING (Alert Active)**: 
+    *   Triggered on the **first occurrence** of a critical error (e.g., P1.1 Sync Loss).
+    *   An immediate `CRITICAL` notification is dispatched.
+*   **RESOLVED (Cleared)**: 
+    *   Triggered only after the error has completely disappeared and the stream has remained stable for a **5-second observation window**.
+    *   An `OK` notification is dispatched, and the state returns to `OFF`.
 
 ---
 
-## 3. Incident Merging (Anti-Storm Logic)
+## 2. High-Reliability Webhook Signaling
 
-To handle intermittent faults ("chattering"), the engine implements **Dampening**:
-*   If an incident clears but re-opens within **T_reopen** (default 5s), it is merged back into the previous logical incident rather than creating a new one.
-*   This preserves the continuity of the fault for SLA reporting.
+The system features a dedicated, non-blocking signaling thread to ensure that alarm delivery never impacts real-time stream analysis.
+
+### 2.1 Resilient Delivery
+*   **Async Task Queue**: Up to 1024 pending alerts are buffered in a lock-free queue.
+*   **Retry with Backoff**: Failed HTTP POSTs are retried **3 times** using an exponential backoff strategy (`1s -> 2s -> 4s`).
+*   **CURL-based Engine**: Supports HTTPS, custom headers, and sub-second timeouts.
+
+### 2.2 Noise Control (Suppression & Aggregation)
+To manage high-frequency errors (e.g., CC bursts), the engine employs two layers of protection:
+*   **Hierarchical Suppression**: If a stream enters `SYNC_LOSS` (Root Cause), all sub-alerts (CC, PAT, CRC) are automatically silenced.
+*   **Sliding Window Aggregation**: Within a **10-second** window, identical alerts are suppressed and counted. At the end of the window, a summary message is sent (e.g., `CC_ERROR occurred 150 times`).
 
 ---
 
-## 4. Operational Metrology JSON
+## 3. Standard Filter Masks (TR 101 290)
 
-Incidents are reported via the API with high-fidelity metadata:
-```json
-{
-  "incident_id": "INC-20260306-001",
-  "type": "CC_ERROR",
-  "status": "ACTIVE",
-  "suppressed": false,
-  "first_occur": 1772804183000,
-  "last_occur": 1772804186200,
-  "count": 1024,
-  "details": { "pid": 256, "gap_size": 2 }
+Alerts can be enabled or disabled per-stream using a bitmask aligned with ETSI standards:
+
+| Index | Name | Bitmask |
+| :--- | :--- | :--- |
+| P1.1 | TS_sync_loss | `0x0001` |
+| P1.3 | PAT_error | `0x0002` |
+| P1.4 | CC_error | `0x0004` |
+| P2.3 | PCR_error | `0x0040` |
+| FAIL | Failover Event | `0x1000` |
+
+---
+
+## 4. Configuration Example
+
+```nginx
+alert {
+    webhook_url http://ops-center.local/webhook;
+    filter_mask 0xFFFF;
+    cooldown    10s;
 }
 ```

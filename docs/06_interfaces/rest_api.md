@@ -1,38 +1,66 @@
 # REST API Reference
 
-The TsAnalyzer Appliance follows an **API-First** design. The Web UI is a consumer of these documented endpoints.
+TsAnalyzer Server provides a high-performance REST API for dynamic stream management and real-time telemetry extraction.
+
+---
 
 ## 1. Stream Management
 
-### Register a Stream
+### 1.1 Create/Update a Stream
 `POST /api/v1/streams`
+
+Creates a new analysis pipeline. The payload follows the hierarchical configuration model.
+
+**Payload Example:**
 ```json
 {
-  "stream_id": "CH-01",
-  "url": "srt://47.92.1.1:9000?mode=caller",
-  "config": { "enable_pacing": true }
+  "id": "tenant-a/live/ch1",
+  "metrology": {
+    "pcr_jitter": true,
+    "hls_audit": false
+  },
+  "compliance": {
+    "tr101290": true
+  },
+  "pipeline": {
+    "enabled": true,
+    "bitrate": "15Mbps",
+    "outputs": ["udp://239.1.1.1:1234"]
+  },
+  "alert": {
+    "webhook_url": "http://alert-manager/notify",
+    "filter_mask": "0x0F"
+  }
 }
 ```
 
-### Remove a Stream
-`DELETE /api/v1/streams/:id`
+### 1.2 Delete a Stream
+`DELETE /api/v1/streams/{id}`
 
 ---
 
-## 2. Metrology Snapshots
+## 2. Telemetry & Monitoring
 
-### Instantaneous Snapshot
-`GET /api/v1/snapshot/:id`
-Returns the current Tier 1-6 state including video metadata and active alarms.
+### 2.1 Get Global Metrics
+`GET /metrics`
 
-### Full Engine State
-`GET /api/v1/metrology/full`
-Returns a global JSON object containing every monitored stream and the Master Health of the appliance.
+Returns high-density Prometheus-compatible metrics. See [Observability Model](../04_operations/observability_model.md) for details.
+
+### 2.2 Get Real-time Snapshot
+`GET /api/v1/snapshot`
+
+Returns a full JSON snapshot of all active streams, including TR 101 290 status and PCR jitter values.
+
+### 2.3 System Health
+`GET /health`
+
+Lightweight endpoint for load-balancer and Kubernetes liveness probes. Returns `200 OK`.
 
 ---
 
-## 3. Forensic Export
+## 3. Configuration Management
 
-### Download Capture
-`GET /api/v1/forensics/:id/capture`
-Downloads the last 500ms of raw TS packets associated with the most recent Priority 1 incident.
+### 3.1 Hot-Reload
+`POST /api/v1/config/reload`
+
+Triggers a zero-latency configuration reload from the local `tsa.conf`.
