@@ -7,6 +7,7 @@
 
 /* Internal declaration of the AVX2 implementation */
 extern intptr_t tsa_simd_find_sync_avx2(const uint8_t* buf, size_t len);
+extern void tsa_simd_extract_pids_8_avx2(const uint8_t* buf, uint16_t* pids);
 
 bool tsa_simd_capable(void) {
     static int cached_result = -1;
@@ -39,6 +40,19 @@ intptr_t tsa_simd_find_sync(const uint8_t* buf, size_t len) {
     return -1;
 }
 
+void tsa_simd_extract_pids_8(const uint8_t* buf, uint16_t* pids) {
+    if (tsa_simd_capable()) {
+        tsa_simd_extract_pids_8_avx2(buf, pids);
+        return;
+    }
+
+    /* Fallback: Scalar extraction */
+    for (int i = 0; i < 8; i++) {
+        const uint8_t* p = buf + (i * 188);
+        pids[i] = ((p[1] & 0x1f) << 8) | p[2];
+    }
+}
+
 #else
 /* Non-x86 architectures */
 bool tsa_simd_capable(void) {
@@ -49,6 +63,12 @@ intptr_t tsa_simd_find_sync(const uint8_t* buf, size_t len) {
         if (buf[i] == 0x47) return (intptr_t)i;
     }
     return -1;
+}
+void tsa_simd_extract_pids_8(const uint8_t* buf, uint16_t* pids) {
+    for (int i = 0; i < 8; i++) {
+        const uint8_t* p = buf + (i * 188);
+        pids[i] = ((p[1] & 0x1f) << 8) | p[2];
+    }
 }
 #endif
 

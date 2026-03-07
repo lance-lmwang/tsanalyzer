@@ -24,6 +24,14 @@ intptr_t tsa_simd_find_sync(const uint8_t* buf, size_t len);
 uint64_t tsa_simd_check_sync_batch(const uint8_t* buf, size_t packet_count);
 
 /**
+ * @brief Batch extract PIDs from 8 consecutive TS packets.
+ *
+ * @param buf Pointer to the start of the packets (must have 188*8 bytes available)
+ * @param pids Output array for 8 extracted 13-bit PIDs
+ */
+void tsa_simd_extract_pids_8(const uint8_t* buf, uint16_t* pids);
+
+/**
  * @brief Check if current CPU supports required SIMD features.
  */
 bool tsa_simd_capable(void);

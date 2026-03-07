@@ -22,7 +22,8 @@ void tsa_clock_domain_update_pcr(tsa_clock_domain_t* cd, uint64_t pcr_ns) {
     if (cd) {
         if (cd->last_pcr_ns > 0 && cd->last_wall_ns > 0) {
             // Simplified EMA drift calculation for phase 3
-            (void)cd; (void)pcr_ns;
+            (void)cd;
+            (void)pcr_ns;
             // In a real scenario we need historical wall_ns for the previous PCR,
             // using current wall_ns as approximation for the test
         }
