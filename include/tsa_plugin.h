@@ -7,7 +7,7 @@ typedef struct tsa_plugin_ops_s {
     const char* name;
 
     // Allocate and initialize the plugin instance
-    void* (*create)(void* config_or_parent);
+    void* (*create)(void* config_or_parent, void* context_buf);
 
     // Destroy the plugin
     void (*destroy)(void* self);

@@ -3,7 +3,7 @@ project(TsAnalyzer C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -Wall -Wextra -pthread")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -Wall -Wextra -pthread")
 
 # Dependencies check
 find_package(Threads REQUIRED)
@@ -58,6 +58,9 @@ add_library(tsp_core STATIC
     src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c
     src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c
+    src/tsa_descriptors.c
+    src/tsa_health.c
+    src/tsa_histogram.c
     src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
@@ -65,7 +68,7 @@ add_library(tsp_core STATIC
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
     src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
-    src/tsa_pcr_clock.c
+    src/tsa_pcr_clock.c src/tsa_stream_model.c
     src/tsa_pipeline.c src/tsa_packet_pool.c src/tsa_clock_domain.c
     src/tsa_simd.c src/tsa_simd_avx2.c
 )
@@ -108,6 +111,7 @@ endmacro()
 tsa_test(test_affinity test_affinity.c)
 tsa_test(test_analyzer_zero_alloc test_analyzer_zero_alloc.c)
 tsa_test(test_atomic_sync test_atomic_sync.c)
+tsa_test(test_bitrate_peaks test_bitrate_peaks.c)
 tsa_test(test_bitrate_comparison test_bitrate_comparison.c)
 tsa_test(test_bitstream test_bitstream.c)
 tsa_test(test_capture_performance test_capture_performance.c)
@@ -116,6 +120,7 @@ tsa_test(test_causal_chain test_causal_chain.c)
 tsa_test(test_cc_classifier test_cc_classifier.c)
 tsa_test(test_cc_repair test_cc_repair.c)
 tsa_test(test_cc_repair_stress test_cc_repair_stress.c)
+tsa_test(test_descriptors test_descriptors.c)
 tsa_test(test_clock_128 test_clock_128.c)
 tsa_test(test_clock_inspector test_clock_inspector.c)
 tsa_test(test_config test_config.c)
@@ -192,6 +197,8 @@ tsa_test(test_spsc test_spsc.c)
 tsa_test(test_spsc_queue test_spsc_queue.c)
 tsa_test(test_stc_reconstruction test_stc_reconstruction.c)
 tsa_test(test_stc_stability test_stc_stability.c)
+tsa_test(test_stream_model test_stream_model.c)
+tsa_test(test_metadata test_metadata.c)
 tsa_test(test_stream_tree test_stream_tree.c)
 tsa_test(test_stress_pcr_tstd test_stress_pcr_tstd.c)
 tsa_test(test_telemetry test_telemetry.c)
@@ -223,3 +230,4 @@ tsa_test(test_packet_pool test_packet_pool.c)
 tsa_test(test_clock_domain test_clock_domain.c)
 tsa_test(test_simd test_simd.c)
 tsa_test(test_pacer_throughput test_pacer_throughput.c)
+tsa_test(test_health_debounce test_health_debounce.c)

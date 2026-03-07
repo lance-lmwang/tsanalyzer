@@ -14,8 +14,9 @@ typedef struct {
 
 static void pcr_on_ts(void* self, const uint8_t* pkt);
 
-static void* pcr_create(void* h) {
-    pcr_ctx_t* ctx = calloc(1, sizeof(pcr_ctx_t));
+static void* pcr_create(void* h, void* context_buf) {
+    pcr_ctx_t* ctx = (pcr_ctx_t*)context_buf;
+    memset(ctx, 0, sizeof(pcr_ctx_t));
     ctx->h = (tsa_handle_t*)h;
     tsa_stream_init(&ctx->stream, ctx, pcr_on_ts);
     return ctx;
@@ -24,7 +25,6 @@ static void* pcr_create(void* h) {
 static void pcr_destroy(void* engine) {
     pcr_ctx_t* ctx = (pcr_ctx_t*)engine;
     tsa_stream_destroy(&ctx->stream);
-    free(ctx);
 }
 
 static tsa_stream_t* pcr_get_stream(void* engine) {

@@ -39,6 +39,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         return NULL;
     }
 
+    tsa_stream_model_init(&h->ts_model);
     return h;
 }
 

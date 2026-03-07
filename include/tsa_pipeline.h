@@ -9,6 +9,7 @@ typedef struct {
     uint8_t data[188];
     uint64_t ingress_time_ns;
     int ref_count;
+    void* metadata;
 } tsa_packet_t;
 
 /* --- Pipeline Stage Interface --- */

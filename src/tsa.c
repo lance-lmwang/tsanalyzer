@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "tsa_internal.h"
+#include "tsa_descriptors.h"
 #include "tsa_log.h"
 #include "tsa_plugin.h"
 #include "tsa_simd.h"
@@ -33,6 +34,7 @@
 /* --- Core Management --- */
 
 tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
+    tsa_descriptors_init();
     tsa_handle_t* h = calloc(1, sizeof(tsa_handle_t));
     if (!h) return NULL;
 
@@ -117,7 +119,6 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.analysis.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 128);
     ts_pcr_window_init(&h->pcr_long_window, 1024);
-
     h->pool_size = 1024 * 1024 + 32 * 65536;
     if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
 
@@ -148,7 +149,9 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     tsa_register_pcr_engine(h);
     tsa_register_essence_engine(h);
 
+    tsa_stream_model_init(&h->ts_model);
     return h;
+
 fail:
     tsa_destroy(h);
     return NULL;
@@ -174,6 +177,9 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_bitrate_ema);
     FREE_IF(h->pid_bitrate_min);
     FREE_IF(h->pid_bitrate_max);
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        if (h->pid_histograms[i]) free(h->pid_histograms[i]);
+    }
     FREE_IF(h->last_cc);
     FREE_IF(h->ignore_next_cc);
     FREE_IF(h->pid_seen);
@@ -221,15 +227,40 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->double_buffer.buffers[1]);
     FREE_IF(h->event_q);
     if (h->webhook) tsa_webhook_destroy(h->webhook);
+    tsa_destroy_engines(h);
     free(h);
+}
+
+void tsa_destroy_engines(tsa_handle_t* h) {
+    if (!h) return;
+    for (int i = 0; i < h->plugin_count; i++) {
+        if (h->plugins[i].in_use && h->plugins[i].ops && h->plugins[i].ops->destroy) {
+            h->plugins[i].ops->destroy(h->plugins[i].instance);
+        }
+        h->plugins[i].in_use = false;
+    }
+    h->plugin_count = 0;
 }
 
 void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
     if (!h || !ops || h->plugin_count >= MAX_TSA_PLUGINS) return;
-    void* instance = ops->create(h);
+
+    int slot = -1;
+    for (int i = 0; i < MAX_TSA_PLUGINS; i++) {
+        if (!h->plugins[i].in_use) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == -1) return;
+
+    void* instance = ops->create(h, h->plugins[slot].context);
     if (!instance) return;
-    h->plugins[h->plugin_count].ops = ops;
-    h->plugins[h->plugin_count].instance = instance;
+
+    h->plugins[slot].ops = ops;
+    h->plugins[slot].instance = instance;
+    h->plugins[slot].in_use = true;
+
     if (ops->get_stream) {
         tsa_stream_t* child = ops->get_stream(instance);
         if (child) tsa_stream_attach(&h->root_stream, child);
@@ -443,6 +474,14 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
+    if (r.pid < TS_PID_MAX) {
+        if (!h->pid_histograms[r.pid]) {
+            h->pid_histograms[r.pid] = calloc(1, sizeof(tsa_histogram_t));
+        }
+        if (h->pid_histograms[r.pid]) {
+            tsa_hist_add_packet(h->pid_histograms[r.pid], h->stc_ns, TS_PACKET_BITS);
+        }
+    }
     if (r.scrambled) {
         h->live->pid_scrambled_packets[r.pid]++;
         tsa_push_event(h, TSA_EVENT_SCRAMBLED, r.pid, 0);

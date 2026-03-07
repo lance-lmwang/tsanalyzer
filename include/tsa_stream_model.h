@@ -24,6 +24,7 @@ typedef struct {
     uint16_t program_number;
     uint16_t pmt_pid;
     uint16_t pcr_pid;
+    uint16_t lcn;
     char service_name[256];
     char provider_name[256];
 

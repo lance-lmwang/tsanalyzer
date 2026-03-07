@@ -33,6 +33,7 @@ tsa_packet_t* tsa_packet_pool_acquire(tsa_packet_pool_t* pool) {
 
     if (pkt) {
         pkt->ref_count = 1;
+        pkt->metadata = NULL;
     }
     return pkt;
 }

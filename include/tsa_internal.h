@@ -10,8 +10,10 @@
 #include "tsa_alert.h"
 #include "tsa_bitstream.h"
 #include "tsa_clock.h"
+#include "tsa_histogram.h"
 #include "tsa_plugin.h"
 #include "tsa_stream.h"
+#include "tsa_stream_model.h"
 #include "tsa_webhook.h"
 
 /* --- Fundamental Types --- */
@@ -66,6 +68,13 @@ typedef enum {
 } tsa_event_type_t;
 
 typedef enum { TS_CC_OK, TS_CC_DUPLICATE, TS_CC_LOSS, TS_CC_OUT_OF_ORDER } ts_cc_status_t;
+
+typedef struct {
+    uint64_t last_occurrence_ns;
+    uint64_t last_absence_ns;
+    uint64_t fired_time_ns;
+    bool is_fired;
+} tsa_debounce_t;
 
 #define MAX_EVENT_QUEUE 1024
 #define MAX_PROGRAMS 16
@@ -338,6 +347,7 @@ struct tsa_handle {
     ts_section_filter_t* pid_filters;
     uint32_t program_count;
     tsa_program_info_t programs[MAX_PROGRAMS];
+    tsa_ts_model_t ts_model;
     char network_name[256];
     char service_name[256];
     char provider_name[256];
@@ -364,17 +374,27 @@ struct tsa_handle {
     tsa_event_ring_t* event_q;
     tsa_webhook_engine_t* webhook;
 
+    /* --- Industrial Debounce States --- */
+    tsa_debounce_t debounce_cc;
+    tsa_debounce_t debounce_transport;
+    tsa_debounce_t debounce_pts;
+
     /* --- Stream Tree & Plugins --- */
     tsa_stream_t root_stream;
     uint64_t current_ns;
     ts_decode_result_t current_res;
 
 #define MAX_TSA_PLUGINS 16
+#define MAX_PLUGIN_CONTEXT_SIZE 32768
     struct {
         void* instance;
         tsa_plugin_ops_t* ops;
+        bool in_use;
+        alignas(16) uint8_t context[MAX_PLUGIN_CONTEXT_SIZE];
     } plugins[MAX_TSA_PLUGINS];
     int plugin_count;
+
+    tsa_histogram_t* pid_histograms[TS_PID_MAX];
 };
 
 /* --- Internal APIs --- */
@@ -401,7 +421,6 @@ double calculate_shannon_entropy(const uint32_t* counts, int len);
 double calculate_pcr_jitter(uint64_t pcr, uint64_t now, double* drift);
 void tsa_scte35_process(struct tsa_handle* h, uint16_t pid, const uint8_t* data, int len);
 
-// Renamed from tsa_check_alert_resolutions
-void tsa_alert_check_resolutions(struct tsa_handle* h);
+float tsa_calculate_health(struct tsa_handle* h);
 
 #endif  // TSANALYZER_INTERNAL_H

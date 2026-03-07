@@ -12,8 +12,9 @@ typedef struct {
 
 static void essence_on_ts(void* self, const uint8_t* pkt);
 
-static void* essence_create(void* h) {
-    essence_ctx_t* ctx = calloc(1, sizeof(essence_ctx_t));
+static void* essence_create(void* h, void* context_buf) {
+    essence_ctx_t* ctx = (essence_ctx_t*)context_buf;
+    memset(ctx, 0, sizeof(essence_ctx_t));
     ctx->h = (tsa_handle_t*)h;
     tsa_stream_init(&ctx->stream, ctx, essence_on_ts);
     return ctx;
@@ -22,7 +23,6 @@ static void* essence_create(void* h) {
 static void essence_destroy(void* engine) {
     essence_ctx_t* ctx = (essence_ctx_t*)engine;
     tsa_stream_destroy(&ctx->stream);
-    free(ctx);
 }
 
 static tsa_stream_t* essence_get_stream(void* engine) {

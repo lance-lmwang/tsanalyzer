@@ -13,8 +13,9 @@ typedef struct {
 
 static void scte35_on_ts(void* self, const uint8_t* pkt);
 
-static void* scte35_create(void* h) {
-    scte35_engine_t* e = calloc(1, sizeof(scte35_engine_t));
+static void* scte35_create(void* h, void* context_buf) {
+    scte35_engine_t* e = (scte35_engine_t*)context_buf;
+    memset(e, 0, sizeof(scte35_engine_t));
     e->h = (tsa_handle_t*)h;
     tsa_stream_init(&e->stream, e, scte35_on_ts);
     return e;
@@ -23,7 +24,6 @@ static void* scte35_create(void* h) {
 static void scte35_destroy(void* engine) {
     scte35_engine_t* ctx = (scte35_engine_t*)engine;
     tsa_stream_destroy(&ctx->stream);
-    free(ctx);
 }
 
 static tsa_stream_t* scte35_get_stream(void* engine) {

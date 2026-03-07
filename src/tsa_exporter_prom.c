@@ -160,6 +160,10 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
 
             SAFE_APPEND("tsa_metrology_pid_bitrate_bps%s %llu\n", pid_labels,
                         (unsigned long long)s->pid_bitrate_bps[p]);
+            SAFE_APPEND("tsa_metrology_pid_bitrate_peak_bps%s %llu\n", pid_labels,
+                        (unsigned long long)s->pid_bitrate_peak_bps[p]);
+            SAFE_APPEND("tsa_metrology_pid_bitrate_min_bps%s %llu\n", pid_labels,
+                        (unsigned long long)s->pid_bitrate_min_bps[p]);
             SAFE_APPEND("tsa_metrology_pid_scrambled_packets_total%s %llu\n", pid_labels,
                         (unsigned long long)s->pid_scrambled_packets[p]);
             SAFE_APPEND("tsa_metrology_pid_pes_errors_total%s %llu\n", pid_labels,

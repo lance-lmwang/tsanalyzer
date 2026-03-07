@@ -138,6 +138,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     tsa_calc_stream_bitrate(h, wall_dt);
     tsa_eval_tr101290_alarms(h, n, stc);
 
+    // --- Industrial Health Scoring ---
+    float current_health = tsa_calculate_health(h);
+    if (h->last_health_score < 0.1) {
+        h->last_health_score = current_health;
+    } else {
+        /* EMA Smoothing for stability */
+        h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
+    }
+
     // --- CAUSAL ANALYSIS ---
     double jitter_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
     double drift_abs = fabs(h->stc_wall_drift_ppm);
@@ -149,21 +158,6 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     if (cn > 1.0) cn = 1.0;
     double ce = drift_abs / 100.0;
     if (ce > 1.0) ce = 1.0;
-
-    float current_health = 100.0f;
-    if (!h->signal_lock) {
-        /* Grace period: Only drop health to 0 after receiving some packets or waiting longer */
-        if (h->live->total_ts_packets > 100) current_health = 0.0f;
-    } else {
-        if (rn < 5.0f) current_health -= (5.0f - rn) * 4.0f;
-        if (re < 30.0f) current_health -= (30.0f - re) * 0.5f;
-        if (h->live->cc_error.count > h->prev_snap_base->cc_error.count) current_health -= 25.0f;
-    }
-    if (current_health < 0) current_health = 0;
-    if (current_health < h->last_health_score || h->last_health_score < 0.1)
-        h->last_health_score = current_health;
-    else
-        h->last_health_score = h->last_health_score * 0.8f + current_health * 0.2f;
 
     memset(&sn->predictive, 0, sizeof(sn->predictive));
     sn->predictive.master_health = h->last_health_score;
@@ -233,8 +227,16 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].cc_errors = h->live->pid_cc_errors[p];
         sn->pids[ai].scrambled_packets = h->live->pid_scrambled_packets[p];
         sn->pids[ai].pes_errors = h->live->pid_pes_errors[p];
-        sn->pids[ai].status = (uint8_t)h->pid_status[p];
-        sn->pids[ai].width = h->pid_width[p];
+
+        // Populate high-res metrics from histogram
+        if (h->pid_histograms[p]) {
+            tsa_hist_update(h->pid_histograms[p], n);
+            sn->pids[ai].bitrate_peak = h->pid_histograms[p]->max_bps;
+            h->live->pid_bitrate_peak_bps[p] = h->pid_histograms[p]->max_bps;
+            h->live->pid_bitrate_min_bps[p] = h->pid_histograms[p]->min_bps;
+        }
+
+        sn->pids[ai].status = (uint8_t)h->pid_status[p];        sn->pids[ai].width = h->pid_width[p];
         sn->pids[ai].height = h->pid_height[p];
         sn->pids[ai].profile = h->pid_profile[p];
         sn->pids[ai].level = h->pid_level[p];

@@ -90,6 +90,8 @@ typedef struct {
     uint64_t stream_utc_ms;
     uint64_t pid_packet_count[TS_PID_MAX];
     uint64_t pid_bitrate_bps[TS_PID_MAX];
+    uint64_t pid_bitrate_peak_bps[TS_PID_MAX];
+    uint64_t pid_bitrate_min_bps[TS_PID_MAX];
     uint64_t pid_cc_errors[TS_PID_MAX];
     uint64_t pid_scrambled_packets[TS_PID_MAX];
     uint64_t pid_pes_errors[TS_PID_MAX];
@@ -145,6 +147,7 @@ typedef struct {
     int64_t bitrate_q16_16;
     uint64_t bitrate_min;
     uint64_t bitrate_max;
+    uint64_t bitrate_peak;
     uint64_t cc_errors;
     uint64_t scrambled_packets;
     uint64_t pes_errors;

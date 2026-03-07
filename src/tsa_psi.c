@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tsa_descriptors.h"
 #include "tsa_internal.h"
 
 static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
@@ -18,6 +19,7 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
         uint16_t pn = (p[i] << 8) | p[i + 1];
         uint16_t ppid = ((p[i + 2] & 0x1F) << 8) | p[i + 3];
         if (pn != 0) {
+            tsa_stream_model_update_program(&h->ts_model, pn, ppid);
             bool found = false;
             for (uint32_t j = 0; j < h->program_count; j++)
                 if (h->programs[j].program_number == pn) {
@@ -57,6 +59,7 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
         pr->program_number = pn;
     }
     if (pr) {
+        tsa_stream_model_update_program(&h->ts_model, pn, pid);
         pr->pmt_pid = pid;
         pr->pcr_pid = pcr;
         if (pcr < TS_PID_MAX) {
@@ -66,31 +69,27 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
         pr->stream_count = 0;
     }
     int pi = ((p[10] & 0x0F) << 8) | p[11];
+
+    // Process program-level descriptors
+    for (int d = 12; d < 12 + pi && d < sl + 3 - 4; ) {
+        tsa_descriptors_process(h, pid, &p[d], NULL);
+        d += 2 + p[d + 1];
+    }
+
     for (int i = 12 + pi; i < sl + 3 - 4;) {
         uint8_t ty = p[i];
         uint16_t spid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
         int es = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
 
         // Advanced detection based on descriptors
-        if (ty == 0x06) {
-            for (int d = i + 5; d < i + 5 + es;) {
-                uint8_t dt = p[d], dl = p[d + 1];
-                if (dt == 0x6a || dt == 0x7a || dt == 0x81) {  // AC3 / EAC3 / AC3-Legacy
-                    ty = 0x81;                                 // Map to AC3 internal type
-                    break;
-                } else if (dt == 0x59) {  // DVB Subtitle
-                    ty = 0x59;            // Internal subtype
-                    break;
-                } else if (dt == 0x56) {  // Teletext
-                    ty = 0x56;
-                    break;
-                }
-                d += 2 + dl;
-            }
+        for (int d = i + 5; d < i + 5 + es;) {
+            tsa_descriptors_process(h, spid, &p[d], &ty);
+            d += 2 + p[d + 1];
         }
 
         if (h->pid_stream_type[spid] != ty) {
             h->pid_stream_type[spid] = ty;
+            tsa_stream_model_update_es(&h->ts_model, pid, spid, ty);
             tsa_precompile_pid_labels(h, spid);
         }
         if (ty == 0x86) h->pid_is_scte35[spid] = true;
@@ -138,23 +137,13 @@ static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     h->last_sdt_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     for (int i = 11; i < sl + 3 - 4;) {
+        uint16_t sid = (p[i] << 8) | p[i + 1];
         int esl = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
         for (int j = i + 5; j < i + 5 + esl;) {
-            uint8_t dt = p[j], dl = p[j + 1];
-            if (dt == 0x48 && dl > 3) {
-                int nl = p[j + 3];
-                memcpy(h->provider_name, p + j + 4, (nl < 255) ? nl : 255);
-                h->provider_name[(nl < 255) ? nl : 255] = 0;
-                h->provider_name[(nl < 255) ? nl : 255] = '\0';
-                int pnl = p[j + 4 + nl + 1];
-                memcpy(h->service_name, p + j + 4 + nl + 2, (pnl < 255) ? pnl : 255);
-                h->service_name[(pnl < 255) ? pnl : 255] = 0;
-                h->service_name[(pnl < 255) ? pnl : 255] = '\0';
-            }
-            j += 2 + dl;
+            tsa_descriptors_process(h, sid, &p[j], NULL);
+            j += 2 + p[j + 1];
         }
         i += 5 + esl;
-        break;
     }
 }
 
