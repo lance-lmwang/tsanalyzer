@@ -260,6 +260,7 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
             case TSA_EVENT_SYNC_LOSS:   tsa_alert_update(h, TSA_ALERT_SYNC, true, "SYNC", pid); break;
             case TSA_EVENT_PAT_TIMEOUT: tsa_alert_update(h, TSA_ALERT_PAT, true, "PAT", pid); break;
             case TSA_EVENT_PMT_TIMEOUT: tsa_alert_update(h, TSA_ALERT_PMT, true, "PMT", pid); break;
+            case TSA_EVENT_PID_ERROR:   tsa_alert_update(h, TSA_ALERT_PID, true, "PID", pid); break;
             case TSA_EVENT_CC_ERROR:    tsa_alert_update(h, TSA_ALERT_CC, true, "CC", pid); break;
             case TSA_EVENT_CRC_ERROR:   tsa_alert_update(h, TSA_ALERT_CRC, true, "CRC", pid); break;
             case TSA_EVENT_TRANSPORT_ERROR: tsa_alert_update(h, TSA_ALERT_TRANSPORT, true, "TRANSPORT", pid); break;
@@ -269,6 +270,8 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
             case TSA_EVENT_TSTD_UNDERFLOW: h->live->tstd_underflow.count++; tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid); break;
             case TSA_EVENT_TSTD_OVERFLOW: h->live->tstd_overflow.count++; tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid); break;
             case TSA_EVENT_ENTROPY_FREEZE: h->live->entropy_freeze.count++; tsa_alert_update(h, TSA_ALERT_ENTROPY, true, "ENTROPY", pid); break;
+            case TSA_EVENT_SDT_TIMEOUT: h->live->sdt_timeout.count++; tsa_alert_update(h, TSA_ALERT_SDT, true, "SDT", pid); break;
+            case TSA_EVENT_NIT_TIMEOUT: h->live->nit_timeout.count++; tsa_alert_update(h, TSA_ALERT_NIT, true, "NIT", pid); break;
             default: break;
         }
     }

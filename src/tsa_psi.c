@@ -5,7 +5,13 @@
 #include "tsa_internal.h"
 
 static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
-    (void)now;
+    if (h->last_pat_ns > 0) {
+        uint64_t diff = now - h->last_pat_ns;
+        if (diff > TSA_TR101290_PAT_TIMEOUT_NS) { // 500ms TR 101 290 P1.3
+            tsa_push_event(h, TSA_EVENT_PAT_TIMEOUT, 0, diff / 1000000);
+        }
+    }
+    h->last_pat_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     h->seen_pat = true;
     for (int i = 8; i < sl + 3 - 4; i += 4) {
@@ -30,7 +36,13 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
 }
 
 static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now) {
-    (void)now;
+    if (h->last_pmt_ns > 0) {
+        uint64_t diff = now - h->last_pmt_ns;
+        if (diff > TSA_TR101290_PMT_TIMEOUT_NS) { // 500ms TR 101 290 P1.5
+            tsa_push_event(h, TSA_EVENT_PMT_TIMEOUT, pid, diff / 1000000);
+        }
+    }
+    h->last_pmt_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     uint16_t pn = (p[3] << 8) | p[4];
     uint16_t pcr = ((p[8] & 0x1F) << 8) | p[9];
@@ -75,7 +87,13 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
 }
 
 static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
-    (void)now;
+    if (h->last_nit_ns > 0) {
+        uint64_t diff = now - h->last_nit_ns;
+        if (diff > TSA_TR101290_NIT_TIMEOUT_NS) { // 10s TR 101 290 P3.1
+            tsa_push_event(h, TSA_EVENT_NIT_TIMEOUT, 0, diff / 1000000);
+        }
+    }
+    h->last_nit_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     int ndl = ((p[8] & 0x0F) << 8) | p[9];
 
@@ -92,7 +110,13 @@ static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
 }
 
 static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
-    (void)now;
+    if (h->last_sdt_ns > 0) {
+        uint64_t diff = now - h->last_sdt_ns;
+        if (diff > TSA_TR101290_SDT_TIMEOUT_NS) { // 2s TR 101 290 P3.2
+            tsa_push_event(h, TSA_EVENT_SDT_TIMEOUT, 0, diff / 1000000);
+        }
+    }
+    h->last_sdt_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
     for (int i = 11; i < sl + 3 - 4;) {
         int esl = ((p[i + 3] & 0x0F) << 8) | p[i + 4];

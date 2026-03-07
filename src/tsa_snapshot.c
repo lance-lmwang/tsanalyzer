@@ -36,7 +36,7 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
     if (!h->stc_locked || h->live->total_ts_packets < 1000) return;
 
     uint64_t pat_vstc_dt = (h->live->pid_last_seen_vstc[0] > 0) ? (stc - h->live->pid_last_seen_vstc[0]) : 0;
-    if (h->pid_seen[0] && pat_vstc_dt > 500000000ULL) {
+    if (h->pid_seen[0] && pat_vstc_dt > TSA_TR101290_PAT_TIMEOUT_NS) {
         if (h->live->pat_error.count == 0) h->live->pat_error.first_timestamp_ns = n;
         h->live->pat_error.count++;
         h->live->pat_error.last_timestamp_ns = n;
@@ -52,7 +52,7 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
         uint16_t ppid = h->programs[i].pmt_pid;
         if (ppid > 0 && ppid < TS_PID_MAX && h->pid_seen[ppid]) {
             uint64_t pmt_vstc_dt = (h->live->pid_last_seen_vstc[ppid] > 0) ? (stc - h->live->pid_last_seen_vstc[ppid]) : 0;
-            if (pmt_vstc_dt > 500000000ULL) {
+            if (pmt_vstc_dt > TSA_TR101290_PAT_TIMEOUT_NS) {
                 pmt_missing = true;
                 h->pid_status[ppid] = TSA_STATUS_INVALID;
                 tsa_push_event(h, TSA_EVENT_PMT_TIMEOUT, ppid, 0);
@@ -64,6 +64,31 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
         if (h->live->pmt_error.count == 0) h->live->pmt_error.first_timestamp_ns = n;
         h->live->pmt_error.count++;
         h->live->pmt_error.last_timestamp_ns = n;
+    }
+
+    // SDT & NIT Active Watchdogs (P3.1, P3.2)
+    if (h->seen_pat) { // Only check if stream seems active
+        if (h->last_sdt_ns > 0 && (stc - h->last_sdt_ns) > TSA_TR101290_SDT_TIMEOUT_NS) {
+            h->live->sdt_timeout.count++;
+            tsa_push_event(h, TSA_EVENT_SDT_TIMEOUT, 0x11, 0);
+        }
+        if (h->last_nit_ns > 0 && (stc - h->last_nit_ns) > TSA_TR101290_NIT_TIMEOUT_NS) {
+            h->live->nit_timeout.count++;
+            tsa_push_event(h, TSA_EVENT_NIT_TIMEOUT, 0x10, 0);
+        }
+    }
+
+    // P3.x Referenced PID Check
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        if (h->live->pid_is_referenced[i]) {
+            uint64_t last_seen_vstc = h->live->pid_last_seen_vstc[i];
+            if (last_seen_vstc > 0 && (stc - last_seen_vstc) > TSA_TR101290_PID_TIMEOUT_NS) { // 5s for PID error
+                if (h->live->pid_error.count == 0) h->live->pid_error.first_timestamp_ns = n;
+                h->live->pid_error.count++;
+                h->live->pid_error.last_timestamp_ns = n;
+                tsa_push_event(h, TSA_EVENT_PID_ERROR, i, 0);
+            }
+        }
     }
 
     h->live->alarm_pcr_repetition_error = (h->live->pcr_repetition_error.count > h->prev_snap_base->pcr_repetition_error.count);

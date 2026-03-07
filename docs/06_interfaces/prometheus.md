@@ -37,6 +37,8 @@ By default, the appliance serves metrics on `http://<host>:9090/metrics` (or por
 | `tsa_compliance_tr101290_p2_pts_errors_total` | Counter | PTS Repetition Error (P2.5). |
 | `tsa_compliance_tr101290_p2_crc_errors_total` | Counter | SI Section CRC Error (P2.2). |
 | `tsa_compliance_tr101290_p2_transport_errors_total`| Counter | Transport Error Indicator (P2.1). |
+| `tsa_compliance_tr101290_p3_sdt_errors_total` | Counter | SDT repetition interval > 2s (P3.2). |
+| `tsa_compliance_tr101290_p3_nit_errors_total` | Counter | NIT repetition interval > 10s (P3.1). |
 | `tsa_compliance_pcr_repetition_errors` | Counter | PCR Repetition interval > 40ms. |
 | `tsa_compliance_pcr_accuracy_errors` | Counter | PCR Accuracy > ±500ns. |
 

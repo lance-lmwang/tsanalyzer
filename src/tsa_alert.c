@@ -9,6 +9,7 @@ static uint64_t get_mask_for_id(tsa_alert_id_t id) {
         case TSA_ALERT_SYNC:      return TSA_ALERT_MASK_P1_1_SYNC;
         case TSA_ALERT_PAT:       return TSA_ALERT_MASK_P1_3_PAT;
         case TSA_ALERT_PMT:       return TSA_ALERT_MASK_P1_5_PMT;
+        case TSA_ALERT_PID:       return TSA_ALERT_MASK_P1_6_PID;
         case TSA_ALERT_CC:        return TSA_ALERT_MASK_P1_4_CC;
         case TSA_ALERT_TRANSPORT: return TSA_ALERT_MASK_P2_1_TRANSPORT;
         case TSA_ALERT_CRC:       return TSA_ALERT_MASK_P2_2_CRC;
@@ -16,6 +17,8 @@ static uint64_t get_mask_for_id(tsa_alert_id_t id) {
         case TSA_ALERT_PTS:       return TSA_ALERT_MASK_P2_5_PTS;
         case TSA_ALERT_TSTD:      return TSA_ALERT_MASK_TSTD;
         case TSA_ALERT_ENTROPY:   return TSA_ALERT_MASK_ENTROPY;
+        case TSA_ALERT_SDT:       return TSA_ALERT_MASK_SDT;
+        case TSA_ALERT_NIT:       return TSA_ALERT_MASK_NIT;
         default:                  return 0;
     }
 }
@@ -48,8 +51,23 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
 
 void tsa_alert_check_resolutions(tsa_handle_t* h) {
     uint64_t now = h->stc_ns;
-    const char* names[] = {"SYNC", "PAT", "PMT", "CC", "CRC", "PCR", "TRANSPORT", "PTS", "TSTD", "ENTROPY"};
-    const uint64_t RESOLVE_TIMEOUT_NS = 5000000000ULL;
+    const char* names[] = {"SYNC", "PAT", "PMT", "PID", "CC", "CRC", "PCR", "TRANSPORT", "PTS", "TSTD", "ENTROPY", "SDT", "NIT"};
+    const uint64_t RESOLVE_TIMEOUT_NS = TSA_TR101290_PID_TIMEOUT_NS;
+
+    // Active Watchdogs for Repetition (TR 101 290)
+    if (h->signal_lock && h->stc_ns > 0) {
+        if (h->last_pat_ns > 0 && (h->stc_ns - h->last_pat_ns) > TSA_TR101290_PAT_TIMEOUT_NS)
+            tsa_alert_update(h, TSA_ALERT_PAT, true, "PAT", 0);
+
+        if (h->last_pmt_ns > 0 && (h->stc_ns - h->last_pmt_ns) > TSA_TR101290_PMT_TIMEOUT_NS)
+            tsa_alert_update(h, TSA_ALERT_PMT, true, "PMT", 0);
+
+        if (h->last_sdt_ns > 0 && (h->stc_ns - h->last_sdt_ns) > TSA_TR101290_SDT_TIMEOUT_NS)
+            tsa_alert_update(h, TSA_ALERT_SDT, true, "SDT", 0);
+
+        if (h->last_nit_ns > 0 && (h->stc_ns - h->last_nit_ns) > TSA_TR101290_NIT_TIMEOUT_NS)
+            tsa_alert_update(h, TSA_ALERT_NIT, true, "NIT", 0);
+    }
 
     for (int i = 0; i < TSA_ALERT_MAX; i++) {
         tsa_alert_state_t* s = &h->alerts[i];

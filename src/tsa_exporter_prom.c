@@ -81,6 +81,8 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_compliance_tr101290_p2_pts_errors_total%s %llu\n", labels, (unsigned long long)s->pts_error.count);
         SAFE_APPEND("tsa_compliance_tr101290_p2_crc_errors_total%s %llu\n", labels, (unsigned long long)s->crc_error.count);
         SAFE_APPEND("tsa_compliance_tr101290_p2_transport_errors_total%s %llu\n", labels, (unsigned long long)s->transport_error.count);
+        SAFE_APPEND("tsa_compliance_tr101290_p3_sdt_errors_total%s %llu\n", labels, (unsigned long long)s->sdt_timeout.count);
+        SAFE_APPEND("tsa_compliance_tr101290_p3_nit_errors_total%s %llu\n", labels, (unsigned long long)s->nit_timeout.count);
 
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
                     (unsigned long long)s->sync_loss.count);

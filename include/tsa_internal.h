@@ -31,6 +31,13 @@ typedef uint64_t q32_32;
 #define TS_PCR_FLAG 0x10
 #define INVALID_PCR 0xFFFFFFFFFFFFFFFFULL
 
+/* TR 101 290 Standard Thresholds (in Nanoseconds) */
+#define TSA_TR101290_PAT_TIMEOUT_NS   (500000000ULL)   /* 500ms (P1.3) */
+#define TSA_TR101290_PMT_TIMEOUT_NS   (500000000ULL)   /* 500ms (P1.5) */
+#define TSA_TR101290_SDT_TIMEOUT_NS   (2000000000ULL)  /* 2s    (P3.2) */
+#define TSA_TR101290_NIT_TIMEOUT_NS   (10000000000ULL) /* 10s   (P3.1) */
+#define TSA_TR101290_PID_TIMEOUT_NS   (5000000000ULL)  /* 5s    (P3.x) */
+
 /* --- Enums --- */
 typedef enum {
     TS_SYNC_HUNTING,
@@ -50,6 +57,7 @@ typedef enum {
     TSA_EVENT_CRC_ERROR,
     TSA_EVENT_PAT_TIMEOUT,
     TSA_EVENT_PMT_TIMEOUT,
+    TSA_EVENT_PID_ERROR,
     TSA_EVENT_CC_ERROR,
     TSA_EVENT_TRANSPORT_ERROR,
     TSA_EVENT_PTS_ERROR,
@@ -58,7 +66,9 @@ typedef enum {
     TSA_EVENT_SYNC_RECOVERED,
     TSA_EVENT_TSTD_UNDERFLOW,
     TSA_EVENT_TSTD_OVERFLOW,
-    TSA_EVENT_ENTROPY_FREEZE
+    TSA_EVENT_ENTROPY_FREEZE,
+    TSA_EVENT_SDT_TIMEOUT,
+    TSA_EVENT_NIT_TIMEOUT
 } tsa_event_type_t;
 
 typedef enum {
@@ -311,7 +321,7 @@ struct tsa_handle {
     char service_name[256];
     char provider_name[256];
     bool seen_pat, seen_pmt;
-    uint64_t last_pat_ns, last_pmt_ns;
+    uint64_t last_pat_ns, last_pmt_ns, last_sdt_ns, last_nit_ns;
 
     uint16_t pid_active_list[MAX_ACTIVE_PIDS];
     int16_t pid_to_active_idx[TS_PID_MAX];
