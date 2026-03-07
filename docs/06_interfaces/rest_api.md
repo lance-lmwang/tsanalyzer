@@ -58,9 +58,34 @@ Lightweight endpoint for load-balancer and Kubernetes liveness probes. Returns `
 
 ---
 
-## 3. Configuration Management
+## 4. Security & Authentication
 
-### 3.1 Hot-Reload
-`POST /api/v1/config/reload`
+TsAnalyzer Pro implements a multi-layer security model to protect telemetry and stream integrity.
 
-Triggers a zero-latency configuration reload from the local `tsa.conf`.
+### 4.1 API Authentication (Bearer Token)
+All administrative endpoints (POST/DELETE) require a valid **Bearer Token** in the `Authorization` header.
+
+*   **Mechanism**: Fixed-token authentication for standalone probes or OIDC integration for Appliance deployments.
+*   **Header**: `Authorization: Bearer <API_KEY>`
+
+### 4.2 Transport Layer Security (HTTPS)
+Production deployments MUST enable TLS 1.3 for all REST API communication.
+*   **Certificates**: Supports PEM-encoded X.509 certificates and keys.
+*   **Self-Signed**: For laboratory use, can be overridden via `TLS_INSECURE_SKIP_VERIFY`.
+
+### 4.3 Data Ingest Security (SRT AES)
+For SRT ingest, TsAnalyzer Pro supports industry-standard AES encryption.
+*   **Encryption Modes**: AES-128, AES-192, and AES-256.
+*   **Passphrase**: Defined in the stream configuration:
+    ```json
+    {
+      "ingest": {
+        "url": "srt://:9000?passphrase=secret-key&pbkeylen=32"
+      }
+    }
+    ```
+
+### 4.4 Multi-Tenancy Isolation
+In the Appliance profile, streams are partitioned into **Tenants**.
+*   **Namespace**: IDs are prefixed with the tenant name (e.g., `tenant-a/stream-1`).
+*   **Access Control**: API tokens are scoped to specific tenants, preventing cross-tenant telemetry leakage.
