@@ -1,105 +1,136 @@
 {
   "uid": "global-wall",
-  "title": "TsAnalyzer Pro - UNIFIED NOC v4.0",
+  "title": "TsAnalyzer Pro - GLOBAL STREAM WALL (PLANE 1)",
   "refresh": "5s",
   "schemaVersion": 36,
   "version": 1,
-  "time": { "from": "now-15m", "to": "now" },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "graphTooltip": 1,
   "templating": {
-    "list": [
-      {
-        "name": "stream",
-        "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-        "query": "label_values(tsa_system_health_score, stream_id)",
-        "refresh": 1,
-        "includeAll": false,
-        "multi": false,
-        "label": "Focus Stream"
-      }
-    ]
+    "list": []
   },
   "panels": [
     {
-      "title": "FLEET STATUS WALL (ALL STREAMS)",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "title": "FLEET INSTABILITY (%)",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
-        { "expr": "tsa_system_health_score", "legendFormat": "{{stream_id}}" }
+        {
+          "expr": "((count(tsa_system_health_score < 100) / count(tsa_system_health_score)) * 100) or on() vector(0)"
+        }
       ],
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
+          "unit": "percent",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 70 },
-              { "color": "green", "value": 90 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
             ]
           }
         }
-      },
-      "options": {
-        "reduceOptions": { "values": true, "calcs": [] },
-        "orientation": "horizontal",
-        "textMode": "name",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
       }
     },
     {
-      "type": "row",
-      "title": "TIERED DIAGNOSTICS: $stream",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
-      "collapsed": false
-    },
-    {
-      "title": "L1/L2: INTEGRITY (CC ERRORS)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [
-        { "expr": "sum by (stream_id) (increase(tsa_compliance_tr101290_errors{stream_id=\"$stream\"}[1m]))", "legendFormat": "Violation Rate" }
-      ]
-    },
-    {
-      "title": "L3: TIMING (PCR JITTER)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [
-        { "expr": "tsa_metrology_pcr_jitter_ms{stream_id=\"$stream\"}", "legendFormat": "Jitter (ms)" }
-      ]
-    },
-    {
-      "title": "L4: BITRATE DYNAMICS",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [
-        { "expr": "tsa_metrology_physical_bitrate_bps{stream_id=\"$stream\"} / 1000000", "legendFormat": "Mbps" }
-      ]
-    },
-    {
-      "title": "L5: BUFFER (RST PREDICTIVE)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [
-        { "expr": "tsa_predictive_rst_network_seconds{stream_id=\"$stream\"}", "legendFormat": "RST (s)" }
-      ]
-    },
-    {
-      "title": "L6: CONTENT VITALS (FPS)",
+      "title": "GLOBAL MONITORING MATRIX (CLICK TO FOCUS)",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
-        { "expr": "tsa_essence_video_fps{stream_id=\"$stream\"}", "legendFormat": "FPS" }
-      ]
+        {
+          "expr": "tsa_system_health_score",
+          "legendFormat": "{{stream_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 90,
+                "to": 100,
+                "result": {
+                  "color": "green",
+                  "text": "STABLE"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 70,
+                "to": 90,
+                "result": {
+                  "color": "yellow",
+                  "text": "DEGRADED"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 70,
+                "result": {
+                  "color": "red",
+                  "text": "CRITICAL"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "color": "dark-red",
+                  "text": "LOST"
+                }
+              }
+            }
+          ],
+          "links": [
+            {
+              "title": "Jump to ${__series.name} Focus View",
+              "url": "/d/stream-focus?var-stream=${__series.name}",
+              "targetBlank": false
+            }
+          ]
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "justifyMode": "center",
+        "textMode": "name",
+        "orientation": "auto"
+      }
     }
-  ]
+  ],
+  "editable": true
 }

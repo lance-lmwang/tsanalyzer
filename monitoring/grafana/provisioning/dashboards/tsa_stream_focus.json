@@ -14,7 +14,7 @@
       {
         "name": "stream",
         "type": "query",
-        "query": "label_values(tsa_health_score, stream_id)",
+        "query": "label_values(tsa_system_health_score, stream_id)",
         "refresh": 1,
         "datasource": {
           "type": "prometheus",
@@ -51,7 +51,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_signal_lock_status{stream_id=\"$stream\"}"
+          "expr": "tsa_system_signal_locked{stream_id=\"$stream\"}"
         }
       ],
       "fieldConfig": {
@@ -93,7 +93,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_health_score{stream_id=\"$stream\"}"
+          "expr": "tsa_system_health_score{stream_id=\"$stream\"}"
         }
       ],
       "fieldConfig": {
@@ -119,11 +119,11 @@
       },
       "targets": [
         {
-          "expr": "tsa_internal_analyzer_drop{stream_id=\"$stream\"}",
+          "expr": "tsa_system_internal_drop_count{stream_id=\"$stream\"}",
           "legendFormat": "Drops"
         },
         {
-          "expr": "tsa_worker_slice_overruns{stream_id=\"$stream\"}",
+          "expr": "tsa_system_worker_overruns{stream_id=\"$stream\"}",
           "legendFormat": "Overruns"
         }
       ]
@@ -154,7 +154,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_physical_bitrate_bps{stream_id=\"$stream\"}"
+          "expr": "tsa_metrology_physical_bitrate_bps{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -211,7 +211,7 @@
       },
       "targets": [
         {
-          "expr": "mdi_df{stream_id=\"$stream\"}"
+          "expr": "tsa_transport_mdi_df_ms{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -241,7 +241,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_tr101290_p1_sync_loss{stream_id=\"$stream\"}"
+          "expr": "tsa_compliance_tr101290_p1_sync_loss_total{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -260,7 +260,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_tr101290_p1_pat_error{stream_id=\"$stream\"}"
+          "expr": "tsa_compliance_tr101290_p1_pat_errors_total{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -279,7 +279,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_tr101290_p1_pmt_error{stream_id=\"$stream\"}"
+          "expr": "tsa_compliance_tr101290_p1_pmt_errors_total{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -298,7 +298,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}"
+          "expr": "tsa_compliance_tr101290_p1_cc_errors_total{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -328,7 +328,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_pcr_jitter_ms{stream_id=\"$stream\"}"
+          "expr": "tsa_metrology_pcr_jitter_ms{stream_id=\"$stream\"}"
         }
       ]
     },
@@ -358,7 +358,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (pid, type) (tsa_pid_bitrate_bps{stream_id=\"$stream\"})"
+          "expr": "sum by (pid, type) (tsa_metrology_pid_bitrate_bps{stream_id=\"$stream\"})"
         }
       ],
       "options": {
@@ -405,7 +405,7 @@
       },
       "targets": [
         {
-          "expr": "increase(tsa_tr101290_p1_cc_error{stream_id=\"$stream\"}[1h]) > 0",
+          "expr": "increase(tsa_compliance_tr101290_p1_cc_errors_total{stream_id=\"$stream\"}[1h]) > 0",
           "format": "table"
         }
       ]
