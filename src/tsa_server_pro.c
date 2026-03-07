@@ -12,18 +12,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 
+#include "../include/tsa_top_shm.h"
 #include "mongoose.h"
 #include "mpmc_queue.h"
 #include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
-#include "../include/tsa_top_shm.h"
+#include "tsa_log.h"
+
+#define TAG "SERVER_PRO"
 
 #define MAX_CONNS 4096
 #define HTTP_PORT "8081"
@@ -45,7 +48,7 @@ typedef struct {
     atomic_bool closed;
     _Atomic uint64_t pending_drops;
     uint32_t conn_idx;
-    uint64_t last_commit_ns; // Heartbeat tracking
+    uint64_t last_commit_ns;  // Heartbeat tracking
 } conn_t;
 
 static conn_t* g_conns[MAX_CONNS];
@@ -107,7 +110,7 @@ static void load_config(const char* file) {
                     c->conn_idx = idx;
                     g_conns[idx] = c;
                     pthread_mutex_unlock(&g_conn_lock);
-                    printf("PRO: Configured UDP stream %s on port %d\n", id, port);
+                    tsa_info(TAG, "Configured UDP stream %s on port %d", id, port);
                 } else {
                     free(c);
                     close(udp_fd);
@@ -218,7 +221,7 @@ static void* io_thread(void* arg) {
     uint8_t raw_buf[4096];
     ts_packet_t pkt;
 
-    printf("PRO: I/O Thread Active (SRT eid=%d)\n", srt_eid);
+    tsa_info(TAG, "I/O Thread Active (SRT eid=%d)", srt_eid);
 
     while (atomic_load(&g_run)) {
         SRTSOCKET ready_srt[32];
@@ -243,7 +246,7 @@ static void* io_thread(void* arg) {
                 if (c->type == CONN_SRT_LISTENER) {
                     SRTSOCKET client = srt_accept(s, NULL, NULL);
                     if (client != SRT_INVALID_SOCK) {
-                        printf("PRO: Accepted SRT fd=%d\n", (int)client);
+                        tsa_info(TAG, "Accepted SRT fd=%d", (int)client);
                         int sync = 0;
                         srt_setsockopt(client, 0, SRTO_RCVSYN, &sync, sizeof(sync));
                         srt_setsockopt(client, 0, SRTO_SNDSYN, &sync, sizeof(sync));
@@ -303,7 +306,7 @@ static void* io_thread(void* arg) {
                             }
                         } else if (len == SRT_ERROR) {
                             if (srt_getlasterror(NULL) != SRT_EASYNCRCV) {
-                                printf("PRO: Closed SRT fd=%d (%s)\n", (int)s, srt_getlasterror_str());
+                                tsa_info(TAG, "Closed SRT fd=%d (%s)", (int)s, srt_getlasterror_str());
                                 srt_epoll_remove_usock(srt_eid, s);
                                 atomic_store(&c->closed, true);
                             }
@@ -375,7 +378,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             } else {
                 tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
             }
-            mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\n", "%s", resp);
+            mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r", "%s", resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
             static char resp[512 * 1024];
             char id_val[64];
@@ -395,20 +398,19 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 tsa_snapshot_full_t snap;
                 if (tsa_take_snapshot_full(target, &snap) == 0) {
                     tsa_snapshot_to_json(target, &snap, resp, sizeof(resp));
-                    mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
+                    mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r", "%s",
                                   resp);
                 } else {
-                    mg_http_reply(c, 500, NULL, "Snapshot unavailable\n");
+                    mg_http_reply(c, 500, NULL, "Snapshot unavailable");
                 }
             } else {
-                mg_http_reply(c, 404, NULL, "Stream ID not found or missing\n");
+                mg_http_reply(c, 404, NULL, "Stream ID not found or missing");
             }
         } else {
-            mg_http_reply(c, 200, "", "TsAnalyzer Pro - Appliance Metric Gateway\n");
+            mg_http_reply(c, 200, "", "TsAnalyzer Pro - Appliance Metric Gateway");
         }
     }
 }
-
 
 static void setup_srt_listener(SRTSOCKET* out_sl, int* out_srt_eid) {
     *out_sl = srt_create_socket();
@@ -429,9 +431,9 @@ static void setup_srt_listener(SRTSOCKET* out_sl, int* out_srt_eid) {
         c->conn_idx = idx;
         g_conns[idx] = c;
         pthread_mutex_unlock(&g_conn_lock);
-        printf("PRO: Listening SRT on %d\n", g_srt_port);
+        tsa_info(TAG, "Listening SRT on %d", g_srt_port);
     } else {
-        fprintf(stderr, "PRO: Failed to bind SRT on %d\n", g_srt_port);
+        tsa_error(TAG, "Failed to bind SRT on %d", g_srt_port);
     }
 
     *out_srt_eid = srt_epoll_create();
@@ -447,7 +449,7 @@ static void init_shm(int* out_shm_fd, tsa_top_shm_block_t** out_shm_block) {
             *out_shm_block = mmap(0, sizeof(tsa_top_shm_block_t), PROT_READ | PROT_WRITE, MAP_SHARED, *out_shm_fd, 0);
             if (*out_shm_block != MAP_FAILED) {
                 memset(*out_shm_block, 0, sizeof(tsa_top_shm_block_t));
-                printf("PRO: Shared memory initialized at %s\n", TSA_TOP_SHM_NAME);
+                tsa_info(TAG, "Shared memory initialized at %s", TSA_TOP_SHM_NAME);
             } else {
                 *out_shm_block = NULL;
             }
@@ -455,7 +457,8 @@ static void init_shm(int* out_shm_fd, tsa_top_shm_block_t** out_shm_block) {
     }
 }
 
-static void cleanup_and_exit(int shm_fd, tsa_top_shm_block_t* shm_block, struct mg_mgr* mgr, pthread_t t_io, pthread_t t_workers[], int srt_eid) {
+static void cleanup_and_exit(int shm_fd, tsa_top_shm_block_t* shm_block, struct mg_mgr* mgr, pthread_t t_io,
+                             pthread_t t_workers[], int srt_eid) {
     if (shm_block) munmap(shm_block, sizeof(tsa_top_shm_block_t));
     if (shm_fd >= 0) close(shm_fd);
     shm_unlink(TSA_TOP_SHM_NAME);
@@ -507,7 +510,8 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
         if (shm_block && (now - last_shm_update) > 500000000ULL) {
             // Write sequence lock: using atomic pointer logic since seq_lock is part of SHM
             uint64_t seq = atomic_load_explicit((_Atomic uint64_t*)&shm_block->seq_lock, memory_order_acquire);
-            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 1, memory_order_release); // Make it odd
+            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 1,
+                                  memory_order_release);  // Make it odd
 
             shm_block->num_active_streams = 0;
             double total_health = 0.0;
@@ -525,8 +529,10 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
                         info->master_health = snap.summary.master_health;
 
                         info->cc_errors = snap.stats.cc_loss_count + snap.stats.cc_duplicate_count;
-                        info->p1_errors = snap.stats.alarm_sync_loss + snap.stats.alarm_pat_error + snap.stats.alarm_cc_error + snap.stats.alarm_pmt_error;
-                        info->p2_errors = snap.stats.alarm_pcr_repetition_error + snap.stats.alarm_pcr_accuracy_error + snap.stats.alarm_crc_error;
+                        info->p1_errors = snap.stats.alarm_sync_loss + snap.stats.alarm_pat_error +
+                                          snap.stats.alarm_cc_error + snap.stats.alarm_pmt_error;
+                        info->p2_errors = snap.stats.alarm_pcr_repetition_error + snap.stats.alarm_pcr_accuracy_error +
+                                          snap.stats.alarm_crc_error;
                         info->p3_errors = snap.stats.alarm_sdt_error;
 
                         info->pcr_jitter_p99_ms = snap.stats.pcr_jitter_max_ns / 1000000.0;
@@ -541,7 +547,9 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
                             if (snap.pids[j].width > 0 && info->width == 0) {
                                 info->width = (double)snap.pids[j].width;
                                 info->height = (double)snap.pids[j].height;
-                                info->fps = (snap.pids[j].gop_ms > 0) ? ((double)snap.pids[j].gop_n * 1000.0 / snap.pids[j].gop_ms) : 0.0;
+                                info->fps = (snap.pids[j].gop_ms > 0)
+                                                ? ((double)snap.pids[j].gop_n * 1000.0 / snap.pids[j].gop_ms)
+                                                : 0.0;
                                 info->gop_ms = (double)snap.pids[j].gop_ms;
                             }
                             if (snap.pids[j].has_cea708) info->has_cea708 = 1;
@@ -560,7 +568,8 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
                 shm_block->global_health = 0.0;
             }
 
-            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 2, memory_order_release); // Back to even
+            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 2,
+                                  memory_order_release);  // Back to even
             last_shm_update = now;
         }
     }
@@ -589,7 +598,7 @@ int main(int argc, char** argv) {
     char http_addr[64];
     snprintf(http_addr, sizeof(http_addr), "http://0.0.0.0:%d", g_http_port);
     mg_http_listen(&mgr, http_addr, http_fn, &mgr);
-    printf("PRO: HTTP Metrics active on %s\n", http_addr);
+    tsa_info(TAG, "HTTP Metrics active on %s", http_addr);
 
     int shm_fd;
     tsa_top_shm_block_t* shm_block;

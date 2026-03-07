@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+
 #include "tsa_internal.h"
 
 int ts_pcr_window_regress(ts_pcr_window_t* w, double* out_slope, double* out_intercept, int64_t* out_max_err) {

@@ -1,14 +1,8 @@
-#include "metrology/nalu_sniffer.h"
 #include <stdlib.h>
 #include <string.h>
 
+#include "metrology/nalu_sniffer.h"
 #include "tsa_internal.h"
-
-
-
-
-
-
 
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, int len, uint64_t stc_ns) {
     (void)stc_ns;
@@ -85,8 +79,10 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                             int64_t diff_90k = (int64_t)frame_pts - (int64_t)scte_pts;
 
                             // Handle rollover delta (if diff is wildly huge)
-                            if (diff_90k > ((int64_t)1 << 32)) diff_90k -= ((int64_t)1 << 33);
-                            else if (diff_90k < -((int64_t)1 << 32)) diff_90k += ((int64_t)1 << 33);
+                            if (diff_90k > ((int64_t)1 << 32))
+                                diff_90k -= ((int64_t)1 << 33);
+                            else if (diff_90k < -((int64_t)1 << 32))
+                                diff_90k += ((int64_t)1 << 33);
 
                             h->scte35_alignment_error_ns[pid] = diff_90k * 1000000000LL / 90000LL;
 

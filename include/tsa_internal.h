@@ -1,29 +1,29 @@
 #ifndef TSANALYZER_INTERNAL_H
 #define TSANALYZER_INTERNAL_H
 
-#include "tsa.h"
 #include <stdalign.h>
 #include <stdatomic.h>
 #include <time.h>
 
 #include "mpmc_queue.h"
+#include "tsa.h"
+#include "tsa_alert.h"
 #include "tsa_bitstream.h"
 #include "tsa_clock.h"
-#include "tsa_stream.h"
 #include "tsa_plugin.h"
+#include "tsa_stream.h"
 #include "tsa_webhook.h"
-#include "tsa_alert.h"
 
 /* --- Fundamental Types --- */
 typedef __int128_t int128_t;
 typedef int128_t q64_64;
 
-#define TO_Q64_64(x) ((int128_t)((x) * 18446744073709551616.0))
+#define TO_Q64_64(x) ((int128_t)((x)*18446744073709551616.0))
 #define INT_TO_Q64_64(x) ((int128_t)(x) << 64)
 #define FROM_Q64_64(x) ((double)(x) / 18446744073709551616.0)
 
 typedef uint64_t q32_32;
-#define TO_Q32_32(x) ((uint64_t)((x) * 4294967296.0))
+#define TO_Q32_32(x) ((uint64_t)((x)*4294967296.0))
 
 /* --- MPEG-TS Constants --- */
 #define TS_AF_FLAG 0x20
@@ -32,24 +32,16 @@ typedef uint64_t q32_32;
 #define INVALID_PCR 0xFFFFFFFFFFFFFFFFULL
 
 /* TR 101 290 Standard Thresholds (in Nanoseconds) */
-#define TSA_TR101290_PAT_TIMEOUT_NS   (500000000ULL)   /* 500ms (P1.3) */
-#define TSA_TR101290_PMT_TIMEOUT_NS   (500000000ULL)   /* 500ms (P1.5) */
-#define TSA_TR101290_SDT_TIMEOUT_NS   (2000000000ULL)  /* 2s    (P3.2) */
-#define TSA_TR101290_NIT_TIMEOUT_NS   (10000000000ULL) /* 10s   (P3.1) */
-#define TSA_TR101290_PID_TIMEOUT_NS   (5000000000ULL)  /* 5s    (P3.x) */
+#define TSA_TR101290_PAT_TIMEOUT_NS (500000000ULL)   /* 500ms (P1.3) */
+#define TSA_TR101290_PMT_TIMEOUT_NS (500000000ULL)   /* 500ms (P1.5) */
+#define TSA_TR101290_SDT_TIMEOUT_NS (2000000000ULL)  /* 2s    (P3.2) */
+#define TSA_TR101290_NIT_TIMEOUT_NS (10000000000ULL) /* 10s   (P3.1) */
+#define TSA_TR101290_PID_TIMEOUT_NS (5000000000ULL)  /* 5s    (P3.x) */
 
 /* --- Enums --- */
-typedef enum {
-    TS_SYNC_HUNTING,
-    TS_SYNC_CONFIRMING,
-    TS_SYNC_LOCKED
-} tsa_sync_state_t;
+typedef enum { TS_SYNC_HUNTING, TS_SYNC_CONFIRMING, TS_SYNC_LOCKED } tsa_sync_state_t;
 
-typedef enum {
-    TSA_STATUS_VALID = 0,
-    TSA_STATUS_INVALID = 1,
-    TSA_STATUS_DEGRADED = 2
-} tsa_measurement_status_t;
+typedef enum { TSA_STATUS_VALID = 0, TSA_STATUS_INVALID = 1, TSA_STATUS_DEGRADED = 2 } tsa_measurement_status_t;
 
 typedef enum {
     TSA_EVENT_SCTE35,
@@ -71,12 +63,7 @@ typedef enum {
     TSA_EVENT_NIT_TIMEOUT
 } tsa_event_type_t;
 
-typedef enum {
-    TS_CC_OK,
-    TS_CC_DUPLICATE,
-    TS_CC_LOSS,
-    TS_CC_OUT_OF_ORDER
-} ts_cc_status_t;
+typedef enum { TS_CC_OK, TS_CC_DUPLICATE, TS_CC_LOSS, TS_CC_OUT_OF_ORDER } ts_cc_status_t;
 
 #define MAX_EVENT_QUEUE 1024
 #define MAX_PROGRAMS 16
@@ -85,7 +72,10 @@ typedef enum {
 /* --- Utility Prototypes --- */
 typedef struct {
     char* base;
-    union { size_t size; size_t capacity; };
+    union {
+        size_t size;
+        size_t capacity;
+    };
     size_t offset;
 } tsa_metric_buffer_t;
 
@@ -301,7 +291,10 @@ struct tsa_handle {
     uint64_t* pid_pts_offset_64;
 
     char (*pid_labels)[128];
-    struct { uint64_t dts_ns; uint32_t size; } (*pid_au_q)[32];
+    struct {
+        uint64_t dts_ns;
+        uint32_t size;
+    } (*pid_au_q)[32];
     uint8_t* pid_au_head;
     uint8_t* pid_au_tail;
     uint64_t* pid_pending_dts;
@@ -348,7 +341,7 @@ struct tsa_handle {
     uint64_t current_ns;
     ts_decode_result_t current_res;
 
-    #define MAX_TSA_PLUGINS 16
+#define MAX_TSA_PLUGINS 16
     struct {
         void* instance;
         tsa_plugin_ops_t* ops;
@@ -364,7 +357,7 @@ void tsa_tstd_drain(struct tsa_handle* h, uint16_t pid);
 int16_t tsa_update_pid_tracker(struct tsa_handle* h, uint16_t pid);
 void tsa_reset_pid_stats(struct tsa_handle* h, uint16_t pid);
 void tsa_precompile_pid_labels(struct tsa_handle* h, uint16_t pid);
-void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns);
+void tsa_clock_update(const uint8_t* packet, tsa_clock_inspector_t* inspector, uint64_t now_ns);
 void tsa_section_filter_push(struct tsa_handle* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
 void tsa_push_event(struct tsa_handle* h, tsa_event_type_t type, uint16_t pid, uint64_t val);
 void tsa_handle_es_payload(struct tsa_handle* h, uint16_t pid, const uint8_t* buf, int len, uint64_t now_ns);
@@ -383,4 +376,4 @@ void tsa_scte35_process(struct tsa_handle* h, uint16_t pid, const uint8_t* data,
 // Renamed from tsa_check_alert_resolutions
 void tsa_alert_check_resolutions(struct tsa_handle* h);
 
-#endif // TSANALYZER_INTERNAL_H
+#endif  // TSANALYZER_INTERNAL_H

@@ -1,8 +1,8 @@
 #ifndef TSA_STREAM_H
 #define TSA_STREAM_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define TSA_MAX_PID 8192
 #define TSA_MAX_STREAM_CHILDREN 16
@@ -10,8 +10,8 @@
 typedef struct tsa_stream_s tsa_stream_t;
 
 struct tsa_stream_s {
-    void* self;               // Pointer to the owner module/plugin context
-    tsa_stream_t* parent;     // Upstream parent
+    void* self;            // Pointer to the owner module/plugin context
+    tsa_stream_t* parent;  // Upstream parent
 
     // Stream callback for processing 188-byte TS packets
     void (*on_ts)(void* self, const uint8_t* ts);
@@ -38,11 +38,10 @@ int tsa_stream_detach(tsa_stream_t* parent, tsa_stream_t* child);
 void tsa_stream_send(tsa_stream_t* stream, const uint8_t* ts);
 
 // Reactive Demux APIs
-void tsa_stream_demux_set_callbacks(tsa_stream_t* stream,
-                                    void (*join_pid)(void*, uint16_t),
+void tsa_stream_demux_set_callbacks(tsa_stream_t* stream, void (*join_pid)(void*, uint16_t),
                                     void (*leave_pid)(void*, uint16_t));
 void tsa_stream_demux_join_pid(tsa_stream_t* stream, uint16_t pid);
 void tsa_stream_demux_leave_pid(tsa_stream_t* stream, uint16_t pid);
 bool tsa_stream_demux_check_pid(tsa_stream_t* stream, uint16_t pid);
 
-#endif // TSA_STREAM_H
+#endif  // TSA_STREAM_H

@@ -1,4 +1,5 @@
 #include "tsa_plugin.h"
+
 #include <string.h>
 
 static tsa_plugin_ops_t* s_plugins[TSA_MAX_PLUGINS];

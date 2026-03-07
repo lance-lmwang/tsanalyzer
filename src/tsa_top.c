@@ -44,15 +44,14 @@ static void draw_stream_row(int row, int max_x, const tsa_top_stream_info_t* s) 
     snprintf(err_p123, sizeof(err_p123), "%lu/%lu/%lu", s->p1_errors, s->p2_errors, s->p3_errors);
     snprintf(flags, sizeof(flags), "%s%s", s->has_scte35 ? "S35 " : "", s->has_cea708 ? "CC " : "");
 
-    mvprintw(row, 0, "%-20.20s %7.2fM %9.1f%% %10lu %12s %5.1fms %5.1fms %8s",
-             s->stream_id, s->current_bitrate_mbps, s->master_health,
-             s->cc_errors, err_p123, s->pcr_jitter_p99_ms, s->mdi_df_ms, flags);
+    mvprintw(row, 0, "%-20.20s %7.2fM %9.1f%% %10lu %12s %5.1fms %5.1fms %8s", s->stream_id, s->current_bitrate_mbps,
+             s->master_health, s->cc_errors, err_p123, s->pcr_jitter_p99_ms, s->mdi_df_ms, flags);
     attroff(COLOR_PAIR(color_pair));
 
     /* Line 2: Deep Diagnostics & Metadata (Indented) */
     attron(COLOR_PAIR(6)); /* Magenta for Timing/Drift */
-    mvprintw(row + 1, 2, "RST(N/E): %5.1fs / %5.1fs  Drift(S/L): %5.1f / %5.1f ppm",
-             s->rst_net_s, s->rst_enc_s, s->drift_ppm, s->drift_long_ppm);
+    mvprintw(row + 1, 2, "RST(N/E): %5.1fs / %5.1fs  Drift(S/L): %5.1f / %5.1f ppm", s->rst_net_s, s->rst_enc_s,
+             s->drift_ppm, s->drift_long_ppm);
     attroff(COLOR_PAIR(6));
 
     if (s->width > 0) {
@@ -87,12 +86,12 @@ int main(void) {
     start_color();
     use_default_colors();
 
-    init_pair(1, COLOR_WHITE, COLOR_BLUE);  /* Header */
-    init_pair(2, COLOR_GREEN, -1);          /* OK */
-    init_pair(3, COLOR_YELLOW, -1);         /* Warning */
-    init_pair(4, COLOR_RED, -1);            /* Error */
-    init_pair(5, COLOR_CYAN, -1);           /* Metadata */
-    init_pair(6, COLOR_MAGENTA, -1);        /* Timing */
+    init_pair(1, COLOR_WHITE, COLOR_BLUE); /* Header */
+    init_pair(2, COLOR_GREEN, -1);         /* OK */
+    init_pair(3, COLOR_YELLOW, -1);        /* Warning */
+    init_pair(4, COLOR_RED, -1);           /* Error */
+    init_pair(5, COLOR_CYAN, -1);          /* Metadata */
+    init_pair(6, COLOR_MAGENTA, -1);       /* Timing */
 
     uint64_t last_rendered_seq = 0;
 
@@ -124,8 +123,8 @@ int main(void) {
 
                 /* Render Header Labels */
                 attron(A_BOLD);
-                mvprintw(1, 0, "%-20s %10s %10s %10s %12s %8s %8s %8s",
-                         "STREAM ID", "BITRATE", "HEALTH", "CC_ERR", "TR_P1/2/3", "PCR_JIT", "MDI_DF", "FLAGS");
+                mvprintw(1, 0, "%-20s %10s %10s %10s %12s %8s %8s %8s", "STREAM ID", "BITRATE", "HEALTH", "CC_ERR",
+                         "TR_P1/2/3", "PCR_JIT", "MDI_DF", "FLAGS");
                 attroff(A_BOLD);
 
                 /* Render Streams */
@@ -137,7 +136,8 @@ int main(void) {
 
                 /* Render Footer */
                 attron(A_DIM);
-                mvprintw(max_y - 1, 0, " [q] Quit | Deterministic Metrology Engine Active | Sequence: %lu", last_rendered_seq);
+                mvprintw(max_y - 1, 0, " [q] Quit | Deterministic Metrology Engine Active | Sequence: %lu",
+                         last_rendered_seq);
                 attroff(A_DIM);
 
                 refresh();

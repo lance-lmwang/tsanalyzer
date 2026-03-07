@@ -1,6 +1,7 @@
-#include <string.h>
-#include <ctype.h>
 #include "tsa_conf_lexer.h"
+
+#include <ctype.h>
+#include <string.h>
 
 void tsa_lexer_init(tsa_lexer_t* l, const char* input) {
     l->start = input;
@@ -32,15 +33,18 @@ tsa_token_t tsa_lexer_next(tsa_lexer_t* l) {
 
     if (c == '{') {
         tok.type = TSA_TOKEN_LBRACE;
-        tok.text[0] = c; tok.text[1] = '\0';
+        tok.text[0] = c;
+        tok.text[1] = '\0';
         l->pos++;
     } else if (c == '}') {
         tok.type = TSA_TOKEN_RBRACE;
-        tok.text[0] = c; tok.text[1] = '\0';
+        tok.text[0] = c;
+        tok.text[1] = '\0';
         l->pos++;
     } else if (c == ';') {
         tok.type = TSA_TOKEN_SEMICOLON;
-        tok.text[0] = c; tok.text[1] = '\0';
+        tok.text[0] = c;
+        tok.text[1] = '\0';
         l->pos++;
     } else {
         // Word or Number with units

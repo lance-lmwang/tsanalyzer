@@ -43,4 +43,4 @@ extern tsa_plugin_ops_t tr101290_ops;
 extern tsa_plugin_ops_t pcr_ops;
 extern tsa_plugin_ops_t essence_ops;
 
-#endif // TSA_PLUGIN_H
+#endif  // TSA_PLUGIN_H

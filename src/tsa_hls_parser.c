@@ -1,14 +1,15 @@
+#include "tsa_hls_parser.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tsa_hls_parser.h"
 
-static const char* find_line_end(const char *s, const char *end) {
+static const char *find_line_end(const char *s, const char *end) {
     while (s < end && *s != '\n' && *s != '\r') s++;
     return s;
 }
 
-static const char* skip_whitespace(const char *s, const char *end) {
+static const char *skip_whitespace(const char *s, const char *end) {
     while (s < end && (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n')) s++;
     return s;
 }
@@ -82,7 +83,7 @@ int tsa_hls_parse_m3u8(tsa_hls_context_t *ctx, const char *data, size_t len) {
 
             if (ctx->on_segment) ctx->on_segment(ctx->user_data, &seg);
 
-            is_discontinuity = false; // Reset
+            is_discontinuity = false;  // Reset
         }
 
         p = line_end;

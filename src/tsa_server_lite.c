@@ -8,6 +8,9 @@
 #include <unistd.h>
 
 #include "mongoose.h"
+#include "tsa_log.h"
+
+#define TAG "SERVER_LITE"
 
 #define MAX_S 8
 typedef struct {
@@ -65,7 +68,7 @@ int main() {
 
     clock_gettime(CLOCK_MONOTONIC, &g_last_time);
     signal(SIGINT, sig_handler);
-    printf("STABLE ENGINE STARTING (8 PORTS)...\n");
+    tsa_info(TAG, "STABLE ENGINE STARTING (8 PORTS)...");
 
     uint8_t pkt[2048];
     while (g_keep_running) {

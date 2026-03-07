@@ -45,4 +45,4 @@ typedef struct {
     tsa_top_stream_info_t streams[TSA_TOP_MAX_STREAMS];
 } __attribute__((aligned(64))) tsa_top_shm_block_t;
 
-#endif // TSA_TOP_SHM_H
+#endif  // TSA_TOP_SHM_H

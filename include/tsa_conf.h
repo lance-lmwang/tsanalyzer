@@ -1,8 +1,9 @@
 #ifndef TSA_CONF_H
 #define TSA_CONF_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+
 #include "tsa.h"
 
 #define MAX_OUTPUTS 8

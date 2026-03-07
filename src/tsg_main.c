@@ -10,7 +10,10 @@
 
 #include "mongoose.h"
 #include "tsa.h"
+#include "tsa_log.h"
 #include "tsp.h"
+
+#define TAG "TSG"
 
 static volatile int g_keep_running = 1;
 static tsa_gateway_t* g_gw = NULL;
@@ -44,10 +47,10 @@ static void* http_server_thread(void* arg) {
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
     if (mg_http_listen(&mgr, listen_url, fn, NULL) == NULL) {
-        fprintf(stderr, "Failed to start HTTP server on %s\n", listen_url);
+        tsa_error(TAG, "Failed to start HTTP server on %s", listen_url);
         return NULL;
     }
-    printf("Gateway Metrics server started at %s/metrics\n", listen_url);
+    tsa_info(TAG, "Gateway Metrics server started at %s/metrics", listen_url);
     while (g_keep_running) {
         mg_mgr_poll(&mgr, 1000);
     }
@@ -132,7 +135,7 @@ int main(int argc, char** argv) {
     }
 
     if (!srt_in && !udp_in_port) {
-        fprintf(stderr, "Error: Ingest source required (--srt-in or --udp-in)\n");
+        tsa_error(TAG, "Error: Ingest source required (--srt-in or --udp-in)");
         return 1;
     }
 
@@ -144,7 +147,7 @@ int main(int argc, char** argv) {
 
     g_gw = tsa_gateway_create(&cfg);
     if (!g_gw) {
-        fprintf(stderr, "Failed to create gateway\n");
+        tsa_error(TAG, "Failed to create gateway");
         return 1;
     }
 
@@ -159,8 +162,8 @@ int main(int argc, char** argv) {
     uint64_t last_snap_ns = get_now_ns();
 
     if (srt_in) {
-        printf("Gateway: SRT Ingest %s -> UDP Egress %s:%d\n", srt_in, cfg.pacing.dest_ip ? cfg.pacing.dest_ip : "NONE",
-               cfg.pacing.port);
+        tsa_info(TAG, "Gateway: SRT Ingest %s -> UDP Egress %s:%d", srt_in,
+                 cfg.pacing.dest_ip ? cfg.pacing.dest_ip : "NONE", cfg.pacing.port);
         ts_ingest_srt_t* ingest = ts_ingest_srt_create(srt_in);
         if (!ingest) return 1;
         while (g_keep_running) {
@@ -183,8 +186,8 @@ int main(int argc, char** argv) {
         }
         ts_ingest_srt_destroy(ingest);
     } else {
-        printf("Gateway: UDP Ingest :%d -> UDP Egress %s:%d\n", udp_in_port,
-               cfg.pacing.dest_ip ? cfg.pacing.dest_ip : "NONE", cfg.pacing.port);
+        tsa_info(TAG, "Gateway: UDP Ingest :%d -> UDP Egress %s:%d", udp_in_port,
+                 cfg.pacing.dest_ip ? cfg.pacing.dest_ip : "NONE", cfg.pacing.port);
         ts_ingest_udp_t* ingest = ts_ingest_udp_create(NULL, (uint16_t)udp_in_port);
         if (!ingest) return 1;
         while (g_keep_running) {

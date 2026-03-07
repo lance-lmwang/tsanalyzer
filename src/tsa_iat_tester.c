@@ -6,17 +6,17 @@
  * independent of TS payload parsing logic.
  */
 
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <getopt.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include <time.h>
-#include <signal.h>
+#include <unistd.h>
 
 #define DEFAULT_SLEEP_US 1000
 #define TS_PACKET_SIZE 188
@@ -44,23 +44,26 @@ int main(int argc, char* argv[]) {
     int sleep_us = DEFAULT_SLEEP_US;
     unsigned long max_count = 0;
 
-    static struct option long_options[] = {
-        {"ip", required_argument, 0, 'i'},
-        {"port", required_argument, 0, 'p'},
-        {"sleep", required_argument, 0, 's'},
-        {"count", required_argument, 0, 'c'},
-        {"help", no_argument, 0, 'h'},
-        {0, 0, 0, 0}
-    };
+    static struct option long_options[] = {{"ip", required_argument, 0, 'i'},    {"port", required_argument, 0, 'p'},
+                                           {"sleep", required_argument, 0, 's'}, {"count", required_argument, 0, 'c'},
+                                           {"help", no_argument, 0, 'h'},        {0, 0, 0, 0}};
 
     int opt;
     int option_index = 0;
     while ((opt = getopt_long(argc, argv, "i:p:s:c:h", long_options, &option_index)) != -1) {
         switch (opt) {
-            case 'i': dest_ip = optarg; break;
-            case 'p': port = atoi(optarg); break;
-            case 's': sleep_us = atoi(optarg); break;
-            case 'c': max_count = strtoul(optarg, NULL, 10); break;
+            case 'i':
+                dest_ip = optarg;
+                break;
+            case 'p':
+                port = atoi(optarg);
+                break;
+            case 's':
+                sleep_us = atoi(optarg);
+                break;
+            case 'c':
+                max_count = strtoul(optarg, NULL, 10);
+                break;
             case 'h':
             default:
                 print_usage(argv[0]);
@@ -94,10 +97,10 @@ int main(int argc, char* argv[]) {
     uint8_t buf[UDP_PACKET_SIZE];
     memset(buf, 0xFF, sizeof(buf));
     for (int i = 0; i < 7; i++) {
-        buf[i * TS_PACKET_SIZE + 0] = 0x47; // Sync byte
-        buf[i * TS_PACKET_SIZE + 1] = 0x1F; // PID 0x1FFF
+        buf[i * TS_PACKET_SIZE + 0] = 0x47;  // Sync byte
+        buf[i * TS_PACKET_SIZE + 1] = 0x1F;  // PID 0x1FFF
         buf[i * TS_PACKET_SIZE + 2] = 0xFF;
-        buf[i * TS_PACKET_SIZE + 3] = 0x10; // Payload only, CC=0
+        buf[i * TS_PACKET_SIZE + 3] = 0x10;  // Payload only, CC=0
     }
 
     struct sigaction sa;

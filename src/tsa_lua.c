@@ -1,10 +1,12 @@
 #include "tsa_lua.h"
-#include "tsa_plugin.h"
-#include "tsa_internal.h"
-#include "tsa_source.h"
-#include "tsp.h"
+
 #include <stdlib.h>
 #include <string.h>
+
+#include "tsa_internal.h"
+#include "tsa_plugin.h"
+#include "tsa_source.h"
+#include "tsp.h"
 
 #define TSA_LUA_SOURCE_MT "tsa.source"
 #define TSA_LUA_OUTPUT_MT "tsa.output"
@@ -20,10 +22,15 @@ typedef struct {
 } lua_tsa_source_t;
 
 static void dummy_on_packets(void* user_data, const uint8_t* pkts, int count, uint64_t now_ns) {
-    (void)user_data; (void)pkts; (void)count; (void)now_ns;
+    (void)user_data;
+    (void)pkts;
+    (void)count;
+    (void)now_ns;
 }
 static void dummy_on_status(void* user_data, int status_code, const char* msg) {
-    (void)user_data; (void)status_code; (void)msg;
+    (void)user_data;
+    (void)status_code;
+    (void)msg;
 }
 
 static int l_tsa_udp_input(lua_State* L) {
@@ -34,7 +41,7 @@ static int l_tsa_udp_input(lua_State* L) {
     lua_setmetatable(L, -2);
 
     // We will hook real callbacks when link (set_upstream) happens in Step 3
-    tsa_source_callbacks_t cbs = { dummy_on_packets, dummy_on_status };
+    tsa_source_callbacks_t cbs = {dummy_on_packets, dummy_on_status};
     obj->src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, port, &cbs, NULL);
     if (!obj->src) {
         return luaL_error(L, "Failed to create UDP input");
@@ -72,7 +79,7 @@ static int l_tsa_udp_output(lua_State* L) {
     cfg.dest_ip = ip;
     cfg.port = port;
     cfg.mode = TSPACER_MODE_BASIC;
-    cfg.bitrate = 10000000; // 10Mbps default
+    cfg.bitrate = 10000000;  // 10Mbps default
 
     obj->tsp = tsp_create(&cfg);
     if (!obj->tsp) {
@@ -116,13 +123,11 @@ static int l_tsa_add_plugin(lua_State* L) {
     return 0;
 }
 
-static const struct luaL_Reg tsa_lib[] = {
-    {"log", l_tsa_log},
-    {"add_plugin", l_tsa_add_plugin},
-    {"udp_input", l_tsa_udp_input},
-    {"udp_output", l_tsa_udp_output},
-    {NULL, NULL}
-};
+static const struct luaL_Reg tsa_lib[] = {{"log", l_tsa_log},
+                                          {"add_plugin", l_tsa_add_plugin},
+                                          {"udp_input", l_tsa_udp_input},
+                                          {"udp_output", l_tsa_udp_output},
+                                          {NULL, NULL}};
 
 static void register_metatables(lua_State* L) {
     luaL_newmetatable(L, TSA_LUA_SOURCE_MT);

@@ -6,7 +6,7 @@
 #include "tsa.h"
 
 int parse_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
-                      int* pbkeylen) {
+                  int* pbkeylen) {
     if (!url || !host || !port) return -1;
     *is_listener = 0;
     *latency = 250;

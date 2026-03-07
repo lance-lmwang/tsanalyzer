@@ -5,7 +5,10 @@
 
 #include "tsa.h"
 #include "tsa_internal.h"
+#include "tsa_log.h"
 #include "tsp.h"
+
+#define TAG "GATEWAY"
 
 #ifndef VIDEO_PID
 #define VIDEO_PID 0x0100
@@ -84,8 +87,10 @@ int tsa_gateway_process_dual(tsa_gateway_t* gw, const uint8_t* pkt_p, const uint
 
             uint32_t target_index = gw->active_index;
 
-            if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_FORCE_PRIMARY) target_index = 0;
-            else if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_FORCE_BACKUP) target_index = 1;
+            if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_FORCE_PRIMARY)
+                target_index = 0;
+            else if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_FORCE_BACKUP)
+                target_index = 1;
             else if (gw->cfg.failover_mode == TSA_FAILOVER_MODE_AUTO) {
                 if (gw->active_index == 0 && health_p < gw->cfg.health_threshold && health_b > health_p) {
                     target_index = 1;
@@ -94,18 +99,21 @@ int tsa_gateway_process_dual(tsa_gateway_t* gw, const uint8_t* pkt_p, const uint
                 }
             }
 
-            if (target_index != gw->active_index && (now_ns - gw->last_switch_ns > (uint64_t)gw->cfg.switch_hold_ms * 1000000ULL)) {
+            if (target_index != gw->active_index &&
+                (now_ns - gw->last_switch_ns > (uint64_t)gw->cfg.switch_hold_ms * 1000000ULL)) {
                 gw->active_index = target_index;
                 gw->last_switch_ns = now_ns;
                 gw->pending_discontinuity = true;
-                printf("GATEWAY: Switched active source to %s (P:%.2f, B:%.2f)\n",
-                       target_index == 0 ? "PRIMARY" : "BACKUP", health_p, health_b);
+                tsa_info(TAG, "Switched active source to %s (P:%.2f, B:%.2f)", target_index == 0 ? "PRIMARY" : "BACKUP",
+                         health_p, health_b);
 
                 if (gw->tsa->webhook) {
                     char switch_msg[256];
-                    snprintf(switch_msg, sizeof(switch_msg), "Source Switched to %s (PrimaryHealth:%.2f, BackupHealth:%.2f)",
+                    snprintf(switch_msg, sizeof(switch_msg),
+                             "Source Switched to %s (PrimaryHealth:%.2f, BackupHealth:%.2f)",
                              target_index == 0 ? "PRIMARY" : "BACKUP", health_p, health_b);
-                    tsa_webhook_push_event(gw->tsa->webhook, gw->cfg.analysis_primary.input_label, "FAILOVER", switch_msg);
+                    tsa_webhook_push_event(gw->tsa->webhook, gw->cfg.analysis_primary.input_label, "FAILOVER",
+                                           switch_msg);
                 }
             }
         }
@@ -120,7 +128,7 @@ int tsa_gateway_process_dual(tsa_gateway_t* gw, const uint8_t* pkt_p, const uint
 
     if (gw->pending_discontinuity) {
         /* Set discontinuity indicator in adaptation field if present, or create one */
-        if (output_pkt[3] & 0x20) { /* Has adaptation field */
+        if (output_pkt[3] & 0x20) {                       /* Has adaptation field */
             if (output_pkt[4] > 0) output_pkt[5] |= 0x80; /* Set bit 7: discontinuity_indicator */
         }
         gw->pending_discontinuity = false;

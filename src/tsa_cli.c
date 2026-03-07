@@ -5,20 +5,20 @@
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-#include <stdatomic.h>
 
 #include "mongoose.h"
 #include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
-#include "tsa_source.h"
 #include "tsa_lua.h"
+#include "tsa_source.h"
 
 static _Atomic int g_keep_running = 1;
 static spsc_queue_t* g_pkt_queue = NULL;
@@ -27,7 +27,10 @@ static uint64_t g_simulated_now_ns = NS_PER_SEC; /* Start at 1s for replay */
 /* Prometheus exporter from src/tsa_exporter_prom.c */
 extern void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
 
-static void sig_handler(int sig) { (void)sig; atomic_store(&g_keep_running, 0); }
+static void sig_handler(int sig) {
+    (void)sig;
+    atomic_store(&g_keep_running, 0);
+}
 
 /* --- Source Callbacks --- */
 
@@ -183,39 +186,55 @@ int main(int argc, char** argv) {
     bool pacing = false;
 
     static struct option long_options[] = {
-        {"mode",      required_argument, 0, 'm'},
-        {"udp",       required_argument, 0, 'u'},
-        {"srt",       required_argument, 0, 's'},
-        {"interface", required_argument, 0, 'i'},
-        {"pacing",    no_argument,       0, 'p'},
-        {"label",     required_argument, 0, 'l'},
-        {"http",      required_argument, 0, 'H'},
-        {"alpha",     required_argument, 0, 'a'},
-        {"help",      no_argument,       0, 'h'},
-        {0, 0, 0, 0}
-    };
+        {"mode", required_argument, 0, 'm'}, {"udp", required_argument, 0, 'u'},
+        {"srt", required_argument, 0, 's'},  {"interface", required_argument, 0, 'i'},
+        {"pacing", no_argument, 0, 'p'},     {"label", required_argument, 0, 'l'},
+        {"http", required_argument, 0, 'H'}, {"alpha", required_argument, 0, 'a'},
+        {"help", no_argument, 0, 'h'},       {0, 0, 0, 0}};
 
     int opt;
     while ((opt = getopt_long(argc, argv, "m:u:s:i:pl:H:a:h", long_options, NULL)) != -1) {
         switch (opt) {
             case 'm':
-                if (strcasecmp(optarg, "live") == 0) cfg.op_mode = TSA_MODE_LIVE;
-                else if (strcasecmp(optarg, "replay") == 0) cfg.op_mode = TSA_MODE_REPLAY;
+                if (strcasecmp(optarg, "live") == 0)
+                    cfg.op_mode = TSA_MODE_LIVE;
+                else if (strcasecmp(optarg, "replay") == 0)
+                    cfg.op_mode = TSA_MODE_REPLAY;
                 break;
-            case 'u': udp_port = atoi(optarg); cfg.op_mode = TSA_MODE_LIVE; break;
-            case 's': strncpy(srt_url, optarg, sizeof(srt_url)-1); cfg.op_mode = TSA_MODE_LIVE; break;
-            case 'i': strncpy(interface, optarg, sizeof(interface)-1); cfg.op_mode = TSA_MODE_LIVE; break;
-            case 'p': pacing = true; break;
-            case 'l': strncpy(stream_label, optarg, sizeof(stream_label)-1); break;
-            case 'H': http_port = atoi(optarg); break;
-            case 'a': cfg.analysis.pcr_ema_alpha = atof(optarg); break;
-            case 'h': print_usage(argv[0]); return 0;
-            default: return 1;
+            case 'u':
+                udp_port = atoi(optarg);
+                cfg.op_mode = TSA_MODE_LIVE;
+                break;
+            case 's':
+                strncpy(srt_url, optarg, sizeof(srt_url) - 1);
+                cfg.op_mode = TSA_MODE_LIVE;
+                break;
+            case 'i':
+                strncpy(interface, optarg, sizeof(interface) - 1);
+                cfg.op_mode = TSA_MODE_LIVE;
+                break;
+            case 'p':
+                pacing = true;
+                break;
+            case 'l':
+                strncpy(stream_label, optarg, sizeof(stream_label) - 1);
+                break;
+            case 'H':
+                http_port = atoi(optarg);
+                break;
+            case 'a':
+                cfg.analysis.pcr_ema_alpha = atof(optarg);
+                break;
+            case 'h':
+                print_usage(argv[0]);
+                return 0;
+            default:
+                return 1;
         }
     }
 
     if (optind < argc) {
-        strncpy(filename, argv[optind], sizeof(filename)-1);
+        strncpy(filename, argv[optind], sizeof(filename) - 1);
         if (strncmp(filename, "http://", 7) == 0 || strncmp(filename, "https://", 8) == 0) {
             cfg.op_mode = TSA_MODE_LIVE;
         }
@@ -227,7 +246,7 @@ int main(int argc, char** argv) {
     }
 
     if (stream_label[0]) {
-        strncpy(cfg.input_label, stream_label, sizeof(cfg.input_label)-1);
+        strncpy(cfg.input_label, stream_label, sizeof(cfg.input_label) - 1);
     }
 
     signal(SIGINT, sig_handler);
@@ -262,11 +281,14 @@ int main(int argc, char** argv) {
         pthread_t analysis_tid;
         pthread_create(&analysis_tid, NULL, analysis_thread_func, h);
 
-        tsa_source_callbacks_t cbs = { on_source_packets_async, on_source_status };
+        tsa_source_callbacks_t cbs = {on_source_packets_async, on_source_status};
         tsa_source_t* src = NULL;
-        if (interface[0]) src = tsa_source_create(TSA_SOURCE_PCAP, interface, NULL, 0, &cbs, h);
-        else if (udp_port > 0) src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, udp_port, &cbs, h);
-        else if (srt_url[0]) src = tsa_source_create(TSA_SOURCE_SRT, srt_url, NULL, 0, &cbs, h);
+        if (interface[0])
+            src = tsa_source_create(TSA_SOURCE_PCAP, interface, NULL, 0, &cbs, h);
+        else if (udp_port > 0)
+            src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, udp_port, &cbs, h);
+        else if (srt_url[0])
+            src = tsa_source_create(TSA_SOURCE_SRT, srt_url, NULL, 0, &cbs, h);
         else if (filename[0]) {
             if (strncmp(filename, "http://", 7) == 0 || strncmp(filename, "https://", 8) == 0) {
                 src = tsa_source_create(TSA_SOURCE_HLS, filename, NULL, 0, &cbs, h);

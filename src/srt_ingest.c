@@ -6,7 +6,10 @@
 #include <unistd.h>
 
 #include "tsa.h"
+#include "tsa_log.h"
 #include "tsp.h"
+
+#define TAG "SRT_INGEST"
 
 struct ts_ingest_srt {
     SRTSOCKET sock;
@@ -43,17 +46,17 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
         srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
 
         if (srt_bind(s, (struct sockaddr*)&sa, sizeof(sa)) == SRT_ERROR) {
-            fprintf(stderr, "SRT Listener: Bind failed: %s\n", srt_getlasterror_str());
+            tsa_error(TAG, "SRT Listener: Bind failed: %s", srt_getlasterror_str());
             srt_close(s);
             return NULL;
         }
 
         srt_listen(s, 1);
-        printf("SRT Listener: Waiting for caller on %d...\n", port);
+        tsa_info(TAG, "SRT Listener: Waiting for caller on %d...", port);
 
         SRTSOCKET client = srt_accept(s, NULL, NULL);
         if (client == SRT_INVALID_SOCK) {
-            fprintf(stderr, "SRT Listener: Accept failed: %s\n", srt_getlasterror_str());
+            tsa_error(TAG, "SRT Listener: Accept failed: %s", srt_getlasterror_str());
             srt_close(s);
             return NULL;
         }
@@ -65,7 +68,7 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
         int sync = 1;
         srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
         if (srt_connect(s, (struct sockaddr*)&sa, sizeof(sa)) == SRT_ERROR) {
-            fprintf(stderr, "SRT Caller: Connect failed: %s\n", srt_getlasterror_str());
+            tsa_error(TAG, "SRT Caller: Connect failed: %s", srt_getlasterror_str());
             srt_close(s);
             return NULL;
         }

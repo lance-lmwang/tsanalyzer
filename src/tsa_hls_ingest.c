@@ -1,9 +1,10 @@
+#include <curl/curl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <unistd.h>
-#include <curl/curl.h>
+
 #include "tsa_hls_parser.h"
 #include "tsa_source.h"
 
@@ -54,7 +55,7 @@ static void download_segment(hls_ingest_t *ingest, const char *url) {
         int count = chunk.size / 188;
         if (count > 0) {
             // Push to analyzer in bulk
-            ingest->cbs.on_packets(ingest->user_data, (uint8_t*)chunk.data, count, 0);
+            ingest->cbs.on_packets(ingest->user_data, (uint8_t *)chunk.data, count, 0);
         }
     }
     free(chunk.data);
@@ -68,7 +69,7 @@ static void on_segment_found(void *user_data, const tsa_hls_segment_t *seg) {
     }
 }
 
-static void* hls_worker(void* arg) {
+static void *hls_worker(void *arg) {
     hls_ingest_t *ingest = (hls_ingest_t *)arg;
     ingest->curl = curl_easy_init();
     curl_easy_setopt(ingest->curl, CURLOPT_USERAGENT, "TsAnalyzer-HLS/1.0");
@@ -84,7 +85,7 @@ static void* hls_worker(void* arg) {
         CURLcode res = curl_easy_perform(ingest->curl);
         if (res == CURLE_OK) {
             tsa_hls_context_t ctx = {0};
-            strncpy(ctx.master_url, ingest->m3u8_url, sizeof(ctx.master_url)-1);
+            strncpy(ctx.master_url, ingest->m3u8_url, sizeof(ctx.master_url) - 1);
             ctx.on_segment = on_segment_found;
             ctx.user_data = ingest;
 
@@ -103,12 +104,12 @@ static void* hls_worker(void* arg) {
     return NULL;
 }
 
-void* tsa_hls_ingest_start(const char *url, const tsa_source_callbacks_t *cbs, void *user_data) {
+void *tsa_hls_ingest_start(const char *url, const tsa_source_callbacks_t *cbs, void *user_data) {
     hls_ingest_t *ingest = calloc(1, sizeof(hls_ingest_t));
     ingest->cbs = *cbs;
     ingest->user_data = user_data;
     ingest->running = true;
-    strncpy(ingest->m3u8_url, url, sizeof(ingest->m3u8_url)-1);
+    strncpy(ingest->m3u8_url, url, sizeof(ingest->m3u8_url) - 1);
 
     pthread_create(&ingest->thread, NULL, hls_worker, ingest);
     return ingest;

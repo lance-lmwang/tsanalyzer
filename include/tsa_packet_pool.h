@@ -1,8 +1,9 @@
 #ifndef TSA_PACKET_POOL_H
 #define TSA_PACKET_POOL_H
 
-#include <stddef.h>
 #include <pthread.h>
+#include <stddef.h>
+
 #include "tsa_pipeline.h"
 
 typedef struct {

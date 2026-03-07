@@ -1,16 +1,17 @@
-#include <stdlib.h>
-#include <stdatomic.h>
 #include "tsa_packet_pool.h"
+
+#include <stdatomic.h>
+#include <stdlib.h>
 
 tsa_packet_pool_t* tsa_packet_pool_create(size_t capacity) {
     tsa_packet_pool_t* pool = calloc(1, sizeof(tsa_packet_pool_t));
     pool->capacity = capacity;
     pool->packets = calloc(capacity, sizeof(tsa_packet_t));
     pthread_mutex_init(&pool->lock, NULL);
-    
+
     // Simple ring buffer logic for free list
     pool->head = 0;
-    pool->tail = capacity - 1; // Initially full
+    pool->tail = capacity - 1;  // Initially full
     return pool;
 }
 
@@ -29,7 +30,7 @@ tsa_packet_t* tsa_packet_pool_acquire(tsa_packet_pool_t* pool) {
         pool->head = (pool->head + 1) % pool->capacity;
     }
     pthread_mutex_unlock(&pool->lock);
-    
+
     if (pkt) {
         pkt->ref_count = 1;
     }

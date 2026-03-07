@@ -287,8 +287,8 @@ typedef struct {
     tsp_config_t pacing;
 
     bool enable_smart_failover;
-    float health_threshold;       /* 0.0 - 1.0, e.g. 0.7 triggers switch */
-    uint32_t switch_hold_ms;      /* Avoid flapping */
+    float health_threshold;  /* 0.0 - 1.0, e.g. 0.7 triggers switch */
+    uint32_t switch_hold_ms; /* Avoid flapping */
     tsa_failover_mode_t failover_mode;
 
     bool enable_action_engine;
@@ -329,7 +329,5 @@ static inline int tsa_find_pid_in_snapshot(const tsa_snapshot_full_t* snap, uint
     }
     return -1;
 }
-
-
 
 #endif

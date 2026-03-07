@@ -1,10 +1,11 @@
 #include "tsa_event.h"
+
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
 #include <sys/epoll.h>
+#include <unistd.h>
 
 #define MAX_EVENTS 1024
 
@@ -90,7 +91,7 @@ void tsa_reactor_run(tsa_reactor_t* reactor) {
         int n = epoll_wait(reactor->epoll_fd, events, MAX_EVENTS, 100);
         if (n < 0) {
             if (errno == EINTR) continue;
-            break; // Error
+            break;  // Error
         }
 
         for (int i = 0; i < n; i++) {

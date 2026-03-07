@@ -7,7 +7,7 @@
 static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     if (h->last_pat_ns > 0) {
         uint64_t diff = now - h->last_pat_ns;
-        if (diff > TSA_TR101290_PAT_TIMEOUT_NS) { // 500ms TR 101 290 P1.3
+        if (diff > TSA_TR101290_PAT_TIMEOUT_NS) {  // 500ms TR 101 290 P1.3
             tsa_push_event(h, TSA_EVENT_PAT_TIMEOUT, 0, diff / 1000000);
         }
     }
@@ -38,7 +38,7 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
 static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now) {
     if (h->last_pmt_ns > 0) {
         uint64_t diff = now - h->last_pmt_ns;
-        if (diff > TSA_TR101290_PMT_TIMEOUT_NS) { // 500ms TR 101 290 P1.5
+        if (diff > TSA_TR101290_PMT_TIMEOUT_NS) {  // 500ms TR 101 290 P1.5
             tsa_push_event(h, TSA_EVENT_PMT_TIMEOUT, pid, diff / 1000000);
         }
     }
@@ -89,7 +89,7 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
 static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     if (h->last_nit_ns > 0) {
         uint64_t diff = now - h->last_nit_ns;
-        if (diff > TSA_TR101290_NIT_TIMEOUT_NS) { // 10s TR 101 290 P3.1
+        if (diff > TSA_TR101290_NIT_TIMEOUT_NS) {  // 10s TR 101 290 P3.1
             tsa_push_event(h, TSA_EVENT_NIT_TIMEOUT, 0, diff / 1000000);
         }
     }
@@ -100,7 +100,7 @@ static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     // Parse network descriptors
     for (int j = 10; j < 10 + ndl && j < sl + 3 - 4;) {
         uint8_t dt = p[j], dl = p[j + 1];
-        if (dt == 0x40 && dl > 0) { // network_name_descriptor
+        if (dt == 0x40 && dl > 0) {  // network_name_descriptor
             int nl = dl;
             memcpy(h->network_name, p + j + 2, (nl < 255) ? nl : 255);
             h->network_name[(nl < 255) ? nl : 255] = '\0';
@@ -112,7 +112,7 @@ static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
 static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     if (h->last_sdt_ns > 0) {
         uint64_t diff = now - h->last_sdt_ns;
-        if (diff > TSA_TR101290_SDT_TIMEOUT_NS) { // 2s TR 101 290 P3.2
+        if (diff > TSA_TR101290_SDT_TIMEOUT_NS) {  // 2s TR 101 290 P3.2
             tsa_push_event(h, TSA_EVENT_SDT_TIMEOUT, 0, diff / 1000000);
         }
     }
@@ -124,10 +124,12 @@ static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
             uint8_t dt = p[j], dl = p[j + 1];
             if (dt == 0x48 && dl > 3) {
                 int nl = p[j + 3];
-                memcpy(h->provider_name, p + j + 4, (nl < 255) ? nl : 255); h->provider_name[(nl < 255) ? nl : 255] = 0;
+                memcpy(h->provider_name, p + j + 4, (nl < 255) ? nl : 255);
+                h->provider_name[(nl < 255) ? nl : 255] = 0;
                 h->provider_name[(nl < 255) ? nl : 255] = '\0';
                 int pnl = p[j + 4 + nl + 1];
-                memcpy(h->service_name, p + j + 4 + nl + 2, (pnl < 255) ? pnl : 255); h->service_name[(pnl < 255) ? pnl : 255] = 0;
+                memcpy(h->service_name, p + j + 4 + nl + 2, (pnl < 255) ? pnl : 255);
+                h->service_name[(pnl < 255) ? pnl : 255] = 0;
                 h->service_name[(pnl < 255) ? pnl : 255] = '\0';
             }
             j += 2 + dl;
@@ -143,24 +145,42 @@ void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return;
     const char* codec = tsa_get_pid_type_name(h, pid);
     const char* type = "Other";
-    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0) type = "Video";
+    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0)
+        type = "Video";
     else if (strcmp(codec, "AAC") == 0 || strcmp(codec, "ADTS-AAC") == 0 || strcmp(codec, "MPEG1-A") == 0 ||
-               strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0) type = "Audio";
+             strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0)
+        type = "Audio";
     snprintf(h->pid_labels[pid], 128, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\",codec=\"%s\"}",
              h->config.input_label[0] ? h->config.input_label : "unknown", pid, type, codec);
 }
 
 void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
-    h->pid_seen[pid] = false; h->live->pid_packet_count[pid] = 0; h->live->pid_bitrate_bps[pid] = 0;
-    h->live->pid_cc_errors[pid] = 0; h->pid_bitrate_min[pid] = 0; h->pid_bitrate_max[pid] = 0;
-    h->ignore_next_cc[pid] = false; h->pid_width[pid] = 0; h->pid_height[pid] = 0;
-    h->pid_profile[pid] = 0; h->pid_audio_sample_rate[pid] = 0; h->pid_audio_channels[pid] = 0;
-    h->pid_gop_n[pid] = 0; h->pid_gop_min[pid] = 0xFFFFFFFF; h->pid_gop_max[pid] = 0;
-    h->pid_gop_ms[pid] = 0; h->pid_last_idr_ns[pid] = 0; h->pid_frame_num_valid[pid] = false;
+    h->pid_seen[pid] = false;
+    h->live->pid_packet_count[pid] = 0;
+    h->live->pid_bitrate_bps[pid] = 0;
+    h->live->pid_cc_errors[pid] = 0;
+    h->pid_bitrate_min[pid] = 0;
+    h->pid_bitrate_max[pid] = 0;
+    h->ignore_next_cc[pid] = false;
+    h->pid_width[pid] = 0;
+    h->pid_height[pid] = 0;
+    h->pid_profile[pid] = 0;
+    h->pid_audio_sample_rate[pid] = 0;
+    h->pid_audio_channels[pid] = 0;
+    h->pid_gop_n[pid] = 0;
+    h->pid_gop_min[pid] = 0xFFFFFFFF;
+    h->pid_gop_max[pid] = 0;
+    h->pid_gop_ms[pid] = 0;
+    h->pid_last_idr_ns[pid] = 0;
+    h->pid_frame_num_valid[pid] = false;
     if (h->pid_pes_buf[pid]) h->pid_pes_len[pid] = 0;
-    h->pid_eb_fill_q64[pid] = 0; h->pid_tb_fill_q64[pid] = 0; h->pid_mb_fill_q64[pid] = 0;
-    h->live->pid_eb_fill_bytes[pid] = 0; h->live->pid_eb_fill_pct[pid] = 0;
-    h->last_buffer_leak_vstc[pid] = 0; h->pid_status[pid] = TSA_STATUS_VALID;
+    h->pid_eb_fill_q64[pid] = 0;
+    h->pid_tb_fill_q64[pid] = 0;
+    h->pid_mb_fill_q64[pid] = 0;
+    h->live->pid_eb_fill_bytes[pid] = 0;
+    h->live->pid_eb_fill_pct[pid] = 0;
+    h->last_buffer_leak_vstc[pid] = 0;
+    h->pid_status[pid] = TSA_STATUS_VALID;
 }
 
 int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
@@ -177,13 +197,24 @@ int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
         } else {
             int ev = -1;
             for (int i = 0; i < MAX_ACTIVE_PIDS; i++) {
-                bool prot = false; uint16_t c = h->pid_active_list[i];
-                if (c <= 1 || h->pid_is_pmt[c]) prot = true;
-                else for (int j = 0; j < 16; j++) if (h->config.protected_pids[j] == c) { prot = true; break; }
-                if (!prot) { ev = i; break; }
+                bool prot = false;
+                uint16_t c = h->pid_active_list[i];
+                if (c <= 1 || h->pid_is_pmt[c])
+                    prot = true;
+                else
+                    for (int j = 0; j < 16; j++)
+                        if (h->config.protected_pids[j] == c) {
+                            prot = true;
+                            break;
+                        }
+                if (!prot) {
+                    ev = i;
+                    break;
+                }
             }
             if (ev == -1) ev = 0;
-            uint16_t ep = h->pid_active_list[ev]; h->pid_to_active_idx[ep] = -1;
+            uint16_t ep = h->pid_active_list[ev];
+            h->pid_to_active_idx[ep] = -1;
             tsa_reset_pid_stats(h, ep);
             for (int i = ev; i < MAX_ACTIVE_PIDS - 1; i++) {
                 h->pid_active_list[i] = h->pid_active_list[i + 1];
@@ -219,16 +250,19 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         if (pointer + 1 < len) {
             if (f->active && f->len > 0) {
                 memcpy(f->buffer + f->len, payload + 1, pointer);
-                f->len += pointer; f->complete = true;
+                f->len += pointer;
+                f->complete = true;
             }
-            f->active = true; f->len = len - 1 - pointer;
+            f->active = true;
+            f->len = len - 1 - pointer;
             memcpy(f->buffer, payload + 1 + pointer, f->len);
         }
     } else if (f->active) {
         if (f->len + len < 4096) {
             memcpy(f->buffer + f->len, payload, len);
             f->len += len;
-        } else f->active = false;
+        } else
+            f->active = false;
     }
     if (f->active && f->len >= 3) {
         int sl = ((f->buffer[1] & 0x0F) << 8) | f->buffer[2];
@@ -251,10 +285,14 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         if (!skip_parsing) {
             uint32_t crc = tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
             if (crc == 0) {
-                if (tid == 0x00) process_pat(h, f->buffer, h->stc_ns);
-                else if (tid == 0x02) process_pmt(h, pid, f->buffer, h->stc_ns);
-                else if (tid == 0x40) process_nit(h, f->buffer, h->stc_ns);
-                else if (tid == 0x42) process_sdt(h, f->buffer, h->stc_ns);
+                if (tid == 0x00)
+                    process_pat(h, f->buffer, h->stc_ns);
+                else if (tid == 0x02)
+                    process_pmt(h, pid, f->buffer, h->stc_ns);
+                else if (tid == 0x40)
+                    process_nit(h, f->buffer, h->stc_ns);
+                else if (tid == 0x42)
+                    process_sdt(h, f->buffer, h->stc_ns);
 
                 if (has_version) {
                     f->last_ver = ver;
@@ -267,6 +305,7 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
                 tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
             }
         }
-        f->active = false; f->complete = false;
+        f->active = false;
+        f->complete = false;
     }
 }

@@ -1,11 +1,12 @@
+#include "tsa_webhook.h"
+
+#include <curl/curl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
-#include <unistd.h>
 #include <time.h>
-#include <curl/curl.h>
-#include "tsa_webhook.h"
+#include <unistd.h>
 
 #define MAX_WEBHOOK_QUEUE 1024
 #define MAX_RETRIES 3
@@ -41,21 +42,24 @@ struct tsa_webhook_engine {
 
 static uint32_t simple_hash(const char* s1, const char* s2) {
     uint32_t h = 0;
-    if (s1) while (*s1) h = h * 31 + (uint32_t)(*s1++);
-    if (s2) while (*s2) h = h * 31 + (uint32_t)(*s2++);
+    if (s1)
+        while (*s1) h = h * 31 + (uint32_t)(*s1++);
+    if (s2)
+        while (*s2) h = h * 31 + (uint32_t)(*s2++);
     return h;
 }
 
-static void send_now_locked(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type, const char* message, uint32_t count) {
+static void send_now_locked(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type,
+                            const char* message, uint32_t count) {
     char buf[2048];
     if (count > 1) {
         snprintf(buf, sizeof(buf),
-            "{\"stream_id\":\"%s\",\"event\":\"%s\",\"message\":\"%s (occurred %u times)\",\"timestamp\":%lu,\"summary\":true}",
-            stream_id, event_type, message, count, (unsigned long)time(NULL));
+                 "{\"stream_id\":\"%s\",\"event\":\"%s\",\"message\":\"%s (occurred %u "
+                 "times)\",\"timestamp\":%lu,\"summary\":true}",
+                 stream_id, event_type, message, count, (unsigned long)time(NULL));
     } else {
-        snprintf(buf, sizeof(buf),
-            "{\"stream_id\":\"%s\",\"event\":\"%s\",\"message\":\"%s\",\"timestamp\":%lu}",
-            stream_id, event_type, message, (unsigned long)time(NULL));
+        snprintf(buf, sizeof(buf), "{\"stream_id\":\"%s\",\"event\":\"%s\",\"message\":\"%s\",\"timestamp\":%lu}",
+                 stream_id, event_type, message, (unsigned long)time(NULL));
     }
 
     if (eng->count < MAX_WEBHOOK_QUEUE) {
@@ -83,8 +87,9 @@ static void* webhook_worker(void* arg) {
 
         for (int i = 0; i < SUPPRESSION_CACHE_SIZE; i++) {
             if (eng->cache[i].count > 1 && (now_ns - eng->cache[i].last_sent_ns >= COOLDOWN_NS)) {
-                send_now_locked(eng, eng->cache[i].last_stream_id, eng->cache[i].last_event_type, eng->cache[i].last_message, eng->cache[i].count);
-                eng->cache[i].count = 0; // Reset
+                send_now_locked(eng, eng->cache[i].last_stream_id, eng->cache[i].last_event_type,
+                                eng->cache[i].last_message, eng->cache[i].count);
+                eng->cache[i].count = 0;  // Reset
             }
         }
 
@@ -92,7 +97,7 @@ static void* webhook_worker(void* arg) {
         if (eng->count == 0 && eng->running) {
             struct timespec wait_time;
             clock_gettime(CLOCK_REALTIME, &wait_time);
-            wait_time.tv_sec += 1; // Wake up every second to check for flushes
+            wait_time.tv_sec += 1;  // Wake up every second to check for flushes
             pthread_cond_timedwait(&eng->cond, &eng->lock, &wait_time);
         }
 
@@ -146,7 +151,8 @@ void tsa_webhook_destroy(tsa_webhook_engine_t* eng) {
     free(eng);
 }
 
-void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type, const char* message) {
+void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type,
+                            const char* message) {
     if (!eng) return;
     uint32_t h = simple_hash(stream_id, event_type);
 
@@ -169,8 +175,12 @@ void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, co
 
     // New or fresh window
     int idx = -1;
-    for(int i=0; i<SUPPRESSION_CACHE_SIZE; i++) if(eng->cache[i].count == 0) { idx = i; break; }
-    if(idx == -1) idx = (int)(now % SUPPRESSION_CACHE_SIZE); // Random replacement
+    for (int i = 0; i < SUPPRESSION_CACHE_SIZE; i++)
+        if (eng->cache[i].count == 0) {
+            idx = i;
+            break;
+        }
+    if (idx == -1) idx = (int)(now % SUPPRESSION_CACHE_SIZE);  // Random replacement
 
     eng->cache[idx].hash = h;
     eng->cache[idx].last_sent_ns = now;

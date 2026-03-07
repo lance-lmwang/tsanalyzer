@@ -6,17 +6,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa_internal.h"
 
 static const char* scte35_command_name(uint8_t type) {
     switch (type) {
-        case 0x00: return "Splice Null";
-        case 0x04: return "Splice Schedule";
-        case 0x05: return "Splice Insert";
-        case 0x06: return "Time Signal";
-        case 0x07: return "Bandwidth Reservation";
-        case 0xff: return "Private Command";
-        default: return "Reserved";
+        case 0x00:
+            return "Splice Null";
+        case 0x04:
+            return "Splice Schedule";
+        case 0x05:
+            return "Splice Insert";
+        case 0x06:
+            return "Time Signal";
+        case 0x07:
+            return "Bandwidth Reservation";
+        case 0xff:
+            return "Private Command";
+        default:
+            return "Reserved";
     }
 }
 
@@ -31,9 +39,9 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
     br_init(&r, p, len);
     br_skip(&r, 3 * 8); /* Skip table_id and section_length */
 
-    br_read(&r, 8);  /* protocol_version */
-    br_read(&r, 1);  /* encrypted_packet */
-    br_read(&r, 6);  /* encryption_algorithm */
+    br_read(&r, 8); /* protocol_version */
+    br_read(&r, 1); /* encrypted_packet */
+    br_read(&r, 6); /* encryption_algorithm */
     uint64_t pts_adjust = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
 
     br_read(&r, 8);  /* cw_index */
@@ -44,8 +52,7 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
     const char* cmd_name = scte35_command_name(splice_command_type);
 
     printf("[%s] SCTE-35: 0x%04x | Command: %s (0x%02x) | Adj: %lu\n",
-           h->config.input_label[0] ? h->config.input_label : "GLOBAL",
-           pid, cmd_name, splice_command_type, pts_adjust);
+           h->config.input_label[0] ? h->config.input_label : "GLOBAL", pid, cmd_name, splice_command_type, pts_adjust);
 
     if (splice_command_type == 0x05) { /* Splice Insert */
         uint32_t event_id = br_read(&r, 32);
@@ -58,8 +65,8 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
             bool immediate = br_read(&r, 1);
             br_read(&r, 4); /* Reserved */
 
-            printf("  EventID: 0x%08x | Out-of-Net: %d | Program-Splice: %d | Immediate: %d\n",
-                   event_id, out_of_network, program_splice, immediate);
+            printf("  EventID: 0x%08x | Out-of-Net: %d | Program-Splice: %d | Immediate: %d\n", event_id,
+                   out_of_network, program_splice, immediate);
 
             if (program_splice && !immediate) {
                 if (br_read(&r, 1)) { /* time_specified_flag */
@@ -68,7 +75,8 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
 
                     // We broadcast this target PTS to all video PIDs for them to audit their next IDR frame
                     for (int i = 0; i < TS_PID_MAX; i++) {
-                        if (h->pid_seen[i] && (h->pid_stream_type[i] == 0x1B || h->pid_stream_type[i] == 0x24)) { // H.264 or HEVC
+                        if (h->pid_seen[i] &&
+                            (h->pid_stream_type[i] == 0x1B || h->pid_stream_type[i] == 0x24)) {  // H.264 or HEVC
                             h->scte35_target_pts[i] = pts_time;
                         }
                     }
@@ -82,7 +90,7 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
             }
         }
     } else if (splice_command_type == 0x06) { /* Time Signal */
-        if (br_read(&r, 1)) { /* time_specified_flag */
+        if (br_read(&r, 1)) {                 /* time_specified_flag */
             uint64_t pts_time = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
             printf("  Time Signal PTS: %lu\n", pts_time);
         }

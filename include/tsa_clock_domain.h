@@ -16,7 +16,7 @@ typedef struct {
     uint64_t last_arrival_ns;
     uint64_t last_pcr_ns;
     uint64_t last_pts_ns;
-    
+
     // Drift state
     double drift_pcr_vs_wall_ppm;
     double drift_pts_vs_pcr_ppm;

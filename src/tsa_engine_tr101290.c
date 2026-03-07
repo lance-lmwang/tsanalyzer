@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa_internal.h"
 #include "tsa_plugin.h"
 
@@ -46,7 +47,8 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 
     // 2. Continuity Counter (CC) Check
     if (h->last_cc[pid] != 0x10 && !res->has_discontinuity) {
-        ts_cc_status_t s = cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
+        ts_cc_status_t s =
+            cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
 
         if (s == TS_CC_LOSS || s == TS_CC_OUT_OF_ORDER) {
             if (!h->ignore_next_cc[pid]) {
@@ -72,7 +74,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
         uint64_t last_pts_ns = h->pid_last_seen_vstc[pid];
         if (last_pts_ns > 0) {
             uint64_t diff_ns = h->stc_ns - last_pts_ns;
-            if (diff_ns > 700000000ULL) { // 700ms threshold
+            if (diff_ns > 700000000ULL) {  // 700ms threshold
                 if (h->live->pts_error.count == 0) h->live->pts_error.first_timestamp_ns = now;
                 h->live->pts_error.count++;
                 h->live->pts_error.last_timestamp_ns = now;
@@ -93,6 +95,6 @@ tsa_plugin_ops_t tr101290_ops = {
 };
 
 void tsa_register_tr101290_engine(tsa_handle_t* h) {
-    extern void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops);
+    extern void tsa_plugin_attach_instance(tsa_handle_t * h, tsa_plugin_ops_t * ops);
     tsa_plugin_attach_instance(h, &tr101290_ops);
 }

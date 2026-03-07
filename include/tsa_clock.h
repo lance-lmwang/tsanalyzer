@@ -1,8 +1,8 @@
 #ifndef TSA_CLOCK_H
 #define TSA_CLOCK_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <time.h>
 
 /**
@@ -25,12 +25,12 @@ typedef struct {
     bool initialized;
 
     /* Last observed PCR state (27MHz scale) */
-    uint64_t last_pcr_val;          /* Raw PCR value (27MHz) from packet */
-    uint64_t last_pcr_local_ns;     /* Local timestamp (ns) when last PCR was processed */
+    uint64_t last_pcr_val;      /* Raw PCR value (27MHz) from packet */
+    uint64_t last_pcr_local_ns; /* Local timestamp (ns) when last PCR was processed */
 
     /* Baseline reference for Overall Jitter (PCR_OJ) calculation */
-    uint64_t first_pcr_val;         /* Baseline PCR value */
-    uint64_t first_pcr_local_ns;    /* Baseline local timestamp (ns) */
+    uint64_t first_pcr_val;      /* Baseline PCR value */
+    uint64_t first_pcr_local_ns; /* Baseline local timestamp (ns) */
 
     /* TR 101 290 Metrics */
     uint64_t pcr_interval_max_ticks; /* Maximum observed PCR repetition interval */
@@ -46,10 +46,10 @@ typedef struct {
     /* Statistics */
     uint64_t pcr_count;
     uint32_t priority_1_errors;
-      /* TR 101 290 1.1 (PCR_error) repetition violation count */
+    /* TR 101 290 1.1 (PCR_error) repetition violation count */
 
     /* Discontinuity handling */
-    bool pending_discontinuity;      /* Set if a discontinuity was detected, waiting for next PCR */
+    bool pending_discontinuity; /* Set if a discontinuity was detected, waiting for next PCR */
 } tsa_clock_inspector_t;
 
 /**

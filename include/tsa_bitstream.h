@@ -1,8 +1,8 @@
 #ifndef TSA_BITSTREAM_H
 #define TSA_BITSTREAM_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct {
     const uint8_t* buf;

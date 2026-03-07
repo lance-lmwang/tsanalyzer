@@ -1,8 +1,8 @@
 #ifndef TSA_WEBHOOK_H
 #define TSA_WEBHOOK_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct tsa_webhook_engine tsa_webhook_engine_t;
 
@@ -26,6 +26,7 @@ void tsa_webhook_push(tsa_webhook_engine_t* eng, const char* json_msg);
 /**
  * Helper to push a simple error event.
  */
-void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type, const char* message);
+void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type,
+                            const char* message);
 
 #endif

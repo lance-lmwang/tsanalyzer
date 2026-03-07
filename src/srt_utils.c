@@ -7,7 +7,7 @@
 
 // Extended SRT URL Parser: srt://host:port?mode=caller&latency=200&passphrase=abc&pbkeylen=16
 int parse_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
-                      int* pbkeylen) {
+                  int* pbkeylen) {
     if (strncmp(url, "srt://", 6) != 0) return -1;
 
     char buf[256];

@@ -1,9 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
-#include "tsa_plugin.h"
 #include "tsa_internal.h"
+#include "tsa_plugin.h"
 
 typedef struct {
     tsa_handle_t* h;
@@ -48,11 +48,9 @@ static void scte35_reset(void* engine) {
     e->scte35_count = 0;
 }
 
-tsa_plugin_ops_t tsa_scte35_engine = {
-    .name = "SCTE35_PARSER",
-    .create = scte35_create,
-    .destroy = scte35_destroy,
-    .get_stream = scte35_get_stream,
-    .reset = scte35_reset,
-    .commit = NULL
-};
+tsa_plugin_ops_t tsa_scte35_engine = {.name = "SCTE35_PARSER",
+                                      .create = scte35_create,
+                                      .destroy = scte35_destroy,
+                                      .get_stream = scte35_get_stream,
+                                      .reset = scte35_reset,
+                                      .commit = NULL};

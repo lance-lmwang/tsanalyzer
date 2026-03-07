@@ -1,23 +1,23 @@
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <srt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <srt.h>
 
 #ifdef HAVE_PCAP
-#include <pcap.h>
+#include <netinet/if_ether.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
-#include <netinet/if_ether.h>
+#include <pcap.h>
 #endif
 
-#include "tsa_source.h"
 #include "tsa.h"
 #include "tsa_internal.h"
+#include "tsa_source.h"
 
 struct tsa_source {
     tsa_source_type_t type;
@@ -52,15 +52,15 @@ struct tsa_source {
 static int get_rtp_header_len(const uint8_t* p, int len) {
     if (len < 12) return 0;
     int size = 12;
-    size += 4 * (p[0] & 0x0F); // CSRC count
-    if (p[0] & 0x10) { // Extension bit
+    size += 4 * (p[0] & 0x0F);  // CSRC count
+    if (p[0] & 0x10) {          // Extension bit
         if (len < size + 4) return size;
         size += 4 + 4 * ((p[size + 2] << 8) | p[size + 3]);
     }
     return size;
 }
 
-static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, const u_char *pkt) {
+static void pcap_packet_callback(u_char* user, const struct pcap_pkthdr* h, const u_char* pkt) {
     tsa_source_t* src = (tsa_source_t*)user;
 
     // Pacing Logic: Simulate original capture speed
@@ -86,7 +86,7 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
     if (link_type == DLT_EN10MB) {
         offset = 14;
         if (h->caplen < 14) return;
-        uint16_t eth_type = ntohs(*(uint16_t *)(pkt + 12));
+        uint16_t eth_type = ntohs(*(uint16_t*)(pkt + 12));
         if (eth_type == 0x8100) {
             if (h->caplen < 18) return;
             offset += 4;
@@ -101,14 +101,14 @@ static void pcap_packet_callback(u_char *user, const struct pcap_pkthdr *h, cons
 
     if (h->caplen < offset + 20 + 8) return;
 
-    struct iphdr *ip = (struct iphdr *)(pkt + offset);
+    struct iphdr* ip = (struct iphdr*)(pkt + offset);
     if (ip->version != 4 || ip->protocol != IPPROTO_UDP) return;
 
     int ip_hdr_len = ip->ihl * 4;
     if (h->caplen < offset + ip_hdr_len + 8) return;
 
-    struct udphdr *udp = (struct udphdr *)(pkt + offset + ip_hdr_len);
-    uint8_t *payload = (uint8_t *)udp + 8;
+    struct udphdr* udp = (struct udphdr*)(pkt + offset + ip_hdr_len);
+    uint8_t* payload = (uint8_t*)udp + 8;
     int payload_len = ntohs(udp->len) - 8;
 
     if (payload_len <= 0 || (offset + ip_hdr_len + 8 + payload_len) > (int)h->caplen) return;
@@ -230,11 +230,12 @@ static void* srt_thread(void* arg) {
     return NULL;
 }
 
-tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port, const tsa_source_callbacks_t* cbs, void* user_data) {
+tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port,
+                                const tsa_source_callbacks_t* cbs, void* user_data) {
     tsa_source_t* src = calloc(1, sizeof(tsa_source_t));
     src->type = type;
-    if (url) strncpy(src->url, url, sizeof(src->url)-1);
-    if (filter_ip) strncpy(src->filter_ip, filter_ip, sizeof(src->filter_ip)-1);
+    if (url) strncpy(src->url, url, sizeof(src->url) - 1);
+    if (filter_ip) strncpy(src->filter_ip, filter_ip, sizeof(src->filter_ip) - 1);
     src->filter_port = filter_port;
     src->cbs = *cbs;
     src->user_data = user_data;

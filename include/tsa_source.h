@@ -1,18 +1,13 @@
 #ifndef TSA_SOURCE_H
 #define TSA_SOURCE_H
 
-#include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include "tsa_event.h"
 
-typedef enum {
-    TSA_SOURCE_UDP,
-    TSA_SOURCE_SRT,
-    TSA_SOURCE_FILE,
-    TSA_SOURCE_PCAP,
-    TSA_SOURCE_HLS
-} tsa_source_type_t;
+typedef enum { TSA_SOURCE_UDP, TSA_SOURCE_SRT, TSA_SOURCE_FILE, TSA_SOURCE_PCAP, TSA_SOURCE_HLS } tsa_source_type_t;
 
 typedef struct tsa_source tsa_source_t;
 
@@ -31,8 +26,8 @@ typedef struct {
 } tsa_source_callbacks_t;
 
 /* HLS Ingest Internal API */
-void* tsa_hls_ingest_start(const char *url, const tsa_source_callbacks_t *cbs, void *user_data);
-void tsa_hls_ingest_stop(void *handle);
+void* tsa_hls_ingest_start(const char* url, const tsa_source_callbacks_t* cbs, void* user_data);
+void tsa_hls_ingest_stop(void* handle);
 
 /**
  * Create a new source instance.
@@ -41,7 +36,8 @@ void tsa_hls_ingest_stop(void *handle);
  * @param cbs Callbacks for data and status.
  * @param user_data Opaque pointer passed to callbacks.
  */
-tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port, const tsa_source_callbacks_t* cbs, void* user_data);
+tsa_source_t* tsa_source_create(tsa_source_type_t type, const char* url, const char* filter_ip, int filter_port,
+                                const tsa_source_callbacks_t* cbs, void* user_data);
 
 /**
  * Set a reactor for the source. If set, the source will use the reactor

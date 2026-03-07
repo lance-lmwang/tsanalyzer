@@ -1,8 +1,10 @@
+#include "tsa_units.h"
+
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include "tsa_units.h"
+
 #include "tsa_log.h"
 
 static uint64_t parse_with_unit(const char* s, const char** units, uint64_t* factors, int count, uint64_t def_factor) {
@@ -36,11 +38,12 @@ uint64_t tsa_units_to_ns(const char* s) {
 
 uint64_t tsa_units_to_size(const char* s) {
     const char* units[] = {"g", "m", "k", "b"};
-    uint64_t factors[] = {1024ULL*1024*1024, 1024ULL*1024, 1024ULL, 1ULL};
+    uint64_t factors[] = {1024ULL * 1024 * 1024, 1024ULL * 1024, 1024ULL, 1ULL};
     return parse_with_unit(s, units, factors, 4, 1ULL);
 }
 
 bool tsa_units_to_bool(const char* s) {
-    if (strcasecmp(s, "on") == 0 || strcasecmp(s, "true") == 0 || strcasecmp(s, "yes") == 0 || strcmp(s, "1") == 0) return true;
+    if (strcasecmp(s, "on") == 0 || strcasecmp(s, "true") == 0 || strcasecmp(s, "yes") == 0 || strcmp(s, "1") == 0)
+        return true;
     return false;
 }

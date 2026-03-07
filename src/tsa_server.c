@@ -10,8 +10,11 @@
 
 #include "mongoose.h"
 #include "tsa.h"
-#include "tsa_internal.h"
 #include "tsa_conf.h"
+#include "tsa_internal.h"
+#include "tsa_log.h"
+
+#define TAG "SERVER"
 
 extern void tsa_exporter_prom_v2(tsa_handle_t **handles, int count, char *buf, size_t sz);
 
@@ -54,7 +57,8 @@ static void *worker(void *arg) {
             int remaining = (int)len;
             while (remaining >= 188) {
                 tsa_process_packet(s->tsa, p, now);
-                p += 188; remaining -= 188;
+                p += 188;
+                remaining -= 188;
             }
         }
         if (now - last_commit > 100000000ULL) {
@@ -71,17 +75,18 @@ static tsa_full_conf_t g_sys_conf;
 
 static void apply_sys_conf() {
     g_http_port = g_sys_conf.http_listen_port > 0 ? g_sys_conf.http_listen_port : 8088;
-    
+
     pthread_mutex_lock(&g_nodes_lock);
     for (int i = 0; i < g_sys_conf.stream_count; i++) {
         if (g_node_count >= MAX_STREAMS) break;
         node_t *n = &g_nodes[g_node_count++];
-        strncpy(n->id, g_sys_conf.streams[i].id, 31); n->id[31] = '\0';
-        
+        strncpy(n->id, g_sys_conf.streams[i].id, 31);
+        n->id[31] = '\0';
+
         char *p_str = strrchr(g_sys_conf.streams[i].cfg.url, ':');
         n->port = p_str ? atoi(p_str + 1) : (19001 + g_node_count);
         n->active = true;
-        
+
         n->tsa = tsa_create(&g_sys_conf.streams[i].cfg);
         pthread_create(&n->thread, NULL, worker, n);
     }
@@ -92,7 +97,7 @@ static void load_config(const char *file) {
     if (tsa_conf_load(&g_sys_conf, file) == 0) {
         apply_sys_conf();
     } else {
-        fprintf(stderr, "Failed to load configuration file: %s\n", file);
+        tsa_error(TAG, "Failed to load configuration file: %s", file);
     }
 }
 
@@ -105,9 +110,8 @@ static void save_state() {
     for (int i = 0; i < g_node_count; i++) {
         if (!g_nodes[i].active) continue;
         if (!first) fprintf(fp, ",\n");
-        fprintf(fp, "    {\"id\": \"%s\", \"url\": \"%s\", \"alert_mask\": %llu, \"webhook_url\": \"%s\"}", 
-                g_nodes[i].id, g_nodes[i].tsa->config.url, 
-                (unsigned long long)g_nodes[i].tsa->config.alert.filter_mask,
+        fprintf(fp, "    {\"id\": \"%s\", \"url\": \"%s\", \"alert_mask\": %llu, \"webhook_url\": \"%s\"}",
+                g_nodes[i].id, g_nodes[i].tsa->config.url, (unsigned long long)g_nodes[i].tsa->config.alert.filter_mask,
                 g_nodes[i].tsa->config.alert.webhook_url);
         first = false;
     }
@@ -125,7 +129,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         tsa_handle_t *h_list[MAX_STREAMS];
         int count = 0;
         pthread_mutex_lock(&g_nodes_lock);
-        for (int i = 0; i < g_node_count; i++) if (g_nodes[i].active) h_list[count++] = g_nodes[i].tsa;
+        for (int i = 0; i < g_node_count; i++)
+            if (g_nodes[i].active) h_list[count++] = g_nodes[i].tsa;
         tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
         pthread_mutex_unlock(&g_nodes_lock);
         mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", resp);
@@ -137,21 +142,34 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             uint64_t mask = g_alert_mask;
 
             char *id_p = mg_json_get_str(hm->body, "$.id");
-            if (id_p) { strncpy(id, id_p, 31); id[31] = '\0'; free(id_p); }
+            if (id_p) {
+                strncpy(id, id_p, 31);
+                id[31] = '\0';
+                free(id_p);
+            }
 
             char *wh_p = mg_json_get_str(hm->body, "$.webhook_url");
-            if (wh_p) { strncpy(webhook, wh_p, 255); webhook[255] = '\0'; free(wh_p); }
-            else strncpy(webhook, g_webhook_url, 255);
+            if (wh_p) {
+                strncpy(webhook, wh_p, 255);
+                webhook[255] = '\0';
+                free(wh_p);
+            } else
+                strncpy(webhook, g_webhook_url, 255);
 
             char *mask_p = mg_json_get_str(hm->body, "$.alert_mask");
-            if (mask_p) { mask = strtoull(mask_p, NULL, 0); free(mask_p); }
+            if (mask_p) {
+                mask = strtoull(mask_p, NULL, 0);
+                free(mask_p);
+            }
 
             pthread_mutex_lock(&g_nodes_lock);
             if (g_node_count < MAX_STREAMS) {
                 node_t *n = &g_nodes[g_node_count++];
-                strncpy(n->id, id[0] ? id : "dynamic", 31); n->id[31] = '\0';
-                n->port = 19000 + g_node_count; n->active = true;
-                
+                strncpy(n->id, id[0] ? id : "dynamic", 31);
+                n->id[31] = '\0';
+                n->port = 19000 + g_node_count;
+                n->active = true;
+
                 tsa_config_t cfg = g_sys_conf.vhost_default;
                 cfg.op_mode = TSA_MODE_LIVE;
                 strncpy(cfg.input_label, n->id, 31);
@@ -159,13 +177,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 cfg.alert.filter_mask = mask;
                 n->tsa = tsa_create(&cfg);
                 pthread_create(&n->thread, NULL, worker, n);
-                pthread_mutex_unlock(&g_nodes_lock); // Unlock before calling save_state which re-locks
+                pthread_mutex_unlock(&g_nodes_lock);  // Unlock before calling save_state which re-locks
                 save_state();
-                printf("Stream created: %s on port %d\n", n->id, n->port); fflush(stdout);
+                printf("Stream created: %s on port %d\n", n->id, n->port);
+                fflush(stdout);
                 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\",\"port\":%d}", n->port);
             } else {
                 pthread_mutex_unlock(&g_nodes_lock);
-                printf("Stream creation failed: Full\n"); fflush(stdout);
+                printf("Stream creation failed: Full\n");
+                fflush(stdout);
                 mg_http_reply(c, 507, "", "Full");
             }
         } else {
@@ -189,13 +209,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             char sid[64] = "";
             int id_len = (int)(hm->uri.len - 16);
             if (id_len > 0 && id_len < 63) {
-                memcpy(sid, hm->uri.buf + 16, id_len); sid[id_len] = '\0';
+                memcpy(sid, hm->uri.buf + 16, id_len);
+                sid[id_len] = '\0';
                 pthread_mutex_lock(&g_nodes_lock);
-                for (int i = 0; i < g_node_count; i++) if (strcmp(g_nodes[i].id, sid) == 0) g_nodes[i].active = false;
+                for (int i = 0; i < g_node_count; i++)
+                    if (strcmp(g_nodes[i].id, sid) == 0) g_nodes[i].active = false;
                 pthread_mutex_unlock(&g_nodes_lock);
             }
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
-        } else mg_http_reply(c, 405, "", "Method Not Allowed");
+        } else
+            mg_http_reply(c, 405, "", "Method Not Allowed");
     } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
         char *snap_buf = calloc(1, 1024 * 1024);
         int off = snprintf(snap_buf, 1024 * 1024, "[");
@@ -227,7 +250,7 @@ int main(int argc, char **argv) {
     char addr[128];
     snprintf(addr, sizeof(addr), "http://0.0.0.0:%d", g_http_port);
     if (mg_http_listen(&mgr, addr, fn, NULL) == NULL) return 1;
-    printf("OK: HTTP Server is now active at %s/metrics\n", addr);
+    tsa_info(TAG, "OK: HTTP Server is now active at %s/metrics", addr);
     while (atomic_load(&g_run)) mg_mgr_poll(&mgr, 100);
     mg_mgr_free(&mgr);
     return 0;

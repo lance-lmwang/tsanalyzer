@@ -5,10 +5,10 @@
 
 typedef enum {
     TSA_TOKEN_EOF = 0,
-    TSA_TOKEN_WORD,     // e.g. "metrology", "on", "15Mbps"
-    TSA_TOKEN_LBRACE,   // '{'
-    TSA_TOKEN_RBRACE,   // '}'
-    TSA_TOKEN_SEMICOLON, // ';'
+    TSA_TOKEN_WORD,       // e.g. "metrology", "on", "15Mbps"
+    TSA_TOKEN_LBRACE,     // '{'
+    TSA_TOKEN_RBRACE,     // '}'
+    TSA_TOKEN_SEMICOLON,  // ';'
     TSA_TOKEN_ERROR
 } tsa_token_type_t;
 

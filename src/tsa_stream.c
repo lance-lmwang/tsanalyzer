@@ -1,4 +1,5 @@
 #include "tsa_stream.h"
+
 #include <string.h>
 
 void tsa_stream_init(tsa_stream_t* stream, void* self_ctx, void (*on_ts_cb)(void*, const uint8_t*)) {
@@ -70,8 +71,7 @@ void tsa_stream_send(tsa_stream_t* stream, const uint8_t* ts) {
     }
 }
 
-void tsa_stream_demux_set_callbacks(tsa_stream_t* stream,
-                                    void (*join_pid)(void*, uint16_t),
+void tsa_stream_demux_set_callbacks(tsa_stream_t* stream, void (*join_pid)(void*, uint16_t),
                                     void (*leave_pid)(void*, uint16_t)) {
     if (!stream) return;
     stream->join_pid = join_pid;

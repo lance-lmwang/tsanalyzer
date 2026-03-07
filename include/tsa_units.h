@@ -1,8 +1,8 @@
 #ifndef TSA_UNITS_H
 #define TSA_UNITS_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * Convert human readable bitrate (e.g. "15Mbps", "500k") to bps.

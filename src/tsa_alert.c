@@ -1,25 +1,42 @@
+#include "tsa_alert.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tsa_alert.h"
+
 #include "tsa_internal.h"
+#include "tsa_log.h"
 
 static uint64_t get_mask_for_id(tsa_alert_id_t id) {
     switch (id) {
-        case TSA_ALERT_SYNC:      return TSA_ALERT_MASK_P1_1_SYNC;
-        case TSA_ALERT_PAT:       return TSA_ALERT_MASK_P1_3_PAT;
-        case TSA_ALERT_PMT:       return TSA_ALERT_MASK_P1_5_PMT;
-        case TSA_ALERT_PID:       return TSA_ALERT_MASK_P1_6_PID;
-        case TSA_ALERT_CC:        return TSA_ALERT_MASK_P1_4_CC;
-        case TSA_ALERT_TRANSPORT: return TSA_ALERT_MASK_P2_1_TRANSPORT;
-        case TSA_ALERT_CRC:       return TSA_ALERT_MASK_P2_2_CRC;
-        case TSA_ALERT_PCR:       return TSA_ALERT_MASK_P2_3_PCR;
-        case TSA_ALERT_PTS:       return TSA_ALERT_MASK_P2_5_PTS;
-        case TSA_ALERT_TSTD:      return TSA_ALERT_MASK_TSTD;
-        case TSA_ALERT_ENTROPY:   return TSA_ALERT_MASK_ENTROPY;
-        case TSA_ALERT_SDT:       return TSA_ALERT_MASK_SDT;
-        case TSA_ALERT_NIT:       return TSA_ALERT_MASK_NIT;
-        default:                  return 0;
+        case TSA_ALERT_SYNC:
+            return TSA_ALERT_MASK_P1_1_SYNC;
+        case TSA_ALERT_PAT:
+            return TSA_ALERT_MASK_P1_3_PAT;
+        case TSA_ALERT_PMT:
+            return TSA_ALERT_MASK_P1_5_PMT;
+        case TSA_ALERT_PID:
+            return TSA_ALERT_MASK_P1_6_PID;
+        case TSA_ALERT_CC:
+            return TSA_ALERT_MASK_P1_4_CC;
+        case TSA_ALERT_TRANSPORT:
+            return TSA_ALERT_MASK_P2_1_TRANSPORT;
+        case TSA_ALERT_CRC:
+            return TSA_ALERT_MASK_P2_2_CRC;
+        case TSA_ALERT_PCR:
+            return TSA_ALERT_MASK_P2_3_PCR;
+        case TSA_ALERT_PTS:
+            return TSA_ALERT_MASK_P2_5_PTS;
+        case TSA_ALERT_TSTD:
+            return TSA_ALERT_MASK_TSTD;
+        case TSA_ALERT_ENTROPY:
+            return TSA_ALERT_MASK_ENTROPY;
+        case TSA_ALERT_SDT:
+            return TSA_ALERT_MASK_SDT;
+        case TSA_ALERT_NIT:
+            return TSA_ALERT_MASK_NIT;
+        default:
+            return 0;
     }
 }
 
@@ -35,10 +52,13 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
             s->status = TSA_ALERT_STATE_FIRING;
             s->needs_resolve_msg = true;
 
+            tsa_info("ALERT", "FIRING: %s Error detected on PID 0x%04x (stream=%s)", name, pid,
+                     h->config.input_label[0] ? h->config.input_label : "unknown");
+
             /* Check filter mask before sending webhook */
             uint64_t mask = get_mask_for_id(id);
             uint64_t user_mask = h->config.alert_filter_mask;
-            if (user_mask == 0) user_mask = TSA_ALERT_MASK_ALL; // Default: All enabled
+            if (user_mask == 0) user_mask = TSA_ALERT_MASK_ALL;  // Default: All enabled
 
             if (h->webhook && (user_mask & mask)) {
                 char msg[256];
@@ -51,7 +71,8 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
 
 void tsa_alert_check_resolutions(tsa_handle_t* h) {
     uint64_t now = h->stc_ns;
-    const char* names[] = {"SYNC", "PAT", "PMT", "PID", "CC", "CRC", "PCR", "TRANSPORT", "PTS", "TSTD", "ENTROPY", "SDT", "NIT"};
+    const char* names[] = {"SYNC",      "PAT", "PMT",  "PID",     "CC",  "CRC", "PCR",
+                           "TRANSPORT", "PTS", "TSTD", "ENTROPY", "SDT", "NIT"};
     const uint64_t RESOLVE_TIMEOUT_NS = TSA_TR101290_PID_TIMEOUT_NS;
 
     // Active Watchdogs for Repetition (TR 101 290)
@@ -74,6 +95,9 @@ void tsa_alert_check_resolutions(tsa_handle_t* h) {
         if (s->status == TSA_ALERT_STATE_FIRING) {
             if (now - s->last_occurrence_ns > RESOLVE_TIMEOUT_NS) {
                 s->status = TSA_ALERT_STATE_OFF;
+
+                tsa_info("ALERT", "RESOLVED: %s Error stabilized (stream=%s)", names[i],
+                         h->config.input_label[0] ? h->config.input_label : "unknown");
 
                 uint64_t mask = get_mask_for_id((tsa_alert_id_t)i);
                 uint64_t user_mask = h->config.alert_filter_mask;

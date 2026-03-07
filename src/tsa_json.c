@@ -1,6 +1,7 @@
-#include "tsa_internal.h"
 #include <stdio.h>
 #include <string.h>
+
+#include "tsa_internal.h"
 
 size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char* b, size_t s) {
     if (!sn || !b || s < 2048) return 0;
@@ -22,8 +23,8 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
         "\"master_health\":%.1f,"
         "\"engine_determinism\":{\"drops\":%llu,\"overruns\":%llu}},",
         sn->summary.signal_lock ? "true" : "false", sn->network_name, sn->service_name, sn->provider_name,
-        sn->predictive.master_health,
-        (unsigned long long)st->internal_analyzer_drop, (unsigned long long)st->worker_slice_overruns);
+        sn->predictive.master_health, (unsigned long long)st->internal_analyzer_drop,
+        (unsigned long long)st->worker_slice_overruns);
 
     // Tier 2: Transport & Link Integrity (SRT/MDI)
     SAFE_JSON(
@@ -44,17 +45,23 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
         "\"pts_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu},"
         "\"crc_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu},"
         "\"transport_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu}}},",
-        (unsigned long long)st->sync_loss.count, (unsigned long long)st->sync_loss.first_timestamp_ns, (unsigned long long)st->sync_loss.last_timestamp_ns,
-        (unsigned long long)st->pat_error.count, (unsigned long long)st->pat_error.first_timestamp_ns, (unsigned long long)st->pat_error.last_timestamp_ns,
-        (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.first_timestamp_ns, (unsigned long long)st->cc_error.last_timestamp_ns,
-        (unsigned long long)st->pmt_error.count, (unsigned long long)st->pmt_error.first_timestamp_ns, (unsigned long long)st->pmt_error.last_timestamp_ns,
-        (unsigned long long)st->pid_error.count, (unsigned long long)st->pid_error.first_timestamp_ns, (unsigned long long)st->pid_error.last_timestamp_ns,
-        st->pcr_jitter_avg_ns / 1000000.0,
+        (unsigned long long)st->sync_loss.count, (unsigned long long)st->sync_loss.first_timestamp_ns,
+        (unsigned long long)st->sync_loss.last_timestamp_ns, (unsigned long long)st->pat_error.count,
+        (unsigned long long)st->pat_error.first_timestamp_ns, (unsigned long long)st->pat_error.last_timestamp_ns,
+        (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.first_timestamp_ns,
+        (unsigned long long)st->cc_error.last_timestamp_ns, (unsigned long long)st->pmt_error.count,
+        (unsigned long long)st->pmt_error.first_timestamp_ns, (unsigned long long)st->pmt_error.last_timestamp_ns,
+        (unsigned long long)st->pid_error.count, (unsigned long long)st->pid_error.first_timestamp_ns,
+        (unsigned long long)st->pid_error.last_timestamp_ns, st->pcr_jitter_avg_ns / 1000000.0,
         st->pcr_accuracy_ns_piecewise / 1000000.0, (unsigned long long)st->last_pcr_interval_bitrate_bps,
-        (unsigned long long)st->pcr_repetition_error.count, (unsigned long long)st->pcr_repetition_error.first_timestamp_ns, (unsigned long long)st->pcr_repetition_error.last_timestamp_ns,
-        (unsigned long long)st->pts_error.count, (unsigned long long)st->pts_error.first_timestamp_ns, (unsigned long long)st->pts_error.last_timestamp_ns,
-        (unsigned long long)st->crc_error.count, (unsigned long long)st->crc_error.first_timestamp_ns, (unsigned long long)st->crc_error.last_timestamp_ns,
-        (unsigned long long)st->transport_error.count, (unsigned long long)st->transport_error.first_timestamp_ns, (unsigned long long)st->transport_error.last_timestamp_ns);
+        (unsigned long long)st->pcr_repetition_error.count,
+        (unsigned long long)st->pcr_repetition_error.first_timestamp_ns,
+        (unsigned long long)st->pcr_repetition_error.last_timestamp_ns, (unsigned long long)st->pts_error.count,
+        (unsigned long long)st->pts_error.first_timestamp_ns, (unsigned long long)st->pts_error.last_timestamp_ns,
+        (unsigned long long)st->crc_error.count, (unsigned long long)st->crc_error.first_timestamp_ns,
+        (unsigned long long)st->crc_error.last_timestamp_ns, (unsigned long long)st->transport_error.count,
+        (unsigned long long)st->transport_error.first_timestamp_ns,
+        (unsigned long long)st->transport_error.last_timestamp_ns);
 
     // Tier 5/6: Essence & Payload Dynamics
     SAFE_JSON(
@@ -80,10 +87,12 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
 
         const char* p_st = tsa_get_pid_type_name(h, p->pid);
         if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0) {
-            SAFE_JSON(",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"level\":%u,\"chroma_format\":%u,\"bit_depth\":%u,\"exact_fps\":%.3f,\"gop_n\":%u,\"gop_ms\":%u,\"has_cea708\":"
-                      "%s,\"has_scte35\":%s}",
-                      p->width, p->height, p->profile, p->level, p->chroma_format, p->bit_depth, p->exact_fps, p->gop_n, p->gop_ms, p->has_cea708 ? "true" : "false",
-                      p->has_scte35 ? "true" : "false");
+            SAFE_JSON(
+                ",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"level\":%u,\"chroma_format\":%u,"
+                "\"bit_depth\":%u,\"exact_fps\":%.3f,\"gop_n\":%u,\"gop_ms\":%u,\"has_cea708\":"
+                "%s,\"has_scte35\":%s}",
+                p->width, p->height, p->profile, p->level, p->chroma_format, p->bit_depth, p->exact_fps, p->gop_n,
+                p->gop_ms, p->has_cea708 ? "true" : "false", p->has_scte35 ? "true" : "false");
         }
 
         SAFE_JSON("}");

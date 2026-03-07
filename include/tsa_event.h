@@ -32,4 +32,4 @@ int tsa_reactor_del(tsa_reactor_t* reactor, tsa_reactor_event_t* event);
 // Update event subscriptions (e.g. if you added on_write callback dynamically).
 int tsa_reactor_mod(tsa_reactor_t* reactor, tsa_reactor_event_t* event);
 
-#endif // TSA_EVENT_H
+#endif  // TSA_EVENT_H

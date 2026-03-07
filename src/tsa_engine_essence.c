@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa_internal.h"
 #include "tsa_plugin.h"
 
@@ -56,8 +57,8 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
 
                 const char* st = tsa_get_pid_type_name(h, pid);
                 bool is_video = (strcmp(st, "H.264") == 0 || strcmp(st, "HEVC") == 0 || strcmp(st, "MPEG2-V") == 0);
-                bool is_audio = (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 ||
-                                 strcmp(st, "MPEG1-A") == 0 || strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0);
+                bool is_audio = (strcmp(st, "AAC") == 0 || strcmp(st, "ADTS-AAC") == 0 || strcmp(st, "MPEG1-A") == 0 ||
+                                 strcmp(st, "MPEG2-A") == 0 || strcmp(st, "AC3") == 0);
 
                 if (is_video) {
                     h->last_v_pts = res->pts;
@@ -82,7 +83,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
             h->pid_pes_len[pid] += res->payload_len;
 
             h->pid_eb_fill_q64[pid] += INT_TO_Q64_64(res->payload_len);
-            if (h->pid_eb_fill_q64[pid] > INT_TO_Q64_64(1200000)) { // T-STD standard capacity fallback
+            if (h->pid_eb_fill_q64[pid] > INT_TO_Q64_64(1200000)) {  // T-STD standard capacity fallback
                 tsa_push_event(h, TSA_EVENT_TSTD_OVERFLOW, pid, 0);
             }
         }
@@ -97,6 +98,6 @@ tsa_plugin_ops_t essence_ops = {
 };
 
 void tsa_register_essence_engine(tsa_handle_t* h) {
-    extern void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops);
+    extern void tsa_plugin_attach_instance(tsa_handle_t * h, tsa_plugin_ops_t * ops);
     tsa_plugin_attach_instance(h, &essence_ops);
 }

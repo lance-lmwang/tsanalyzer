@@ -1,6 +1,10 @@
-#include "tsa_internal.h"
 #include <stdio.h>
 #include <string.h>
+
+#include "tsa_internal.h"
+#include "tsa_log.h"
+
+#define TAG "CORE"
 
 void tsa_render_dashboard(tsa_handle_t* h) {
     if (!h) return;
@@ -72,6 +76,9 @@ void tsa_render_dashboard(tsa_handle_t* h) {
         }
         printf(" [%10llu] %-15s PID 0x%04x  Value: %llu\n", (unsigned long long)ev->timestamp_ns / 1000000ULL, type_str,
                ev->pid, (unsigned long long)ev->value);
+
+        tsa_info(TAG, "EVENT: %s on PID 0x%04x (stream=%s)", type_str, ev->pid, h->config.input_label);
+
         tail++;
     }
     atomic_store_explicit(&h->event_q->tail, tail, memory_order_release);

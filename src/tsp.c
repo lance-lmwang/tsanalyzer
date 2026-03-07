@@ -114,8 +114,8 @@ static void* tx_loop(void* arg) {
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
 
         if (head - tail < (uint64_t)BATCH_SIZE) {
-            usleep(100); // Wait for enough packets to form a batch
-            clock_gettime(CLOCK_MONOTONIC, &next_tx_time); // Reset pacing clock on underflow
+            usleep(100);                                    // Wait for enough packets to form a batch
+            clock_gettime(CLOCK_MONOTONIC, &next_tx_time);  // Reset pacing clock on underflow
             continue;
         }
 
