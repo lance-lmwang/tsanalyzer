@@ -32,7 +32,7 @@
 #define MAX_CONNS 4096
 #define HTTP_PORT "8088"
 #define PACKET_BUF_SIZE 65536
-#define ANA_QUEUE_SIZE 512
+#define ANA_QUEUE_SIZE 4096
 
 typedef enum { CONN_UDP, CONN_SRT_LISTENER, CONN_SRT_CLIENT } conn_type_t;
 
@@ -70,6 +70,7 @@ static void load_config(const char* file) {
     g_sys_conf.http_listen_port = 8088;
     g_sys_conf.srt_listen_port = 9000;
     g_sys_conf.worker_threads = 16;
+    g_sys_conf.worker_slice_us = 2000; // Default 2ms
 
     if (tsa_conf_load(&g_sys_conf, file) != 0) {
         tsa_error(TAG, "Failed to load configuration: %s. Using internal defaults.", file);
@@ -147,7 +148,7 @@ static void* worker_thread(void* arg) {
     (void)arg;
     ts_packet_t pkt;
     uint32_t stream_id;
-    uint64_t slice_cycles = 500 * g_cycles_per_us;  // 500us quota
+    uint64_t slice_cycles = g_sys_conf.worker_slice_us * g_cycles_per_us;
 
     while (atomic_load(&g_run)) {
         if (mpmc_queue_pop(g_ready_queue, &stream_id)) {
@@ -177,7 +178,7 @@ static void* worker_thread(void* arg) {
                     }
                 }
 
-                if (drained > 0 || (now > c->last_commit_ns && (now - c->last_commit_ns) > 100000000ULL)) {
+                if (now > c->last_commit_ns && (now - c->last_commit_ns) >= 100000000ULL) {
                     tsa_commit_snapshot(c->tsa, now);
                     c->last_commit_ns = now;
                 }
@@ -355,6 +356,17 @@ static void* io_thread(void* arg) {
 static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
+
+        if (mg_strcasecmp(hm->method, mg_str("OPTIONS")) == 0) {
+            mg_http_reply(c, 200,
+                          "Access-Control-Allow-Origin: *\r\n"
+                          "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                          "Access-Control-Allow-Headers: Content-Type\r\n"
+                          "Content-Length: 0\r\n",
+                          "");
+            return;
+        }
+
         if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
             mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
             static char resp[8 * 1024 * 1024];

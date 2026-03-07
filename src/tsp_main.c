@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "tsp.h"
+#include "tsa_log.h"
 
 static volatile sig_atomic_t keep_running = 1;
 
@@ -33,13 +34,15 @@ void print_usage(const char* prog) {
 }
 
 static void print_stats(tsp_handle_t* h, uint32_t ts_per_udp) {
-    uint64_t total_p, drops, det_rate, pps;
+    uint64_t total_ts, drops, det_rate, udp_pps;
     int64_t max_j, min_j;
-    if (tsp_get_stats(h, &total_p, &max_j, &min_j, &drops, &det_rate, &pps) != 0) return;
-    double cur_mbps = (double)pps * ts_per_udp * 188.0 * 8.0 / 1000000.0;
-    printf("Pkts: %lu, PPS: %lu, Cur Rate: %.2f Mbps, PCR Rate: %.2f Mbps, Jitter: %ld/%ld ns, Drops: %lu\n", total_p,
-           pps, cur_mbps, (double)det_rate / 1000000.0, max_j, min_j, drops);
-    fflush(stdout);
+    if (tsp_get_stats(h, &total_ts, &max_j, &min_j, &drops, &det_rate, &udp_pps) != 0) return;
+
+    // Physical bitrate = (UDP Packets/sec) * (TS packets per UDP) * (TS packet size) * 8
+    double cur_mbps = (double)udp_pps * ts_per_udp * 188.0 * 8.0 / 1000000.0;
+
+    tsa_info("STATS", "Pkts: %lu, PPS: %lu, Cur Rate: %.2f Mbps, PCR Rate: %.2f Mbps, Drops: %lu",
+             total_ts, udp_pps, cur_mbps, (double)det_rate / 1000000.0, drops);
 }
 
 int main(int argc, char* argv[]) {
@@ -105,13 +108,13 @@ int main(int argc, char* argv[]) {
     }
 
     if ((cfg.mode != TSPACER_MODE_PCR && cfg.bitrate == 0) || (cfg.dest_ip == NULL && cfg.url == NULL)) {
-        fprintf(stderr, "Error: Missing required arguments.\n");
+        tsa_error("MAIN", "Error: Missing required arguments.");
         print_usage(argv[0]);
         return 1;
     }
 
     if (cfg.dest_ip != NULL && cfg.port == 0) {
-        fprintf(stderr, "Error: UDP port required when using IP.\n");
+        tsa_error("MAIN", "Error: UDP port required when using IP.");
         print_usage(argv[0]);
         return 1;
     }
@@ -124,19 +127,19 @@ int main(int argc, char* argv[]) {
     if (input_file) {
         in = fopen(input_file, "rb");
         if (!in) {
-            fprintf(stderr, "[FATAL ERROR] Cannot open input TS file: '%s'. Reason: %s\n", input_file, strerror(errno));
+            tsa_error("MAIN", "Cannot open input TS file: '%s'. Reason: %s", input_file, strerror(errno));
             return 1;
         }
     }
 
     tsp_handle_t* h = tsp_create(&cfg);
     if (!h) {
-        fprintf(stderr, "tsp_create failed\n");
+        tsa_error("MAIN", "tsp_create failed");
         return 1;
     }
     int start_err = tsp_start(h);
     if (start_err != 0) {
-        fprintf(stderr, "tsp_start failed: %d (%s)\n", start_err, strerror(start_err));
+        tsa_error("MAIN", "tsp_start failed: %d (%s)", start_err, strerror(start_err));
         return 1;
     }
 
@@ -147,32 +150,33 @@ int main(int argc, char* argv[]) {
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
-    uint8_t buf[188 * 100];
+    uint8_t buf[188 * 5000]; // 940KB buffer
     uint64_t last_stats_ns = 0;
-    printf("TsPacer started. Bitrate: %lu bps, Dest: %s:%d\n", cfg.bitrate, cfg.dest_ip, cfg.port);
-
-    struct pollfd pfd = {.fd = fileno(in), .events = POLLIN};
+    tsa_info("MAIN", "TsPacer started. Bitrate: %lu bps, Dest: %s:%d", cfg.bitrate, cfg.dest_ip ? cfg.dest_ip : "SRT", cfg.port);
 
     while (keep_running) {
-        int ret = poll(&pfd, 1, 10);
-        if (ret > 0 && (pfd.revents & POLLIN)) {
-            size_t n = fread(buf, 1, sizeof(buf), in);
-            if (n > 0) {
-                size_t pkts = n / 188;
-                int enq = 0;
-                while (keep_running && enq < (int)pkts) {
-                    int r = tsp_enqueue(h, buf + (enq * 188), (size_t)((int)pkts - enq));
-                    if (r > 0)
-                        enq += r;
-                    else
-                        usleep(1000);
-                }
-            } else if (feof(in)) {
-                if (input_file && loop_file)
-                    fseek(in, 0, SEEK_SET);
+        size_t n = fread(buf, 1, sizeof(buf), in);
+        if (n > 0) {
+            size_t pkts = n / 188;
+            int enq = 0;
+            while (keep_running && enq < (int)pkts) {
+                int r = tsp_enqueue(h, buf + (enq * 188), (size_t)((int)pkts - enq));
+                if (r > 0)
+                    enq += r;
                 else
-                    break;
+                    usleep(100);
             }
+        } else if (feof(in)) {
+            if (input_file && loop_file) {
+                fseek(in, 0, SEEK_SET);
+                // No sleep here, loop immediately to keep pacer fed
+            } else
+                break;
+        } else if (ferror(in)) {
+            break;
+        } else {
+            // For pipes/stdin, might need a small sleep if no data yet
+            usleep(1000);
         }
 
         struct timespec ts;

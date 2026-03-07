@@ -4,7 +4,9 @@ set -u
 
 PORT_API=8088
 PORT_UDP=19001
-SAMPLE_TS="sample/test.ts"
+SAMPLE_TS="./sample/test.ts"
+[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="../sample/test.ts"
+[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="/home/lmwang/dev/sample/test.ts"
 
 echo ">>> TsAnalyzer: Professional Metrology Test (Dual-Rate Monitor via CLI)"
 

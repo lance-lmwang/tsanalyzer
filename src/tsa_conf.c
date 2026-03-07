@@ -129,7 +129,11 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 conf->worker_threads = atoi(p.lookahead.text);
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
-            } else if (strcmp(word, "stream") == 0) {
+            } else if (strcmp(word, "worker_slice_us") == 0) {
+                conf->worker_slice_us = atoi(p.lookahead.text);
+                next_token(&p);
+                match(&p, TSA_TOKEN_SEMICOLON);
+            } else if (strcmp(word, "vhost") == 0) {
                 char id[TSA_ID_MAX];
                 snprintf(id, sizeof(id), "%s", p.lookahead.text);
                 next_token(&p);

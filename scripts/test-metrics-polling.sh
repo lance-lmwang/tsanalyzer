@@ -6,7 +6,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 UDP_PORT=1235
-SAMPLE_FILE="sample/test.ts"
+SAMPLE_FILE="./sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 METRICS_URL="http://localhost:8000/metrics"
 
 # 1. Start tsa

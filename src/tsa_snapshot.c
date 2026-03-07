@@ -4,26 +4,29 @@
 
 #include "tsa_internal.h"
 
-static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t stc_dt) {
-    /* L2: PCR-Locked Golden Standard Bitrate
-     * Ignore very small windows (<100ms) to prevent initialization spikes. */
-    if (stc_dt < 100000000ULL) return;
+static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t wall_dt) {
+    /* L2: Ingress Physical Bitrate
+     * Use wall-clock time delta for actual throughput measurement. */
+    if (wall_dt < 10000000ULL) return; // Need at least 10ms
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
     if (dp > 0) {
-        uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / stc_dt);
+        uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / wall_dt);
 
-        /* Bitrate Warm-up: Use instant value for first lock, then EMA.
-         * Also ignore tiny packet counts that might lead to aliasing. */
         if (h->live->physical_bitrate_bps == 0) {
-            if (h->live->total_ts_packets > 5000) h->live->physical_bitrate_bps = instant_br;
+            if (h->live->total_ts_packets > 1000) h->live->physical_bitrate_bps = instant_br;
         } else {
-            h->live->physical_bitrate_bps = (uint64_t)(0.1 * instant_br + 0.9 * h->live->physical_bitrate_bps);
+            /* Smooth ingress bitrate */
+            h->live->physical_bitrate_bps = (uint64_t)(0.2 * instant_br + 0.8 * h->live->physical_bitrate_bps);
         }
 
-        /* Protection against absurd values during initial lock */
         if (h->live->physical_bitrate_bps > TS_MAX_BITRATE_BPS) h->live->physical_bitrate_bps = TS_MAX_BITRATE_BPS;
     }
+
+    /* MDI and other clock-relative stats still use STC if possible, but fallback to wall_dt */
+    uint64_t stc_dt = h->stc_ns - h->last_snap_ns;
+    if (stc_dt < 1000000ULL || stc_dt > 10000000000ULL) stc_dt = wall_dt;
+
     h->live->mdi_mlr_pkts_s =
         (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * NS_PER_SEC) / stc_dt;
     h->live->mdi_df_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
@@ -127,8 +130,12 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         tsa_tstd_drain(h, h->pid_active_list[i]);
     }
 
-    /* Bitrate is based on STC delta (L2 Tier) */
-    tsa_calc_stream_bitrate(h, dt);
+    /* For bitrates and FPS, wall-clock delta is much more stable than STC (which can jump). */
+    uint64_t wall_dt = (n > h->last_snap_wall_ns) ? (n - h->last_snap_wall_ns) : 0;
+    if (wall_dt < 1000000ULL) wall_dt = 100000000ULL; // Default to 100ms if first snap or jitter
+
+    /* Bitrate is based on wall-clock delta (L2 Tier) */
+    tsa_calc_stream_bitrate(h, wall_dt);
     tsa_eval_tr101290_alarms(h, n, stc);
 
     // --- CAUSAL ANALYSIS ---
@@ -176,26 +183,56 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     uint32_t ai = 0;
     uint32_t ptc = h->pid_tracker_count;
     if (ptc > MAX_ACTIVE_PIDS) ptc = MAX_ACTIVE_PIDS;
+
+    float max_fps = 0;
+    uint32_t max_gop = 0;
+    bool is_initial = (h->live->total_ts_packets < 50000);
+
     for (uint32_t i = 0; i < ptc; i++) {
         uint16_t p = h->pid_active_list[i];
         if (p >= TS_PID_MAX) continue;
         uint64_t p_pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
-        if (p_pd > 0 && dt >= 1000000ULL) {
-            uint64_t cb = (p_pd * TS_PACKET_BITS * NS_PER_SEC) / dt;
+        if (p_pd > 0) {
+            uint64_t cb = (p_pd * TS_PACKET_BITS * NS_PER_SEC) / wall_dt;
             if (cb > TS_MAX_BITRATE_BPS) cb = TS_MAX_BITRATE_BPS;
+
+            float alpha = is_initial ? 0.5f : 0.15f;
             if (h->live->pid_bitrate_bps[p] == 0)
                 h->live->pid_bitrate_bps[p] = cb;
             else
-                h->live->pid_bitrate_bps[p] =
-                    (cb * (uint64_t)h->pcr_ema_alpha_q32 +
-                     h->live->pid_bitrate_bps[p] * ((1ULL << 32) - (uint64_t)h->pcr_ema_alpha_q32)) >>
-                    32;
+                h->live->pid_bitrate_bps[p] = (uint64_t)(alpha * cb + (1.0f - alpha) * h->live->pid_bitrate_bps[p]);
+        } else if (wall_dt >= 500000000ULL) {
+            h->live->pid_bitrate_bps[p] = 0;
         }
+
+        /* Calculate FPS based on frame counts detected since last snapshot */
+        uint64_t cur_frames = h->pid_i_frames[p] + h->pid_p_frames[p] + h->pid_b_frames[p];
+        uint64_t prev_frames = h->prev_snap_base_frames[p];
+        if (cur_frames > prev_frames) {
+            float inst_fps = (float)((cur_frames - prev_frames) * NS_PER_SEC) / wall_dt;
+            if (h->pid_exact_fps[p] < 0.1) h->pid_exact_fps[p] = inst_fps;
+            else h->pid_exact_fps[p] = 0.1f * inst_fps + 0.9f * h->pid_exact_fps[p];
+        } else if (wall_dt >= 2000000000ULL) {
+            h->pid_exact_fps[p] = 0;
+        }
+        h->prev_snap_base_frames[p] = cur_frames;
+
         const char* p_st = tsa_get_pid_type_name(h, p);
+        /* If we have frame data, it's a video stream regardless of what PMT says */
+        bool has_frames = (cur_frames > 0);
+        if (strcmp(p_st, "H.264") == 0 || strcmp(p_st, "HEVC") == 0 || strcmp(p_st, "MPEG2-V") == 0 ||
+            (has_frames && h->pid_exact_fps[p] > 0.5)) {
+            if (h->pid_exact_fps[p] > max_fps) max_fps = h->pid_exact_fps[p];
+            if (h->pid_gop_max[p] > max_gop) max_gop = h->pid_gop_max[p];
+        }
+
         sn->pids[ai].pid = p;
         strncpy(sn->pids[ai].type_str, p_st, sizeof(sn->pids[ai].type_str) - 1);
         sn->pids[ai].type_str[sizeof(sn->pids[ai].type_str) - 1] = '\0';
         sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16;
+        sn->pids[ai].cc_errors = h->live->pid_cc_errors[p];
+        sn->pids[ai].scrambled_packets = h->live->pid_scrambled_packets[p];
+        sn->pids[ai].pes_errors = h->live->pid_pes_errors[p];
         sn->pids[ai].status = (uint8_t)h->pid_status[p];
         sn->pids[ai].width = h->pid_width[p];
         sn->pids[ai].height = h->pid_height[p];
@@ -228,6 +265,9 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].bit_depth = h->pid_bit_depth[p];
         ai++;
     }
+
+    h->live->video_fps = max_fps;
+    h->live->gop_ms = max_gop;
 
     sn->summary.master_health = h->last_health_score;
     sn->summary.total_packets = h->live->total_ts_packets;

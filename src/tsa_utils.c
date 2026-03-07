@@ -200,12 +200,18 @@ const char* tsa_stream_type_to_str(uint8_t type) {
             return "MPEG2-A";
         case 0x06:
             return "Private";
+        case 0x56:
+            return "Teletext";
+        case 0x59:
+            return "Subtitle";
         case 0x0f:
             return "ADTS-AAC";
         case 0x11:
             return "AAC-LATM";
         case 0x86:
             return "SCTE-35";
+        case 0x1b:
+            return "H.264";
         case 0x24:
             return "HEVC";
         case 0x81:

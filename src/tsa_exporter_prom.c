@@ -160,6 +160,10 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
 
             SAFE_APPEND("tsa_metrology_pid_bitrate_bps%s %llu\n", pid_labels,
                         (unsigned long long)s->pid_bitrate_bps[p]);
+            SAFE_APPEND("tsa_metrology_pid_scrambled_packets_total%s %llu\n", pid_labels,
+                        (unsigned long long)s->pid_scrambled_packets[p]);
+            SAFE_APPEND("tsa_metrology_pid_pes_errors_total%s %llu\n", pid_labels,
+                        (unsigned long long)s->pid_pes_errors[p]);
 
             if (snap->pids[j].eb_fill_pct > 0 || snap->pids[j].tb_fill_pct > 0) {
                 SAFE_APPEND("tsa_compliance_pid_tstd_eb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].eb_fill_pct);
@@ -235,11 +239,14 @@ void tsa_export_pid_labels(tsa_metric_buffer_t* buf, tsa_handle_t* h, uint16_t p
     const char* codec = tsa_get_pid_type_name(h, pid);
     const char* type = "Other";
 
-    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0) {
+    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0 ||
+        strcmp(codec, "MPEG1-V") == 0) {
         type = "Video";
     } else if (strcmp(codec, "AAC") == 0 || strcmp(codec, "ADTS-AAC") == 0 || strcmp(codec, "MPEG1-A") == 0 ||
-               strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0) {
+               strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0 || strcmp(codec, "AAC-LATM") == 0) {
         type = "Audio";
+    } else if (strcmp(codec, "Subtitle") == 0 || strcmp(codec, "Teletext") == 0) {
+        type = "Data";
     }
 
     snprintf(label, sizeof(label), "pid=\"0x%04x\",type=\"%s\",codec=\"%s\"", pid, type, codec);

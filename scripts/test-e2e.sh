@@ -17,7 +17,9 @@ cd "$PROJECT_ROOT"
 # --- Test Parameters ---
 API_URL="http://localhost:8088/api/v1/streams"
 TOKEN="header.eyJ0ZW5hbnQiOiAiZDJlMi10ZXN0In0.signature"
-SAMPLE_FILE="sample/test.ts"
+SAMPLE_FILE="./sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 LOG_DIR="build/e2e_logs"
 
 # --- Helper Functions ---

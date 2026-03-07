@@ -60,7 +60,9 @@ typedef enum {
     TSA_EVENT_TSTD_OVERFLOW,
     TSA_EVENT_ENTROPY_FREEZE,
     TSA_EVENT_SDT_TIMEOUT,
-    TSA_EVENT_NIT_TIMEOUT
+    TSA_EVENT_NIT_TIMEOUT,
+    TSA_EVENT_SCRAMBLED,
+    TSA_EVENT_PES_ERROR
 } tsa_event_type_t;
 
 typedef enum { TS_CC_OK, TS_CC_DUPLICATE, TS_CC_LOSS, TS_CC_OUT_OF_ORDER } ts_cc_status_t;
@@ -104,6 +106,27 @@ uint64_t extract_pcr(const uint8_t* p);
 
 ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 
+/* Stream Type IDs (MPEG-TS Standard) */
+#define TSA_TYPE_VIDEO_MPEG2 0x02
+#define TSA_TYPE_VIDEO_H264  0x1b
+#define TSA_TYPE_VIDEO_HEVC  0x24
+#define TSA_TYPE_AUDIO_AAC   0x0f
+#define TSA_TYPE_AUDIO_AC3   0x81
+#define TSA_TYPE_PRIVATE     0x06
+#define TSA_TYPE_SCTE35      0x86
+
+static inline bool tsa_is_h264(uint8_t type) {
+    return type == TSA_TYPE_VIDEO_H264 || type == 0x00 || type == TSA_TYPE_PRIVATE;
+}
+
+static inline bool tsa_is_hevc(uint8_t type) {
+    return type == TSA_TYPE_VIDEO_HEVC;
+}
+
+static inline bool tsa_is_video(uint8_t type) {
+    return type == TSA_TYPE_VIDEO_H264 || type == TSA_TYPE_VIDEO_HEVC || type == TSA_TYPE_VIDEO_MPEG2;
+}
+
 const char* tsa_stream_type_to_str(uint8_t type);
 const char* tsa_get_pid_type_name(const struct tsa_handle* h, uint16_t p);
 
@@ -114,6 +137,7 @@ typedef struct {
     bool has_payload;
     int payload_len;
     uint8_t cc;
+    bool scrambled;
     bool has_discontinuity;
     bool has_pes_header;
     uint64_t pts;
@@ -259,6 +283,7 @@ struct tsa_handle {
     uint64_t* pid_bitrate_max;
     uint64_t* pid_last_seen_vstc;
     uint64_t* pid_last_seen_ns;
+    uint64_t* prev_snap_base_frames;
 
     // Codec metadata
     uint8_t** pid_pes_buf;

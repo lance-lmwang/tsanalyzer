@@ -7,7 +7,9 @@ cd "$PROJECT_ROOT"
 
 PORT_API=8088
 PORT_UDP=19001
-SAMPLE="sample/test.ts"
+SAMPLE="./sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="../sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="/home/lmwang/dev/sample/test.ts"
 DURATION=300
 
 echo "--- STEP 1: Industrial Setup ---"

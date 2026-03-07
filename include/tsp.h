@@ -50,6 +50,7 @@ struct tsp_handle {
     alignas(64) _Atomic uint64_t head;
     alignas(64) _Atomic uint64_t tail;
     uint8_t* ring_buffer;
+    uint64_t* ts_buffer;
     _Atomic bool running;
     pthread_t thread;
     int fd;
@@ -57,17 +58,20 @@ struct tsp_handle {
     SRTSOCKET srt_sock;
     bool srt_enabled;
     uint8_t stuffing_packet[TS_PACKET_SIZE];
-    _Atomic uint64_t total_udp_packets;
+    _Atomic uint64_t total_ts_sent;
+    _Atomic uint64_t total_udp_sent;
     _Atomic uint64_t detected_bitrate;
 
-    // Pacing & Metrology State (Used by tx_loop and tsp_enqueue)
-    uint64_t last_token_ns;
-    double tokens;
+    // PCR-Locked Scheduling State
+    uint64_t schedule_start_ns;
+    uint64_t schedule_pcr_base;
+    uint64_t last_scheduled_ns;
     uint64_t last_pcr_val_tx;
     uint64_t pkts_since_pcr;
-    uint64_t byte_offset_base;
-    uint64_t pcr_base;
-    uint64_t sys_time_base;
+
+    // Statistics for PPS calculation
+    uint64_t last_t;
+    uint64_t last_ns;
 };
 
 /* API */

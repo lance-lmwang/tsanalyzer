@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Configuration parameters
-TS_FILE="/home/lmwang/dev/cctvhd.ts"
+TS_FILE="./sample/cctvhd.ts"
+[ ! -f "$TS_FILE" ] && TS_FILE="../sample/cctvhd.ts"
+[ ! -f "$TS_FILE" ] && TS_FILE="/home/lmwang/dev/sample/cctvhd.ts"
 BITRATE=20000000
 BIN="./build/tsp"
 LOG_FILE="benchmark_results.log"
@@ -11,7 +13,7 @@ echo "=== TsPacer CBR 60s Benchmark ==="
 
 # 1. Attempt to grant RT permissions
 echo "1. Requesting RT permissions (setcap)..."
-setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
+setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN" 2>/dev/null || true
 
 # 2. Launch real-time streaming
 echo "2. Running benchmark for $DURATION..."

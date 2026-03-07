@@ -4,7 +4,9 @@
 PORT_API=8100
 DURATION=300
 STREAMS=7
-SAMPLE="sample/test.ts"
+SAMPLE="./sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="../sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="/home/lmwang/dev/sample/test.ts"
 
 echo "=================================================="
 echo " [FACTORY] v9.1 PRODUCTION ACCEPTANCE: 7-STREAM STRESS"

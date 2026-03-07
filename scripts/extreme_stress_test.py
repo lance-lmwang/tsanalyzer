@@ -1,10 +1,11 @@
+import os
 #!/usr/bin/env python3
 import time, requests, subprocess, sys
 
 STREAMS = 8
 DURATION = 30
 PORT_API = 8099
-SAMPLE = "../sample/test.ts"
+SAMPLE = next((f for f in ["./sample/test.ts", "../sample/test.ts", "/home/lmwang/dev/sample/test.ts"] if os.path.exists(f)), "/home/lmwang/dev/sample/test.ts")
 
 def get_stats():
     try:

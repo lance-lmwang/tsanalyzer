@@ -70,6 +70,25 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
         uint8_t ty = p[i];
         uint16_t spid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
         int es = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
+
+        // Advanced detection based on descriptors
+        if (ty == 0x06) {
+            for (int d = i + 5; d < i + 5 + es;) {
+                uint8_t dt = p[d], dl = p[d + 1];
+                if (dt == 0x6a || dt == 0x7a || dt == 0x81) {  // AC3 / EAC3 / AC3-Legacy
+                    ty = 0x81;                                 // Map to AC3 internal type
+                    break;
+                } else if (dt == 0x59) {  // DVB Subtitle
+                    ty = 0x59;            // Internal subtype
+                    break;
+                } else if (dt == 0x56) {  // Teletext
+                    ty = 0x56;
+                    break;
+                }
+                d += 2 + dl;
+            }
+        }
+
         if (h->pid_stream_type[spid] != ty) {
             h->pid_stream_type[spid] = ty;
             tsa_precompile_pid_labels(h, spid);
@@ -145,11 +164,14 @@ void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return;
     const char* codec = tsa_get_pid_type_name(h, pid);
     const char* type = "Other";
-    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0)
+    if (strcmp(codec, "H.264") == 0 || strcmp(codec, "HEVC") == 0 || strcmp(codec, "MPEG2-V") == 0 ||
+        strcmp(codec, "MPEG1-V") == 0)
         type = "Video";
     else if (strcmp(codec, "AAC") == 0 || strcmp(codec, "ADTS-AAC") == 0 || strcmp(codec, "MPEG1-A") == 0 ||
-             strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0)
+             strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0 || strcmp(codec, "AAC-LATM") == 0)
         type = "Audio";
+    else if (strcmp(codec, "Subtitle") == 0 || strcmp(codec, "Teletext") == 0)
+        type = "Data";
     snprintf(h->pid_labels[pid], TSA_LABEL_MAX, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\",codec=\"%s\"}",
              h->config.input_label[0] ? h->config.input_label : "unknown", pid, type, codec);
 }
@@ -159,6 +181,8 @@ void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->live->pid_packet_count[pid] = 0;
     h->live->pid_bitrate_bps[pid] = 0;
     h->live->pid_cc_errors[pid] = 0;
+    h->live->pid_scrambled_packets[pid] = 0;
+    h->live->pid_pes_errors[pid] = 0;
     h->pid_bitrate_min[pid] = 0;
     h->pid_bitrate_max[pid] = 0;
     h->ignore_next_cc[pid] = false;

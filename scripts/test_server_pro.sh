@@ -5,6 +5,8 @@ SRT_PORT=9000
 UDP_PORT=19001
 HTTP_PORT=8088
 SAMPLE_FILE="./sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 BLUE='\033[34m'; GREEN='\033[32m'; RED='\033[31m'; NC='\033[0m'
 
 echo -e "${BLUE}=== Starting TsAnalyzer Pro Server Test ===${NC}"

@@ -1,4 +1,4 @@
-import urllib.request
+import os, import urllib.request
 import sys
 from collections import defaultdict
 

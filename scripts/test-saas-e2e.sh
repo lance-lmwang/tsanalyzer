@@ -6,7 +6,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 API_URL="http://localhost:8088/api/v1/streams"
-SAMPLE_FILE="sample/test.ts"
+SAMPLE_FILE="./sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 
 # JWTs for two tenants
 TOKEN1="header.eyJ0ZW5hbnQiOiAidGVuYW50MSJ9.signature"

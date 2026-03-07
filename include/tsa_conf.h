@@ -19,6 +19,7 @@ typedef struct {
     int http_listen_port;
     int srt_listen_port;
     int worker_threads;
+    int worker_slice_us;
     bool shm_enabled;
     char log_format[16];
 

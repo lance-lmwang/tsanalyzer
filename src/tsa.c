@@ -86,6 +86,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_pts_offset_64, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_last_seen_vstc, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_last_seen_ns, uint64_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->prev_snap_base_frames, uint64_t, TS_PID_MAX);
 
     h->pid_labels = calloc(TS_PID_MAX, 128);
     h->pid_au_q = calloc(TS_PID_MAX, sizeof(*h->pid_au_q));
@@ -261,15 +262,25 @@ void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_de
     r->payload_len = 188 - 4 - r->af_len;
     r->has_payload = (p[3] & 0x10) && r->payload_len > 0;
     r->cc = p[3] & 0x0F;
+    r->scrambled = (p[3] & 0xC0) != 0;
     r->has_discontinuity = (r->af_len > 1) && (p[5] & 0x80);
     r->has_pes_header = false;
     r->pts = r->dts = 0;
     if (r->pusi && r->has_payload) {
-        tsa_pes_header_t ph;
-        if (tsa_parse_pes_header(p + 4 + r->af_len, r->payload_len, &ph) == 0) {
-            r->has_pes_header = true;
-            r->pts = ph.pts;
-            r->dts = ph.dts;
+        const uint8_t* pay = p + 4 + r->af_len;
+        if (r->payload_len >= 3 && pay[0] == 0x00 && pay[1] == 0x00 && pay[2] == 0x01) {
+            tsa_pes_header_t ph;
+            if (tsa_parse_pes_header(pay, r->payload_len, &ph) == 0) {
+                r->has_pes_header = true;
+                r->pts = ph.pts;
+                r->dts = ph.dts;
+            }
+        } else if (r->payload_len >= 3) {
+            // Check if this PID is supposed to be PES (not PAT/PMT/etc)
+            if (h->live->pid_is_referenced[r->pid] && !h->pid_is_pmt[r->pid] && r->pid > 0x1F) {
+                h->live->pid_pes_errors[r->pid]++;
+                tsa_push_event(h, TSA_EVENT_PES_ERROR, r->pid, 0);
+            }
         }
     }
 }
@@ -432,6 +443,10 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
+    if (r.scrambled) {
+        h->live->pid_scrambled_packets[r.pid]++;
+        tsa_push_event(h, TSA_EVENT_SCRAMBLED, r.pid, 0);
+    }
     h->live->pid_last_seen_vstc[r.pid] = h->stc_ns;
     h->live->pid_last_seen_ns[r.pid] = n;
     h->pkts_since_pcr++;

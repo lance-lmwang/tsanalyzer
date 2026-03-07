@@ -1,4 +1,4 @@
-import time
+import os, import time
 import requests
 import re
 import sys

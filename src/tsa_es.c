@@ -3,9 +3,11 @@
 
 #include "metrology/nalu_sniffer.h"
 #include "tsa_internal.h"
+#include "tsa_log.h"
+
+#define TAG "ES_ANALYZER"
 
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, int len, uint64_t stc_ns) {
-    (void)stc_ns;
     if (!h || !pay || len < 4) return;
 
     if (h->config.analysis.entropy) {
@@ -19,17 +21,17 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
         }
     }
 
-    const char* st = tsa_get_pid_type_name(h, pid);
-    if (strcmp(st, "H.264") != 0 && strcmp(st, "HEVC") != 0 && strcmp(st, "ES") != 0) {
-        return;
-    }
+    /* 1. Fast stream type identification (Zero string comparison) */
+    uint8_t st_id = h->pid_stream_type[pid];
+    bool is_h264 = tsa_is_h264(st_id);
+    bool is_h265 = tsa_is_hevc(st_id);
 
-    bool is_h264 = (strcmp(st, "H.264") == 0);
-    (void)is_h264;
-    bool is_h265 = (strcmp(st, "HEVC") == 0);
+    if (!is_h264 && !is_h265) return;
 
     const uint8_t* p = pay;
     const uint8_t* end = pay + len - 4;
+    bool frame_counted = false;
+
     while (p <= end) {
         p = memchr(p, 0x00, end - p + 1);
         if (!p) break;
@@ -44,6 +46,10 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
             tsa_nalu_info_t info;
             tsa_nalu_sniff(d, l, is_h265, &info);
 
+            if (info.nalu_type_abstract != NALU_TYPE_UNKNOWN) {
+                tsa_debug(TAG, "PID 0x%04x NALU: %d", pid, info.nalu_type_abstract);
+            }
+
             if (info.nalu_type_abstract == NALU_TYPE_SPS) {
                 h->pid_profile[pid] = info.profile;
                 h->pid_level[pid] = info.level;
@@ -57,7 +63,11 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                     h->pid_closed_gops[pid]++;
                 else
                     h->pid_open_gops[pid]++;
-                h->pid_i_frames[pid]++;
+
+                if (!frame_counted) {
+                    h->pid_i_frames[pid]++;
+                    frame_counted = true;
+                }
             } else if (info.nalu_type_abstract == NALU_TYPE_SEI) {
                 if (info.has_cea708) {
                     h->pid_has_cea708[pid] = true;
@@ -67,16 +77,23 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                 bool is_idr = (info.nalu_type_abstract == NALU_TYPE_IDR) || (info.slice_type == 2);
 
                 if (is_idr) {
-                    uint64_t now = (uint64_t)ts_now_ns128();
+                    uint64_t now = stc_ns;
                     if (h->pid_last_idr_ns[pid] > 0) {
                         h->pid_gop_ms[pid] = (uint32_t)((now - h->pid_last_idr_ns[pid]) / 1000000ULL);
+                        if (h->pid_gop_ms[pid] >= 0) {
+                            tsa_debug(TAG, "PID 0x%04x GOP: %u ms (now=%lu, last=%lu)", pid, h->pid_gop_ms[pid], now, h->pid_last_idr_ns[pid]);
+                        }
                         h->pid_last_gop_n[pid] = h->pid_gop_n[pid];
                         if (h->pid_gop_ms[pid] < h->pid_gop_min[pid]) h->pid_gop_min[pid] = h->pid_gop_ms[pid];
                         if (h->pid_gop_ms[pid] > h->pid_gop_max[pid]) h->pid_gop_max[pid] = h->pid_gop_ms[pid];
                     }
                     h->pid_last_idr_ns[pid] = now;
                     h->pid_gop_n[pid] = 0;
-                    h->pid_i_frames[pid]++;
+
+                    if (!frame_counted) {
+                        h->pid_i_frames[pid]++;
+                        frame_counted = true;
+                    }
 
                     // SCTE-35 Alignment Audit
                     if (h->scte35_target_pts[pid] != 0xFFFFFFFFFFFFFFFFULL) {
@@ -100,10 +117,10 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                     }
                 } else {
                     h->pid_gop_n[pid]++;
-                    if (info.slice_type == 1) {
-                        h->pid_b_frames[pid]++;
-                    } else {
-                        h->pid_p_frames[pid]++;
+                    if (!frame_counted) {
+                        if (info.slice_type == 1) h->pid_b_frames[pid]++;
+                        else h->pid_p_frames[pid]++;
+                        frame_counted = true;
                     }
                 }
             }

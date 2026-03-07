@@ -3,7 +3,9 @@
 set -u
 
 PORT_API=8088
-SAMPLE_TS="sample/test.ts"
+SAMPLE_TS="./sample/test.ts"
+[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="../sample/test.ts"
+[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="/home/lmwang/dev/sample/test.ts"
 STREAMS=4
 
 echo ">>> TsAnalyzer PRO: Stable Release Validation"

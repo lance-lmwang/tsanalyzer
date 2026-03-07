@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Configuration
-TS_FILE="/home/lmwang/dev/cctvhd.ts"
+TS_FILE="./sample/cctvhd.ts"
+[ ! -f "$TS_FILE" ] && TS_FILE="../sample/cctvhd.ts"
+[ ! -f "$TS_FILE" ] && TS_FILE="/home/lmwang/dev/sample/cctvhd.ts"
 BIN="./build/tsp"
 LOG_FILE="verify_stuffing.log"
 TARGET_MBPS=9
@@ -23,7 +25,7 @@ if [ ! -f "$TS_FILE" ]; then
 fi
 
 # 1. Request RT permissions
-setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN"
+setcap cap_sys_nice,cap_ipc_lock,cap_net_raw=ep "$BIN" 2>/dev/null || true
 
 # 2. Run TsPacer: Filling 8M PCR stream to 9M CBR
 echo "2. Running TsPacer: Filling 8M PCR stream to 9M CBR..."

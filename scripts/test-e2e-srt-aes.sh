@@ -5,7 +5,9 @@ cd "$PROJECT_ROOT"
 
 # Configuration
 SRT_PORT=9002
-SAMPLE_FILE="sample/test.ts"
+SAMPLE_FILE="./sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 PASSPHRASE="top-secret-123"
 
 echo "=== [1/3] Building Project ==="

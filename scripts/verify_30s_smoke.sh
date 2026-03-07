@@ -3,7 +3,9 @@
 set -e
 PORT_API=8088
 PORT_UDP=19001
-SAMPLE="test.ts"
+SAMPLE="./sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="../sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="/home/lmwang/dev/sample/test.ts"
 
 echo "--- [SMOKE TEST] v14.0 High-Perf Kernel ---"
 fuser -k -9 $PORT_API/tcp $PORT_UDP/udp || true

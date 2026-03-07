@@ -3,7 +3,9 @@
 PORT_API=8100
 STREAMS=7
 DURATION=300
-SAMPLE="../sample/test.ts"
+SAMPLE="./sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="../sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="/home/lmwang/dev/sample/test.ts"
 
 echo "--- [SOAK TEST] v14.0 Production Stability (300s) ---"
 ulimit -n 65535

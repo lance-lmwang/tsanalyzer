@@ -67,9 +67,17 @@
         canvas { width: 100% !important; height: 100% !important; display: block; }
         .blink { animation: soft-blink 0.5s infinite alternate; }
         @keyframes soft-blink { from { opacity: 1; } to { opacity: 0.6; } }
+    <style>
+        .debug-overlay { position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 10px; font-size: 0.6rem; border: 1px solid #333; z-index: 100; }
+        .debug-overlay input { background: #222; color: #FFF; border: 1px solid #444; font-size: 0.6rem; width: 100px; }
     </style>
 </head>
 <body>
+
+<div class="debug-overlay">
+    DATA SRC: <input type="text" id="cfg-host" placeholder="Auto-detecting..."> :8088
+    <div id="debug-info" style="margin-top:5px; color:var(--text-dim)">Initializing...</div>
+</div>
 
 <div class="fleet-wall">
     <div class="section-h">FLEET CONTROL</div>
@@ -141,7 +149,8 @@
 
 <script>
     const COLORS = { OK: '#1C8C5E', WARN: '#F5A623', ALARM: '#C0392B', CYAN: '#06B6D4' };
-    let history = { fps:[], gop:[], av:[], br:[], mdi:[] };
+    const CHART_PALETTE = ['#06B6D4', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6'];
+    let history = { fps:[], gop:[], av:[], br:[], mdi:[], pids: {} };
     let lastCounters = {}; 
     const MAX_DATA = 60;
     let selectedID = "";
@@ -149,24 +158,35 @@
 
     async function tick() {
         try {
-            const host = window.location.hostname || 'localhost';
-            const port = window.location.port || '12345';
+            // Robust host detection with manual override
+            const cfgHost = document.getElementById('cfg-host').value;
+            let host = cfgHost || window.location.hostname || '127.0.0.1';
+            if (host === '0.0.0.0' || host === '') host = '127.0.0.1';
+            const dataPort = '8088';
             
+            // Subtle indicator
+            const debugEl = document.getElementById('debug-info');
+            const dot = (new Date().getSeconds() % 2 === 0) ? '●' : '·';
+            debugEl.innerHTML = `<span style="color:var(--ok-green)">${dot}</span> ${host}:${dataPort}`;
+
             // 1. TIERED FETCH: Core metrics for the Fleet Wall (Low bandwidth)
-            const resCore = await fetch(`http://${host}:${port}/metrics/core`);
+            const resCore = await fetch(`http://${host}:${dataPort}/metrics/core`);
+            if (!resCore.ok) throw new Error(`Metrics fail: ${resCore.status}`);
             const textCore = await resCore.text();
             parseCorePrometheus(textCore);
             updateFleetWall();
 
             // 2. FOCUS FETCH: Full detail only for the selected stream via JSON API
             if (selectedID) {
-                const resFull = await fetch(`http://${host}:${port}/api/v1/snapshot?id=${selectedID}`);
+                const resFull = await fetch(`http://${host}:${dataPort}/api/v1/snapshot?id=${selectedID}`);
+                if (!resFull.ok) throw new Error(`Snapshot fail: ${resFull.status}`);
                 const snap = await resFull.json();
                 renderFocus(snap);
             }
+            document.getElementById('lock-status').style.color = '#FFF';
         } catch(e) {
-            console.warn("NOC Sync Error:", e);
-            document.getElementById('lock-status').innerText = "OFFLINE";
+            console.error("NOC Sync Error:", e);
+            document.getElementById('debug-info').innerHTML = `<span style="color:var(--alarm-red)">ERR</span> ${e.message}`;
         }
     }
 
@@ -240,17 +260,20 @@
     }
 
     function renderFocus(snap) {
+        if (!snap) return;
         // Mapping from JSON API structure
         const status = snap.status || {};
-        const compliance = snap.tier2_compliance || { p1: {}, p2: {} };
+        const compliance = snap.tier2_compliance || {};
+        const p1 = compliance.p1 || {};
+        const p2 = compliance.p2 || {};
         const link = snap.tier1_link || {};
         const essence = snap.tier3_essence || {};
         const predictive = snap.tier4_predictive || {};
 
-        document.getElementById('cur-id').innerText = selectedID;
+        document.getElementById('cur-id').innerText = selectedID || "--";
         document.getElementById('lock-led').style.background = status.signal_lock ? COLORS.OK : COLORS.ALARM;
         document.getElementById('lock-status').innerText = status.signal_lock ? "LOCKED" : "LOST";
-        document.getElementById('v-score').innerText = (status.master_health || 0).toFixed(0);
+        document.getElementById('v-score').innerText = (status.master_health !== undefined) ? status.master_health.toFixed(0) : "--";
         document.getElementById('v-score').style.color = status.master_health < 70 ? COLORS.ALARM : COLORS.OK;
 
         document.getElementById('v-rtt').innerText = link.srt_rtt_ms || 0;
@@ -258,10 +281,10 @@
 
         // Matrix Mapping
         const m = {
-            'm-sync': compliance.p1.sync_loss?.count || 0, 'm-pat': compliance.p1.pat_error?.count || 0,
-            'm-pmt': compliance.p1.pmt_error?.count || 0, 'm-cc': compliance.p1.cc_error?.count || 0,
-            'm-tei': compliance.p2.transport_error?.count || 0, 'm-crc': compliance.p2.crc_error?.count || 0,
-            'm-pcrj': compliance.p2.pcr_jitter_ms > 50, 'm-pcrr': compliance.p2.pcr_repetition?.count || 0
+            'm-sync': p1.sync_loss?.count || 0, 'm-pat': p1.pat_error?.count || 0,
+            'm-pmt': p1.pmt_error?.count || 0, 'm-cc': p1.cc_error?.count || 0,
+            'm-tei': p2.transport_error?.count || 0, 'm-crc': p2.crc_error?.count || 0,
+            'm-pcrj': (p2.pcr_jitter_ms || 0) > 50, 'm-pcrr': p2.pcr_repetition?.count || 0
         };
 
         for(let id in m) {
@@ -269,7 +292,7 @@
             if (el) el.style.background = m[id] > 0 ? COLORS.ALARM : COLORS.OK;
         }
 
-        document.getElementById('v-fps').innerText = (essence.video_fps || 0).toFixed(2);
+        document.getElementById('v-fps').innerText = (essence.video_fps !== undefined) ? essence.video_fps.toFixed(2) : "0.00";
         document.getElementById('v-gop').innerText = (essence.gop_ms || 0) + "ms";
         document.getElementById('v-av').innerText = (essence.av_sync_ms >= 0 ? "+" : "") + (essence.av_sync_ms || 0) + "ms";
         document.getElementById('v-br').innerText = ((link.physical_bitrate_bps || 0)/1e6).toFixed(1) + "M";
@@ -279,13 +302,15 @@
 
         // PID Inventory
         const invList = document.getElementById('inv-list');
-        invList.innerHTML = (snap.pids || []).map(p => `
-            <tr>
-                <td>${p.pid}</td>
-                <td style="color:var(--link-cyan)">${p.type}</td>
-                <td style="text-align:right">${(p.bitrate_bps/1e6).toFixed(2)}M</td>
-            </tr>
-        `).join('');
+        if (invList) {
+            invList.innerHTML = (snap.pids || []).map(p => `
+                <tr>
+                    <td>${p.pid}</td>
+                    <td style="color:var(--link-cyan)">${p.type}</td>
+                    <td style="text-align:right">${((p.bitrate_bps || 0)/1e6).toFixed(2)}M</td>
+                </tr>
+            `).join('');
+        }
 
         // Update Charts
         history.fps.push(essence.video_fps || 0);
@@ -294,13 +319,30 @@
         history.br.push((link.physical_bitrate_bps || 0)/1e6);
         history.mdi.push(link.mdi_df_ms || 0);
 
-        if(history.fps.length > MAX_DATA) Object.values(history).forEach(a => a.shift());
+        // PID History (Top 5)
+        const topPids = (snap.pids || []).slice(0, 5);
+        topPids.forEach((p, idx) => {
+            if (!history.pids[p.pid]) history.pids[p.pid] = new Array(MAX_DATA).fill(0);
+            history.pids[p.pid].push((p.bitrate_bps || 0)/1e6);
+            if (history.pids[p.pid].length > MAX_DATA) history.pids[p.pid].shift();
+        });
+
+        if(history.fps.length > MAX_DATA) {
+            history.fps.shift(); history.gop.shift(); history.av.shift(); history.br.shift(); history.mdi.shift();
+        }
 
         drawSeries('c-fps', [{data:history.fps, color:COLORS.OK}], 60);
         drawSeries('c-gop', [{data:history.gop, color:COLORS.WARN}], 2000);
         drawSeries('c-av', [{data:history.av, color:COLORS.CYAN}], 500, true);
         drawSeries('c-br', [{data:history.br, color:'#FFF'}], 20);
         drawSeries('c-mdi', [{data:history.mdi, color:COLORS.ALARM}], 100);
+
+        // Draw Multi-line PID series
+        const pidDatasets = Object.keys(history.pids).map((pid, i) => ({
+            data: history.pids[pid],
+            color: CHART_PALETTE[i % CHART_PALETTE.length]
+        }));
+        drawSeries('c-pid-series', pidDatasets, 10);
     }
 
     function drawSeries(id, datasets, range, isCenter=false) {

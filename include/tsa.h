@@ -90,8 +90,10 @@ typedef struct {
     uint64_t stream_utc_ms;
     uint64_t pid_packet_count[TS_PID_MAX];
     uint64_t pid_bitrate_bps[TS_PID_MAX];
-    uint64_t last_pcr_interval_bitrate_bps;
     uint64_t pid_cc_errors[TS_PID_MAX];
+    uint64_t pid_scrambled_packets[TS_PID_MAX];
+    uint64_t pid_pes_errors[TS_PID_MAX];
+    uint64_t last_pcr_interval_bitrate_bps;
     bool pid_is_referenced[TS_PID_MAX];
     uint64_t latched_cc_error;
     float pid_eb_fill_pct[TS_PID_MAX];
@@ -144,6 +146,8 @@ typedef struct {
     uint64_t bitrate_min;
     uint64_t bitrate_max;
     uint64_t cc_errors;
+    uint64_t scrambled_packets;
+    uint64_t pes_errors;
     uint8_t liveness_status;
     uint8_t status;
     uint16_t width;

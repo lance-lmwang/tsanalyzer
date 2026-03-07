@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 import time, requests, subprocess, os, sys, json
 
@@ -7,7 +8,7 @@ CHECK_INTERVAL = 5
 PORT = 8090
 UDP_PORT = 19001
 URL_BASE = f"http://localhost:{PORT}"
-SAMPLE = "../sample/test.ts"
+SAMPLE = next((f for f in ["./sample/test.ts", "../sample/test.ts", "/home/lmwang/dev/sample/test.ts"] if os.path.exists(f)), "/home/lmwang/dev/sample/test.ts")
 
 def cleanup():
     subprocess.run(f"fuser -k -9 {PORT}/tcp", shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)

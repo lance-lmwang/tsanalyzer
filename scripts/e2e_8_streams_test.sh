@@ -3,7 +3,9 @@
 
 BASE_UDP_PORT=19001
 API_URL="http://localhost:8088/api/v1/streams"
-SAMPLE_FILE="sample/test.ts"
+SAMPLE_FILE="./sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 TEST_DURATION=60
 STREAMS=8
 

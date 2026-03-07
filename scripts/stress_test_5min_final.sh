@@ -4,7 +4,9 @@
 PORT_API=8099
 DURATION=300
 STREAMS=8
-SAMPLE="sample/test.ts"
+SAMPLE="./sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="../sample/test.ts"
+[ ! -f "$SAMPLE" ] && SAMPLE="/home/lmwang/dev/sample/test.ts"
 
 echo "=================================================="
 echo " [FACTORY] PRODUCTION ACCEPTANCE: 5-Min Extreme Stress"

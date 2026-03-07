@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Configuration
-TS_FILE="/home/lmwang/dev/cctvhd.ts"
+TS_FILE="./sample/cctvhd.ts"
+[ ! -f "$TS_FILE" ] && TS_FILE="../sample/cctvhd.ts"
+[ ! -f "$TS_FILE" ] && TS_FILE="/home/lmwang/dev/sample/cctvhd.ts"
 CORE=0
 BITRATE=20000000
 BIN="./build/tsp"

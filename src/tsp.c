@@ -25,12 +25,16 @@ struct spsc_ring {
     _Atomic uint64_t tail;
 };
 
+#include "tsa_log.h"
+#define TAG "TSP"
+
 static int setup_srt(tsp_handle_t* h, const char* url) {
+    tsa_info(TAG, "Setting up SRT for url: %s", url);
     char host[256];
     int port, is_l, lat, pb;
     char pass[128] = "";
     if (parse_url_ext(url, host, &port, &is_l, &lat, pass, &pb) != 0) {
-        fprintf(stderr, "SRT: URL parse failed: %s\n", url);
+        tsa_error(TAG, "SRT: URL parse failed: %s", url);
         return -1;
     }
 
@@ -66,25 +70,25 @@ static int setup_srt(tsp_handle_t* h, const char* url) {
 
     if (is_l) {
         if (srt_bind(h->srt_sock, (struct sockaddr*)&sa, sizeof(sa)) == SRT_ERROR) {
-            fprintf(stderr, "SRT: Bind error: %s\n", srt_getlasterror_str());
+            tsa_error(TAG, "SRT: Bind error: %s", srt_getlasterror_str());
             return -1;
         }
         srt_listen(h->srt_sock, 1);
-        printf("SRT: Listener active on %s:%d\n", host[0] ? host : "0.0.0.0", port);
+        tsa_info(TAG, "SRT: Listener active on %s:%d", host[0] ? host : "0.0.0.0", port);
         SRTSOCKET c = srt_accept(h->srt_sock, NULL, NULL);
         if (c == SRT_INVALID_SOCK) return -1;
         srt_close(h->srt_sock);
         h->srt_sock = c;
     } else {
-        printf("SRT: Connecting to %s:%d (latency=%dms)...\n", host[0] ? host : "127.0.0.1", port, lat);
+        tsa_info(TAG, "SRT: Connecting to %s:%d (latency=%dms)...", host[0] ? host : "127.0.0.1", port, lat);
         int retry = 3;
         while (retry--) {
             if (srt_connect(h->srt_sock, (struct sockaddr*)&sa, sizeof(sa)) != SRT_ERROR) break;
             if (retry == 0) {
-                fprintf(stderr, "SRT: Connect final failure: %s\n", srt_getlasterror_str());
+                tsa_error(TAG, "SRT: Connect final failure: %s", srt_getlasterror_str());
                 return -1;
             }
-            printf("SRT: Handshake retry... (%d left)\n", retry);
+            tsa_info(TAG, "SRT: Handshake retry... (%d left)", retry);
             usleep(500000);
         }
     }
@@ -94,6 +98,7 @@ static int setup_srt(tsp_handle_t* h, const char* url) {
 
 static void* tx_loop(void* arg) {
     tsp_handle_t* h = (tsp_handle_t*)arg;
+    tsa_info(TAG, "tx_loop thread started for h=%p", h);
     if (h->cfg.cpu_core >= 0) {
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
@@ -101,77 +106,98 @@ static void* tx_loop(void* arg) {
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
     }
 
-    // Batching: Standard 7 TS packets (1316 bytes) per UDP message
     const int BATCH_SIZE = h->cfg.ts_per_udp ? h->cfg.ts_per_udp : 7;
     uint8_t batch_buf[TS_PACKET_SIZE * BATCH_SIZE];
-
-    struct timespec next_tx_time;
-    clock_gettime(CLOCK_MONOTONIC, &next_tx_time);
-    time_t last_stats_sec = next_tx_time.tv_sec;
+    time_t last_stats_sec = 0;
 
     while (atomic_load(&h->running)) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
 
         if (head - tail < (uint64_t)BATCH_SIZE) {
-            usleep(100);                                    // Wait for enough packets to form a batch
-            clock_gettime(CLOCK_MONOTONIC, &next_tx_time);  // Reset pacing clock on underflow
+            usleep(100);
             continue;
         }
 
-        uint64_t br = atomic_load(&h->detected_bitrate);
-        if (br == 0) br = h->cfg.bitrate ? h->cfg.bitrate : 8000000;
+        struct timespec now_ts;
+        clock_gettime(CLOCK_MONOTONIC, &now_ts);
+        uint64_t now_ns = (uint64_t)now_ts.tv_sec * 1000000000ULL + now_ts.tv_nsec;
 
-        uint64_t batch_bits = TS_PACKET_SIZE * BATCH_SIZE * 8;
-        // Calculate nanoseconds required to transmit one batch at current bitrate
-        uint64_t batch_ns = (batch_bits * 1000000000ULL) / br;
+        // Check if the next batch is ready to be sent
+        uint64_t target_ns = h->ts_buffer[tail % RING_BUFFER_SIZE];
 
-        // Add to absolute next transmit time
-        next_tx_time.tv_nsec += batch_ns;
-        while (next_tx_time.tv_nsec >= 1000000000) {
-            next_tx_time.tv_nsec -= 1000000000;
-            next_tx_time.tv_sec++;
+        if (now_ns >= target_ns) {
+            if (now_ns > target_ns + 50000000ULL) { // More than 50ms late
+                static uint64_t last_warn_pkts = 0;
+                uint64_t cur_pkts = atomic_load(&h->total_ts_sent);
+                if (cur_pkts > last_warn_pkts + 10000) {
+                    tsa_warn(TAG, "Pacer lagging behind schedule by %lu ms (buffer pressure or CPU load)",
+                             (now_ns - target_ns) / 1000000);
+                    last_warn_pkts = cur_pkts;
+                }
+            }
+            // Precision dispatch: send exactly BATCH_SIZE packets
+            for (int i = 0; i < BATCH_SIZE; i++) {
+                memcpy(batch_buf + i * TS_PACKET_SIZE, h->ring_buffer + ((tail + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE,
+                       TS_PACKET_SIZE);
+            }
+
+            if (h->srt_enabled) {
+                srt_send(h->srt_sock, (const char*)batch_buf, sizeof(batch_buf));
+            } else {
+                sendto(h->fd, batch_buf, sizeof(batch_buf), 0, (struct sockaddr*)&h->dest_addr, sizeof(h->dest_addr));
+            }
+
+            tail += BATCH_SIZE;
+            atomic_fetch_add(&h->total_ts_sent, BATCH_SIZE);
+            atomic_fetch_add(&h->total_udp_sent, 1);
+            atomic_store_explicit(&h->tail, tail, memory_order_release);
+        } else {
+            // Ahead of schedule: wait
+            uint64_t diff = target_ns - now_ns;
+            if (diff > 1000000ULL) { // > 1ms, safe to sleep
+                struct timespec ts = {0, 500000}; // 0.5ms sleep
+                nanosleep(&ts, NULL);
+            } else {
+                // Microsecond precision: busy wait
+                while (target_ns > now_ns) {
+                    for (int i = 0; i < 10; i++) __asm__ __volatile__("pause");
+                    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+                    now_ns = (uint64_t)now_ts.tv_sec * 1000000000ULL + now_ts.tv_nsec;
+                }
+            }
         }
 
-        // Precise sleep until next_tx_time
-        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_tx_time, NULL);
-
-        if (h->cfg.stats_cb && next_tx_time.tv_sec != last_stats_sec) {
+        if (now_ts.tv_sec != last_stats_sec) {
             tsp_stats_t snap;
             tsp_get_stats_snapshot(h, &snap);
-            h->cfg.stats_cb(h, &snap, h->cfg.user_data);
-            last_stats_sec = next_tx_time.tv_sec;
+            if (h->cfg.stats_cb) {
+                h->cfg.stats_cb(h, &snap, h->cfg.user_data);
+            }
+            last_stats_sec = now_ts.tv_sec;
         }
-
-        // Prepare 1316-byte batch
-        for (int i = 0; i < BATCH_SIZE; i++) {
-            memcpy(batch_buf + i * TS_PACKET_SIZE, h->ring_buffer + ((tail + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE,
-                   TS_PACKET_SIZE);
-        }
-
-        if (h->srt_enabled) {
-            int res = srt_send(h->srt_sock, (const char*)batch_buf, sizeof(batch_buf));
-            if (res == SRT_ERROR) break;
-        } else {
-            sendto(h->fd, batch_buf, sizeof(batch_buf), 0, (struct sockaddr*)&h->dest_addr, sizeof(h->dest_addr));
-        }
-
-        atomic_store_explicit(&h->tail, tail + BATCH_SIZE, memory_order_release);
-        atomic_fetch_add(&h->total_udp_packets, BATCH_SIZE);
     }
+    tsa_info(TAG, "tx_loop thread exiting for h=%p", h);
     return NULL;
 }
 
 tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
+    tsa_info(TAG, "tsp_create: bitrate=%lu, port=%d", cfg->bitrate, cfg->port);
     tsp_handle_t* h = calloc(1, sizeof(tsp_handle_t));
     if (!h) return NULL;
     h->cfg = *cfg;
     h->ring_buffer = malloc(RING_BUFFER_SIZE * TS_PACKET_SIZE);
+    h->ts_buffer = malloc(RING_BUFFER_SIZE * sizeof(uint64_t));
     h->fd = socket(AF_INET, SOCK_DGRAM, 0);
     h->last_pcr_val_tx = INVALID_PCR;
+    h->last_ns = 0;
+    h->last_t = 0;
+    h->schedule_start_ns = 0;
+    h->schedule_pcr_base = INVALID_PCR;
 
     if (cfg->url) {
         if (setup_srt(h, cfg->url) != 0) {
+            tsa_error(TAG, "SRT setup failed");
             free(h->ring_buffer);
             if (h->fd >= 0) close(h->fd);
             free(h);
@@ -186,6 +212,7 @@ tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
 }
 
 int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
+    if (!h) return 0;
     uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
     uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
 
@@ -193,43 +220,89 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
     if (available == 0) return 0;
     if (count > available) count = available;
 
+    struct timespec now_ts;
+    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+    uint64_t now_ns = (uint64_t)now_ts.tv_sec * 1000000000ULL + now_ts.tv_nsec;
+
+    uint64_t br = atomic_load(&h->detected_bitrate);
+    if (br == 0) br = h->cfg.bitrate ? h->cfg.bitrate : 8000000;
+    uint64_t ns_per_pkt = (1504ULL * 1000000000ULL) / br;
+
     for (size_t i = 0; i < count; i++) {
         const uint8_t* pkt = ts_packets + (i * TS_PACKET_SIZE);
-        memcpy(h->ring_buffer + ((head + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE, pkt, TS_PACKET_SIZE);
+        uint64_t idx = (head + i) % RING_BUFFER_SIZE;
+        memcpy(h->ring_buffer + idx * TS_PACKET_SIZE, pkt, TS_PACKET_SIZE);
+
+        uint64_t target_ns = 0;
         if ((pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x10)) {
             uint64_t b = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
                          ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
             uint64_t pcr = b * 300 + (((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11]);
+
+            if (h->schedule_pcr_base == INVALID_PCR || h->schedule_start_ns == 0) {
+                h->schedule_pcr_base = pcr;
+                h->schedule_start_ns = now_ns + 100000000ULL;
+                target_ns = h->schedule_start_ns;
+                tsa_info(TAG, "Pacer schedule anchored: PCR=%lu, TargetNS=%lu (Latency: 100ms)",
+                         pcr, h->schedule_start_ns);
+            } else {
+                uint64_t pcr_delta_ns = (pcr - h->schedule_pcr_base) * 1000 / 27;
+                target_ns = h->schedule_start_ns + pcr_delta_ns;
+            }
+
+            // Update detected bitrate for interpolation between PCRs
             if (h->last_pcr_val_tx != INVALID_PCR && pcr > h->last_pcr_val_tx) {
                 uint64_t dt_pcr_ns = (pcr - h->last_pcr_val_tx) * 1000 / 27;
                 uint64_t dp = head + i + 1 - h->pkts_since_pcr;
-                if (dt_pcr_ns > 0) atomic_store(&h->detected_bitrate, dp * 1504ULL * 1000000000ULL / dt_pcr_ns);
+                if (dt_pcr_ns > 0) {
+                    uint64_t old_br = atomic_load(&h->detected_bitrate);
+                    uint64_t new_br = dp * 1504ULL * 1000000000ULL / dt_pcr_ns;
+                    atomic_store(&h->detected_bitrate, new_br);
+                    if (old_br == 0) {
+                        tsa_info(TAG, "Bitrate converged: %.2f Mbps", (double)new_br / 1000000.0);
+                    }
+                }
             }
             h->last_pcr_val_tx = pcr;
             h->pkts_since_pcr = head + i + 1;
+            h->last_scheduled_ns = target_ns;
+        } else {
+            // Interpolate based on last scheduled time
+            if (h->last_scheduled_ns == 0) {
+                h->last_scheduled_ns = now_ns + 100000000ULL;
+            }
+            target_ns = h->last_scheduled_ns + ns_per_pkt;
+            h->last_scheduled_ns = target_ns;
         }
+        h->ts_buffer[idx] = target_ns;
     }
     atomic_store_explicit(&h->head, head + count, memory_order_release);
     return (int)count;
 }
 
 int tsp_start(tsp_handle_t* h) {
+    if (!h) return -1;
+    tsa_info(TAG, "tsp_start: h=%p", h);
     atomic_store(&h->running, true);
     return pthread_create(&h->thread, NULL, tx_loop, h);
 }
 int tsp_stop(tsp_handle_t* h) {
+    if (!h) return -1;
+    tsa_info(TAG, "tsp_stop: h=%p", h);
     atomic_store(&h->running, false);
     pthread_join(h->thread, NULL);
     return 0;
 }
 void tsp_destroy(tsp_handle_t* h) {
     if (!h) return;
+    tsa_info(TAG, "tsp_destroy: h=%p", h);
     if (atomic_load(&h->running)) {
         tsp_stop(h);
     }
     if (h->srt_enabled) srt_close(h->srt_sock);
     if (h->fd >= 0) close(h->fd);
     free(h->ring_buffer);
+    free(h->ts_buffer);
     free(h);
 }
 
@@ -238,7 +311,7 @@ uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) {
 }
 
 uint64_t tsp_get_total_packets(tsp_handle_t* h) {
-    return atomic_load(&h->total_udp_packets);
+    return atomic_load(&h->total_ts_sent);
 }
 
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h) {
@@ -259,12 +332,26 @@ pthread_t tsp_get_thread(tsp_handle_t* h) {
 }
 
 int tsp_get_stats(tsp_handle_t* h, uint64_t* t, int64_t* mx, int64_t* mn, uint64_t* d, uint64_t* dr, uint64_t* pps) {
-    (void)mx;
-    (void)mn;
-    (void)d;
-    (void)pps;
-    if (t) *t = atomic_load(&h->total_udp_packets);
+    if (!h) return -1;
+    (void)mx; (void)mn; (void)d;
+    if (t) *t = atomic_load(&h->total_ts_sent);
     if (dr) *dr = atomic_load(&h->detected_bitrate);
+
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    uint64_t now_ns = (uint64_t)now.tv_sec * 1000000000ULL + now.tv_nsec;
+
+    uint64_t cur_t = atomic_load(&h->total_udp_sent);
+    if (pps) {
+        if (h->last_ns > 0 && now_ns > h->last_ns) {
+            *pps = (cur_t - h->last_t) * 1000000000ULL / (now_ns - h->last_ns);
+        } else {
+            *pps = 0;
+        }
+    }
+    h->last_t = cur_t;
+    h->last_ns = now_ns;
+
     return 0;
 }
 
@@ -272,7 +359,7 @@ int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s) {
     if (!h || !s) return -1;
     memset(s, 0, sizeof(tsp_stats_t));
     s->detected_bitrate = atomic_load(&h->detected_bitrate);
-    s->total_packets = atomic_load(&h->total_udp_packets);
+    s->total_packets = atomic_load(&h->total_ts_sent);
     return 0;
 }
 uint64_t calculate_target_time(tsp_handle_t* h, uint64_t p, uint64_t b, uint64_t n) {

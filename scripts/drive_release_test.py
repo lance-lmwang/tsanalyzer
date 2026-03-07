@@ -6,7 +6,7 @@ import os
 # TsAnalyzer Stable Release Drive
 SERVER_BIN = os.path.abspath("./build/tsa_server")
 PACER_BIN = os.path.abspath("./build/tsp")
-SAMPLE_TS = "../sample/test.ts"
+SAMPLE_TS = next((f for f in ["./sample/test.ts", "../sample/test.ts", "/home/lmwang/dev/sample/test.ts"] if os.path.exists(f)), "/home/lmwang/dev/sample/test.ts")
 
 print(">>> Release Validation: Starting Server...")
 srv = subprocess.Popen([SERVER_BIN], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

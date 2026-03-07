@@ -10,7 +10,9 @@ METRICS_URL="http://127.0.0.1:$PORT/metrics"
 SNAPSHOT_URL="http://127.0.0.1:$PORT/api/v1/snapshot"
 LOG_FILE="stability_report.log"
 CSV_FILE="stability_metrics.csv"
-SAMPLE_FILE="demo_stream.ts"
+SAMPLE_FILE="./sample/demo_stream.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/demo_stream.ts"
+[ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/demo_stream.ts"
 
 # Colors for output
 GREEN='\033[0;32m'
