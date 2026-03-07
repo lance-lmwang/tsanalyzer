@@ -1,7 +1,7 @@
 #!/bin/bash
 # TSA Pro NOC E2E Verification Script
 
-PORT=8082
+PORT=8088
 
 echo "=== [1/4] Building Project ==="
 ./build.sh || exit 1

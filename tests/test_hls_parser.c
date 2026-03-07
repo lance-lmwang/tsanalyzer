@@ -7,10 +7,12 @@
 
 static int g_seg_count = 0;
 static void on_segment(void *user_data, const tsa_hls_segment_t *seg) {
-    (void)g_seg_count;
-    assert(seg->sequence == (uint64_t)expected_seq);
+    (void)user_data;
     if (g_seg_count == 0) {
+        assert(seg->sequence == 101);
         assert(strstr(seg->url, "segment_101.ts") != NULL);
+    } else if (g_seg_count == 1) {
+        assert(seg->sequence == 102);
     }
     g_seg_count++;
 }

@@ -2,7 +2,7 @@
 # TsAnalyzer: Real-time Metrology Dual-Bitrate Verification (CLI Edition)
 set -u
 
-PORT_API=12345
+PORT_API=8088
 PORT_UDP=19001
 SAMPLE_TS="sample/test.ts"
 
@@ -10,7 +10,7 @@ echo ">>> TsAnalyzer: Professional Metrology Test (Dual-Rate Monitor via CLI)"
 
 # Check if sample file exists
 if [ ! -f "$SAMPLE_TS" ]; then
-    echo "❌ FATAL ERROR: Sample file '$SAMPLE_TS' not found."
+    echo "[FAIL] FATAL ERROR: Sample file '$SAMPLE_TS' not found."
     exit 1
 fi
 
@@ -39,7 +39,7 @@ for i in {1..6}; do
     METRICS=$(curl -s http://localhost:$PORT_API/metrics || echo "")
 
     if [ -z "$METRICS" ]; then
-        echo "[$((i*5+5))s] | Waiting... | -- | -- | ❌ NO DATA"
+        echo "[$((i*5+5))s] | Waiting... | -- | -- | [FAIL] NO DATA"
         continue
     fi
 
@@ -48,15 +48,15 @@ for i in {1..6}; do
     JITTER=$(echo "$METRICS" | grep "tsa_metrology_pcr_jitter_ms" | head -n 1 | awk '{print $2}' || echo "0.0")
 
     if [ "$C_BPS" == "0" ] || [ -z "$C_BPS" ]; then
-        echo "[$((i*5+5))s] | PCR NOT LOCKED | -- | $JITTER ms | ⚠️ LOCKING"
+        echo "[$((i*5+5))s] | PCR NOT LOCKED | -- | $JITTER ms | [WARN] LOCKING"
         continue
     fi
 
     P_MBPS=$(echo "scale=2; $P_BPS / 1000000" | bc)
     C_MBPS=$(echo "scale=2; $C_BPS / 1000000" | bc)
 
-    J_STATUS="✅"
-    if (( $(echo "$JITTER > 10.0" | bc -l) )); then J_STATUS="⚠️"; fi
+    J_STATUS="[PASS]"
+    if (( $(echo "$JITTER > 10.0" | bc -l) )); then J_STATUS="[WARN]"; fi
 
     printf "[%2ds] | %13.2f | %16.2f | %7.3f | %s OK\n" $((i*5+5)) "$P_MBPS" "$C_MBPS" "$JITTER" "$J_STATUS"
     SUCCESS_COUNT=$((SUCCESS_COUNT+1))

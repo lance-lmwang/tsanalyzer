@@ -81,7 +81,7 @@ def render_dashboard(snap):
 
 def main():
     parser = argparse.ArgumentParser(description="TSA CLI Monitor")
-    parser.add_argument("--url", default="http://localhost:8082/api/v1/snapshot", help="API Snapshot URL")
+    parser.add_argument("--url", default="http://localhost:8088/api/v1/snapshot", help="API Snapshot URL")
     args = parser.parse_args()
 
     print("\033[2J") # Clear screen

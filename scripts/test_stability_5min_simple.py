@@ -4,7 +4,7 @@ import time, requests, subprocess, os, sys
 STREAM_ID = "STR-PRO-5M"
 TEST_DURATION = 300
 CHECK_INTERVAL = 5
-PORT = 8082
+PORT = 8088
 URL_BASE = f"http://localhost:{PORT}"
 
 def cleanup():
@@ -30,7 +30,7 @@ def run():
     server = subprocess.Popen(["./build/tsa_server", f"http://0.0.0.0:{PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     if not verify_server():
-        print("CRITICAL: Server failed to start or respond on port 8082")
+        print("CRITICAL: Server failed to start or respond on port 8088")
         server.terminate()
         return False
 

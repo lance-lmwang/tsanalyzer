@@ -3,7 +3,7 @@ import time, requests, subprocess, os, sys
 
 # Professional Configuration
 API_PORT = 8100
-UDP_START_PORT = 12345
+UDP_START_PORT = 19001
 STREAMS = 7
 DURATION = 300
 REPORT_FILE = "/tmp/stability_heartbeat.csv"

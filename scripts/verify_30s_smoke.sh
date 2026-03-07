@@ -1,7 +1,7 @@
 #!/bin/bash
 # TsAnalyzer Pro: 30s Smoke Test (Single Stream)
 set -e
-PORT_API=8082
+PORT_API=8088
 PORT_UDP=19001
 SAMPLE="test.ts"
 
@@ -24,7 +24,7 @@ for i in {1..3}; do
     MBPS=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
     # Convert bps to Mbps
     MBPS_F=$(echo "scale=2; $MBPS / 1000000" | bc)
-    printf "[%2ds] | %9d | %5.2f | ✅ OK\n" $((i*5+10)) "$CC" "$MBPS_F"
+    printf "[%2ds] | %9d | %5.2f | [PASS] OK\n" $((i*5+10)) "$CC" "$MBPS_F"
 done
 
 kill -9 $SERVER_PID $TSP_PID || true

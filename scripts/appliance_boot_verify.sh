@@ -18,21 +18,21 @@ SAMPLE_FILE=${1:-sample/test.ts}
 
 if [ ! -f "$SAMPLE_FILE" ]; then
     echo "================================================================================"
-    echo "❌ FATAL ERROR: NO TRAFFIC SOURCE DETECTED"
+    echo "[FAIL] FATAL ERROR: NO TRAFFIC SOURCE DETECTED"
     echo "================================================================================"
     echo "Search locations attempted: '$SAMPLE_FILE'"
     exit 1
 fi
-echo "🛡️  Source Verified: $SAMPLE_FILE"
+echo "[GUARD]  Source Verified: $SAMPLE_FILE"
 
 echo "================================================================================"
-echo "🛡️  TsAnalyzer Pro Appliance - SYSTEM INITIALIZATION"
+echo "[GUARD]  TsAnalyzer Pro Appliance - SYSTEM INITIALIZATION"
 echo "================================================================================"
 
 echo "--- [1/5] CLEANING ENVIRONMENT & PORT CHECK ---"
 if lsof -Pi :$TSA_PORT -sTCP:LISTEN -t >/dev/null ; then
     OCCUPYING_PROCESS=$(ps -p $(lsof -t -i:$TSA_PORT) -o comm= || echo "unknown")
-    echo "⚠️  WARNING: Port $TSA_PORT is already in use by process: $OCCUPYING_PROCESS"
+    echo "[WARN]  WARNING: Port $TSA_PORT is already in use by process: $OCCUPYING_PROCESS"
     exit 1
 fi
 

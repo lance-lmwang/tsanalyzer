@@ -31,7 +31,7 @@ function run_test() {
     sleep 15
     
     # 3. Probe Metrics
-    METRICS=$(curl -s http://localhost:12345/metrics)
+    METRICS=$(curl -s http://localhost:8088/metrics)
     BR=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
     HE=$(echo "$METRICS" | grep "tsa_system_health_score" | awk '{print $2}')
     

@@ -10,7 +10,7 @@ def test_dashboard_integrity():
     try:
         subprocess.run([sys.executable, "scripts/deploy_dashboard.py"], check=True, capture_output=True)
     except Exception as e:
-        print(f"❌ FAIL: Script crashed: {e}")
+        print(f"[FAIL] FAIL: Script crashed: {e}")
         return False
 
     base_path = 'monitoring/grafana/provisioning/dashboards'
@@ -19,7 +19,7 @@ def test_dashboard_integrity():
     for f in files:
         path = os.path.join(base_path, f)
         if not os.path.exists(path):
-            print(f"❌ FAIL: Missing file {f}")
+            print(f"[FAIL] FAIL: Missing file {f}")
             return False
         
         with open(path, 'r') as jf:
@@ -43,10 +43,10 @@ def test_dashboard_integrity():
                 for tier in required_tiers:
                     found = any(tier in t for t in titles)
                     if not found:
-                        print(f"❌ FAIL: Tier keyword '{tier}' not found in {f}!")
+                        print(f"[FAIL] FAIL: Tier keyword '{tier}' not found in {f}!")
                         return False
     
-    print("✅ PASS: All 3 Planes and 7 Tiers are structurally sound.")
+    print("[PASS] PASS: All 3 Planes and 7 Tiers are structurally sound.")
     return True
 
 if __name__ == "__main__":

@@ -3,12 +3,12 @@ import sys
 from collections import defaultdict
 
 def verify():
-    print("=== 指标唯一性与完整性自动审计 ===")
+    print("=== Metrics Uniqueness and Integrity Audit ===")
     try:
-        response = urllib.request.urlopen("http://localhost:8082/metrics")
+        response = urllib.request.urlopen("http://localhost:8088/metrics")
         content = response.read().decode('utf-8')
     except Exception as e:
-        print(f"FAILED: 无法访问 metrics 接口: {e}")
+        print(f"FAILED: Cannot access metrics endpoint: {e}")
         return False
 
     lines = content.splitlines()
@@ -19,15 +19,15 @@ def verify():
         if line.startswith("#") or not line.strip():
             continue
 
-        # 解析指标名和标签
+        # Parse metric names and labels
         parts = line.split('{')
         name = parts[0]
         label_part = parts[1].split('}')[0] if len(parts) > 1 else ""
 
-        # 记录该指标名下的所有标签集
+        # Record all label sets for this metric
         metrics_map[name].append(label_part)
 
-    # 检查核心看板指标的唯一性
+    # Check uniqueness of core dashboard metrics
     critical_metrics = [
         "tsa_system_signal_locked",
         "tsa_system_health_score",
@@ -38,11 +38,11 @@ def verify():
     for m in critical_metrics:
         labels = metrics_map.get(m, [])
         if not labels:
-            print(f"[ERROR] 缺失关键指标: {m}")
+            print(f"[ERROR] Missing critical metric: {m}")
             errors += 1
             continue
 
-        # 针对每个 stream_id 检查
+        # Check for each stream_id
         stream_ids = defaultdict(int)
         for lp in labels:
             sid = ""
@@ -54,16 +54,16 @@ def verify():
 
         for sid, count in stream_ids.items():
             if count > 1:
-                print(f"[CRITICAL] 指标重复: {m} 在 {sid} 下出现了 {count} 次！")
+                print(f"[CRITICAL] Metric duplicated: {m} for {sid} appeared {count} times!")
                 errors += 1
             else:
-                print(f"[PASS] {m} ({sid}) 唯一性验证通过")
+                print(f"[PASS] {m} ({sid}) uniqueness verified")
 
     if errors == 0:
-        print(">>> 审计通过：所有核心指标全局唯一且对齐看板。")
+        print(">>> Audit Passed: All core metrics are globally unique and aligned with dashboard.")
         return True
     else:
-        print(f">>> 审计失败：发现 {errors} 处严重冲突。")
+        print(f">>> Audit Failed: Found {errors} serious conflicts.")
         return False
 
 if __name__ == "__main__":

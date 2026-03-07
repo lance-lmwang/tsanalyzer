@@ -73,7 +73,8 @@ static void http_handler(struct mg_connection* c, int ev, void* ev_data) {
 
             if (metrics_buf) {
                 tsa_exporter_prom_v2(&h, 1, metrics_buf, buf_size);
-                mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", metrics_buf);
+                mg_http_reply(c, 200, "Content-Type: text/plain; version=0.0.4\r\nAccess-Control-Allow-Origin: *\r\n",
+                              "%s", metrics_buf);
             } else {
                 mg_http_reply(c, 500, NULL, "Out of memory");
             }
@@ -143,7 +144,7 @@ static void print_usage(const char* prog) {
     printf("  -i, --interface <iface>   Capture from network interface (PCAP)\n");
     printf("  -p, --pacing              Enable source-level pacing (for replay/file)\n");
     printf("  -l, --label <id>          Set stream label (default: unknown)\n");
-    printf("  -H, --http <port>         Set HTTP server port (default: 12345)\n");
+    printf("  -H, --http <port>         Set HTTP server port (default: 8088)\n");
     printf("  -a, --alpha <val>         Set PCR EMA alpha (default: 0.1)\n");
     printf("\nAdvanced Mode:\n");
     printf("  %s run <script.lua>       Execute a dynamic Lua pipeline script\n", prog);
@@ -177,7 +178,7 @@ int main(int argc, char** argv) {
     cfg.analysis.pcr_ema_alpha = 0.1;
     cfg.op_mode = TSA_MODE_REPLAY; /* Default */
 
-    int http_port = 12345;
+    int http_port = 8088;
     int udp_port = 0;
     char srt_url[256] = "";
     char interface[64] = "";

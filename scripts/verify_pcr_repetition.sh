@@ -3,7 +3,7 @@
 # Validates TR 101 290 1.1 (40ms) using the lightweight CLI.
 
 set -e
-PORT_API=12345
+PORT_API=8088
 PORT_UDP=19001
 SAMPLE_TS="./sample/test_1m.ts"
 
@@ -11,7 +11,7 @@ echo ">>> TsAnalyzer: PCR Repetition Verification (via CLI)"
 
 # 0. Check dependencies
 if [ ! -f "$SAMPLE_TS" ]; then
-    echo "❌ ERROR: Sample TS not found."
+    echo "[FAIL] ERROR: Sample TS not found."
     exit 1
 fi
 
@@ -35,14 +35,14 @@ MAX_RETRIES=15
 for i in $(seq 1 $MAX_RETRIES); do
     METRICS=$(curl -s http://localhost:$PORT_API/metrics || echo "")
     if echo "$METRICS" | grep -q 'tsa_system_signal_locked.* 1'; then
-        echo "    ✅ Signal Locked"
+        echo "    [PASS] Signal Locked"
         break
     fi
     sleep 1
 done
 
 if [ "$i" -eq "$MAX_RETRIES" ]; then
-    echo "    ❌ FAILED: Signal not locked after $MAX_RETRIES seconds"
+    echo "    [FAIL] FAILED: Signal not locked after $MAX_RETRIES seconds"
     kill -9 $CLI_PID $TSP_PID || true
     exit 1
 fi

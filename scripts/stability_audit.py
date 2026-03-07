@@ -4,7 +4,7 @@ import re
 import sys
 
 # Configuration
-URL = "http://localhost:8082/metrics"
+URL = "http://localhost:8088/metrics"
 DURATION_SEC = 600  # 10 minutes
 INTERVAL_SEC = 5
 SAMPLES = DURATION_SEC // INTERVAL_SEC

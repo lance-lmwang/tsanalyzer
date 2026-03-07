@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PORT_API=12345  # tsa_cli default
+PORT_API=8088  # tsa_cli default
 PORT_UDP=19001
 SAMPLE_TS="./sample/btvhd.ts"
 if [ ! -f "$SAMPLE_TS" ]; then
@@ -12,7 +12,7 @@ echo ">>> E2E PCR Verification via tsa_cli (Live Mode)"
 
 # 0. Check sample file
 if [ ! -f "$SAMPLE_TS" ]; then
-    echo "❌ FATAL ERROR: Sample file '$SAMPLE_TS' not found."
+    echo "[FAIL] FATAL ERROR: Sample file '$SAMPLE_TS' not found."
     exit 1
 fi
 
@@ -30,7 +30,7 @@ sleep 5 # Increased sleep to ensure bind
 
 # Verify bind
 if ! ss -unlp | grep "$PORT_UDP" | grep -q "tsa_cli"; then
-    echo "❌ FAILED: tsa_cli failed to bind to UDP $PORT_UDP"
+    echo "[FAIL] FAILED: tsa_cli failed to bind to UDP $PORT_UDP"
     kill -9 $CLI_PID || true
     exit 1
 fi
@@ -48,14 +48,14 @@ for i in $(seq 1 $MAX_RETRIES); do
     METRICS=$(curl -s http://localhost:$PORT_API/metrics || echo "")
     LOCK=$(echo "$METRICS" | grep "^tsa_system_signal_locked" | awk '{print $2}' || echo "0")
     if [ "$LOCK" == "1" ]; then
-        echo "    ✅ Signal locked"
+        echo "    [PASS] Signal locked"
         break
     fi
     sleep 1
 done
 
 if [ "$i" -eq "$MAX_RETRIES" ]; then
-    echo "❌ FAILED: Timeout waiting for signal lock."
+    echo "[FAIL] FAILED: Timeout waiting for signal lock."
     kill -9 $CLI_PID $TSP_PID || true
     exit 1
 fi
@@ -77,11 +77,11 @@ echo "Final PCR Repetition Error Count: $ERR_COUNT"
 echo "------------------------------------------------------------"
 
 if [ "$ERR_COUNT" != "0" ]; then
-    echo "✅ SUCCESS: Alpha-Beta Clock & Timeout logic verified!"
+    echo "[PASS] SUCCESS: Alpha-Beta Clock & Timeout logic verified!"
     kill -9 $CLI_PID $TSP_PID || true
     exit 0
 else
-    echo "❌ FAILED: PCR Timeout was NOT recorded in metrics."
+    echo "[FAIL] FAILED: PCR Timeout was NOT recorded in metrics."
     kill -9 $CLI_PID $TSP_PID || true
     exit 1
 fi

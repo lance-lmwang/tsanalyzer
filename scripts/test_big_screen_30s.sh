@@ -13,25 +13,25 @@ function cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== [1/2] 启动监控服务器 (Port 8082) ==="
+echo "=== [1/2] Starting metrics server (Port 8088) ==="
 ./build/tsa_server > server.log 2>&1 &
 sleep 2
 
-echo "=== [2/2] 注入 8 路高清流 (10 Mbps 每路) ==="
+echo "=== [2/2] Injecting 8-stream HD set (10 Mbps each) ==="
 for i in {1..8}; do
     UDP_PORT=$((19001 + i - 1))
     ./build/tsp -i 127.0.0.1 -p $UDP_PORT -l -f "$SAMPLE_FILE" -b 10000000 > /dev/null 2>&1 &
 done
 
 echo "----------------------------------------------------"
-echo "监控已开启! 你可以访问: http://localhost:8082/metrics"
-echo "正在模拟大屏抓取数据 (持续 30 秒)..."
+echo "Monitoring active! You can access: http://localhost:8088/metrics"
+echo "Simulating big-screen data fetching (duration 30s)..."
 echo "----------------------------------------------------"
 
 for i in {1..15}; do
-    echo "[$(date +%H:%M:%S)] 抓取测试..."
-    curl -s http://localhost:8082/metrics | grep "tsa_system_total_packets" | head -n 4
+    echo "[$(date +%H:%M:%S)] Scrape test..."
+    curl -s http://localhost:8088/metrics | grep "tsa_system_total_packets" | head -n 4
     sleep 2
 done
 
-echo "测试结束。"
+echo "Test ended."

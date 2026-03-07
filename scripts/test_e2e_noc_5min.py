@@ -5,7 +5,7 @@ STREAM_ID = "STR-PRO-5M"
 TEST_DURATION = 300
 CHECK_INTERVAL = 5
 PORT = 8090
-UDP_PORT = 12345
+UDP_PORT = 19001
 URL_BASE = f"http://localhost:{PORT}"
 SAMPLE = "../sample/test.ts"
 
@@ -84,10 +84,10 @@ def run():
 
                     if last_cc == -1: last_cc = cc
                     elif cc > last_cc:
-                        print(f"\\n❌ FAILED: CC Errors INCREASED! ({last_cc} -> {cc})")
+                        print(f"\\n[FAIL] FAILED: CC Errors INCREASED! ({last_cc} -> {cc})")
                         return False
                     if elapsed > 10 and mbps < 1.0:
-                        print(f"\\n❌ FAILED: Bitrate Drop detected!")
+                        print(f"\\n[FAIL] FAILED: Bitrate Drop detected!")
                         return False
                 else:
                     return False
@@ -96,7 +96,7 @@ def run():
                 return False
 
         print("--------------------------------------------------")
-        print("✅ SUCCESS: 5 Minute stability verified (PCR-Locked).")
+        print("[PASS] SUCCESS: 5 Minute stability verified (PCR-Locked).")
         return True
     finally:
         sim.terminate()

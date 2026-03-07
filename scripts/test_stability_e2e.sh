@@ -5,14 +5,14 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-PORT_API=8082
-PORT_UDP=12345
+PORT_API=8088
+PORT_UDP=19001
 SAMPLE="sample/test.ts"
 DURATION=300
 
 echo "--- STEP 1: Industrial Setup ---"
 ./build.sh > /dev/null
-fuser -k 8082/tcp 12345/udp || true
+fuser -k 8088/tcp 8088/udp || true
 sleep 1
 
 echo "--- STEP 2: Launch Analyzer ---"
@@ -39,7 +39,7 @@ while true; do
         break
     fi
 
-    METRICS=$(curl -s http://localhost:8082/metrics || echo "")
+    METRICS=$(curl -s http://localhost:8088/metrics || echo "")
     if [ -n "$METRICS" ]; then
         HEALTH=$(echo "$METRICS" | grep "tsa_system_health_score" | awk '{print $2}')
         CC=$(echo "$METRICS" | grep "tsa_compliance_tr101290_p1_cc_errors_total" | awk '{print $2}')
@@ -50,7 +50,7 @@ while true; do
 " "$ELAPSED" "$HEALTH" "$CC" "$MBPS"
 
         if [ "$PREV_CC" != "-1" ] && [ "$CC" -gt "$PREV_CC" ]; then
-            echo "❌ FAILED: CC Error Increment detected!"
+            echo "[FAIL] FAILED: CC Error Increment detected!"
             kill $SERVER_PID $TSP_PID || true
             exit 1
         fi
@@ -63,6 +63,6 @@ while true; do
 done
 
 echo "--------------------------------------------------"
-echo "✅ SUCCESS: 5-Minute Stability Verified (UDP + PCR-Locked)"
+echo "[PASS] SUCCESS: 5-Minute Stability Verified (UDP + PCR-Locked)"
 kill $SERVER_PID $TSP_PID || true
 exit 0

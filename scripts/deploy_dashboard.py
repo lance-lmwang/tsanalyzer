@@ -227,7 +227,7 @@ def main():
         path = os.path.join(base_path, filename)
         with open(path, 'w') as f:
             json.dump(content, f, indent=2)
-        print(f"✅ Deployed: {path}")
+        print(f"[PASS] Deployed: {path}")
 
 if __name__ == "__main__":
     main()

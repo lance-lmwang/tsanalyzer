@@ -11,13 +11,13 @@ def cleanup():
 
 def run_limit_discovery():
     cleanup()
-    print("🚀 STARTING STEPPED SCALING DISCOVERY")
+    print("[RUN] STARTING STEPPED SCALING DISCOVERY")
     server = subprocess.Popen(["./build/tsa_server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(3)
 
     for count in range(1, MAX_STREAMS + 1):
         print(f"--- Adding Stream #{count} ---")
-        port = 12345 + count - 1
+        port = 8088 + count - 1
         core = count
         subprocess.Popen(["taskset", "-c", str(core), "./build/tsp", "-P", "-l", "-t", "7", "-i", "127.0.0.1", "-p", str(port), "-f", SAMPLE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

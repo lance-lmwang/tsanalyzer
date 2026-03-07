@@ -4,7 +4,7 @@ import sys
 
 def get_metrics():
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8082/metrics", timeout=2) as response:
+        with urllib.request.urlopen("http://127.0.0.1:8088/metrics", timeout=2) as response:
             return response.read().decode('utf-8')
     except Exception as e:
         print(f"ERROR: Failed to connect to API: {e}")

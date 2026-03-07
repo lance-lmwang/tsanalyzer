@@ -7,12 +7,12 @@ STREAMS=8
 SAMPLE="sample/test.ts"
 
 echo "=================================================="
-echo " 🏭 PRODUCTION ACCEPTANCE: 5-Min Extreme Stress"
+echo " [FACTORY] PRODUCTION ACCEPTANCE: 5-Min Extreme Stress"
 echo "=================================================="
 
 # 1. Cleanup
 fuser -k -9 $PORT_API/tcp >/dev/null 2>&1 || true
-for i in {0..7}; do fuser -k -9 $((12345 + $i))/udp >/dev/null 2>&1 || true; done
+for i in {0..7}; do fuser -k -9 $((8088 + $i))/udp >/dev/null 2>&1 || true; done
 pkill -9 tsa_server || true
 pkill -9 tsp || true
 sleep 2
@@ -25,7 +25,7 @@ sleep 2
 # 3. Launch 8 Pacers
 echo "[*] Launching 8 PCR-Locked Pacers..."
 for i in {0..7}; do
-    ./build/tsp -P -l -t 7 -i 127.0.0.1 -p $((12345 + $i)) -f "$SAMPLE" > /dev/null 2>&1 &
+    ./build/tsp -P -l -t 7 -i 127.0.0.1 -p $((8088 + $i)) -f "$SAMPLE" > /dev/null 2>&1 &
 done
 
 # 4. Calibrate Baseline
@@ -48,18 +48,18 @@ while true; do
     STATUS="STABLE"
     if [ "$CURRENT_CC" -gt "$BASELINE" ]; then
         DIFF=$((CURRENT_CC - BASELINE))
-        echo "[$ELAPSED s] | $CURRENT_CC | ❌ FAILED (+$DIFF errors)"
+        echo "[$ELAPSED s] | $CURRENT_CC | [FAIL] FAILED (+$DIFF errors)"
         kill $SERVER_PID $(pgrep tsp)
         exit 1
     fi
 
-    printf "[%3d s] | %15d | ✅ OK
+    printf "[%3d s] | %15d | [PASS] OK
 " "$ELAPSED" "$CURRENT_CC"
     sleep 10
 done
 
 echo "--------------------------------------------------"
-echo "✅ FINAL VERDICT: 5-MINUTE PRODUCTION STABILITY PASSED"
+echo "[PASS] FINAL VERDICT: 5-MINUTE PRODUCTION STABILITY PASSED"
 echo "   - Streams: $STREAMS"
 echo "   - CC Increment: 0"
 kill $SERVER_PID $(pgrep tsp)

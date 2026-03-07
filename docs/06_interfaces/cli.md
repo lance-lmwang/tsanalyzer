@@ -7,10 +7,10 @@ The `tsa_top` utility provides a real-time, console-based monitoring interface f
 *   **Zero-Copy IPC**: Uses POSIX shared memory to read metrics from the analysis engine without triggering HTTP overhead.
 *   **Dual-Line Display**: Each stream occupies two lines to balance density with readability.
 *   **Status Color Coding**:
-    *   🟢 **GREEN**: Signal Optimal.
-    *   🟡 **YELLOW**: Degraded/Unstable.
-    *   🔴 **RED**: Critical P1/P2 Failure.
-    *   🔵 **BLUE**: High-bitrate dropping (Internal Bottleneck).
+    *   [GREEN] **GREEN**: Signal Optimal.
+    *   [YELLOW] **YELLOW**: Degraded/Unstable.
+    *   [RED] **RED**: Critical P1/P2 Failure.
+    *   [BLUE] **BLUE**: High-bitrate dropping (Internal Bottleneck).
 
 ---
 

@@ -24,7 +24,7 @@ start_t = time.time()
 for _ in range(4):
     time.sleep(5)
     try:
-        r = requests.get("http://127.0.0.1:8082/metrics", timeout=2)
+        r = requests.get("http://127.0.0.1:8088/metrics", timeout=2)
         m = r.text
         phys = 0
         pcr = 0

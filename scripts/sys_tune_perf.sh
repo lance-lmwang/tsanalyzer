@@ -42,4 +42,4 @@ sysctl -w net.core.wmem_default=16777216
 sysctl -w net.core.netdev_max_backlog=30000
 
 echo "--------------------------------------------------"
-echo "✅ KERNEL HARDENING COMPLETE"
+echo "[PASS] KERNEL HARDENING COMPLETE"

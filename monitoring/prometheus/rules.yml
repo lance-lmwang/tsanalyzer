@@ -26,8 +26,8 @@ groups:
 
   - name: tsa_inference_l3_decision
     rules:
-      # 采用 bool 算术逻辑：(条件A) * 1 + (条件B) * 2 + (条件C) * 3
-      # 这样结果永远是向量，且互斥
+      # Using bool arithmetic logic: (CondA) * 1 + (CondB) * 2 + (CondC) * 3
+      # Results are always vectors and mutually exclusive
       - record: dominant_failure_domain
         expr: >
           ((tsa_score_network > bool 0.6) * (tsa_score_encoder < bool 0.2) * 1)

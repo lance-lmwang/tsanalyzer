@@ -22,19 +22,19 @@ echo "==========================================================================
 echo "[*] Waiting 15s for data metrics to stabilize..."
 sleep 15
 
-# 1. 验证引擎 (Source)
+# 1. Verify Engine (Source)
 echo -n "[1/4] Probing TSA Engine Metrics at :$TSA_PORT... "
 HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TSA_METRICS" || echo "000")
 
 if [ "$HTTP_STATUS" == "200" ]; then
     if curl -s "$TSA_METRICS" | grep -q "tsa_system_health_score"; then
-        echo "✅ PASS"
+        echo "[PASS] PASS"
     else
-        echo "❌ FAIL (Server is UP at :$TSA_PORT, but NO DATA. Is 'tsp' running?)"
+        echo "[FAIL] FAIL (Server is UP at :$TSA_PORT, but NO DATA. Is 'tsp' running?)"
         exit 1
     fi
 else
-    echo "❌ FAIL (Server is DOWN at :$TSA_PORT. Error Code: $HTTP_STATUS)"
+    echo "[FAIL] FAIL (Server is DOWN at :$TSA_PORT. Error Code: $HTTP_STATUS)"
     if lsof -Pi :$TSA_PORT -sTCP:LISTEN -t >/dev/null ; then
         CONFLICT_PROC=$(ps -p $(lsof -t -i:$TSA_PORT) -o comm=)
         echo "    CONFLICT DETECTED: Port $TSA_PORT is occupied by process: '$CONFLICT_PROC'"
@@ -42,37 +42,37 @@ else
     exit 1
 fi
 
-# 2. 验证抓取 (Transport)
+# 2. Verify Transport (Transport)
 echo -n "[2/4] Verifying Prometheus Scrape Success... "
 SCRAPE_STATE=$(curl -s "$PROM_API/targets" | jq -r ".data.activeTargets[] | select(.discoveredLabels.__address__==\"127.0.0.1:$TSA_PORT\") | .health" 2>/dev/null || echo "unknown")
 if [ "$SCRAPE_STATE" == "up" ]; then
-    echo "✅ PASS"
+    echo "[PASS] PASS"
 else
-    echo "❌ FAIL (Prometheus reports target is $SCRAPE_STATE)"
+    echo "[FAIL] FAIL (Prometheus reports target is $SCRAPE_STATE)"
     echo "    Tip: Check http://localhost:$PROM_PORT/targets"
     exit 1
 fi
 
-# 3. 验证推理 (Logic)
+# 3. Verify Logic (Logic)
 echo -n "[3/4] Testing Failure Domain Inference Rules... "
 INFERENCE_VALUE=$(curl -s "$PROM_API/query?query=dominant_failure_domain" | jq -r '.data.result[0].value[1]' 2>/dev/null || echo "null")
 if [ "$INFERENCE_VALUE" != "null" ]; then
-    echo "✅ PASS (Brain is calculating states)"
+    echo "[PASS] PASS (Brain is calculating states)"
 else
-    echo "❌ FAIL (Inference metric is empty)"
+    echo "[FAIL] FAIL (Inference metric is empty)"
     exit 1
 fi
 
-# 4. 验证 UI (Presentation)
+# 4. Verify UI (Presentation)
 echo -n "[4/4] Verifying Grafana API Accessibility... "
 if curl -s -o /dev/null -w "%{http_code}" "$GRAFANA_API/health" | grep -q "200"; then
-    echo "✅ PASS"
+    echo "[PASS] PASS"
 else
-    echo "❌ FAIL (Grafana unreachable at :3000)"
+    echo "[FAIL] FAIL (Grafana unreachable at :3000)"
     exit 1
 fi
 
 echo "================================================================================"
-echo "✅ APPLIANCE STATUS: OPERATIONAL"
+echo "[PASS] APPLIANCE STATUS: OPERATIONAL"
 echo "URL: http://$(hostname -I | awk '{print $1}'):3000/d/global-wall"
 echo "================================================================================"

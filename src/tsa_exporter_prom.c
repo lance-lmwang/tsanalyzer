@@ -198,7 +198,30 @@ void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz) {
 }
 
 void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz) {
-    tsa_exporter_prom_v2(handles, count, buf, sz);
+    if (!handles || !buf || sz < 1024) return;
+    int off = 0;
+    int n;
+
+#define SAFE_APPEND(...)                                                           \
+    {                                                                              \
+        n = snprintf(buf + off, (sz > (size_t)off) ? (sz - off) : 0, __VA_ARGS__); \
+        if (n > 0) off += (off + n < (int)sz) ? n : (int)(sz - off - 1);           \
+    }
+
+    for (int i = 0; i < count; i++) {
+        tsa_handle_t* h = handles[i];
+        if (!h) continue;
+
+        tsa_snapshot_lite_t s;
+        if (tsa_take_snapshot_lite(h, &s) != 0) continue;
+
+        const char* sid = h->config.input_label;
+        if (!sid[0]) sid = "unknown";
+
+        SAFE_APPEND("tsa_system_signal_locked{stream_id=\"%s\"} %d\n", sid, s.signal_lock ? 1 : 0);
+        SAFE_APPEND("tsa_system_health_score{stream_id=\"%s\"} %.1f\n", sid, s.master_health);
+    }
+#undef SAFE_APPEND
 }
 
 void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t sz) {

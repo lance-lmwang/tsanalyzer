@@ -1,10 +1,10 @@
 #!/bin/bash
-# TsAnalyzer Pro - 监控栈一键清空重启脚本 (Auto-Purge)
+# TsAnalyzer Pro - Monitoring stack one-click purge and restart script (Auto-Purge)
 
 MONITORING_DIR="monitoring"
 
 function cleanup_all() {
-    echo "[1/4] 正在强制清空旧数据和容器..."
+    echo "[1/4] Forcefully purging old data and containers..."
     cd $MONITORING_DIR
     docker compose down -v > /dev/null 2>&1
     cd ..
@@ -13,24 +13,24 @@ function cleanup_all() {
 }
 
 function start_stack() {
-    echo "[2/4] 启动全新监控栈..."
+    echo "[2/4] Starting fresh monitoring stack..."
     cd $MONITORING_DIR
     docker compose up -d > /dev/null 2>&1
     cd ..
 
-    # 等待 Grafana 就绪
-    echo "等待 Grafana 服务初始化..."
+    # Waiting for Grafana ready
+    echo "Waiting for Grafana service initialization..."
     until curl -s http://localhost:3000/api/health | grep "ok" > /dev/null; do
         sleep 1
     done
 }
 
 function start_data_flow() {
-    echo "[3/4] 启动高性能分析引擎 (tsa_server)..."
+    echo "[3/4] Starting high-performance analysis engine (tsa_server)..."
     ./build/tsa_server > server.log 2>&1 &
     sleep 2
 
-    echo "[4/4] 注入 8 路测试流 (10 Mbps)..."
+    echo "[4/4] Injecting 8-stream test set (10 Mbps)..."
     SAMPLE_FILE="/tmp/dummy.ts"
     if [ ! -f "$SAMPLE_FILE" ]; then
         dd if=/dev/zero bs=188 count=10000 > "$SAMPLE_FILE" 2>/dev/null
@@ -44,11 +44,11 @@ function start_data_flow() {
 
 function verify() {
     echo "-------------------------------------------------------"
-    echo "重启完成！检查结果："
+    echo "Restart complete! Check results: "
     echo "- Grafana: http://localhost:3000"
-    echo "- Metrics: http://localhost:8082/metrics"
-    echo "- 看板状态: $(curl -s http://localhost:3000/api/search?type=dash-db | grep -o '"title":"[^"]*"' | head -n 1)"
-    echo "- 采集状态: $(curl -s http://localhost:9090/api/v1/targets | grep -o '"health":"up"' | head -n 1)"
+    echo "- Metrics: http://localhost:8088/metrics"
+    echo "- Dashboard Status: $(curl -s http://localhost:3000/api/search?type=dash-db | grep -o '"title":"[^"]*"' | head -n 1)"
+    echo "- Scrape Status: $(curl -s http://localhost:9090/api/v1/targets | grep -o '"health":"up"' | head -n 1)"
     echo "-------------------------------------------------------"
 }
 

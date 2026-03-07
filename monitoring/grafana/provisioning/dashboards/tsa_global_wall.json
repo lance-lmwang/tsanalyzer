@@ -28,7 +28,7 @@
       },
       "targets": [
         {
-          "expr": "((count(tsa_health_score < 100) / count(tsa_health_score)) * 100) or on() vector(0)"
+          "expr": "((count(tsa_system_health_score < 100) / count(tsa_system_health_score)) * 100) or on() vector(0)"
         }
       ],
       "fieldConfig": {
@@ -65,7 +65,7 @@
       },
       "targets": [
         {
-          "expr": "tsa_health_score",
+          "expr": "tsa_system_health_score",
           "legendFormat": "{{stream_id}}"
         }
       ],

@@ -71,11 +71,11 @@ for i in $(seq 1 $MAX_WAIT); do
 done
 
 if [ $READY -eq 0 ]; then
-    echo "❌ FATAL: Server failed to start or bind to port 8088 within ${MAX_WAIT}s"
+    echo "[FAIL] FATAL: Server failed to start or bind to port 8088 within ${MAX_WAIT}s"
     cat "$LOG_DIR/saas_daemon.log"
     exit 1
 fi
-echo "   ✅ API Ready."
+echo "   [PASS] API Ready."
 
 echo "-> Creating secure stream 'e2e_stream_1' via API..."
 curl -s --connect-timeout 5 --max-time 10 -X POST "$API_URL" \

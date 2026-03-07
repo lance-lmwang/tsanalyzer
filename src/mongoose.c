@@ -21754,7 +21754,7 @@ struct mg_tcpip_driver mg_tcpip_driver_cyw = {mg_tcpip_driver_cyw_init, mg_tcpip
 // Processor core firmware is loaded to TCM RAM, along with module-dependent
 // (hardware design) NVRAM data, via the chip backplane access through the bus
 // Once the chip has been initialized, information regarding regulatory
-// constraints (CLM blob, “Country Locale Matrix”), is loaded as an IOVAR. This
+// constraints (CLM blob, "Country Locale Matrix"), is loaded as an IOVAR. This
 // is tied to the module being certified, hence it is also module-dependent.
 // - Result: chip firmware + module NVRAM data + module CLM blob
 
@@ -24795,7 +24795,7 @@ bool mg_sdio_init(struct mg_tcpip_sdio *sdio) {
 // - 16.5 SDIO Card Metaformat
 // - 16.7.2 CISTPL_FUNCE (0x22): Function Extension Tuple, provides standard
 // information about the card (common) and each individual function. One
-// CISTPL_FUNCE in each function’s CIS, immediately following the CISTPL_FUNCID
+// CISTPL_FUNCE in each function's CIS, immediately following the CISTPL_FUNCID
 // tuple
 // - 16.7.3 CISTPL_FUNCE Tuple for Function 0 (common)
 // - 16.7.4 CISTPL_FUNCE Tuple for Function 1-7

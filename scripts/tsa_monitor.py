@@ -30,39 +30,39 @@ def display_dashboard(snap):
     pred = snap.get('tier4_predictive', {})
     pids = snap.get('pids', [])
 
-    print(f"┌──────────────────────────────────────────────────────────────────────────────┐")
-    print(f"│ TsAnalyzer Pro NOC - 7-Tier Metrology Dashboard        {time.strftime('%H:%M:%S')}      │")
-    print(f"├──────────────────────────────────────────────────────────────────────────────┤")
+    print(f"+------------------------------------------------------------------------------+")
+    print(f"| TsAnalyzer Pro NOC - 7-Tier Metrology Dashboard        {time.strftime('%H:%M:%S')}      |")
+    print(f"+------------------------------------------------------------------------------+")
 
     # T1: Master
     fid = status.get('master_health', 0)
     lock = "LOCKED" if status.get('signal_lock') else "LOSS"
     label = status.get('input_label', 'Unknown')
-    print(f"│ SOURCE: {label:<15} | LOCK: {lock:<10} | FIDELITY: {fid:>5.1f}% │")
-    print(f"├──────────────────────────────────────────────────────────────────────────────┤")
+    print(f"| SOURCE: {label:<15} | LOCK: {lock:<10} | FIDELITY: {fid:>5.1f}% |")
+    print(f"+------------------------------------------------------------------------------+")
 
     # T2: Link
-    print(f"│ [T2] TRANSPORT & LINK                                                        │")
-    print(f"│ " + format_row("Physical Bitrate", link.get('physical_bitrate_bps',0)/1e6, "Mbps") + " | " + format_row("MDI Delay Factor", link.get('mdi_df_ms',0), "ms") + " │")
-    print(f"│ " + format_row("SRT RTT", link.get('srt_rtt_ms',0), "ms") + " | " + format_row("SRT Retransmit", link.get('srt_retransmit_pct',0), "%") + "  │")
-    print(f"├──────────────────────────────────────────────────────────────────────────────┤")
+    print(f"| [T2] TRANSPORT & LINK                                                        |")
+    print(f"| " + format_row("Physical Bitrate", link.get('physical_bitrate_bps',0)/1e6, "Mbps") + " | " + format_row("MDI Delay Factor", link.get('mdi_df_ms',0), "ms") + " |")
+    print(f"| " + format_row("SRT RTT", link.get('srt_rtt_ms',0), "ms") + " | " + format_row("SRT Retransmit", link.get('srt_retransmit_pct',0), "%") + "  |")
+    print(f"+------------------------------------------------------------------------------+")
 
     # T3 & T4: Compliance
-    print(f"│ [T3] ETR 290 P1 (CRITICAL)        │ [T4] ETR 290 P2 (TIMING)                 │")
-    print(f"│ " + f"CC Errors: {p1.get('cc_error',0):<14}" + " │ " + f"PCR Jitter: {p2.get('pcr_jitter_ms',0):>8.3f} ms" + "          │")
-    print(f"│ " + f"PAT Errors: {p1.get('pat_error',0):<13}" + " │ " + f"PCR Repet:  {p2.get('pcr_repetition',0):>8} ms" + "          │")
-    print(f"├──────────────────────────────────────────────────────────────────────────────┤")
+    print(f"| [T3] ETR 290 P1 (CRITICAL)        | [T4] ETR 290 P2 (TIMING)                 |")
+    print(f"| " + f"CC Errors: {p1.get('cc_error',0):<14}" + " | " + f"PCR Jitter: {p2.get('pcr_jitter_ms',0):>8.3f} ms" + "          |")
+    print(f"| " + f"PAT Errors: {p1.get('pat_error',0):<13}" + " | " + f"PCR Repet:  {p2.get('pcr_repetition',0):>8} ms" + "          |")
+    print(f"+------------------------------------------------------------------------------+")
 
     # T5 & T6: Payload & Essence
-    print(f"│ [T5] MUX PAYLOAD DYNAMICS         │ [T6] ESSENCE QUALITY                     │")
-    print(f"│ " + f"Active PIDs: {len(pids):<14}" + " │ " + f"Video FPS: {essence.get('video_fps',0):>8.2f}" + "             │")
-    print(f"│ " + f"Null Density: {0:<13}" + " │ " + f"AV Sync:   {essence.get('av_sync_offset_ms',0):>8} ms" + "          │")
-    print(f"├──────────────────────────────────────────────────────────────────────────────┤")
+    print(f"| [T5] MUX PAYLOAD DYNAMICS         | [T6] ESSENCE QUALITY                     |")
+    print(f"| " + f"Active PIDs: {len(pids):<14}" + " | " + f"Video FPS: {essence.get('video_fps',0):>8.2f}" + "             |")
+    print(f"| " + f"Null Density: {0:<13}" + " | " + f"AV Sync:   {essence.get('av_sync_offset_ms',0):>8} ms" + "          |")
+    print(f"+------------------------------------------------------------------------------+")
 
     # T7: Predictive/Forensic
     rst = pred.get('rst_encoder_s', 0)
-    print(f"│ [T7] PREDICTIVE: Remaining Safe Time (RST): {rst:>6.2f} s                       │")
-    print(f"└──────────────────────────────────────────────────────────────────────────────┘")
+    print(f"| [T7] PREDICTIVE: Remaining Safe Time (RST): {rst:>6.2f} s                       |")
+    print(f"+------------------------------------------------------------------------------+")
 
     print(f"\nTop PIDs:")
     print(f"{'PID':<8} | {'TYPE':<10} | {'BITRATE':<12} | {'EB FILL':<8}")
@@ -72,7 +72,7 @@ def display_dashboard(snap):
 
 def main():
     parser = argparse.ArgumentParser(description='TsAnalyzer Professional NOC CLI')
-    parser.add_argument('--url', default='http://localhost:12345/api/v1/snapshot', help='API URL')
+    parser.add_argument('--url', default='http://localhost:8088/api/v1/snapshot', help='API URL')
     parser.add_argument('--duration', type=int, default=0, help='Duration in seconds')
     parser.add_argument('--verify', action='store_true', help='Verification mode for CI')
     args = parser.parse_args()

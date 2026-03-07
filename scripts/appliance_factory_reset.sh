@@ -13,7 +13,7 @@ bash monitoring/monitoring-purge.sh --all
 
 echo "--- [2/6] GENERATING APPLIANCE CONFIG (8 STREAMS) ---"
 cat > tsa.conf <<EOF
-GLOBAL http_port 8082
+GLOBAL http_port 8088
 ST-1 udp://127.0.0.1:19001
 ST-2 udp://127.0.0.1:19002
 ST-3 udp://127.0.0.1:19003
@@ -38,13 +38,13 @@ done
 sleep 15
 
 echo "--- [6/6] FINAL METRICS VERIFICATION ---"
-STATUS=$(curl -s http://localhost:8082/metrics | grep "tsa_system_health_score" | wc -l)
+STATUS=$(curl -s http://localhost:8088/metrics | grep "tsa_system_health_score" | wc -l)
 
 if [ "$STATUS" -ge 8 ]; then
-    echo "✅ SUCCESS: $STATUS streams reporting health metrics (Includes 8 simulation + local-probes)."
+    echo "[PASS] SUCCESS: $STATUS streams reporting health metrics (Includes 8 simulation + local-probes)."
     echo "Dashboard: http://localhost:3000/d/global-wall"
 else
-    echo "❌ FAILURE: Only $STATUS/8 streams reporting."
+    echo "[FAIL] FAILURE: Only $STATUS/8 streams reporting."
     echo "Check server.log for details."
     exit 1
 fi

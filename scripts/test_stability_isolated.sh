@@ -7,14 +7,14 @@ STREAMS=7
 SAMPLE="sample/test.ts"
 
 echo "=================================================="
-echo " 🏭 v9.1 PRODUCTION ACCEPTANCE: 7-STREAM STRESS"
+echo " [FACTORY] v9.1 PRODUCTION ACCEPTANCE: 7-STREAM STRESS"
 echo " Cores: Core 0 (API), Cores 1-7 (Analysis)"
 echo "=================================================="
 
 # 1. Hard Cleanup
 ulimit -n 65535
 fuser -k -9 $PORT_API/tcp >/dev/null 2>&1 || true
-for i in {0..6}; do fuser -k -9 $((12345 + $i))/udp >/dev/null 2>&1 || true; done
+for i in {0..6}; do fuser -k -9 $((8088 + $i))/udp >/dev/null 2>&1 || true; done
 pkill -9 tsa_server || true
 pkill -9 tsp || true
 sleep 2
@@ -30,7 +30,7 @@ for i in {1..10}; do
         echo "[*] Analyzer is UP and RESPONSIVE."
         break
     fi
-    if [ $i -eq 10 ]; then echo "❌ CRITICAL: Server failed to start."; exit 1; fi
+    if [ $i -eq 10 ]; then echo "[FAIL] CRITICAL: Server failed to start."; exit 1; fi
     sleep 1
 done
 
@@ -38,7 +38,7 @@ done
 echo "[*] Injecting 7-Stream Load (PCR-Locked)..."
 for i in {0..6}; do
     CORE=$((i + 1))
-    PORT=$((12345 + i))
+    PORT=$((8088 + i))
     taskset -c $CORE ./build/tsp -P -l -t 7 -i 127.0.0.1 -p $PORT -f "$SAMPLE" > /dev/null 2>&1 &
 done
 
@@ -60,21 +60,21 @@ while true; do
     CURRENT_CC=$(curl -s http://localhost:$PORT_API/metrics | grep "tsa_cc" | awk '{sum+=$2} END {print sum}')
 
     if [ -z "$CURRENT_CC" ]; then
-        echo "[$ELAPSED s] | API UNRESPONSIVE | ⚠️ WARNING"
+        echo "[$ELAPSED s] | API UNRESPONSIVE | [WARN] WARNING"
     else
         if [ "$CURRENT_CC" -gt "$BASELINE" ]; then
             DIFF=$((CURRENT_CC - BASELINE))
-            echo "[$ELAPSED s] | $CURRENT_CC | ❌ FAILED (+$DIFF)"
+            echo "[$ELAPSED s] | $CURRENT_CC | [FAIL] FAILED (+$DIFF)"
             kill -9 $SERVER_PID $(pgrep tsp)
             exit 1
         fi
-        printf "[%3d s] | %17d | ✅ OK\n" "$ELAPSED" "$CURRENT_CC"
+        printf "[%3d s] | %17d | [PASS] OK\n" "$ELAPSED" "$CURRENT_CC"
     fi
     sleep 10
 done
 
 echo "--------------------------------------------------"
-echo "✅ FINAL VERDICT: v9.1 FIRMWARE-GRADE STABILITY PASSED"
+echo "[PASS] FINAL VERDICT: v9.1 FIRMWARE-GRADE STABILITY PASSED"
 echo "   - Concurrency: 7 Streams"
 echo "   - Duration: 300 Seconds"
 echo "   - CC Increment: 0"

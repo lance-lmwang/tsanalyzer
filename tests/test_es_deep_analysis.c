@@ -6,7 +6,7 @@
 #include "tsa.h"
 #include "tsa_internal.h"
 
-// 模拟 PMT 引用
+// Simulate PMT reference
 void mock_pmt_reference(tsa_handle_t* h, uint16_t pid, uint8_t stream_type) {
     h->live->pid_is_referenced[pid] = true;
     h->pid_seen[pid] = true;

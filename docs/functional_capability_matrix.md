@@ -8,14 +8,14 @@ This document provides a comprehensive overview of the current capabilities of T
 
 | Feature | Status | Description |
 | :--- | :--- | :--- |
-| **UDP/RTP Ingest** | ✅ Implemented | High-performance raw UDP and RTP reception. |
-| **SRT Caller/Listener** | ✅ Implemented | Full support for Secure Reliable Transport protocol. |
-| **PCAP Offline Replay** | ✅ Implemented | Bit-accurate replay of network captures for forensic analysis. |
-| **HLS / HTTP Ingest** | ✅ Implemented | Libcurl-based chunk downloading and M3U8 manifest auditing. |
-| **MDI (RFC 4445)** | ✅ Implemented | Media Delivery Index (Delay Factor & MLR) using hardware timestamps. |
-| **IAT Histograms** | ✅ Implemented | Real-time Inter-Arrival Time statistical profiling for micro-burst detection. |
-| **Bitrate Smoother** | ✅ Implemented | High-precision CBR reshaping using `clock_nanosleep` absolute timing. |
-| **Smart Failover** | ✅ Implemented | Automatic switching between Primary/Backup inputs based on TR 101 290 health. |
+| **UDP/RTP Ingest** | [PASS] Implemented | High-performance raw UDP and RTP reception. |
+| **SRT Caller/Listener** | [PASS] Implemented | Full support for Secure Reliable Transport protocol. |
+| **PCAP Offline Replay** | [PASS] Implemented | Bit-accurate replay of network captures for forensic analysis. |
+| **HLS / HTTP Ingest** | [PASS] Implemented | Libcurl-based chunk downloading and M3U8 manifest auditing. |
+| **MDI (RFC 4445)** | [PASS] Implemented | Media Delivery Index (Delay Factor & MLR) using hardware timestamps. |
+| **IAT Histograms** | [PASS] Implemented | Real-time Inter-Arrival Time statistical profiling for micro-burst detection. |
+| **Bitrate Smoother** | [PASS] Implemented | High-precision CBR reshaping using `clock_nanosleep` absolute timing. |
+| **Smart Failover** | [PASS] Implemented | Automatic switching between Primary/Backup inputs based on TR 101 290 health. |
 | **I/O-Computing Decoupling** | 🔶 Partial | Hybrid Reactor model for high-density concurrent stream support. |
 
 ---
@@ -24,10 +24,10 @@ This document provides a comprehensive overview of the current capabilities of T
 
 | Feature | Status | Description |
 | :--- | :--- | :--- |
-| **Priority 1 (P1)** | ✅ Implemented | Sync Loss, PAT Error, CC Error, PMT Error. |
-| **Priority 2 (P2)** | ✅ Implemented | Transport Error, CRC, PCR Repetition, PCR Accuracy, PTS Error. |
-| **Priority 3 (P3)** | ✅ Implemented | SDT and NIT version tracking/parsing. |
-| **SCTE-35 Audit** | ✅ Implemented | Nanosecond-level alignment error between ad-triggers and Video I-Frames. |
+| **Priority 1 (P1)** | [PASS] Implemented | Sync Loss, PAT Error, CC Error, PMT Error. |
+| **Priority 2 (P2)** | [PASS] Implemented | Transport Error, CRC, PCR Repetition, PCR Accuracy, PTS Error. |
+| **Priority 3 (P3)** | [PASS] Implemented | SDT and NIT version tracking/parsing. |
+| **SCTE-35 Audit** | [PASS] Implemented | Nanosecond-level alignment error between ad-triggers and Video I-Frames. |
 | **CAS Audit** | 📅 Planned | Monitoring of Scrambling flags and CAID descriptor compliance. |
 
 ---
@@ -36,10 +36,10 @@ This document provides a comprehensive overview of the current capabilities of T
 
 | Feature | Status | Description |
 | :--- | :--- | :--- |
-| **Software PLL** | ✅ Implemented | 27MHz System Time Clock (STC) reconstruction from sparse PCRs. |
-| **PCR 3D Decomposition**| ✅ Implemented | Decomposition of jitter into Accuracy (AC), Drift (DR), and System Jitter (OJ). |
-| **Walltime Drift** | ✅ Implemented | Long-term Linear Regression (Trend) of PCR vs. Physical System Clock. |
-| **PCR Root Cause** | ✅ Implemented | Correlation logic to isolate Network vs. Encoder jitter sources. |
+| **Software PLL** | [PASS] Implemented | 27MHz System Time Clock (STC) reconstruction from sparse PCRs. |
+| **PCR 3D Decomposition**| [PASS] Implemented | Decomposition of jitter into Accuracy (AC), Drift (DR), and System Jitter (OJ). |
+| **Walltime Drift** | [PASS] Implemented | Long-term Linear Regression (Trend) of PCR vs. Physical System Clock. |
+| **PCR Root Cause** | [PASS] Implemented | Correlation logic to isolate Network vs. Encoder jitter sources. |
 
 ---
 
@@ -47,11 +47,11 @@ This document provides a comprehensive overview of the current capabilities of T
 
 | Feature | Status | Description |
 | :--- | :--- | :--- |
-| **Zero-Copy NALU Sniffer**| ✅ Implemented | Lightweight inspection of H.264/H.265 headers without full decoding. |
-| **GOP Structure Tracking** | ✅ Implemented | Detection of I/P/B frame sequences, GOP length (N), and GOP duration (ms). |
-| **Entropy Analysis** | ✅ Implemented | Shannon entropy variance used to detect frozen or black screens. |
-| **T-STD Buffer Model** | ✅ Implemented | Annex D simulation of TB, MB, and EB (Video) occupancy. |
-| **RST (Remaining Safe Time)**| ✅ Implemented | Predictive metric indicating time-to-underflow for decoder buffers. |
+| **Zero-Copy NALU Sniffer**| [PASS] Implemented | Lightweight inspection of H.264/H.265 headers without full decoding. |
+| **GOP Structure Tracking** | [PASS] Implemented | Detection of I/P/B frame sequences, GOP length (N), and GOP duration (ms). |
+| **Entropy Analysis** | [PASS] Implemented | Shannon entropy variance used to detect frozen or black screens. |
+| **T-STD Buffer Model** | [PASS] Implemented | Annex D simulation of TB, MB, and EB (Video) occupancy. |
+| **RST (Remaining Safe Time)**| [PASS] Implemented | Predictive metric indicating time-to-underflow for decoder buffers. |
 | **Thumbnail Generation** | 📅 Planned | Asynchronous sparse decoding of IDR frames. |
 
 ---
@@ -60,12 +60,12 @@ This document provides a comprehensive overview of the current capabilities of T
 
 | Feature | Status | Description |
 | :--- | :--- | :--- |
-| **Prometheus Exporter** | ✅ Implemented | Native high-density metrics output for Grafana. |
-| **JSON REST API** | ✅ Implemented | Programmatic access to full engine snapshots. |
-| **High-Performance TUI**| ✅ Implemented | `tsa_top` utility for real-time console-based local monitoring. |
-| **Triggered Micro-Capture**| ✅ Implemented | Rolling 500ms ring buffer automatically saved to `.ts` on P1 triggers. |
+| **Prometheus Exporter** | [PASS] Implemented | Native high-density metrics output for Grafana. |
+| **JSON REST API** | [PASS] Implemented | Programmatic access to full engine snapshots. |
+| **High-Performance TUI**| [PASS] Implemented | `tsa_top` utility for real-time console-based local monitoring. |
+| **Triggered Micro-Capture**| [PASS] Implemented | Rolling 500ms ring buffer automatically saved to `.ts` on P1 triggers. |
 | **HTML Forensic Reports** | 📅 Planned | Self-contained interactive incident replay files. |
-| **Webhook Signaling** | ✅ Implemented | Asynchronous JSON notification with retry and aggregation logic. |
+| **Webhook Signaling** | [PASS] Implemented | Asynchronous JSON notification with retry and aggregation logic. |
 
 ---
 
@@ -79,12 +79,12 @@ Inspired by enterprise-grade video management systems, these features target ful
 | **ABR Group Audit** | 📅 Planned | Measuring temporal alignment (Skew) across multiple bitrate renditions. |
 | **Logo & Branding QC** | 📅 Planned | Vision-based detection of burned-in logos to ensure correct channel playout. |
 | **BITC OCR Correlation** | 📅 Planned | Extracting burned-in timecodes and correlating them with PCR/PTS timelines. |
-| **Enterprise Audit Trail** | ✅ Implemented | Full lifecycle logging of stream events, config changes, and operator acknowledgments. |
+| **Enterprise Audit Trail** | [PASS] Implemented | Full lifecycle logging of stream events, config changes, and operator acknowledgments. |
 
 ---
 
 ## Legend
-*   ✅ **Implemented**: Fully functional and verified via automated tests.
+*   [PASS] **Implemented**: Fully functional and verified via automated tests.
 *   🔶 **Partial**: Basic logic exists, but full spec coverage is pending.
 *   📅 **Planned**: Designed and accepted into the roadmap, implementation pending.
 *   ⏸️ **Paused**: Development suspended to focus on core metrology maturity.

@@ -5,7 +5,7 @@ set -e
 echo "--- [1/3] HARD RESET ---"
 pkill -9 tsa_server || true
 pkill -9 tsp || true
-fuser -k 8082/tcp || true
+fuser -k 8088/tcp || true
 
 echo "--- [2/3] STARTING ENGINE ---"
 ./build/tsa_server tsa.conf > server.log 2>&1 &
@@ -18,8 +18,8 @@ done
 
 echo "Waiting for metrics to stabilize..."
 for i in {1..10}; do
-    if curl -s http://localhost:8082/metrics | grep -q "tsa_system_health_score"; then
-        echo "✅ Metrics detected!"
+    if curl -s http://localhost:8088/metrics | grep -q "tsa_system_health_score"; then
+        echo "[PASS] Metrics detected!"
         bash scripts/verify_appliance_integrity.sh
         exit 0
     fi
@@ -27,6 +27,6 @@ for i in {1..10}; do
     sleep 3
 done
 
-echo "❌ ERROR: Metrics never appeared. Check server.log"
+echo "[FAIL] ERROR: Metrics never appeared. Check server.log"
 tail -n 20 server.log
 exit 1

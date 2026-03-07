@@ -15,7 +15,7 @@ def run_hardcore_test():
     # 2. Setup environment
     conf_path = "ironclad.conf"
     with open(conf_path, "w") as f:
-        f.write("GLOBAL http_port 8081\n")
+        f.write("GLOBAL http_port 8088\n")
         f.write("ST-AUTO udp://127.0.0.1:30005\n")
     
     # 3. Start Processes
@@ -36,7 +36,7 @@ def run_hardcore_test():
             checks += 1
             try:
                 # We use the JSON API for ground truth validation
-                with urllib.request.urlopen("http://127.0.0.1:8081/api/v1/snapshot?id=ST-AUTO") as resp:
+                with urllib.request.urlopen("http://127.0.0.1:8088/api/v1/snapshot?id=ST-AUTO") as resp:
                     data = json.loads(resp.read().decode())
                     pred = data['predictive']
                     s_drift = abs(pred['stc_wall_drift_ppm'])

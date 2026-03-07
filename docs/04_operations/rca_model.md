@@ -31,10 +31,10 @@ The "Banner Truth" is determined by comparing the two scores.
 
 | Dominant Score | Final Inference | NOC Banner Text |
 | :--- | :--- | :--- |
-| $S_{net} < 0.2$ and $S_{enc} < 0.2$ | **Optimal** | ✅ SIGNAL OPTIMAL |
-| $S_{net} > 0.6$ and $S_{enc} < 0.2$ | **Network** | ⚠️ NETWORK IMPAIRMENT |
-| $S_{enc} > 0.6$ and $S_{net} < 0.2$ | **Encoder** | ☢️ ENCODER INSTABILITY |
-| Both $> 0.4$ | **Complex** | 🚨 MULTI-CAUSAL CRITICAL |
+| $S_{net} < 0.2$ and $S_{enc} < 0.2$ | **Optimal** | [PASS] SIGNAL OPTIMAL |
+| $S_{net} > 0.6$ and $S_{enc} < 0.2$ | **Network** | [WARN] NETWORK IMPAIRMENT |
+| $S_{enc} > 0.6$ and $S_{net} < 0.2$ | **Encoder** | [RADIO] ENCODER INSTABILITY |
+| Both $> 0.4$ | **Complex** | [ALARM] MULTI-CAUSAL CRITICAL |
 
 ---
 

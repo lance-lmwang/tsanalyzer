@@ -2,7 +2,7 @@
 # TsAnalyzer: Stable Release & Real-time Stress Test
 set -u
 
-PORT_API=8082
+PORT_API=8088
 SAMPLE_TS="sample/test.ts"
 STREAMS=4
 
@@ -54,10 +54,10 @@ for i in {1..4}; do
         IS_NEG=$(echo "$DIFF < 0" | bc -l)
         if [ "$IS_NEG" -eq "1" ]; then DIFF=$(echo "-1 * $DIFF" | bc -l); fi
 
-        STATUS="✅"
+        STATUS="[PASS]"
         # If MBPS is 0, it means not locked yet
-        if [ "$BPS" -eq "0" ]; then STATUS="⌛"; fi
-        if (( $(echo "$DIFF > 0.5" | bc -l) )) && [ "$BPS" -ne "0" ]; then STATUS="⚠️"; fi
+        if [ "$BPS" -eq "0" ]; then STATUS="[WAIT]"; fi
+        if (( $(echo "$DIFF > 0.5" | bc -l) )) && [ "$BPS" -ne "0" ]; then STATUS="[WARN]"; fi
 
         printf "%s | %8.2f | %11.3f | %12d | %s\n" "$SID" "$MBPS" "$JIT" "$LAT" "$STATUS"
     done

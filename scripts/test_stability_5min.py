@@ -9,7 +9,7 @@ import sys
 STREAM_ID = "STR-PRO-5M"
 TEST_DURATION_SEC = 300  # 5 Minutes
 CHECK_INTERVAL_SEC = 5
-METRICS_URL = "http://localhost:8082/metrics"
+METRICS_URL = "http://localhost:8088/metrics"
 
 def get_metric(metrics_text, name, stream_id):
     for line in metrics_text.splitlines():
@@ -37,13 +37,13 @@ def run_test_session():
 
     # 2. Start TSA Server in background
     log_f = open("test_e2e_server.log", "w")
-    server_proc = subprocess.Popen(["./build/tsa_server", "http://0.0.0.0:8082"], stdout=log_f, stderr=log_f)
+    server_proc = subprocess.Popen(["./build/tsa_server", "http://0.0.0.0:8088"], stdout=log_f, stderr=log_f)
     time.sleep(2)
 
     # 3. Create Stream Task
     try:
         print(f"Creating Stream Task: {STREAM_ID}")
-        requests.post(f"http://localhost:8082/streams?id={STREAM_ID}", timeout=5)
+        requests.post(f"http://localhost:8088/streams?id={STREAM_ID}", timeout=5)
     except Exception as e:
         print(f"ERROR: Failed to reach server to create stream: {e}")
         return False

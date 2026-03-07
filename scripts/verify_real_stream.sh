@@ -34,8 +34,8 @@ echo "WAIT: Analyzing real-time SRT flow for 15s..."
 sleep 15
 
 # Fetch Live Metrics
-LIVE_BR=$(curl -s http://localhost:12345/metrics | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
-LIVE_HEALTH=$(curl -s http://localhost:12345/metrics | grep "tsa_system_health_score" | awk '{print $2}')
+LIVE_BR=$(curl -s http://localhost:8088/metrics | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
+LIVE_HEALTH=$(curl -s http://localhost:8088/metrics | grep "tsa_system_health_score" | awk '{print $2}')
 
 echo -e "REAL-TIME: Bitrate = ${GREEN}$LIVE_BR bps${NC}, Health = ${GREEN}$LIVE_HEALTH%${NC}"
 

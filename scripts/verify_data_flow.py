@@ -14,10 +14,10 @@ def get_json(url):
 def check_pipeline():
     print("=== TSA PRO: DATA FLOW PIPELINE AUDIT ===\n")
 
-    # 1. 检查后端指标产出
+    # 1. Check backend metrics production
     print("[1/4] Checking TSA Server Metrics (/metrics)...")
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8082/metrics", timeout=2) as r:
+        with urllib.request.urlopen("http://127.0.0.1:8088/metrics", timeout=2) as r:
             content = r.read().decode()
             if 'stream_id="STR-1"' in content:
                 print("  - [OK] STR-1 metrics found in raw output.")
@@ -25,10 +25,10 @@ def check_pipeline():
                 print("  - [FAIL] STR-1 NOT FOUND.")
                 return False
     except:
-        print("  - [FAIL] Cannot connect to port 8082.")
+        print("  - [FAIL] Cannot connect to port 8088.")
         return False
 
-    # 2. 检查 Prometheus 采集状态
+    # 2. Check Prometheus scrape status
     print("[2/4] Checking Prometheus Scrape Status...")
     targets = get_json("http://127.0.0.1:9090/api/v1/targets")
     if not targets:
@@ -48,7 +48,7 @@ def check_pipeline():
         print("  - [FAIL] Target not in Prometheus.")
         return False
 
-    # 3. 检查 Prometheus 数据库
+    # 3. Check Prometheus database
     print("[3/4] Checking Prometheus DB...")
     query = 'tsa_system_health_score{stream_id="STR-1"}'
     url = f"http://127.0.0.1:9090/api/v1/query?query={urllib.parse.quote(query)}"

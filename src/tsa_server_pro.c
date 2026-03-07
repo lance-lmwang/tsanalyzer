@@ -29,7 +29,7 @@
 #define TAG "SERVER_PRO"
 
 #define MAX_CONNS 4096
-#define HTTP_PORT "8081"
+#define HTTP_PORT "8088"
 #define PACKET_BUF_SIZE 65536
 #define WORKER_THREADS 16
 #define ANA_QUEUE_SIZE 512
@@ -57,7 +57,7 @@ static _Atomic bool g_run = true;
 static pthread_mutex_t g_conn_lock = PTHREAD_MUTEX_INITIALIZER;
 static mpmc_queue_t* g_ready_queue;
 
-static int g_http_port = 8081;
+static int g_http_port = 8088;
 static int g_srt_port = 9000;
 
 extern void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz);
@@ -361,13 +361,13 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
         if (mg_match(hm->uri, mg_str("/metrics"), NULL) || mg_match(hm->uri, mg_str("/metrics/core"), NULL) ||
             mg_match(hm->uri, mg_str("/metrics/pids"), NULL)) {
-            static char resp[4 * 1024 * 1024];
+            static char resp[8 * 1024 * 1024];
             tsa_handle_t* h_list[MAX_CONNS];
             int count = 0;
             pthread_mutex_lock(&g_conn_lock);
             int total = atomic_load(&g_conn_count);
             for (int i = 0; i < total; i++) {
-                if (g_conns[i]->tsa) h_list[count++] = g_conns[i]->tsa;
+                if (g_conns[i] && g_conns[i]->tsa) h_list[count++] = g_conns[i]->tsa;
             }
             pthread_mutex_unlock(&g_conn_lock);
 
@@ -378,7 +378,8 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             } else {
                 tsa_exporter_prom_v2(h_list, count, resp, sizeof(resp));
             }
-            mg_http_reply(c, 200, "Content-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r", "%s", resp);
+            mg_http_reply(c, 200, "Content-Type: text/plain; version=0.0.4\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
+                          resp);
         } else if (mg_match(hm->uri, mg_str("/api/v1/snapshot"), NULL)) {
             static char resp[512 * 1024];
             char id_val[64];
@@ -387,7 +388,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 pthread_mutex_lock(&g_conn_lock);
                 int total = atomic_load(&g_conn_count);
                 for (int i = 0; i < total; i++) {
-                    if (strcmp(g_conns[i]->id, id_val) == 0) {
+                    if (g_conns[i] && strcmp(g_conns[i]->id, id_val) == 0) {
                         target = g_conns[i]->tsa;
                         break;
                     }
@@ -398,7 +399,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 tsa_snapshot_full_t snap;
                 if (tsa_take_snapshot_full(target, &snap) == 0) {
                     tsa_snapshot_to_json(target, &snap, resp, sizeof(resp));
-                    mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r", "%s",
+                    mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
                                   resp);
                 } else {
                     mg_http_reply(c, 500, NULL, "Snapshot unavailable");
@@ -406,8 +407,56 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             } else {
                 mg_http_reply(c, 404, NULL, "Stream ID not found or missing");
             }
+        } else if (mg_match(hm->uri, mg_str("/api/v1/config/streams"), NULL)) {
+            char* id_ptr = mg_json_get_str(hm->body, "$.stream_id");
+            char* url_ptr = mg_json_get_str(hm->body, "$.url");
+
+            if (id_ptr && url_ptr) {
+                if (strncmp(url_ptr, "udp://", 6) == 0) {
+                    int port = atoi(strrchr(url_ptr, ':') + 1);
+
+                    conn_t* nc = calloc(1, sizeof(conn_t));
+                    snprintf(nc->id, sizeof(nc->id), "%s", id_ptr);
+                    tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
+                    snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", id_ptr);
+
+                    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+                    struct sockaddr_in sa = {0};
+                    sa.sin_family = AF_INET;
+                    sa.sin_port = htons(port);
+                    sa.sin_addr.s_addr = INADDR_ANY;
+
+                    if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
+                        fcntl(udp_fd, F_SETFL, fcntl(udp_fd, F_GETFL, 0) | O_NONBLOCK);
+                        nc->fd = (SRTSOCKET)udp_fd;
+                        nc->type = CONN_UDP;
+                        nc->tsa = tsa_create(&cfg);
+                        nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+
+                        pthread_mutex_lock(&g_conn_lock);
+                        int idx = atomic_fetch_add(&g_conn_count, 1);
+                        nc->conn_idx = idx;
+                        g_conns[idx] = nc;
+                        pthread_mutex_unlock(&g_conn_lock);
+
+                        tsa_info(TAG, "[SUCCESS] Dynamic UDP stream %s active on port %d", id_ptr, port);
+                        mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
+                                      "{\"status\":\"ok\"}");
+                    } else {
+                        free(nc);
+                        close(udp_fd);
+                        mg_http_reply(c, 500, NULL, "Failed to bind UDP port");
+                    }
+                } else {
+                    mg_http_reply(c, 400, NULL, "Unsupported URL format");
+                }
+                free(id_ptr);
+                free(url_ptr);
+            } else {
+                mg_http_reply(c, 400, NULL, "Missing stream_id or url in JSON");
+            }
         } else {
-            mg_http_reply(c, 200, "", "TsAnalyzer Pro - Appliance Metric Gateway");
+            mg_http_reply(c, 200, "Access-Control-Allow-Origin: *\r\n", "TsAnalyzer Pro NOC Gateway");
         }
     }
 }
