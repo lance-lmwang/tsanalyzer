@@ -26,15 +26,85 @@
   },
   "panels": [
     {
-      "type": "row",
-      "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)",
+      "title": "GLOBAL MONITORING MATRIX (CLICK TO FOCUS)",
+      "type": "stat",
       "gridPos": {
-        "h": 1,
+        "h": 6,
         "w": 24,
         "x": 0,
         "y": 0
       },
-      "collapsed": false
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_system_health_score",
+          "legendFormat": "{{stream_id}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "textMode": "name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 90,
+                "to": 100,
+                "result": {
+                  "color": "green",
+                  "text": "STABLE"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 70,
+                "to": 90,
+                "result": {
+                  "color": "yellow",
+                  "text": "DEGRADED"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 70,
+                "result": {
+                  "color": "red",
+                  "text": "CRITICAL"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "color": "dark-red",
+                  "text": "LOST"
+                }
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "type": "stat",
@@ -43,7 +113,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 1
+        "y": 7
       },
       "datasource": {
         "type": "prometheus",
@@ -85,7 +155,7 @@
         "h": 4,
         "w": 12,
         "x": 6,
-        "y": 1
+        "y": 7
       },
       "datasource": {
         "type": "prometheus",
@@ -111,7 +181,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 1
+        "y": 7
       },
       "datasource": {
         "type": "prometheus",
@@ -135,7 +205,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 11
       },
       "collapsed": false
     },
@@ -146,7 +216,7 @@
         "h": 3,
         "w": 6,
         "x": 0,
-        "y": 6
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -165,7 +235,7 @@
         "h": 3,
         "w": 6,
         "x": 6,
-        "y": 6
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -184,7 +254,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 6
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -203,7 +273,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 6
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -222,7 +292,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 15
       },
       "collapsed": false
     },
@@ -233,7 +303,7 @@
         "h": 3,
         "w": 6,
         "x": 0,
-        "y": 10
+        "y": 16
       },
       "datasource": {
         "type": "prometheus",
@@ -252,7 +322,7 @@
         "h": 3,
         "w": 6,
         "x": 6,
-        "y": 10
+        "y": 16
       },
       "datasource": {
         "type": "prometheus",
@@ -271,7 +341,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 10
+        "y": 16
       },
       "datasource": {
         "type": "prometheus",
@@ -290,7 +360,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 10
+        "y": 16
       },
       "datasource": {
         "type": "prometheus",
@@ -309,7 +379,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 19
       },
       "collapsed": false
     },
@@ -320,7 +390,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 20
       },
       "datasource": {
         "type": "prometheus",
@@ -339,7 +409,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 24
       },
       "collapsed": false
     },
@@ -350,7 +420,7 @@
         "h": 15,
         "w": 18,
         "x": 0,
-        "y": 19
+        "y": 25
       },
       "datasource": {
         "type": "prometheus",
@@ -375,7 +445,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 40
       },
       "collapsed": false
     },
@@ -386,7 +456,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 50
       },
       "collapsed": false
     },
@@ -397,7 +467,7 @@
         "h": 16,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",

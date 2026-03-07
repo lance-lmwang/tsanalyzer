@@ -71,7 +71,49 @@ The appliance avoids "Alarm Storms" by mapping severity to specific layers:
 
 ---
 
-## 4. The "Insight" Pipeline
+## 5. Professional NOC Implementation Specification
 
-TsAnalyzer's ultimate value is the transition from **Data** to **Insight**:
-`Packet Processing (SIMD) -> Measurement (PLL) -> Simulation (T-STD) -> Insight (RCA)`
+To ensure metrological consistency across all monitoring surfaces, the following technical standards are mandated:
+
+### 5.1 Global API & Metric Standards
+*   **Standardized Port**: All telemetry is exported via TCP port **8088**.
+*   **Metric Namespaces**:
+    *   `tsa_system_*`: Core appliance status (Health Score, Signal Lock).
+    *   `tsa_metrology_*`: Precision clock and bitrate measurements.
+    *   `tsa_compliance_*`: ETR 290 and standard violation counters.
+*   **Protocol Compliance**: HTTP responses must include `Content-Type: text/plain; version=0.0.4`.
+
+### 5.2 Visual Layout Standards (Mosaic-First Design)
+
+#### TIER 0: GLOBAL FLEET MOSAIC (WALL)
+The primary entry point for NOC operators. It must be implemented as a compact color matrix.
+*   **Visual Target**: **1x8 or 8xN tight grid**.
+*   **Component**: `stat` panel.
+*   **Key Options**: 
+    *   `Orientation`: Horizontal.
+    *   `Text Mode`: Name (Stream ID only).
+    *   `Color Mode`: Background (Solid fill based on thresholds).
+    *   `RedOptions`: `Values: False`, `Calcs: ["lastNotNull"]`.
+
+#### TIER 1-7: FOCUSED INSIGHT PLANE
+Detailed diagnostic panels linked via the `$stream` variable.
+*   **L1/L2 (Transport)**: Gauge or Stat panels showing real-time CC/PAT/PMT violations.
+*   **L3 (Timing)**: Time-series graphs for PCR Jitter (ms) and Frequency Drift (ppm).
+*   **L4 (Dynamics)**: Throughput graphs comparing Physical vs. Content bitrates.
+*   **L5 (Buffer)**: Predictive RST (Remaining Safe Time) status.
+*   **L6 (Content)**: Video vital stats (FPS, GOP structure).
+*   **L7 (RCA)**: Intelligent text-based correlation.
+
+### 5.3 ASCII Layout Representation
+```text
++-----------------------------------------------------------------------+
+|  [ ST-1 ]  [ ST-2 ]  [ ST-3 ]  [ ST-4 ]  [ ST-5 ]  [ ST-6 ]  [ ST-7 ]  |
++-----------------------------------------------------------------------+
+| TIER 1: Master Health (Gauge)  |  TIER 3: ETR 290 P1 (Error List)     |
++--------------------------------+--------------------------------------+
+| TIER 4: PCR Jitter Graph (~~)  |  TIER 5: PID Bitrate Revenue         |
++--------------------------------+--------------------------------------+
+| TIER 6: Content Vitals (FPS)   |  TIER 7: ALARM EVENT LOG (Table)     |
++--------------------------------+--------------------------------------+
+```
+
