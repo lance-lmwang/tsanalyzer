@@ -4,190 +4,412 @@
   "refresh": "5s",
   "schemaVersion": 36,
   "version": 1,
-  "time": { "from": "now-15m", "to": "now" },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "graphTooltip": 1,
   "templating": {
     "list": [
       {
         "name": "stream",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
         "query": "label_values(tsa_system_health_score, stream_id)",
         "refresh": 1,
-        "includeAll": false,
-        "multi": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "label": "Focus Stream"
       }
     ]
   },
   "panels": [
     {
-      "title": "GLOBAL MONITORING MATRIX (CLICK TO FOCUS)",
-      "type": "stat",
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_system_health_score", "legendFormat": "{{stream_id}}" }],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            { "type": "range", "options": { "from": 90, "to": 100, "result": { "color": "green", "text": "STABLE" } } },
-            { "type": "range", "options": { "from": 70, "to": 90, "result": { "color": "yellow", "text": "DEGRADED" } } },
-            { "type": "range", "options": { "from": 1, "to": 70, "result": { "color": "red", "text": "CRITICAL" } } },
-            { "type": "value", "options": { "0": { "color": "dark-red", "text": "LOST" } } }
-          ],
-          "links": [
-            { "title": "Focus on ${__series.name}", "url": "/d/stream-focus?var-stream=${__series.name}", "targetBlank": false }
-          ]
-        }
-      },
-      "options": {
-        "reduceOptions": { "values": false, "calcs": ["lastNotNull"] },
-        "orientation": "horizontal",
-        "textMode": "name",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
-      }
-    },
-    {
       "type": "row",
-      "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS) - $stream",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "title": "TIER 1: MASTER CONTROL CONSOLE (SIGNAL STATUS)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "collapsed": false
     },
     {
       "type": "stat",
       "title": "SIGNAL PRESENCE",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_system_signal_locked{stream_id=\"$stream\"}" }],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_system_signal_locked{stream_id=\"$stream\"}"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "LOST", "color": "red" }, "1": { "text": "LOCKED", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "LOST",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "LOCKED",
+                  "color": "green"
+                }
+              }
+            }
           ]
         }
       },
-      "options": { "colorMode": "background", "justifyMode": "center" }
+      "options": {
+        "colorMode": "background",
+        "justifyMode": "center"
+      }
     },
     {
       "type": "gauge",
       "title": "SIGNAL FIDELITY",
-      "gridPos": { "h": 4, "w": 12, "x": 6, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_system_health_score{stream_id=\"$stream\"}" }],
-      "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent" } }
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 6,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_system_health_score{stream_id=\"$stream\"}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent"
+        }
+      }
     },
     {
       "type": "stat",
       "title": "ENGINE DETERMINISM",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
-        { "expr": "tsa_system_internal_drop_count{stream_id=\"$stream\"}", "legendFormat": "Drops" },
-        { "expr": "tsa_system_worker_overruns{stream_id=\"$stream\"}", "legendFormat": "Overruns" }
+        {
+          "expr": "tsa_system_internal_drop_count{stream_id=\"$stream\"}",
+          "legendFormat": "Drops"
+        },
+        {
+          "expr": "tsa_system_worker_overruns{stream_id=\"$stream\"}",
+          "legendFormat": "Overruns"
+        }
       ]
     },
     {
       "type": "row",
       "title": "TIER 2: TRANSPORT & LINK INTEGRITY (SRT/MDI)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 11 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
       "collapsed": false
     },
     {
       "type": "stat",
       "title": "Link Capacity",
-      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_metrology_physical_bitrate_bps{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_metrology_physical_bitrate_bps{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "stat",
       "title": "SRT NAK",
-      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_transport_srt_retransmit_rate{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_srt_nak_count{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "stat",
       "title": "SRT RTT",
-      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_transport_srt_rtt_ms{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_srt_rtt_ms{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "stat",
       "title": "MDI DF",
-      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_transport_mdi_df_ms{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_transport_mdi_df_ms{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "row",
       "title": "TIER 3: ETR 290 P1 (CRITICAL COMPLIANCE)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
       "collapsed": false
     },
     {
       "type": "stat",
       "title": "Sync Loss",
-      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_compliance_tr101290_p1_sync_loss_total{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_compliance_tr101290_p1_sync_loss_total{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "stat",
       "title": "PAT Error",
-      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_compliance_tr101290_p1_pat_errors_total{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_compliance_tr101290_p1_pat_errors_total{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "stat",
       "title": "PMT Error",
-      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_compliance_tr101290_p1_pmt_errors_total{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_compliance_tr101290_p1_pmt_errors_total{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "stat",
       "title": "CC Error",
-      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_compliance_tr101290_p1_cc_errors_total{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_compliance_tr101290_p1_cc_errors_total{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "row",
       "title": "TIER 4: ETR 290 P2 (CLOCK & TIMING)",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
       "collapsed": false
     },
     {
       "type": "timeseries",
       "title": "PCR JITTER & ACCURACY",
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 20 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_metrology_pcr_jitter_ms{stream_id=\"$stream\"}" }]
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "tsa_metrology_pcr_jitter_ms{stream_id=\"$stream\"}"
+        }
+      ]
     },
     {
       "type": "row",
-      "title": "TIER 5 & 6: SERVICE DYNAMICS & CONTENT",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "title": "TIER 5: SERVICE PAYLOAD DYNAMICS (MUX)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
       "collapsed": false
     },
     {
       "type": "timeseries",
       "title": "PID BITRATE REVENUE",
-      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum by (pid) (tsa_metrology_pid_bitrate_bps{stream_id=\"$stream\"})" }]
+      "gridPos": {
+        "h": 15,
+        "w": 18,
+        "x": 0,
+        "y": 19
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (pid, type) (tsa_metrology_pid_bitrate_bps{stream_id=\"$stream\"})"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
+      }
     },
     {
-      "type": "stat",
-      "title": "Video FPS",
-      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "tsa_essence_video_fps{stream_id=\"$stream\"}" }]
+      "type": "row",
+      "title": "TIER 6: ESSENCE QUALITY & TEMPORAL STABILITY",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "collapsed": false
+    },
+    {
+      "type": "row",
+      "title": "TIER 7: ALARM RECAP & FORENSIC AUDIT TRAIL",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "collapsed": false
+    },
+    {
+      "type": "table",
+      "title": "ALARM EVENT LOG",
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "increase(tsa_compliance_tr101290_p1_cc_errors_total{stream_id=\"$stream\"}[1h]) > 0",
+          "format": "table"
+        }
+      ]
     }
-  ]
+  ],
+  "editable": true
 }
