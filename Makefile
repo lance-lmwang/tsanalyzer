@@ -115,11 +115,19 @@ lint:
 
 format:
 	@echo "$(BLUE)=== Formatting Code ===$(RESET)"
-	@find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format -i
+	@if command -v clang-format >/dev/null 2>&1; then \
+		find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format -i; \
+	else \
+		echo "WARNING: clang-format not found, skipping formatting."; \
+	fi
 
 check-format:
 	@echo "$(BLUE)=== Checking Code Format ===$(RESET)"
-	@find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format --dry-run --Werror
+	@if command -v clang-format >/dev/null 2>&1; then \
+		find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format --dry-run --Werror; \
+	else \
+		echo "WARNING: clang-format not found, skipping format check."; \
+	fi
 install: release
 	@echo "$(BLUE)=== Installing to $(INSTALL_PREFIX) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(MAKE) install

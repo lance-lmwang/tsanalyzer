@@ -186,10 +186,11 @@
             const v = parseFloat(val);
             const s = newStreams[id];
 
-            if (name === 'tsa_health_score') s.health = v;
-            if (name === 'tsa_signal_lock_status') s.lock = v > 0;
+            if (name === 'tsa_system_health_score') s.health = v;
+            if (name === 'tsa_system_signal_locked') s.lock = v > 0;
 
-            if (name === 'tsa_tr101290_errors') {
+            if (name === 'tsa_compliance_tr101290_errors') {
+
                 const typeMatch = line.match(/error_type="([^"]+)"/);
                 if (typeMatch) {
                     const type = typeMatch[1];
@@ -257,11 +258,12 @@
 
         // Matrix Mapping
         const m = {
-            'm-sync': compliance.p1.sync_loss, 'm-pat': compliance.p1.pat_error,
-            'm-pmt': compliance.p1.pmt_error, 'm-cc': compliance.p1.cc_error,
-            'm-tei': compliance.p2.transport_error, 'm-crc': compliance.p2.crc_error,
-            'm-pcrj': compliance.p2.pcr_jitter_ms > 50, 'm-pcrr': compliance.p2.pcr_repetition
+            'm-sync': compliance.p1.sync_loss?.count || 0, 'm-pat': compliance.p1.pat_error?.count || 0,
+            'm-pmt': compliance.p1.pmt_error?.count || 0, 'm-cc': compliance.p1.cc_error?.count || 0,
+            'm-tei': compliance.p2.transport_error?.count || 0, 'm-crc': compliance.p2.crc_error?.count || 0,
+            'm-pcrj': compliance.p2.pcr_jitter_ms > 50, 'm-pcrr': compliance.p2.pcr_repetition?.count || 0
         };
+
         for(let id in m) {
             const el = document.getElementById(id);
             if (el) el.style.background = m[id] > 0 ? COLORS.ALARM : COLORS.OK;
@@ -269,7 +271,7 @@
 
         document.getElementById('v-fps').innerText = (essence.video_fps || 0).toFixed(2);
         document.getElementById('v-gop').innerText = (essence.gop_ms || 0) + "ms";
-        document.getElementById('v-av').innerText = (essence.av_sync_offset_ms >= 0 ? "+" : "") + (essence.av_sync_offset_ms || 0) + "ms";
+        document.getElementById('v-av').innerText = (essence.av_sync_ms >= 0 ? "+" : "") + (essence.av_sync_ms || 0) + "ms";
         document.getElementById('v-br').innerText = ((link.physical_bitrate_bps || 0)/1e6).toFixed(1) + "M";
 
         document.getElementById('v-rst-n').innerText = (predictive.rst_network_s || 0).toFixed(1) + "s";
@@ -288,9 +290,10 @@
         // Update Charts
         history.fps.push(essence.video_fps || 0);
         history.gop.push(essence.gop_ms || 0);
-        history.av.push(essence.av_sync_offset_ms || 0);
+        history.av.push(essence.av_sync_ms || 0);
         history.br.push((link.physical_bitrate_bps || 0)/1e6);
         history.mdi.push(link.mdi_df_ms || 0);
+
         if(history.fps.length > MAX_DATA) Object.values(history).forEach(a => a.shift());
 
         drawSeries('c-fps', [{data:history.fps, color:COLORS.OK}], 60);

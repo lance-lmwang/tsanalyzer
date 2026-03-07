@@ -121,6 +121,14 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 conf->http_listen_port = atoi(p.lookahead.text);
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
+            } else if (strcmp(word, "srt_listen") == 0) {
+                conf->srt_listen_port = atoi(p.lookahead.text);
+                next_token(&p);
+                match(&p, TSA_TOKEN_SEMICOLON);
+            } else if (strcmp(word, "worker_threads") == 0) {
+                conf->worker_threads = atoi(p.lookahead.text);
+                next_token(&p);
+                match(&p, TSA_TOKEN_SEMICOLON);
             } else if (strcmp(word, "stream") == 0) {
                 char id[TSA_ID_MAX];
                 snprintf(id, sizeof(id), "%s", p.lookahead.text);

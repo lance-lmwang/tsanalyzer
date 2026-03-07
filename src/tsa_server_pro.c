@@ -23,6 +23,7 @@
 #include "mpmc_queue.h"
 #include "spsc_queue.h"
 #include "tsa.h"
+#include "tsa_conf.h"
 #include "tsa_internal.h"
 #include "tsa_log.h"
 
@@ -31,7 +32,6 @@
 #define MAX_CONNS 4096
 #define HTTP_PORT "8088"
 #define PACKET_BUF_SIZE 65536
-#define WORKER_THREADS 16
 #define ANA_QUEUE_SIZE 512
 
 typedef enum { CONN_UDP, CONN_SRT_LISTENER, CONN_SRT_CLIENT } conn_type_t;
@@ -64,62 +64,58 @@ extern void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, s
 extern void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz);
 extern void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t sz);
 
+static tsa_full_conf_t g_sys_conf;
+
 static void load_config(const char* file) {
-    FILE* fp = fopen(file, "r");
-    if (!fp) return;
-    char line[512], id[64], url[256];
+    g_sys_conf.http_listen_port = 8088;
+    g_sys_conf.srt_listen_port = 9000;
+    g_sys_conf.worker_threads = 16;
+
+    if (tsa_conf_load(&g_sys_conf, file) != 0) {
+        tsa_error(TAG, "Failed to load configuration: %s. Using internal defaults.", file);
+    }
+
+    g_http_port = g_sys_conf.http_listen_port;
+    g_srt_port = g_sys_conf.srt_listen_port;
+
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
     sa.sin_addr.s_addr = INADDR_ANY;
 
-    while (fgets(line, sizeof(line), fp) && atomic_load(&g_conn_count) < MAX_CONNS) {
-        if (line[0] == '#' || line[0] == '\n') continue;
-        if (strncmp(line, "GLOBAL", 6) == 0) {
-            char key[32];
-            int val;
-            if (sscanf(line + 7, "%s %d", key, &val) == 2) {
-                if (strcmp(key, "http_port") == 0)
-                    g_http_port = val;
-                else if (strcmp(key, "srt_port") == 0)
-                    g_srt_port = val;
-            }
-            continue;
-        }
-        if (sscanf(line, "%s %s", id, url) == 2) {
-            conn_t* c = calloc(1, sizeof(conn_t));
-            snprintf(c->id, sizeof(c->id), "%s", id);
-            tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
-            snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", id);
+    for (int i = 0; i < g_sys_conf.stream_count; i++) {
+        if (atomic_load(&g_conn_count) >= MAX_CONNS) break;
+        tsa_stream_conf_t* sc = &g_sys_conf.streams[i];
 
-            if (strncmp(url, "udp://", 6) == 0) {
-                char* p_str = strrchr(url, ':');
-                int port = p_str ? atoi(p_str + 1) : 19001;
-                int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
-                sa.sin_port = htons(port);
-                if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
-                    int flags = fcntl(udp_fd, F_GETFL, 0);
-                    fcntl(udp_fd, F_SETFL, flags | O_NONBLOCK);
-                    c->fd = (SRTSOCKET)udp_fd;
-                    c->type = CONN_UDP;
-                    c->tsa = tsa_create(&cfg);
-                    c->tx_q = spsc_queue_create(1024);
-                    c->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
-                    atomic_init(&c->scheduled, false);
-                    pthread_mutex_lock(&g_conn_lock);
-                    int idx = atomic_fetch_add(&g_conn_count, 1);
-                    c->conn_idx = idx;
-                    g_conns[idx] = c;
-                    pthread_mutex_unlock(&g_conn_lock);
-                    tsa_info(TAG, "Configured UDP stream %s on port %d", id, port);
-                } else {
-                    free(c);
-                    close(udp_fd);
-                }
+        conn_t* c = calloc(1, sizeof(conn_t));
+        snprintf(c->id, sizeof(c->id), "%s", sc->id);
+
+        if (strncmp(sc->cfg.url, "udp://", 6) == 0) {
+            char* p_str = strrchr(sc->cfg.url, ':');
+            int port = p_str ? atoi(p_str + 1) : 19001;
+            int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+            sa.sin_port = htons(port);
+            if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
+                fcntl(udp_fd, F_SETFL, fcntl(udp_fd, F_GETFL, 0) | O_NONBLOCK);
+                c->fd = (SRTSOCKET)udp_fd;
+                c->type = CONN_UDP;
+                c->tsa = tsa_create(&sc->cfg);
+                c->tx_q = spsc_queue_create(1024);
+                c->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+                atomic_init(&c->scheduled, false);
+
+                pthread_mutex_lock(&g_conn_lock);
+                int idx = atomic_fetch_add(&g_conn_count, 1);
+                c->conn_idx = idx;
+                g_conns[idx] = c;
+                pthread_mutex_unlock(&g_conn_lock);
+                tsa_info(TAG, "Configured UDP stream [%s] on port %d", sc->id, port);
+            } else {
+                tsa_error(TAG, "Failed to bind UDP port %d for stream [%s]", port, sc->id);
+                free(c);
+                close(udp_fd);
             }
-            /* SRT Caller or other types can be added here */
         }
     }
-    fclose(fp);
 }
 
 static uint64_t g_cycles_per_us = 3000;
@@ -515,7 +511,8 @@ static void cleanup_and_exit(int shm_fd, tsa_top_shm_block_t* shm_block, struct 
     mg_mgr_free(mgr);
 
     pthread_join(t_io, NULL);
-    for (int i = 0; i < WORKER_THREADS; i++) pthread_join(t_workers[i], NULL);
+    for (int i = 0; i < g_sys_conf.worker_threads; i++) pthread_join(t_workers[i], NULL);
+    free(t_workers);
     srt_epoll_release(srt_eid);
     srt_cleanup();
     for (int i = 0; i < (int)atomic_load(&g_conn_count); i++) {
@@ -531,9 +528,81 @@ static void cleanup_and_exit(int shm_fd, tsa_top_shm_block_t* shm_block, struct 
     mpmc_queue_destroy(g_ready_queue);
 }
 
-static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
-    uint64_t last_shm_update = 0;
+static void* shm_thread(void* arg) {
+    tsa_top_shm_block_t* shm_block = (tsa_top_shm_block_t*)arg;
+    if (!shm_block) return NULL;
 
+    tsa_info(TAG, "SHM Update Thread Active");
+    while (atomic_load(&g_run)) {
+        uint64_t now = (uint64_t)ts_now_ns128();
+        int total = atomic_load(&g_conn_count);
+
+        // Write sequence lock: using atomic pointer logic since seq_lock is part of SHM
+        uint64_t seq = atomic_load_explicit((_Atomic uint64_t*)&shm_block->seq_lock, memory_order_acquire);
+        atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 1, memory_order_release);  // Make it odd
+
+        shm_block->num_active_streams = 0;
+        double total_health = 0.0;
+
+        for (int i = 0; i < total && i < TSA_TOP_MAX_STREAMS; i++) {
+            conn_t* c = g_conns[i];
+            if (c && c->tsa && !atomic_load(&c->closed)) {
+                tsa_snapshot_full_t snap;
+                if (tsa_take_snapshot_full(c->tsa, &snap) == 0) {
+                    tsa_top_stream_info_t* info = &shm_block->streams[shm_block->num_active_streams];
+                    memset(info, 0, sizeof(*info));
+                    snprintf(info->stream_id, sizeof(info->stream_id), "%s", c->id);
+                    info->total_packets = snap.summary.total_packets;
+                    info->current_bitrate_mbps = snap.summary.physical_bitrate_bps / 1000000.0;
+                    info->master_health = snap.summary.master_health;
+
+                    info->cc_errors = snap.stats.cc_loss_count + snap.stats.cc_duplicate_count;
+                    info->p1_errors = snap.stats.alarm_sync_loss + snap.stats.alarm_pat_error +
+                                      snap.stats.alarm_cc_error + snap.stats.alarm_pmt_error;
+                    info->p2_errors = snap.stats.alarm_pcr_repetition_error + snap.stats.alarm_pcr_accuracy_error +
+                                      snap.stats.alarm_crc_error;
+                    info->p3_errors = snap.stats.alarm_sdt_error;
+
+                    info->pcr_jitter_p99_ms = snap.stats.pcr_jitter_max_ns / 1000000.0;
+                    info->mdi_df_ms = snap.stats.mdi_df_ms;
+
+                    info->rst_net_s = snap.predictive.rst_network_s;
+                    info->rst_enc_s = snap.predictive.rst_encoder_s;
+                    info->drift_ppm = snap.predictive.stc_wall_drift_ppm;
+                    info->drift_long_ppm = snap.predictive.long_term_drift_ppm;
+
+                    for (uint32_t j = 0; j < snap.active_pid_count; j++) {
+                        if (snap.pids[j].width > 0 && info->width == 0) {
+                            info->width = (double)snap.pids[j].width;
+                            info->height = (double)snap.pids[j].height;
+                            info->fps = (snap.pids[j].gop_ms > 0)
+                                            ? ((double)snap.pids[j].gop_n * 1000.0 / snap.pids[j].gop_ms)
+                                            : 0.0;
+                            info->gop_ms = (double)snap.pids[j].gop_ms;
+                        }
+                        if (snap.pids[j].has_cea708) info->has_cea708 = 1;
+                        if (snap.pids[j].has_scte35) info->has_scte35 = 1;
+                    }
+
+                    info->is_active = 1;
+                    total_health += snap.summary.master_health;
+                    shm_block->num_active_streams++;
+                }
+            }
+        }
+        if (shm_block->num_active_streams > 0) {
+            shm_block->global_health = total_health / shm_block->num_active_streams;
+        } else {
+            shm_block->global_health = 0.0;
+        }
+
+        atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 2, memory_order_release);  // Back to even
+        usleep(500000);  // 500ms update interval
+    }
+    return NULL;
+}
+
+static void run_main_loop(struct mg_mgr* mgr) {
     while (atomic_load(&g_run)) {
         mg_mgr_poll(mgr, 50);
 
@@ -554,73 +623,6 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
                 }
             }
         }
-
-        // Update Shared Memory (every ~500ms) with Sequence Locking
-        if (shm_block && (now - last_shm_update) > 500000000ULL) {
-            // Write sequence lock: using atomic pointer logic since seq_lock is part of SHM
-            uint64_t seq = atomic_load_explicit((_Atomic uint64_t*)&shm_block->seq_lock, memory_order_acquire);
-            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 1,
-                                  memory_order_release);  // Make it odd
-
-            shm_block->num_active_streams = 0;
-            double total_health = 0.0;
-
-            for (int i = 0; i < total && i < TSA_TOP_MAX_STREAMS; i++) {
-                conn_t* c = g_conns[i];
-                if (c && c->tsa && !atomic_load(&c->closed)) {
-                    tsa_snapshot_full_t snap;
-                    if (tsa_take_snapshot_full(c->tsa, &snap) == 0) {
-                        tsa_top_stream_info_t* info = &shm_block->streams[shm_block->num_active_streams];
-                        memset(info, 0, sizeof(*info));
-                        snprintf(info->stream_id, sizeof(info->stream_id), "%s", c->id);
-                        info->total_packets = snap.summary.total_packets;
-                        info->current_bitrate_mbps = snap.summary.physical_bitrate_bps / 1000000.0;
-                        info->master_health = snap.summary.master_health;
-
-                        info->cc_errors = snap.stats.cc_loss_count + snap.stats.cc_duplicate_count;
-                        info->p1_errors = snap.stats.alarm_sync_loss + snap.stats.alarm_pat_error +
-                                          snap.stats.alarm_cc_error + snap.stats.alarm_pmt_error;
-                        info->p2_errors = snap.stats.alarm_pcr_repetition_error + snap.stats.alarm_pcr_accuracy_error +
-                                          snap.stats.alarm_crc_error;
-                        info->p3_errors = snap.stats.alarm_sdt_error;
-
-                        info->pcr_jitter_p99_ms = snap.stats.pcr_jitter_max_ns / 1000000.0;
-                        info->mdi_df_ms = snap.stats.mdi_df_ms;
-
-                        info->rst_net_s = snap.predictive.rst_network_s;
-                        info->rst_enc_s = snap.predictive.rst_encoder_s;
-                        info->drift_ppm = snap.predictive.stc_wall_drift_ppm;
-                        info->drift_long_ppm = snap.predictive.long_term_drift_ppm;
-
-                        for (uint32_t j = 0; j < snap.active_pid_count; j++) {
-                            if (snap.pids[j].width > 0 && info->width == 0) {
-                                info->width = (double)snap.pids[j].width;
-                                info->height = (double)snap.pids[j].height;
-                                info->fps = (snap.pids[j].gop_ms > 0)
-                                                ? ((double)snap.pids[j].gop_n * 1000.0 / snap.pids[j].gop_ms)
-                                                : 0.0;
-                                info->gop_ms = (double)snap.pids[j].gop_ms;
-                            }
-                            if (snap.pids[j].has_cea708) info->has_cea708 = 1;
-                            if (snap.pids[j].has_scte35) info->has_scte35 = 1;
-                        }
-
-                        info->is_active = 1;
-                        total_health += snap.summary.master_health;
-                        shm_block->num_active_streams++;
-                    }
-                }
-            }
-            if (shm_block->num_active_streams > 0) {
-                shm_block->global_health = total_health / shm_block->num_active_streams;
-            } else {
-                shm_block->global_health = 0.0;
-            }
-
-            atomic_store_explicit((_Atomic uint64_t*)&shm_block->seq_lock, seq + 2,
-                                  memory_order_release);  // Back to even
-            last_shm_update = now;
-        }
     }
 }
 
@@ -638,9 +640,10 @@ int main(int argc, char** argv) {
     int srt_eid;
     setup_srt_listener(&sl, &srt_eid);
 
-    pthread_t t_io, t_workers[WORKER_THREADS];
+    pthread_t t_io, t_shm;
+    pthread_t* t_workers = malloc(sizeof(pthread_t) * g_sys_conf.worker_threads);
     pthread_create(&t_io, NULL, io_thread, (void*)(intptr_t)srt_eid);
-    for (int i = 0; i < WORKER_THREADS; i++) pthread_create(&t_workers[i], NULL, worker_thread, NULL);
+    for (int i = 0; i < g_sys_conf.worker_threads; i++) pthread_create(&t_workers[i], NULL, worker_thread, NULL);
 
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
@@ -652,9 +655,12 @@ int main(int argc, char** argv) {
     int shm_fd;
     tsa_top_shm_block_t* shm_block;
     init_shm(&shm_fd, &shm_block);
+    pthread_create(&t_shm, NULL, shm_thread, shm_block);
 
-    run_main_loop(&mgr, shm_block);
+    run_main_loop(&mgr);
 
+    atomic_store(&g_run, false);
+    pthread_join(t_shm, NULL);
     cleanup_and_exit(shm_fd, shm_block, &mgr, t_io, t_workers, srt_eid);
     return 0;
 }
