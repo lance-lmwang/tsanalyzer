@@ -13,11 +13,11 @@ Migrate `tsanalyzer` to a carrier-grade programmable pipeline architecture with 
     - Replace legacy config parsing in `tsa_server.c` and `tsa_cli.c`.
 
 ## 3. Phase 2: Data Plane & Pipeline Framework
-- [ ] **Task 2.1: Memory Model (Slab & Zero-Copy)**
+- [x] **Task 2.1: Memory Model (Slab & Zero-Copy)**
     - Implement 188-byte Packet Pool and metadata reference counting.
-- [ ] **Task 2.2: Threading Model (Reactor-Worker)**
+- [x] **Task 2.2: Threading Model (Reactor-Worker)**
     - Implement non-blocking IO Reactor and affinity-bound Worker Pool.
-- [ ] **Task 2.3: Pipeline Stages**
+- [x] **Task 2.3: Pipeline Stages**
     - Define Stage interface and implement dynamic assembly (tap model).
 
 ## 4. Phase 3: Metrology & Action Engine

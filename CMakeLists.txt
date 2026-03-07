@@ -63,13 +63,14 @@ add_library(tsp_core STATIC
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
     src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
+    src/tsa_pipeline.c src/tsa_packet_pool.c
 )
 target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 
 # Main Executables
 macro(tsa_exe name src)
     add_executable(${name} ${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 endmacro()
 
 tsa_exe(tsp src/tsp_main.c)
@@ -92,7 +93,7 @@ tsa_exe(tsa_hls_test tools/tsa_hls_test.c)
 enable_testing()
 macro(tsa_test name src)
     add_executable(${name} tests/${src})
-    target_link_libraries(${name} tsp_core m pthread)
+    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
     add_test(NAME ${name} COMMAND ${name})
 endmacro()
 
@@ -207,3 +208,5 @@ tsa_test(test_webhook_async test_webhook_async.c)
 tsa_test(test_alert_state_machine test_alert_state_machine.c)
 tsa_test(test_units test_units.c)
 tsa_test(test_conf test_conf.c)
+tsa_test(test_pipeline test_pipeline.c)
+tsa_test(test_packet_pool test_packet_pool.c)
