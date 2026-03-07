@@ -99,13 +99,13 @@ static void pcap_packet_callback(u_char* user, const struct pcap_pkthdr* h, cons
         return;
     }
 
-    if (h->caplen < offset + 20 + 8) return;
+    if (h->caplen < (uint32_t)(offset + 20 + 8)) return;
 
     struct iphdr* ip = (struct iphdr*)(pkt + offset);
     if (ip->version != 4 || ip->protocol != IPPROTO_UDP) return;
 
     int ip_hdr_len = ip->ihl * 4;
-    if (h->caplen < offset + ip_hdr_len + 8) return;
+    if (h->caplen < (uint32_t)(offset + ip_hdr_len + 8)) return;
 
     struct udphdr* udp = (struct udphdr*)(pkt + offset + ip_hdr_len);
     uint8_t* payload = (uint8_t*)udp + 8;

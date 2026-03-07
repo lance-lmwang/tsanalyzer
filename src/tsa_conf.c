@@ -29,12 +29,12 @@ static bool match(parser_t* p, tsa_token_type_t type) {
 static void parse_metrology(parser_t* p, tsa_config_t* cfg) {
     match(p, TSA_TOKEN_LBRACE);
     while (p->lookahead.type == TSA_TOKEN_WORD) {
-        char key[128];
-        strncpy(key, p->lookahead.text, sizeof(key) - 1);
+        char key[256];
+        snprintf(key, sizeof(key), "%s", p->lookahead.text);
         next_token(p);
 
-        char val[128];
-        strncpy(val, p->lookahead.text, sizeof(val) - 1);
+        char val[256];
+        snprintf(val, sizeof(val), "%s", p->lookahead.text);
         next_token(p);
         match(p, TSA_TOKEN_SEMICOLON);
 
@@ -49,23 +49,23 @@ static void parse_metrology(parser_t* p, tsa_config_t* cfg) {
 static void parse_stream(parser_t* p, const char* id) {
     if (p->conf->stream_count >= MAX_STREAMS_IN_CONF) return;
     tsa_stream_conf_t* sc = &p->conf->streams[p->conf->stream_count++];
-    strncpy(sc->id, id, sizeof(sc->id) - 1);
+    snprintf(sc->id, sizeof(sc->id), "%s", id);
 
     // Inherit from default vhost initially
     memcpy(&sc->cfg, &p->conf->vhost_default, sizeof(tsa_config_t));
 
     match(p, TSA_TOKEN_LBRACE);
     while (p->lookahead.type == TSA_TOKEN_WORD) {
-        char block[128];
-        strncpy(block, p->lookahead.text, sizeof(block) - 1);
+        char block[256];
+        snprintf(block, sizeof(block), "%s", p->lookahead.text);
         next_token(p);
 
         if (strcmp(block, "input") == 0) {
-            strncpy(sc->cfg.url, p->lookahead.text, sizeof(sc->cfg.url) - 1);
+            snprintf(sc->cfg.url, sizeof(sc->cfg.url), "%s", p->lookahead.text);
             next_token(p);
             match(p, TSA_TOKEN_SEMICOLON);
         } else if (strcmp(block, "label") == 0) {
-            strncpy(sc->cfg.input_label, p->lookahead.text, sizeof(sc->cfg.input_label) - 1);
+            snprintf(sc->cfg.input_label, sizeof(sc->cfg.input_label), "%s", p->lookahead.text);
             next_token(p);
             match(p, TSA_TOKEN_SEMICOLON);
         } else if (strcmp(block, "metrology") == 0) {
@@ -113,8 +113,8 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
 
     while (p.lookahead.type != TSA_TOKEN_EOF) {
         if (p.lookahead.type == TSA_TOKEN_WORD) {
-            char word[128];
-            strncpy(word, p.lookahead.text, sizeof(word) - 1);
+            char word[256];
+            snprintf(word, sizeof(word), "%s", p.lookahead.text);
             next_token(&p);
 
             if (strcmp(word, "http_listen") == 0) {
@@ -122,8 +122,8 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
             } else if (strcmp(word, "stream") == 0) {
-                char id[64];
-                strncpy(id, p.lookahead.text, sizeof(id) - 1);
+                char id[256];
+                snprintf(id, sizeof(id), "%s", p.lookahead.text);
                 next_token(&p);
                 parse_stream(&p, id);
             } else {

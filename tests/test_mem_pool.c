@@ -20,9 +20,11 @@ void test_basic_allocation() {
     assert(h != NULL);
 
     void* slab1 = tsa_mem_pool_alloc(h, sizeof(test_slab_t));
+    (void)slab1;
     assert(slab1 != NULL);
 
     void* slab2 = tsa_mem_pool_alloc(h, sizeof(test_slab_t));
+    (void)slab2;
     assert(slab2 != NULL);
     assert(slab1 != slab2);
 

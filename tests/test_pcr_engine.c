@@ -44,7 +44,7 @@ void test_regression() {
 
     double slope;
     double intercept;
-    int ret = ts_pcr_window_regress(&w, &slope, &intercept, NULL);
+    int ret __attribute__((unused)) = ts_pcr_window_regress(&w, &slope, &intercept, NULL);
 
     assert(ret == 0);
     // Slope should be 2.0
@@ -75,7 +75,7 @@ void test_jitter() {
     ts_pcr_window_regress(&w, &slope, &intercept, NULL);
 
     int128_t predicted = (int128_t)(slope * sys_now + intercept);
-    int64_t residual = (int64_t)(pcr_now - predicted);
+    int64_t residual __attribute__((unused)) = (int64_t)(pcr_now - predicted);
 
     // Residual should be positive and roughly 50ns (minus the slope pull)
     assert(residual > 0 && residual < 60);

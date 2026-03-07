@@ -41,7 +41,7 @@ void test_crc_error_pat() {
     memcpy(pkt + 5, pat_v1_bad, 20);
     pkt[3] = 0x12;  // CC 2
 
-    uint64_t prev_crc_errors = h->live->crc_error.count;
+    uint64_t prev_crc_errors __attribute__((unused)) = h->live->crc_error.count;
     tsa_decode_packet(h, pkt, 2000, &res);
 
     assert(h->live->crc_error.count == prev_crc_errors + 1);

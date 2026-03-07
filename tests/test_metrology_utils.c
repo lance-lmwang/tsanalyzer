@@ -12,9 +12,11 @@ void test_time_conversion() {
 
     // 1234567890 * 10^9 + 500,000,000
     __int128_t expected = (__int128_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+    (void)expected;
     assert(ns == expected);
 
     struct timespec back = ns128_to_timespec(ns);
+    (void)back;
     assert(back.tv_sec == ts.tv_sec);
     assert(back.tv_nsec == ts.tv_nsec);
 
@@ -34,7 +36,9 @@ void test_fixed_point() {
     q64_64 diff = q1 - q2;
 
     double sum_d = FROM_Q64_64(sum);
+    (void)sum_d;
     double diff_d = FROM_Q64_64(diff);
+    (void)diff_d;
 
     assert(sum_d > 202.356 && sum_d < 202.358);
     assert(diff_d > 44.554 && diff_d < 44.556);

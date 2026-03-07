@@ -85,7 +85,7 @@ static void *hls_worker(void *arg) {
         CURLcode res = curl_easy_perform(ingest->curl);
         if (res == CURLE_OK) {
             tsa_hls_context_t ctx = {0};
-            strncpy(ctx.master_url, ingest->m3u8_url, sizeof(ctx.master_url) - 1);
+            snprintf(ctx.master_url, sizeof(ctx.master_url), "%s", ingest->m3u8_url);
             ctx.on_segment = on_segment_found;
             ctx.user_data = ingest;
 

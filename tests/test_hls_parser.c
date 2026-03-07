@@ -7,7 +7,7 @@
 
 static int g_seg_count = 0;
 static void on_segment(void *user_data, const tsa_hls_segment_t *seg) {
-    int expected_seq = 101 + g_seg_count;
+    (void)g_seg_count;
     assert(seg->sequence == (uint64_t)expected_seq);
     if (g_seg_count == 0) {
         assert(strstr(seg->url, "segment_101.ts") != NULL);
@@ -31,7 +31,7 @@ int main() {
     ctx.on_segment = on_segment;
 
     printf("Testing HLS Parser...\n");
-    int res = tsa_hls_parse_m3u8(&ctx, m3u8, strlen(m3u8));
+    int res __attribute__((unused)) = tsa_hls_parse_m3u8(&ctx, m3u8, strlen(m3u8));
     assert(res == 0);
     assert(ctx.media_sequence == 101);
     assert(ctx.target_duration == 10);

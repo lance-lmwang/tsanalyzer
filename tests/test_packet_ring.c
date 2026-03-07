@@ -14,7 +14,7 @@ void test_basic_push_pop() {
     memset(pkt, 0x47, 188);
     uint64_t ts = 123456789;
 
-    int res = tsa_packet_ring_push(r, pkt, ts);
+    int res __attribute__((unused)) = tsa_packet_ring_push(r, pkt, ts);
     assert(res == 0);
 
     uint8_t out_pkt[188];

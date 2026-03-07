@@ -21,13 +21,13 @@ void test_event_loop_basic() {
     tsa_reactor_t* reactor = tsa_reactor_create();
     assert(reactor != NULL);
 
-    int pipefd[2];
+    int pipefd[2] = {0};
     assert(pipe(pipefd) == 0);
 
     // Set non-blocking
     fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
 
-    tsa_reactor_event_t ev_read = {.fd = pipefd[0], .on_read = pipe_read_cb, .arg = &pipefd[0]};
+    tsa_reactor_event_t ev_read __attribute__((unused)) = {.fd = pipefd[0], .on_read = pipe_read_cb, .arg = &pipefd[0]};
 
     assert(tsa_reactor_add(reactor, &ev_read) == 0);
 

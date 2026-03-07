@@ -27,7 +27,7 @@ int main() {
     fclose(fp);
 
     tsa_full_conf_t conf = {0};
-    int res = tsa_conf_load(&conf, "test_tsa.conf");
+    int res __attribute__((unused)) = tsa_conf_load(&conf, "test_tsa.conf");
     assert(res == 0);
 
     tsa_info("conf_test", "Checking global settings...");

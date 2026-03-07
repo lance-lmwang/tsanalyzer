@@ -73,6 +73,36 @@ void tsa_render_dashboard(tsa_handle_t* h) {
             case TSA_EVENT_PMT_TIMEOUT:
                 type_str = "PMT TIMEOUT";
                 break;
+            case TSA_EVENT_PID_ERROR:
+                type_str = "PID MISSING";
+                break;
+            case TSA_EVENT_TRANSPORT_ERROR:
+                type_str = "TRANS ERROR";
+                break;
+            case TSA_EVENT_PTS_ERROR:
+                type_str = "PTS ERROR";
+                break;
+            case TSA_EVENT_SYNC_RECOVERED:
+                type_str = "SYNC RECOV";
+                break;
+            case TSA_EVENT_TSTD_UNDERFLOW:
+                type_str = "TSTD UNDER";
+                break;
+            case TSA_EVENT_TSTD_OVERFLOW:
+                type_str = "TSTD OVER";
+                break;
+            case TSA_EVENT_ENTROPY_FREEZE:
+                type_str = "ENTROPY FRZ";
+                break;
+            case TSA_EVENT_SDT_TIMEOUT:
+                type_str = "SDT TIMEOUT";
+                break;
+            case TSA_EVENT_NIT_TIMEOUT:
+                type_str = "NIT TIMEOUT";
+                break;
+            default:
+                type_str = "UNKNOWN";
+                break;
         }
         printf(" [%10llu] %-15s PID 0x%04x  Value: %llu\n", (unsigned long long)ev->timestamp_ns / 1000000ULL, type_str,
                ev->pid, (unsigned long long)ev->value);

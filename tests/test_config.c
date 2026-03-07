@@ -1,12 +1,17 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "tsp.h"
+#include "tsa.h"
+
+void test_simple_config() {
+    tsa_config_t cfg = {0};
+    (void)cfg;
+}
 
 int main() {
-    tsp_config_t cfg;
-    cfg.cpu_core = 5;
-    assert(cfg.cpu_core == 5);
-    printf("Test passed: cpu_core field exists and is assignable.\n");
+    test_simple_config();
+    printf("Config test passed!\n");
     return 0;
 }

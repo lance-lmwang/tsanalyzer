@@ -31,7 +31,7 @@ void* producer_thread(void* arg) {
                 // Edge-triggered push logic
                 if (!atomic_load_explicit(&g_streams[i].scheduled, memory_order_relaxed)) {
                     if (!atomic_exchange_explicit(&g_streams[i].scheduled, true, memory_order_acq_rel)) {
-                        bool success = mpmc_queue_push(g_ready_queue, i);
+                        bool success __attribute__((unused)) = mpmc_queue_push(g_ready_queue, i);
                         assert(success);
                     }
                 }

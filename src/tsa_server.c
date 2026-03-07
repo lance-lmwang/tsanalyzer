@@ -154,7 +154,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 webhook[255] = '\0';
                 free(wh_p);
             } else
-                strncpy(webhook, g_webhook_url, 255);
+                snprintf(webhook, sizeof(webhook), "%s", g_webhook_url);
 
             char *mask_p = mg_json_get_str(hm->body, "$.alert_mask");
             if (mask_p) {
@@ -165,7 +165,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             pthread_mutex_lock(&g_nodes_lock);
             if (g_node_count < MAX_STREAMS) {
                 node_t *n = &g_nodes[g_node_count++];
-                strncpy(n->id, id[0] ? id : "dynamic", 31);
+                snprintf(n->id, sizeof(n->id), "%s", id[0] ? id : "dynamic");
                 n->id[31] = '\0';
                 n->port = 19000 + g_node_count;
                 n->active = true;
@@ -173,7 +173,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 tsa_config_t cfg = g_sys_conf.vhost_default;
                 cfg.op_mode = TSA_MODE_LIVE;
                 strncpy(cfg.input_label, n->id, 31);
-                strncpy(cfg.alert.webhook_url, webhook, sizeof(cfg.alert.webhook_url) - 1);
+                snprintf(cfg.alert.webhook_url, sizeof(cfg.alert.webhook_url), "%s", webhook);
                 cfg.alert.filter_mask = mask;
                 n->tsa = tsa_create(&cfg);
                 pthread_create(&n->thread, NULL, worker, n);
