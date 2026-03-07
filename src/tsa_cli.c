@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
 
     tsa_config_t cfg;
     memset(&cfg, 0, sizeof(cfg));
-    cfg.pcr_ema_alpha = 0.1;
+    cfg.analysis.pcr_ema_alpha = 0.1;
     cfg.op_mode = TSA_MODE_REPLAY; /* Default */
 
     int http_port = 12345;
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
             case 'p': pacing = true; break;
             case 'l': strncpy(stream_label, optarg, sizeof(stream_label)-1); break;
             case 'H': http_port = atoi(optarg); break;
-            case 'a': cfg.pcr_ema_alpha = atof(optarg); break;
+            case 'a': cfg.analysis.pcr_ema_alpha = atof(optarg); break;
             case 'h': print_usage(argv[0]); return 0;
             default: return 1;
         }

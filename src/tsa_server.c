@@ -11,6 +11,7 @@
 #include "mongoose.h"
 #include "tsa.h"
 #include "tsa_internal.h"
+#include "tsa_conf.h"
 
 extern void tsa_exporter_prom_v2(tsa_handle_t **handles, int count, char *buf, size_t sz);
 
@@ -66,43 +67,52 @@ static void *worker(void *arg) {
     return NULL;
 }
 
-static void load_config(const char *file) {
-    FILE *fp = fopen(file, "r");
-    if (!fp) return;
-    char line[512];
-    while (fgets(line, sizeof(line), fp)) {
-        char *p = line;
-        while (*p && (*p == ' ' || *p == '\t')) p++;
-        if (*p == '#' || *p == '\n' || *p == '{' || *p == '}' || *p == '\0') continue;
+static tsa_full_conf_t g_sys_conf;
 
-        char key[64], val[256];
-        if (sscanf(p, "GLOBAL %s %s", key, val) == 2) {
-            if (strcmp(key, "http_port") == 0) g_http_port = atoi(val);
-            else if (strcmp(key, "webhook_url") == 0) strncpy(g_webhook_url, val, 255);
-            else if (strcmp(key, "alert_mask") == 0) g_alert_mask = strtoull(val, NULL, 0);
-            continue;
-        }
-
-        char id[64], url[256];
-        if (sscanf(p, "%s %s", id, url) == 2) {
-            if (strchr(id, ':') || strchr(id, '"')) continue;
-            pthread_mutex_lock(&g_nodes_lock);
-            if (g_node_count < MAX_STREAMS) {
-                node_t *n = &g_nodes[g_node_count++];
-                strncpy(n->id, id, 31); n->id[31] = '\0';
-                char *p_str = strrchr(url, ':');
-                n->port = p_str ? atoi(p_str + 1) : (19001 + g_node_count);
-                n->active = true;
-                tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE, .pcr_ema_alpha = 0.1};
-                strncpy(cfg.input_label, n->id, 31);
-                strncpy(cfg.webhook_url, g_webhook_url, sizeof(cfg.webhook_url) - 1);
-                cfg.alert_filter_mask = g_alert_mask;
-                n->tsa = tsa_create(&cfg);
-                pthread_create(&n->thread, NULL, worker, n);
-            }
-            pthread_mutex_unlock(&g_nodes_lock);
-        }
+static void apply_sys_conf() {
+    g_http_port = g_sys_conf.http_listen_port > 0 ? g_sys_conf.http_listen_port : 8088;
+    
+    pthread_mutex_lock(&g_nodes_lock);
+    for (int i = 0; i < g_sys_conf.stream_count; i++) {
+        if (g_node_count >= MAX_STREAMS) break;
+        node_t *n = &g_nodes[g_node_count++];
+        strncpy(n->id, g_sys_conf.streams[i].id, 31); n->id[31] = '\0';
+        
+        char *p_str = strrchr(g_sys_conf.streams[i].cfg.url, ':');
+        n->port = p_str ? atoi(p_str + 1) : (19001 + g_node_count);
+        n->active = true;
+        
+        n->tsa = tsa_create(&g_sys_conf.streams[i].cfg);
+        pthread_create(&n->thread, NULL, worker, n);
     }
+    pthread_mutex_unlock(&g_nodes_lock);
+}
+
+static void load_config(const char *file) {
+    if (tsa_conf_load(&g_sys_conf, file) == 0) {
+        apply_sys_conf();
+    } else {
+        fprintf(stderr, "Failed to load configuration file: %s\n", file);
+    }
+}
+
+static void save_state() {
+    FILE *fp = fopen("tsa_state.json", "w");
+    if (!fp) return;
+    fprintf(fp, "{\n  \"streams\": [\n");
+    pthread_mutex_lock(&g_nodes_lock);
+    bool first = true;
+    for (int i = 0; i < g_node_count; i++) {
+        if (!g_nodes[i].active) continue;
+        if (!first) fprintf(fp, ",\n");
+        fprintf(fp, "    {\"id\": \"%s\", \"url\": \"%s\", \"alert_mask\": %llu, \"webhook_url\": \"%s\"}", 
+                g_nodes[i].id, g_nodes[i].tsa->config.url, 
+                (unsigned long long)g_nodes[i].tsa->config.alert.filter_mask,
+                g_nodes[i].tsa->config.alert.webhook_url);
+        first = false;
+    }
+    pthread_mutex_unlock(&g_nodes_lock);
+    fprintf(fp, "\n  ]\n}\n");
     fclose(fp);
 }
 
@@ -140,12 +150,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 node_t *n = &g_nodes[g_node_count++];
                 strncpy(n->id, id[0] ? id : "dynamic", 31); n->id[31] = '\0';
                 n->port = 19000 + g_node_count; n->active = true;
-                tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE, .pcr_ema_alpha = 0.1};
+                
+                tsa_config_t cfg = g_sys_conf.vhost_default;
+                cfg.op_mode = TSA_MODE_LIVE;
                 strncpy(cfg.input_label, n->id, 31);
-                strncpy(cfg.webhook_url, webhook, sizeof(cfg.webhook_url) - 1);
-                cfg.alert_filter_mask = mask;
+                strncpy(cfg.alert.webhook_url, webhook, sizeof(cfg.alert.webhook_url) - 1);
+                cfg.alert.filter_mask = mask;
                 n->tsa = tsa_create(&cfg);
                 pthread_create(&n->thread, NULL, worker, n);
+                save_state();
                 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\",\"port\":%d}", n->port);
             } else mg_http_reply(c, 507, "", "Full");
             pthread_mutex_unlock(&g_nodes_lock);

@@ -4,12 +4,12 @@
 Migrate `tsanalyzer` to a carrier-grade programmable pipeline architecture with hierarchical configuration and tap-model isolation.
 
 ## 2. Phase 1: Foundation & Configuration
-- [ ] **Task 1.1: Unit Conversion Engine (`tsa_units`)**
+- [x] **Task 1.1: Unit Conversion Engine (`tsa_units`)**
     - Complete two-way conversion for `Mbps`, `ms`, `ns`, and `on/off`.
-- [ ] **Task 1.2: Lexer & Parser Implementation**
+- [x] **Task 1.2: Lexer & Parser Implementation**
     - Implement `tsa_conf_lexer` for tokenization.
     - Implement `tsa_conf_parser` for block-based parsing and VHost inheritance.
-- [ ] **Task 1.3: Integration**
+- [x] **Task 1.3: Integration**
     - Replace legacy config parsing in `tsa_server.c` and `tsa_cli.c`.
 
 ## 3. Phase 2: Data Plane & Pipeline Framework
