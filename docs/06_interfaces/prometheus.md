@@ -79,6 +79,10 @@ These metrics are labeled by `stream_id`, `pid`, `type`, and `codec` for granula
 | `tsa_compliance_pid_has_scte35` | Gauge | Compliance | 1 if SCTE-35 signaling is present on this PID. |
 | `tsa_essence_pid_video_width` | Gauge | Essence | Decoded video width. |
 | `tsa_essence_pid_video_height` | Gauge | Essence | Decoded video height. |
+| `tsa_essence_pid_video_profile` | Gauge | Essence | Video Profile IDC. |
+| `tsa_essence_pid_video_level` | Gauge | Essence | Video Level IDC. |
+| `tsa_essence_pid_video_bit_depth` | Gauge | Essence | Bit depth (e.g. 8, 10). |
+| `tsa_essence_pid_video_chroma_format` | Gauge | Essence | Chroma format (1=4:2:0, 2=4:2:2). |
 | `tsa_essence_pid_video_gop_n` | Gauge | Essence | Group of Pictures (GOP) frame count. |
 
 ---

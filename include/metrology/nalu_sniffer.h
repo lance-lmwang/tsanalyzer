@@ -28,6 +28,7 @@ typedef struct {
     uint8_t profile;
     uint8_t level;
     uint8_t chroma_format;
+    uint8_t bit_depth;
 
     // For SEI
     bool has_cea708;

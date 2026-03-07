@@ -14,6 +14,7 @@
 #include "tsa_internal.h"
 #include "tsa_log.h"
 #include "tsa_plugin.h"
+#include "tsa_simd.h"
 
 #define TAG "CORE"
 
@@ -514,9 +515,16 @@ void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t no
                 if (h->sync_state == TS_SYNC_LOCKED) {
                     tsa_warn(TAG, "Signal UNLOCKED: Byte scan sync loss (stream=%s)", h->config.input_label);
                 }
-                processed++;
                 h->sync_state = TS_SYNC_HUNTING;
                 h->signal_lock = false;
+
+                /* Optimized hunting using SIMD */
+                intptr_t next_sync = tsa_simd_find_sync(data + processed + 1, len - (processed + 1));
+                if (next_sync >= 0) {
+                    processed += (size_t)next_sync + 1;
+                } else {
+                    processed = len;
+                }
             }
         }
         if (processed < len) {

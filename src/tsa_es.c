@@ -48,6 +48,7 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                 h->pid_profile[pid] = info.profile;
                 h->pid_level[pid] = info.level;
                 h->pid_chroma_format[pid] = info.chroma_format;
+                if (info.bit_depth > 0) h->pid_bit_depth[pid] = info.bit_depth;
                 if (info.width > 0) h->pid_width[pid] = info.width;
                 if (info.height > 0) h->pid_height[pid] = info.height;
             } else if (info.nalu_type_abstract == NALU_TYPE_SEI) {

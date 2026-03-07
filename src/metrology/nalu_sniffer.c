@@ -23,8 +23,8 @@ static void sniff_h264_sps(const uint8_t* buf, int size, tsa_nalu_info_t* out) {
         out->chroma_format = br_read_ue(&r);
         if (out->chroma_format == 3) br_read(&r, 1);  // separate_colour_plane_flag
 
-        br_read_ue(&r);  // bit_depth_luma_minus8
-        br_read_ue(&r);  // bit_depth_chroma_minus8
+        out->bit_depth = br_read_ue(&r) + 8;
+        br_read_ue(&r);
         br_read(&r, 1);  // qpprime_y_zero_transform_bypass_flag
 
         if (br_read(&r, 1)) {  // seq_scaling_matrix_present_flag
@@ -162,6 +162,9 @@ static void sniff_h265_sps(const uint8_t* buf, int size, tsa_nalu_info_t* out) {
         out->width -= (conf_win_left_offset + conf_win_right_offset) * sub_wc;
         out->height -= (conf_win_top_offset + conf_win_bottom_offset) * sub_hc;
     }
+
+    out->bit_depth = br_read_ue(&r) + 8;  // bit_depth_luma_minus8
+    br_read_ue(&r);                       // bit_depth_chroma_minus8
 }
 
 void tsa_nalu_sniff(const uint8_t* buf, int size, bool is_h265, tsa_nalu_info_t* out_info) {

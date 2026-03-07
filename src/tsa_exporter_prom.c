@@ -174,6 +174,10 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                 snprintf(v_labels, sizeof(v_labels), "{stream_id=\"%s\",pid=\"0x%04x\"}", sid, p);
                 SAFE_APPEND("tsa_essence_pid_video_width%s %u\n", v_labels, snap->pids[j].width);
                 SAFE_APPEND("tsa_essence_pid_video_height%s %u\n", v_labels, snap->pids[j].height);
+                SAFE_APPEND("tsa_essence_pid_video_profile%s %u\n", v_labels, snap->pids[j].profile);
+                SAFE_APPEND("tsa_essence_pid_video_level%s %u\n", v_labels, snap->pids[j].level);
+                SAFE_APPEND("tsa_essence_pid_video_bit_depth%s %u\n", v_labels, snap->pids[j].bit_depth);
+                SAFE_APPEND("tsa_essence_pid_video_chroma_format%s %u\n", v_labels, snap->pids[j].chroma_format);
                 if (snap->pids[j].gop_n > 0) {
                     SAFE_APPEND("tsa_essence_pid_video_gop_n%s %u\n", v_labels, snap->pids[j].gop_n);
                 }
