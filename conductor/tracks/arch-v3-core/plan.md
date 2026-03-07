@@ -21,7 +21,7 @@ Migrate `tsanalyzer` to a carrier-grade programmable pipeline architecture with 
     - Define Stage interface and implement dynamic assembly (tap model).
 
 ## 4. Phase 3: Metrology & Action Engine
-- [ ] **Task 3.1: 4-Clock Domain Sync**
+- [x] **Task 3.1: 4-Clock Domain Sync**
     - Implement drift calculation between Wall, Arrival, Reference, and Media domains.
 - [ ] **Task 3.2: Action Engine Refinement**
     - Implement modular CC Repair, PCR Restamping, and precision Pacer.

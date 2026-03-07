@@ -63,7 +63,7 @@ add_library(tsp_core STATIC
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
     src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
-    src/tsa_pipeline.c src/tsa_packet_pool.c
+    src/tsa_pipeline.c src/tsa_packet_pool.c src/tsa_clock_domain.c
 )
 target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
 
@@ -210,3 +210,4 @@ tsa_test(test_units test_units.c)
 tsa_test(test_conf test_conf.c)
 tsa_test(test_pipeline test_pipeline.c)
 tsa_test(test_packet_pool test_packet_pool.c)
+tsa_test(test_clock_domain test_clock_domain.c)
