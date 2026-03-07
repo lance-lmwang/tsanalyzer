@@ -130,12 +130,10 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
 
     tsa_plugin_register(&tsa_scte35_engine);
     tsa_plugin_register(&tr101290_ops);
-    tsa_plugin_register(&codec_ops);
     tsa_plugin_register(&pcr_ops);
     tsa_plugin_register(&essence_ops);
 
     tsa_plugin_attach_instance(h, &tsa_scte35_engine);
-    tsa_register_codec_engine(h);
     tsa_register_tr101290_engine(h);
     tsa_register_pcr_engine(h);
     tsa_register_essence_engine(h);
@@ -267,8 +265,10 @@ void tsa_decode_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_
             case TSA_EVENT_TRANSPORT_ERROR: tsa_alert_update(h, TSA_ALERT_TRANSPORT, true, "TRANSPORT", pid); break;
             case TSA_EVENT_PTS_ERROR:   tsa_alert_update(h, TSA_ALERT_PTS, true, "PTS", pid); break;
             case TSA_EVENT_PCR_REPETITION:
-
             case TSA_EVENT_PCR_JITTER:  tsa_alert_update(h, TSA_ALERT_PCR, true, "PCR", pid); break;
+            case TSA_EVENT_TSTD_UNDERFLOW: h->live->tstd_underflow.count++; tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid); break;
+            case TSA_EVENT_TSTD_OVERFLOW: h->live->tstd_overflow.count++; tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid); break;
+            case TSA_EVENT_ENTROPY_FREEZE: h->live->entropy_freeze.count++; tsa_alert_update(h, TSA_ALERT_ENTROPY, true, "ENTROPY", pid); break;
             default: break;
         }
     }
@@ -401,7 +401,10 @@ void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid) {
     while (head != h->pid_au_tail[pid]) {
         if (h->stc_ns >= h->pid_au_q[pid][head].dts_ns) {
             h->pid_eb_fill_q64[pid] -= INT_TO_Q64_64(h->pid_au_q[pid][head].size);
-            if (h->pid_eb_fill_q64[pid] < 0) h->pid_eb_fill_q64[pid] = 0;
+            if (h->pid_eb_fill_q64[pid] < 0) {
+                h->pid_eb_fill_q64[pid] = 0;
+                tsa_push_event(h, TSA_EVENT_TSTD_UNDERFLOW, pid, 0);
+            }
             head = (head + 1) % 32;
         } else break;
     }

@@ -14,6 +14,8 @@ static uint64_t get_mask_for_id(tsa_alert_id_t id) {
         case TSA_ALERT_CRC:       return TSA_ALERT_MASK_P2_2_CRC;
         case TSA_ALERT_PCR:       return TSA_ALERT_MASK_P2_3_PCR;
         case TSA_ALERT_PTS:       return TSA_ALERT_MASK_P2_5_PTS;
+        case TSA_ALERT_TSTD:      return TSA_ALERT_MASK_TSTD;
+        case TSA_ALERT_ENTROPY:   return TSA_ALERT_MASK_ENTROPY;
         default:                  return 0;
     }
 }
@@ -46,7 +48,7 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
 
 void tsa_alert_check_resolutions(tsa_handle_t* h) {
     uint64_t now = h->stc_ns;
-    const char* names[] = {"SYNC", "PAT", "PMT", "CC", "CRC", "PCR", "TRANSPORT", "PTS"};
+    const char* names[] = {"SYNC", "PAT", "PMT", "CC", "CRC", "PCR", "TRANSPORT", "PTS", "TSTD", "ENTROPY"};
     const uint64_t RESOLVE_TIMEOUT_NS = 5000000000ULL;
 
     for (int i = 0; i < TSA_ALERT_MAX; i++) {

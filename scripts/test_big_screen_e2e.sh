@@ -27,7 +27,7 @@ METRICS=$(curl -s http://localhost:8082/metrics)
 FAILED=0
 for i in {1..4}; do
     STR="STR-$i"
-    HEALTH=$(echo "$METRICS" | grep "tsa_health_score{stream_id=\"$STR\"}" | awk '{print $2}')
+    HEALTH=$(echo "$METRICS" | grep "tsa_system_health_score{stream_id=\"$STR\"}" | awk '{print $2}')
     
     echo -ne "  - $STR: "
     if [[ -z "$HEALTH" ]] || (( $(echo "$HEALTH < 90" | bc -l) )); then

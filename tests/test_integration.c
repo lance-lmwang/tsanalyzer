@@ -7,7 +7,7 @@
 
 void test_full_pipeline() {
     printf("Testing Passive Analysis Pipeline...\n");
-    tsa_config_t cfg = {.pcr_ema_alpha = 0.01};
+    tsa_config_t cfg = {.analysis.pcr_ema_alpha = 0.01};
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

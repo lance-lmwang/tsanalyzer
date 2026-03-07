@@ -114,7 +114,7 @@ while [ $(date +%s) -lt $END_TIME ]; do
     FD_COUNT=$(lsof -p $SERVER_PID | wc -l)
 
     # Logic check: Active streams in metrics
-    ACTIVE_STREAMS=$(curl -s "$METRICS_URL" | grep "tsa_physical_bitrate_bps" | wc -l)
+    ACTIVE_STREAMS=$(curl -s "$METRICS_URL" | grep "tsa_metrology_physical_bitrate_bps" | wc -l)
 
     TS=$(date +'%H:%M:%S')
     echo "$TS,$CPU,$RSS,$FD_COUNT,$ACTIVE_STREAMS" >> $CSV_FILE

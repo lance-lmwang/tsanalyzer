@@ -224,30 +224,40 @@ int tsp_stop(tsp_handle_t* h) {
 }
 void tsp_destroy(tsp_handle_t* h) {
     if (!h) return;
+    if (atomic_load(&h->running)) {
+        tsp_stop(h);
+    }
     if (h->srt_enabled) srt_close(h->srt_sock);
     if (h->fd >= 0) close(h->fd);
     free(h->ring_buffer);
     free(h);
 }
+
 uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) {
     return atomic_load(&h->detected_bitrate);
 }
+
 uint64_t tsp_get_total_packets(tsp_handle_t* h) {
     return atomic_load(&h->total_udp_packets);
 }
+
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h) {
     uint64_t br = atomic_load(&h->detected_bitrate);
     return br / (7 * 188 * 8);
 }
+
 void tsp_update_bitrate(tsp_handle_t* h, uint64_t nb) {
     h->cfg.bitrate = nb;
 }
+
 uint64_t tsp_get_bitrate(tsp_handle_t* h) {
     return h->cfg.bitrate;
 }
+
 pthread_t tsp_get_thread(tsp_handle_t* h) {
     return h->thread;
 }
+
 int tsp_get_stats(tsp_handle_t* h, uint64_t* t, int64_t* mx, int64_t* mn, uint64_t* d, uint64_t* dr, uint64_t* pps) {
     (void)mx;
     (void)mn;
@@ -257,8 +267,12 @@ int tsp_get_stats(tsp_handle_t* h, uint64_t* t, int64_t* mx, int64_t* mn, uint64
     if (dr) *dr = atomic_load(&h->detected_bitrate);
     return 0;
 }
+
 int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s) {
+    if (!h || !s) return -1;
+    memset(s, 0, sizeof(tsp_stats_t));
     s->detected_bitrate = atomic_load(&h->detected_bitrate);
+    s->total_packets = atomic_load(&h->total_udp_packets);
     return 0;
 }
 uint64_t calculate_target_time(tsp_handle_t* h, uint64_t p, uint64_t b, uint64_t n) {

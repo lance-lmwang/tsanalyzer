@@ -34,7 +34,7 @@ def deploy_global_wall():
         'gridPos': {'h': 12, 'w': 24, 'x': 0, 'y': 4},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
         'targets': [{
-            'expr': 'tsa_health_score',
+            'expr': 'tsa_system_health_score',
             'legendFormat': '{{stream_id}}'
         }],
         'fieldConfig': {
@@ -66,7 +66,7 @@ def deploy_global_wall():
         'gridPos': {'h': 4, 'w': 24, 'x': 0, 'y': 0},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
         'targets': [
-            {'expr': '((count(tsa_health_score < 100) / count(tsa_health_score)) * 100) or on() vector(0)'}
+            {'expr': '((count(tsa_system_health_score < 100) / count(tsa_system_health_score)) * 100) or on() vector(0)'}
         ],
         'fieldConfig': {
             'defaults': {
@@ -89,7 +89,7 @@ def deploy_stream_focus():
     dash['templating']['list'].append({
         'name': 'stream',
         'type': 'query',
-        'query': 'label_values(tsa_health_score, stream_id)',
+        'query': 'label_values(tsa_system_health_score, stream_id)',
         'refresh': 1,
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
         'label': 'Focus Stream'
@@ -102,7 +102,7 @@ def deploy_stream_focus():
     dash['panels'].append({
         'type': 'stat', 'title': 'SIGNAL PRESENCE', 'gridPos': {'h': 4, 'w': 6, 'x': 0, 'y': 1},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'tsa_signal_lock_status{stream_id="$stream"}'}],
+        'targets': [{'expr': 'tsa_system_signal_locked{stream_id="$stream"}'}],
         'fieldConfig': {
             'defaults': {
                 'mappings': [{'type': 'value', 'options': {'0': {'text': 'LOST', 'color': 'red'}, '1': {'text': 'LOCKED', 'color': 'green'}}}]
@@ -113,7 +113,7 @@ def deploy_stream_focus():
     dash['panels'].append({
         'type': 'gauge', 'title': 'SIGNAL FIDELITY', 'gridPos': {'h': 4, 'w': 12, 'x': 6, 'y': 1},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'tsa_health_score{stream_id="$stream"}'}],
+        'targets': [{'expr': 'tsa_system_health_score{stream_id="$stream"}'}],
         'fieldConfig': {'defaults': {'min': 0, 'max': 100, 'unit': 'percent'}}
     })
     dash['panels'].append({
@@ -131,7 +131,7 @@ def deploy_stream_focus():
     })
     # ... (Simplified Matrix implementation for brevity in this script)
     metrics = [
-        ('Link Capacity', 'tsa_physical_bitrate_bps', 0, 6, 6),
+        ('Link Capacity', 'tsa_metrology_physical_bitrate_bps', 0, 6, 6),
         ('SRT NAK', 'tsa_srt_nak_count', 6, 6, 6),
         ('SRT RTT', 'tsa_srt_rtt_ms', 12, 6, 6),
         ('MDI DF', 'mdi_df', 18, 6, 6)
@@ -167,7 +167,7 @@ def deploy_stream_focus():
     dash['panels'].append({
         'type': 'timeseries', 'title': 'PCR JITTER & ACCURACY', 'gridPos': {'h': 4, 'w': 24, 'x': 0, 'y': 14},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'tsa_pcr_jitter_ms{stream_id="$stream"}'}]
+        'targets': [{'expr': 'tsa_metrology_pcr_jitter_ms{stream_id="$stream"}'}]
     })
 
     # TIER 5: SERVICE PAYLOAD DYNAMICS
@@ -177,7 +177,7 @@ def deploy_stream_focus():
     dash['panels'].append({
         'type': 'timeseries', 'title': 'PID BITRATE REVENUE', 'gridPos': {'h': 15, 'w': 18, 'x': 0, 'y': 19},
         'datasource': { 'type': 'prometheus', 'uid': DATASOURCE_UID },
-        'targets': [{'expr': 'sum by (pid, type) (tsa_pid_bitrate_bps{stream_id="$stream"})'}],
+        'targets': [{'expr': 'sum by (pid, type) (tsa_metrology_pid_bitrate_bps{stream_id="$stream"})'}],
         'options': {'legend': {'displayMode': 'table', 'placement': 'right'}}
     })
 

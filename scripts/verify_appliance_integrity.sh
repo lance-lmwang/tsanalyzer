@@ -27,7 +27,7 @@ echo -n "[1/4] Probing TSA Engine Metrics at :$TSA_PORT... "
 HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TSA_METRICS" || echo "000")
 
 if [ "$HTTP_STATUS" == "200" ]; then
-    if curl -s "$TSA_METRICS" | grep -q "tsa_health_score"; then
+    if curl -s "$TSA_METRICS" | grep -q "tsa_system_health_score"; then
         echo "✅ PASS"
     else
         echo "❌ FAIL (Server is UP at :$TSA_PORT, but NO DATA. Is 'tsp' running?)"

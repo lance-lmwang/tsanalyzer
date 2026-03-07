@@ -33,9 +33,9 @@ for _ in range(4):
         for line in m.splitlines():
             if 'stream_id="STR-1"' in line:
                 val = float(line.split()[-1])
-                if "tsa_physical_bitrate_bps" in line: phys = val
-                if "tsa_pcr_bitrate_bps" in line: pcr = val
-                if "tsa_pcr_jitter_ms" in line: jitter = val
+                if "tsa_metrology_physical_bitrate_bps" in line: phys = val
+                if "tsa_metrology_pcr_bitrate_bps" in line: pcr = val
+                if "tsa_metrology_pcr_jitter_ms" in line: jitter = val
 
         elapsed = time.time() - start_t
         print("%-10.1fs | %-12.2f | %-10.2f | %-10.3f" % (elapsed, phys/1e6, pcr/1e6, jitter))

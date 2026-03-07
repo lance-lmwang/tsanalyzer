@@ -80,6 +80,11 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         if (h->pid_pes_buf[pid] && h->pid_pes_len[pid] + res->payload_len <= h->pid_pes_cap[pid]) {
             memcpy(h->pid_pes_buf[pid] + h->pid_pes_len[pid], pkt + 4 + res->af_len, res->payload_len);
             h->pid_pes_len[pid] += res->payload_len;
+
+            h->pid_eb_fill_q64[pid] += INT_TO_Q64_64(res->payload_len);
+            if (h->pid_eb_fill_q64[pid] > INT_TO_Q64_64(1200000)) { // T-STD standard capacity fallback
+                tsa_push_event(h, TSA_EVENT_TSTD_OVERFLOW, pid, 0);
+            }
         }
     }
 }

@@ -21,7 +21,7 @@ void encode_pcr_full(uint8_t* pkt, uint64_t ticks) {
 void test_pcr_accuracy_threshold() {
     printf("Running test_pcr_accuracy_threshold...\n");
     tsa_config_t cfg = {0};
-    cfg.pcr_ema_alpha = 0.1;
+    cfg.analysis.pcr_ema_alpha = 0.1;
     tsa_handle_t* h = tsa_create(&cfg);
     uint8_t pkt[188] = {0x47, 0x01, 0x00, 0x30, 0x07, 0x10};  // PID 0x100, AF+PCR
     h->live->pid_is_referenced[0x100] = true;

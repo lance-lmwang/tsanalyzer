@@ -48,11 +48,13 @@ set(CURL_LINK_LIBS "")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
     include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/include")
     set(CURL_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
+else()
+    set(CURL_LINK_LIBS "-lcurl")
 endif()
 
 # Core Library
 add_library(tsp_core STATIC
-    src/tsp.c src/tsa.c src/tsa_engine_tr101290.c src/tsa_engine_codec.c
+    src/tsp.c src/tsa.c src/tsa_engine_tr101290.c
     src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c
     src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c

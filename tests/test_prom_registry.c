@@ -24,7 +24,7 @@ void test_full_prometheus_export() {
     assert(strlen(buffer) > 0);
 
     // Check for some expected core metrics
-    assert(strstr(buffer, "tsa_pcr_bitrate_bps{stream_id=\"test_run\"}") != NULL);
+    assert(strstr(buffer, "tsa_metrology_pcr_bitrate_bps{stream_id=\"test_run\"}") != NULL);
 
     // Check for P1 errors
     assert(strstr(buffer, "tsa_tr101290_p1_errors{stream_id=\"test_run\",error_type=\"cc_error\"}") != NULL);

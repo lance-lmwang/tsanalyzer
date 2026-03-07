@@ -39,7 +39,7 @@ sleep 10
 
 # 4. Audit
 METRICS=$(curl -s http://localhost:8082/metrics)
-UDP_HEALTH=$(echo "$METRICS" | grep 'tsa_health_score{stream_id="TEST-UDP"}' | awk '{print $2}')
+UDP_HEALTH=$(echo "$METRICS" | grep 'tsa_system_health_score{stream_id="TEST-UDP"}' | awk '{print $2}')
 
 echo -e "RESULT: TEST-UDP Health: ${GREEN}$UDP_HEALTH%${RESET}"
 

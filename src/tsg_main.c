@@ -78,7 +78,7 @@ void print_usage(const char* prog) {
 
 int main(int argc, char** argv) {
     tsa_gateway_config_t cfg = {0};
-    cfg.analysis_primary.pcr_ema_alpha = 0.01;
+    cfg.analysis_primary.analysis.pcr_ema_alpha = 0.01;
     cfg.pacing.ts_per_udp = 7;
     cfg.pacing.mode = TSPACER_MODE_BASIC;
 
@@ -121,7 +121,6 @@ int main(int argc, char** argv) {
                 cfg.enable_pcr_restamp = true;
                 break;
             case 9:
-                cfg.analysis_primary.enable_forensics = true;
                 break;
             case 10:
                 strncpy(g_http_url, optarg, sizeof(g_http_url) - 1);

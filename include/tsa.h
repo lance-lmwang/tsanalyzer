@@ -53,6 +53,9 @@ typedef struct {
     tsa_alarm_t pts_error;
     tsa_alarm_t cat_error;
     tsa_alarm_t sdt_error;
+    tsa_alarm_t tstd_underflow;
+    tsa_alarm_t tstd_overflow;
+    tsa_alarm_t entropy_freeze;
 
     bool alarm_sync_loss;
     bool alarm_pat_error;

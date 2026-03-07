@@ -29,7 +29,7 @@ void benchmark_string_builder() {
 
     for (int i = 0; i < num_streams; i++) {
         // Metric 1: Bitrate
-        tsa_mbuf_append_str(&buf, "tsa_pid_bitrate_bps{pid=\"");
+        tsa_mbuf_append_str(&buf, "tsa_metrology_pid_bitrate_bps{pid=\"");
         tsa_mbuf_append_int(&buf, i + 0x100);  // Simulate PID
         tsa_mbuf_append_str(&buf, "\"} ");
         tsa_mbuf_append_int(&buf, 4500000 + i * 100);  // Simulate bitrate value
@@ -43,7 +43,7 @@ void benchmark_string_builder() {
         tsa_mbuf_append_char(&buf, '\n');
 
         // Metric 3: CC Errors
-        tsa_mbuf_append_str(&buf, "tsa_cc_errors_total{pid=\"");
+        tsa_mbuf_append_str(&buf, "tsa_compliance_tr101290_p1_cc_errors_total{pid=\"");
         tsa_mbuf_append_int(&buf, i + 0x100);
         tsa_mbuf_append_str(&buf, "\"} ");
         tsa_mbuf_append_int(&buf, i % 5);

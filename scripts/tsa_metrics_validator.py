@@ -36,8 +36,8 @@ def run_audit():
     if not m2: return False
 
     # Discover stream IDs from m2
-    # Pattern: tsa_total_packets{stream_id="STREAM_ID"}
-    streams = re.findall(r'tsa_total_packets\{stream_id="([^"]+)"\}', m2)
+    # Pattern: tsa_system_total_packets{stream_id="STREAM_ID"}
+    streams = re.findall(r'tsa_system_total_packets\{stream_id="([^"]+)"\}', m2)
     if not streams:
         print("ERROR: No active streams found in metrics!")
         return False
@@ -50,10 +50,10 @@ def run_audit():
     print("-" * 65)
 
     for s in streams:
-        p1 = parse_metric(m1, "tsa_total_packets", s)
-        p2 = parse_metric(m2, "tsa_total_packets", s)
-        br = parse_metric(m2, "tsa_physical_bitrate_bps", s)
-        hl = parse_metric(m2, "tsa_health_score", s)
+        p1 = parse_metric(m1, "tsa_system_total_packets", s)
+        p2 = parse_metric(m2, "tsa_system_total_packets", s)
+        br = parse_metric(m2, "tsa_metrology_physical_bitrate_bps", s)
+        hl = parse_metric(m2, "tsa_system_health_score", s)
 
         # Validation Logic
         if p1 is None or p2 is None:

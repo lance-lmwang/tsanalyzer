@@ -131,15 +131,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", resp);
     } else if (mg_match(hm->uri, mg_str("/api/v1/streams"), NULL)) {
         if (mg_strcasecmp(hm->method, mg_str("POST")) == 0) {
+            printf("POST /api/v1/streams received, body: %.*s\n", (int)hm->body.len, hm->body.buf);
             char id[64] = "";
             char webhook[256] = "";
             uint64_t mask = g_alert_mask;
 
             char *id_p = mg_json_get_str(hm->body, "$.id");
-            if (id_p) { strncpy(id, id_p, 31); free(id_p); }
+            if (id_p) { strncpy(id, id_p, 31); id[31] = '\0'; free(id_p); }
 
             char *wh_p = mg_json_get_str(hm->body, "$.webhook_url");
-            if (wh_p) { strncpy(webhook, wh_p, 255); free(wh_p); }
+            if (wh_p) { strncpy(webhook, wh_p, 255); webhook[255] = '\0'; free(wh_p); }
             else strncpy(webhook, g_webhook_url, 255);
 
             char *mask_p = mg_json_get_str(hm->body, "$.alert_mask");
@@ -158,10 +159,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                 cfg.alert.filter_mask = mask;
                 n->tsa = tsa_create(&cfg);
                 pthread_create(&n->thread, NULL, worker, n);
+                pthread_mutex_unlock(&g_nodes_lock); // Unlock before calling save_state which re-locks
                 save_state();
+                printf("Stream created: %s on port %d\n", n->id, n->port); fflush(stdout);
                 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\",\"port\":%d}", n->port);
-            } else mg_http_reply(c, 507, "", "Full");
-            pthread_mutex_unlock(&g_nodes_lock);
+            } else {
+                pthread_mutex_unlock(&g_nodes_lock);
+                printf("Stream creation failed: Full\n"); fflush(stdout);
+                mg_http_reply(c, 507, "", "Full");
+            }
         } else {
             char *list_buf = calloc(1, 4096);
             int off = snprintf(list_buf, 4096, "{\"streams\":[");

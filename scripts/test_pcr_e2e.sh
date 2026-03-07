@@ -46,7 +46,7 @@ echo ">>> Waiting for metrics to populate..."
 MAX_RETRIES=15
 for i in $(seq 1 $MAX_RETRIES); do
     METRICS=$(curl -s http://localhost:$PORT_API/metrics || echo "")
-    LOCK=$(echo "$METRICS" | grep "^tsa_signal_lock_status" | awk '{print $2}' || echo "0")
+    LOCK=$(echo "$METRICS" | grep "^tsa_system_signal_locked" | awk '{print $2}' || echo "0")
     if [ "$LOCK" == "1" ]; then
         echo "    ✅ Signal locked"
         break
@@ -70,7 +70,7 @@ sleep 5
 # 6. Verify Error Count
 FINAL_METRICS=$(curl -s http://localhost:$PORT_API/metrics)
 # Match either the specific label one or the generic one if available
-ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
+ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_compliance_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
 
 echo "------------------------------------------------------------"
 echo "Final PCR Repetition Error Count: $ERR_COUNT"

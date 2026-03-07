@@ -41,6 +41,6 @@ echo "===================================================="
 
 while true; do
     echo "$(date) Health Check:"
-    curl -s "http://127.0.0.1:$PORT/metrics" | grep "tsa_total_packets" | head -n 4
+    curl -s "http://127.0.0.1:$PORT/metrics" | grep "tsa_system_total_packets" | head -n 4
     sleep 5
 done

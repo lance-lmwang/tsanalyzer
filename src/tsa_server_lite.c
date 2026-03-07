@@ -35,8 +35,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             int off = 0;
             for (int i = 0; i < MAX_S; i++) {
                 off += snprintf(buf + off, sizeof(buf) - off,
-                                "tsa_total_packets{mode=\"%s\"} %llu\n"
-                                "tsa_physical_bitrate_bps{mode=\"%s\"} %llu\n",
+                                "tsa_system_total_packets{mode=\"%s\"} %llu\n"
+                                "tsa_metrology_physical_bitrate_bps{mode=\"%s\"} %llu\n",
                                 g_s[i].id, (unsigned long long)g_s[i].pkts, g_s[i].id, (unsigned long long)g_s[i].br);
             }
             mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "%s", buf);

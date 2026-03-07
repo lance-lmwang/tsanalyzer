@@ -48,8 +48,8 @@ for t in $(seq 5 5 $TEST_DURATION); do
 
     # Aggregate stats across all streams
     DROPS=$(echo "$METRICS" | grep "tsa_internal_analyzer_drop" | awk '{sum+=$2} END {print sum}')
-    HEALTH=$(echo "$METRICS" | grep "tsa_health_score" | awk '{sum+=$2; n++} END {if(n>0) print sum/n; else print 0}')
-    BITRATE=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | awk '{sum+=$2} END {printf "%.2f Mbps\n", sum/1000000}')
+    HEALTH=$(echo "$METRICS" | grep "tsa_system_health_score" | awk '{sum+=$2; n++} END {if(n>0) print sum/n; else print 0}')
+    BITRATE=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | awk '{sum+=$2} END {printf "%.2f Mbps\n", sum/1000000}')
 
     printf "%3ds  | %11d | %10.1f | %s\n" $t "${DROPS:-0}" "$HEALTH" "$BITRATE"
 

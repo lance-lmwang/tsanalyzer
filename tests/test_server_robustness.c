@@ -12,7 +12,6 @@ void test_handle_limit() {
     tsa_handle_t* handles[50];  // Reduced for faster CI
     tsa_config_t cfg = {0};
     cfg.is_live = true;
-    cfg.enable_forensics = false;
 
     for (int i = 0; i < 50; i++) {
         handles[i] = tsa_create(&cfg);

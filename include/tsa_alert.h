@@ -13,6 +13,8 @@
 #define TSA_ALERT_MASK_P2_2_CRC       (1ULL << 5)
 #define TSA_ALERT_MASK_P2_3_PCR       (1ULL << 6)
 #define TSA_ALERT_MASK_P2_5_PTS       (1ULL << 7)
+#define TSA_ALERT_MASK_TSTD           (1ULL << 8)
+#define TSA_ALERT_MASK_ENTROPY        (1ULL << 9)
 
 #define TSA_ALERT_MASK_ALL_P1 (TSA_ALERT_MASK_P1_1_SYNC | TSA_ALERT_MASK_P1_3_PAT | \
                                TSA_ALERT_MASK_P1_4_CC | TSA_ALERT_MASK_P1_5_PMT)
@@ -27,6 +29,8 @@ typedef enum {
     TSA_ALERT_PCR,
     TSA_ALERT_TRANSPORT,
     TSA_ALERT_PTS,
+    TSA_ALERT_TSTD,
+    TSA_ALERT_ENTROPY,
     TSA_ALERT_MAX
 } tsa_alert_id_t;
 

@@ -109,7 +109,7 @@ TSP_GW_PID=$!
 sleep 5
 
 echo "-> Verifying metrics endpoint..."
-curl -s http://127.0.0.1:8001/metrics | grep "tsa_etr290_p1_cc_errors_total"
+curl -s http://127.0.0.1:8001/metrics | grep "tsa_compliance_tr101290_p1_cc_errors_total"
 assert_success
 
 pkill -P $TSG_PID || true

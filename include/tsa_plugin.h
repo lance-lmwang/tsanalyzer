@@ -40,7 +40,6 @@ void tsa_register_essence_engine(struct tsa_handle* h);
 // Default plugin ops
 extern tsa_plugin_ops_t tsa_scte35_engine;
 extern tsa_plugin_ops_t tr101290_ops;
-extern tsa_plugin_ops_t codec_ops;
 extern tsa_plugin_ops_t pcr_ops;
 extern tsa_plugin_ops_t essence_ops;
 

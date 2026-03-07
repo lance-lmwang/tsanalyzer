@@ -30,8 +30,8 @@ sleep 15
 # 4. Final Audit
 echo -e "${BLUE}=== Analyzing Live Telemetry ===${NC}"
 METRICS=$(curl -s http://localhost:8082/metrics)
-HEALTH=$(echo "$METRICS" | grep 'tsa_health_score{stream_id="CCTV5"}' | awk '{print $2}')
-BITRATE=$(echo "$METRICS" | grep 'tsa_physical_bitrate_bps{stream_id="CCTV5"}' | awk '{print $2}')
+HEALTH=$(echo "$METRICS" | grep 'tsa_system_health_score{stream_id="CCTV5"}' | awk '{print $2}')
+BITRATE=$(echo "$METRICS" | grep 'tsa_metrology_physical_bitrate_bps{stream_id="CCTV5"}' | awk '{print $2}')
 
 echo -e "RESULT: CCTV5 Health: ${GREEN}$HEALTH%${NC}"
 echo -e "RESULT: CCTV5 Bitrate: ${GREEN}$BITRATE bps${NC}"

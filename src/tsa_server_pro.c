@@ -85,7 +85,7 @@ static void load_config(const char* file) {
         if (sscanf(line, "%s %s", id, url) == 2) {
             conn_t* c = calloc(1, sizeof(conn_t));
             strncpy(c->id, id, 63);
-            tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.1};
+            tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
             strncpy(cfg.input_label, id, 31);
 
             if (strncmp(url, "udp://", 6) == 0) {
@@ -252,7 +252,7 @@ static void* io_thread(void* arg) {
                         nc->fd = client;
                         nc->type = CONN_SRT_CLIENT;
                         sprintf(nc->id, "SRT-%d", (int)client);
-                        tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.1};
+                        tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
                         strncpy(cfg.input_label, nc->id, 31);
                         nc->tsa = tsa_create(&cfg);
                         nc->tx_q = spsc_queue_create(1024);

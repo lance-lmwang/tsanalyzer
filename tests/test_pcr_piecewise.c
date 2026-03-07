@@ -20,7 +20,7 @@ int main() {
     printf("Testing Piecewise PCR Accuracy...\n");
     tsa_config_t cfg = {0};
     cfg.is_live = false;
-    cfg.pcr_ema_alpha = 0.1;
+    cfg.analysis.pcr_ema_alpha = 0.1;
     tsa_handle_t* h = tsa_create(&cfg);
 
     // Create a dummy PCR packet

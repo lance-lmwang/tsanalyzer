@@ -53,7 +53,7 @@ void* analysis_worker(void* arg) {
 }
 
 int main() {
-    tsa_config_t cfg = {.is_live = true, .pcr_ema_alpha = 0.01};
+    tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.01};
     tsa_handle_t* h = tsa_create(&cfg);
 
     pthread_t tid;

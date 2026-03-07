@@ -4,7 +4,7 @@
 
 #include "tsa.h"
 int main() {
-    tsa_config_t cfg = {.pcr_ema_alpha = 0.01};
+    tsa_config_t cfg = {.analysis.pcr_ema_alpha = 0.01};
     tsa_handle_t* h = tsa_create(&cfg);
     char buf[4096];
     tsa_export_prometheus(h, buf, sizeof(buf));

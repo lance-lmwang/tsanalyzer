@@ -14,6 +14,17 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
     (void)stc_ns;
     if (!h || !pay || len < 4) return;
 
+    if (h->config.analysis.entropy) {
+        uint32_t counts[256] = {0};
+        for (int i = 0; i < len; i++) {
+            counts[pay[i]]++;
+        }
+        double entropy = calculate_shannon_entropy(counts, 256);
+        if (entropy < 1.5) {
+            tsa_push_event(h, TSA_EVENT_ENTROPY_FREEZE, pid, (uint64_t)(entropy * 100));
+        }
+    }
+
     const char* st = tsa_get_pid_type_name(h, pid);
     if (strcmp(st, "H.264") != 0 && strcmp(st, "HEVC") != 0 && strcmp(st, "ES") != 0) {
         return;

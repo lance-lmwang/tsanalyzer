@@ -44,7 +44,7 @@ void test_pid_bitrate_ema() {
 
     tsa_config_t cfg = {
         .is_live = true,
-        .pcr_ema_alpha = 0.1  // 10% weight to new value
+        .analysis.pcr_ema_alpha = 0.1  // 10% weight to new value
     };
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);

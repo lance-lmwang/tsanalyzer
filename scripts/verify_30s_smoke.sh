@@ -21,7 +21,7 @@ for i in {1..3}; do
     sleep 5
     METRICS=$(curl -s http://localhost:$PORT_API/metrics | grep 'stream_id="STR-1"')
     CC=$(echo "$METRICS" | grep "tsa_tr101290_p1_cc_error" | awk '{print $2}')
-    MBPS=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | awk '{print $2}')
+    MBPS=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
     # Convert bps to Mbps
     MBPS_F=$(echo "scale=2; $MBPS / 1000000" | bc)
     printf "[%2ds] | %9d | %5.2f | ✅ OK\n" $((i*5+10)) "$CC" "$MBPS_F"

@@ -18,7 +18,7 @@ done
 
 echo "Waiting for metrics to stabilize..."
 for i in {1..10}; do
-    if curl -s http://localhost:8082/metrics | grep -q "tsa_health_score"; then
+    if curl -s http://localhost:8082/metrics | grep -q "tsa_system_health_score"; then
         echo "✅ Metrics detected!"
         bash scripts/verify_appliance_integrity.sh
         exit 0

@@ -50,7 +50,7 @@ def check_pipeline():
 
     # 3. 检查 Prometheus 数据库
     print("[3/4] Checking Prometheus DB...")
-    query = 'tsa_health_score{stream_id="STR-1"}'
+    query = 'tsa_system_health_score{stream_id="STR-1"}'
     url = f"http://127.0.0.1:9090/api/v1/query?query={urllib.parse.quote(query)}"
     db_res = get_json(url)
     if db_res and db_res['data']['result']:

@@ -23,10 +23,10 @@ def get_metrics():
         # Extract metrics using regex
         # Pattern: metric_name{stream_id="STR-X"} value
         patterns = {
-            'bitrate': r'tsa_physical_bitrate_bps\{stream_id="STR-(\d+)"\} ([\d\.]+)',
+            'bitrate': r'tsa_metrology_physical_bitrate_bps\{stream_id="STR-(\d+)"\} ([\d\.]+)',
             'cc_err': r'tsa_tr101290_p1_cc_error\{stream_id="STR-(\d+)"\} ([\d\.]+)',
-            'health': r'tsa_health_score\{stream_id="STR-(\d+)"\} ([\d\.]+)',
-            'jitter': r'tsa_pcr_jitter_ms\{stream_id="STR-(\d+)"\} ([\d\.]+)'
+            'health': r'tsa_system_health_score\{stream_id="STR-(\d+)"\} ([\d\.]+)',
+            'jitter': r'tsa_metrology_pcr_jitter_ms\{stream_id="STR-(\d+)"\} ([\d\.]+)'
         }
 
         for m_name, pat in patterns.items():

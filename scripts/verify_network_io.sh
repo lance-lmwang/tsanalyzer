@@ -32,8 +32,8 @@ function run_test() {
     
     # 3. Probe Metrics
     METRICS=$(curl -s http://localhost:12345/metrics)
-    BR=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | awk '{print $2}')
-    HE=$(echo "$METRICS" | grep "tsa_health_score" | awk '{print $2}')
+    BR=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
+    HE=$(echo "$METRICS" | grep "tsa_system_health_score" | awk '{print $2}')
     
     # 4. Cleanup
     kill $TSA_PID $TSP_PID > /dev/null 2>&1

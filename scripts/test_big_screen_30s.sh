@@ -30,7 +30,7 @@ echo "----------------------------------------------------"
 
 for i in {1..15}; do
     echo "[$(date +%H:%M:%S)] 抓取测试..."
-    curl -s http://localhost:8082/metrics | grep "tsa_total_packets" | head -n 4
+    curl -s http://localhost:8082/metrics | grep "tsa_system_total_packets" | head -n 4
     sleep 2
 done
 

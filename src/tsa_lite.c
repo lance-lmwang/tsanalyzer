@@ -99,6 +99,6 @@ size_t tsa_snapshot_to_json(const tsa_snapshot_full_t* snap, char* buf, size_t s
 }
 
 void tsa_export_prometheus(tsa_handle_t* h, char* buffer, size_t size) {
-    snprintf(buffer, size, "tsa_total_packets %llu\ntsa_physical_bitrate_bps %llu\n",
+    snprintf(buffer, size, "tsa_system_total_packets %llu\ntsa_metrology_physical_bitrate_bps %llu\n",
              (unsigned long long)h->live->total_ts_packets, (unsigned long long)h->live->physical_bitrate_bps);
 }

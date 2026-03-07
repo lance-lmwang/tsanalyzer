@@ -12,7 +12,6 @@ int main() {
     cfg.pacing.dest_ip = "127.0.0.1";
     cfg.pacing.port = 0;
     cfg.analysis_primary.is_live = true;
-    cfg.analysis_primary.enable_forensics = false;
 
     printf("Attempting to create gateway (fast-fail mode)...\n");
     tsa_gateway_t* gw = tsa_gateway_create(&cfg);

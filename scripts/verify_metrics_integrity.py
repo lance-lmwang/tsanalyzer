@@ -29,8 +29,8 @@ def verify():
 
     # 检查核心看板指标的唯一性
     critical_metrics = [
-        "tsa_signal_lock_status",
-        "tsa_health_score",
+        "tsa_system_signal_locked",
+        "tsa_system_health_score",
         "tsa_rst_encoder_seconds",
         "tsa_essence_video_fps"
     ]

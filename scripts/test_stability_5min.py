@@ -63,9 +63,9 @@ def run_test_session():
                 if resp.status_code == 200:
                     metrics = resp.text
 
-                    cc_errors = get_metric(metrics, "tsa_cc_errors_total", STREAM_ID)
-                    health = get_metric(metrics, "tsa_health_score", STREAM_ID)
-                    bitrate = get_metric(metrics, "tsa_physical_bitrate_bps", STREAM_ID)
+                    cc_errors = get_metric(metrics, "tsa_compliance_tr101290_p1_cc_errors_total", STREAM_ID)
+                    health = get_metric(metrics, "tsa_system_health_score", STREAM_ID)
+                    bitrate = get_metric(metrics, "tsa_metrology_physical_bitrate_bps", STREAM_ID)
                     fps = get_metric(metrics, "tsa_essence_video_fps", STREAM_ID)
 
                     status = f"[{elapsed:3d}s] Health:{health:.1f} CC:{int(cc_errors)} Bitrate:{bitrate/1e6:.2f}M FPS:{fps:.1f}"

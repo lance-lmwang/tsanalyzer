@@ -34,7 +34,7 @@ echo ">>> Waiting for Signal Lock..."
 MAX_RETRIES=15
 for i in $(seq 1 $MAX_RETRIES); do
     METRICS=$(curl -s http://localhost:$PORT_API/metrics || echo "")
-    if echo "$METRICS" | grep -q 'tsa_signal_lock_status.* 1'; then
+    if echo "$METRICS" | grep -q 'tsa_system_signal_locked.* 1'; then
         echo "    ✅ Signal Locked"
         break
     fi
@@ -50,7 +50,7 @@ fi
 # 4. Simulate PCR Gap (TR 101 290 1.1)
 echo ">>> Phase 3: Simulating 200ms PCR Gap (Stream Pause)..."
 # Get baseline errors
-BASE_ERR=$(echo "$METRICS" | grep "tsa_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
+BASE_ERR=$(echo "$METRICS" | grep "tsa_compliance_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
 
 kill -STOP $TSP_PID
 sleep 1.0
@@ -59,7 +59,7 @@ sleep 5
 
 # 5. Check Error Counter
 FINAL_METRICS=$(curl -s http://localhost:$PORT_API/metrics)
-ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
+ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_compliance_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
 
 echo "------------------------------------------------------------"
 echo "PCR Repetition Errors (Baseline: $BASE_ERR): $ERR_COUNT"

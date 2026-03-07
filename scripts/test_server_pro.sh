@@ -38,8 +38,8 @@ echo -e "${BLUE}--- Metrics Verification ---${NC}"
 METRICS=$(curl -s http://localhost:$HTTP_PORT/metrics)
 
 # Check for SRT streams in metrics (using stream_id)
-SRT_COUNT=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | grep -c "stream_id=\"SRT-")
-UDP_FOUND=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | grep -c "stream_id=\"UDP-19001\"")
+SRT_COUNT=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | grep -c "stream_id=\"SRT-")
+UDP_FOUND=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | grep -c "stream_id=\"UDP-19001\"")
 
 echo -e "Found $SRT_COUNT SRT streams in metrics"
 echo -e "UDP Stream Found: $UDP_FOUND"
@@ -49,7 +49,7 @@ RTT_FOUND=$(echo "$METRICS" | grep -c "tsa_srt_rtt_ms")
 
 if [ "$SRT_COUNT" -ge 4 ] && [ "$UDP_FOUND" -ge 1 ]; then
     # Even if RTT is 0, we want to see bitrates
-    SRT_BITRATE_TOTAL=$(echo "$METRICS" | grep "tsa_physical_bitrate_bps" | grep "stream_id=\"SRT-" | awk '{sum+=$2} END {print sum}')
+    SRT_BITRATE_TOTAL=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | grep "stream_id=\"SRT-" | awk '{sum+=$2} END {print sum}')
     echo -e "Total SRT Bitrate: $SRT_BITRATE_TOTAL bps"
     
     if (( $(echo "$SRT_BITRATE_TOTAL > 0" | bc -l) )); then
@@ -66,7 +66,7 @@ if [ "$SRT_COUNT" -ge 4 ] && [ "$UDP_FOUND" -ge 1 ]; then
 else
     echo -e "RESULT: ${RED}FAILED${NC} (Streams not found)"
     echo "Metrics summary:"
-    echo "$METRICS" | grep "tsa_physical_bitrate_bps"
+    echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps"
     killall tsa_server_pro tsp
     exit 1
 fi

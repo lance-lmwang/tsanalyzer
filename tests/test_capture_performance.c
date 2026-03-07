@@ -17,7 +17,7 @@ uint64_t get_ns() {
 
 void benchmark(bool enable_forensics) {
     tsa_config_t cfg = {0};
-    cfg.enable_forensics = enable_forensics;
+
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

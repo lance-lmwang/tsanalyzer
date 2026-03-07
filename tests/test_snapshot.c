@@ -8,7 +8,7 @@
 void test_snapshot_mechanism() {
     printf("Testing Double-Buffered Snapshot Mechanism...\n");
 
-    tsa_config_t cfg = {.pcr_ema_alpha = 0.01, .entropy_window_packets = 500};
+    tsa_config_t cfg = {.analysis.pcr_ema_alpha = 0.01, .entropy_window_packets = 500};
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

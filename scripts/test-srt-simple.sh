@@ -27,8 +27,8 @@ echo "WAIT: Transferring data for 15 seconds..."
 sleep 15
 
 # 4. 抓取结果
-BR=$(curl -s http://localhost:12345/metrics | grep "tsa_physical_bitrate_bps" | awk '{print $2}')
-HE=$(curl -s http://localhost:12345/metrics | grep "tsa_health_score" | awk '{print $2}')
+BR=$(curl -s http://localhost:12345/metrics | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
+HE=$(curl -s http://localhost:12345/metrics | grep "tsa_system_health_score" | awk '{print $2}')
 
 echo -e "${BLUE}--- Test Verdict ---${NC}"
 if [[ ! -z "$BR" ]] && (( BR > 0 )); then

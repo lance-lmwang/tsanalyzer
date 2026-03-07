@@ -38,8 +38,8 @@ for i in {1..4}; do
     for s in $(seq 1 $STREAMS); do
         SID="STR-$s"
         # Extract specific metric for this stream
-        BPS=$(echo "$METRICS" | grep "tsa_pcr_bitrate_bps{stream_id=\"$SID\"}" | awk '{print $2}')
-        JIT=$(echo "$METRICS" | grep "tsa_pcr_jitter_ms{stream_id=\"$SID\"}" | awk '{print $2}')
+        BPS=$(echo "$METRICS" | grep "tsa_metrology_pcr_bitrate_bps{stream_id=\"$SID\"}" | awk '{print $2}')
+        JIT=$(echo "$METRICS" | grep "tsa_metrology_pcr_jitter_ms{stream_id=\"$SID\"}" | awk '{print $2}')
         LAT=$(echo "$METRICS" | grep "tsa_engine_processing_latency_ns{stream_id=\"$SID\"}" | awk '{print $2}')
 
         if [ -z "$BPS" ]; then BPS=0; fi

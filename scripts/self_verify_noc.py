@@ -36,8 +36,8 @@ def check_metrics():
     print("[2/4] Checking metric integrity (v4.0 Appliance)...")
     # Core appliance metrics
     metrics = [
-        "tsa_health_score",
-        "tsa_physical_bitrate_bps",
+        "tsa_system_health_score",
+        "tsa_metrology_physical_bitrate_bps",
         "tsa_internal_analyzer_drop",
         "tsa_worker_slice_overruns"
     ]
