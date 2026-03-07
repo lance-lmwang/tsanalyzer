@@ -1,10 +1,8 @@
 # Dependencies
 deps/srt/
 deps/libpcap/
+deps/lua/
 deps/*.tar.gz
-deps/srs/
-deps/lua/src/lua
-deps/lua/src/luac
 
 build/
 *.o
