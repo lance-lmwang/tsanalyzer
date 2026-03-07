@@ -115,11 +115,11 @@ lint:
 
 format:
 	@echo "$(BLUE)=== Formatting Code ===$(RESET)"
-	@find src include tests -name "*.c" -o -name "*.h" | grep -v "mongoose" | xargs clang-format -i
+	@find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format -i
 
 check-format:
 	@echo "$(BLUE)=== Checking Code Format ===$(RESET)"
-	@find src include tests -name "*.c" -o -name "*.h" | grep -v "mongoose" | xargs clang-format --dry-run --Werror
+	@find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format --dry-run --Werror
 install: release
 	@echo "$(BLUE)=== Installing to $(INSTALL_PREFIX) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(MAKE) install
