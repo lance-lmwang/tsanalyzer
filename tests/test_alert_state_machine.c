@@ -1,8 +1,9 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <unistd.h>
+
 #include "tsa.h"
 #include "tsa_internal.h"
 
@@ -16,9 +17,9 @@ int main() {
 
     printf("Testing Comprehensive Alert State Machine...\n");
 
-    uint64_t now = 1000000000ULL; // 1s
+    uint64_t now = 1000000000ULL;  // 1s
     h->stc_ns = now;
-    h->signal_lock = true; // Signal must be locked to process sub-alerts
+    h->signal_lock = true;  // Signal must be locked to process sub-alerts
 
     // 1. Test PAT and PCR Independence
     printf("  Step 1: Triggering PAT and PCR Errors...\n");
@@ -41,13 +42,13 @@ int main() {
     tsa_push_event(h, TSA_EVENT_CC_ERROR, 100, 0);
 
     // CC should NOT be FIRING because tsa_push_event suppresses it when !signal_lock
-    printf("  Checking suppression: CC status is %d (expected %d)\n",
-           h->alerts[TSA_ALERT_CC].status, TSA_ALERT_STATE_OFF);
+    printf("  Checking suppression: CC status is %d (expected %d)\n", h->alerts[TSA_ALERT_CC].status,
+           TSA_ALERT_STATE_OFF);
     assert(h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_OFF);
 
     // 3. Test Recovery of multiple alerts
     printf("  Step 3: Advancing time (6s) to resolve all...\n");
-    h->stc_ns = now + 8000000000ULL; // +8s
+    h->stc_ns = now + 8000000000ULL;  // +8s
 
     // Simulate signal back for recovery logic
     h->signal_lock = true;

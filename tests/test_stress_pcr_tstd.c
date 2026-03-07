@@ -15,17 +15,17 @@ void test_high_freq_pcr_stc_lock() {
 
     uint8_t pkt[188] = {0};
     pkt[0] = 0x47;
-    pkt[1] = 0x01; // PID 0x100
-    pkt[3] = 0x30; // AF + Payload
-    pkt[4] = 7;    // AF length
-    pkt[5] = 0x10; // PCR flag
+    pkt[1] = 0x01;  // PID 0x100
+    pkt[3] = 0x30;  // AF + Payload
+    pkt[4] = 7;     // AF length
+    pkt[5] = 0x10;  // PCR flag
 
-    uint64_t base_pcr = TS_SYSTEM_CLOCK_HZ * 10; // 10s start
-    uint64_t sys_time = NS_PER_SEC;    // 1s start
+    uint64_t base_pcr = TS_SYSTEM_CLOCK_HZ * 10;  // 10s start
+    uint64_t sys_time = NS_PER_SEC;               // 1s start
 
     // Feed 100 high-frequency PCRs (every 10 packets)
     for (int i = 0; i < 200; i++) {
-        uint64_t current_pcr = base_pcr + (i * 10000); // Fast increment
+        uint64_t current_pcr = base_pcr + (i * 10000);  // Fast increment
         pkt[6] = (current_pcr >> 25) & 0xFF;
         pkt[7] = (current_pcr >> 17) & 0xFF;
         pkt[8] = (current_pcr >> 9) & 0xFF;
@@ -56,14 +56,14 @@ void test_tstd_overflow_detection() {
     tsa_handle_t* h = tsa_create(&cfg);
 
     // Mock a Video PID 0x100
-    h->pid_stream_type[0x100] = 0x1b; // H.264
+    h->pid_stream_type[0x100] = 0x1b;  // H.264
     h->live->pid_is_referenced[0x100] = true;
     tsa_update_pid_tracker(h, 0x100);
 
     // Manually stuff the EB (Elementary Buffer)
     // In a real scenario, this happens via tsa_handle_es_payload
     // Here we test the draining logic dependency on STC
-    h->pid_eb_fill_q64[0x100] = INT_TO_Q64_64(1000000); // 1MB full
+    h->pid_eb_fill_q64[0x100] = INT_TO_Q64_64(1000000);  // 1MB full
 
     // Set STC but don't advance it yet
     h->stc_ns = NS_PER_SEC;
@@ -77,7 +77,7 @@ void test_tstd_overflow_detection() {
     int idx = tsa_find_pid_in_snapshot(&snap, 0x100);
     assert(idx != -1);
     printf("EB Fill after no-advance: %.2f%%\n", snap.pids[idx].eb_fill_pct);
-    assert(snap.pids[idx].eb_fill_pct > 80.0); // Should remain high
+    assert(snap.pids[idx].eb_fill_pct > 80.0);  // Should remain high
 
     // Now advance STC past some DTS
     h->pid_au_q[0x100][0].dts_ns = 1100000000ULL;
@@ -85,7 +85,7 @@ void test_tstd_overflow_detection() {
     h->pid_au_head[0x100] = 0;
     h->pid_au_tail[0x100] = 1;
 
-    h->stc_ns = 1200000000ULL; // Past DTS
+    h->stc_ns = 1200000000ULL;  // Past DTS
     tsa_commit_snapshot(h, 1200000000ULL);
     tsa_take_snapshot_full(h, &snap);
 

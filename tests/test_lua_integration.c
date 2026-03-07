@@ -30,7 +30,7 @@ void test_lua_basic() {
 
     // Verify plugin count increased
     assert(h->plugin_count == initial_count + 1);
-    assert(strcmp(h->plugins[h->plugin_count-1].ops->name, "TR101290_CORE") == 0);
+    assert(strcmp(h->plugins[h->plugin_count - 1].ops->name, "TR101290_CORE") == 0);
 
     tsa_lua_destroy(lua);
     tsa_destroy(h);

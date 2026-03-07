@@ -1,6 +1,7 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
+
 #include "tsa_bitstream.h"
 
 void test_basic_reading() {
@@ -10,8 +11,8 @@ void test_basic_reading() {
 
     assert(br_read(&r, 1) == 1);
     assert(br_read(&r, 1) == 0);
-    assert(br_read(&r, 2) == 2); // 10
-    assert(br_read(&r, 4) == 10); // 1010
+    assert(br_read(&r, 2) == 2);   // 10
+    assert(br_read(&r, 4) == 10);  // 1010
 
     assert(br_read(&r, 8) == 0b11001100);
     assert(br_read(&r, 16) == 0b1111000000001111);
@@ -31,11 +32,11 @@ void test_ue_golomb() {
     // 0001000 => 7
 
     uint8_t data[] = {
-        0b10100110, // 1(0) | 010(1) | 011(2) | 0
-        0b01000010, // 0100(3) | 0010(left part of 4)
-        0b10011000, // 1(right part of 4) | 00110(5) | 00
-        0b11100010, // 111(6) | 00010(left part of 7)
-        0b00000000  // 00(right part of 7)
+        0b10100110,  // 1(0) | 010(1) | 011(2) | 0
+        0b01000010,  // 0100(3) | 0010(left part of 4)
+        0b10011000,  // 1(right part of 4) | 00110(5) | 00
+        0b11100010,  // 111(6) | 00010(left part of 7)
+        0b00000000   // 00(right part of 7)
     };
 
     bit_reader_t r;
@@ -66,10 +67,10 @@ void test_se_golomb() {
 
     // Using the same ue codes: 0, 1, 2, 3, 4, 5, 6
     uint8_t data[] = {
-        0b10100110, // 1(0) | 010(1) | 011(2) | 0
-        0b01000010, // 0100(3) | 0010(left part of 4)
-        0b10011000, // 1(right part of 4) | 00110(5) | 00
-        0b11100000  // 111(6) | pad
+        0b10100110,  // 1(0) | 010(1) | 011(2) | 0
+        0b01000010,  // 0100(3) | 0010(left part of 4)
+        0b10011000,  // 1(right part of 4) | 00110(5) | 00
+        0b11100000   // 111(6) | pad
     };
 
     bit_reader_t r;
@@ -87,12 +88,12 @@ void test_se_golomb() {
 }
 
 void test_peek_skip() {
-    uint8_t data[] = {0xAA, 0x55}; // 10101010 01010101
+    uint8_t data[] = {0xAA, 0x55};  // 10101010 01010101
     bit_reader_t r;
     br_init(&r, data, sizeof(data));
 
     assert(br_peek(&r, 4) == 0xA);
-    assert(br_peek(&r, 4) == 0xA); // Peek should not advance
+    assert(br_peek(&r, 4) == 0xA);  // Peek should not advance
 
     br_skip(&r, 4);
     assert(br_read(&r, 4) == 0xA);

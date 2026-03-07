@@ -1,13 +1,15 @@
-#include <stdio.h>
 #include <assert.h>
-#include "tsa_pipeline.h"
+#include <stdio.h>
+
 #include "tsa_log.h"
+#include "tsa_pipeline.h"
 
 static int g_metrology_calls = 0;
 static int g_repair_calls = 0;
 
 static void metrology_tap(tsa_stage_t* stage, tsa_packet_t* pkt) {
-    (void)stage; (void)pkt;
+    (void)stage;
+    (void)pkt;
     g_metrology_calls++;
 }
 

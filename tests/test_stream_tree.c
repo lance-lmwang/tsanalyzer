@@ -23,7 +23,7 @@ static void test_stream_tree_routing() {
     printf("Testing Stream Tree Routing...\n");
 
     tsa_stream_t root;
-    tsa_stream_init(&root, NULL, NULL); // Root doesn't have its own callback
+    tsa_stream_init(&root, NULL, NULL);  // Root doesn't have its own callback
 
     tsa_stream_t node_a;
     tsa_stream_init(&node_a, NULL, plugin_a_on_ts);
@@ -50,8 +50,8 @@ static void test_stream_tree_routing() {
 
     tsa_stream_send(&root, pkt);
 
-    assert(g_plugin_a_count == 1); // Should not increment
-    assert(g_plugin_b_count == 2); // Should increment
+    assert(g_plugin_a_count == 1);  // Should not increment
+    assert(g_plugin_b_count == 2);  // Should increment
 
     tsa_stream_destroy(&node_a);
     tsa_stream_destroy(&node_b);
@@ -95,18 +95,18 @@ static void test_reactive_pid_management() {
 
     // Node A wants PID 100
     tsa_stream_demux_join_pid(&node_a, 100);
-    assert(g_join_pid_count == 1); // Should propagate to root
-    assert(tsa_stream_demux_check_pid(&root, 100) == false); // Root check is for ITSELF, wait, the root's check?
+    assert(g_join_pid_count == 1);                            // Should propagate to root
+    assert(tsa_stream_demux_check_pid(&root, 100) == false);  // Root check is for ITSELF, wait, the root's check?
     // Actually demux_check_pid checks if the node ITSELF has subscriptions.
     assert(tsa_stream_demux_check_pid(&node_a, 100) == true);
 
     // Node B also wants PID 100
     tsa_stream_demux_join_pid(&node_b, 100);
-    assert(g_join_pid_count == 2); // Propagates to root
+    assert(g_join_pid_count == 2);  // Propagates to root
 
     // Node A leaves PID 100
     tsa_stream_demux_leave_pid(&node_a, 100);
-    assert(g_leave_pid_count == 1); // Root receives leave from A
+    assert(g_leave_pid_count == 1);  // Root receives leave from A
 
     tsa_stream_destroy(&node_a);
     tsa_stream_destroy(&node_b);

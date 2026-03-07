@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "tsa.h"
 #include "tsa_internal.h"
 
@@ -17,22 +18,21 @@ void test_bitrate_spike_suppression() {
 
     uint8_t pkt[188] = {0};
     pkt[0] = 0x47;
-    pkt[1] = 0x00; // PID 0 (PAT)
+    pkt[1] = 0x00;  // PID 0 (PAT)
 
     /* Simulate a burst of 1000 packets arriving at T=1s */
     uint64_t now = NS_PER_SEC;
     for (int i = 0; i < 1000; i++) {
-        tsa_process_packet(h, pkt, now + (i * 1000)); // Very fast packets
+        tsa_process_packet(h, pkt, now + (i * 1000));  // Very fast packets
     }
 
     /* Take a snapshot immediately (dt will be very small) */
-    tsa_commit_snapshot(h, now + 1000000ULL); // 1ms later
+    tsa_commit_snapshot(h, now + 1000000ULL);  // 1ms later
 
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    printf("Initial Physical Bitrate: %lu bps (%.2f Mbps)\n",
-           snap.summary.physical_bitrate_bps,
+    printf("Initial Physical Bitrate: %lu bps (%.2f Mbps)\n", snap.summary.physical_bitrate_bps,
            (double)snap.summary.physical_bitrate_bps / 1000000.0);
 
     /* Professional Expectation: Bitrate should be capped or smoothed, not 1.5Gbps+ */

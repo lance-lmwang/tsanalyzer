@@ -1,8 +1,8 @@
 #ifndef TSA_METROLOGY_NALU_SNIFFER_H
 #define TSA_METROLOGY_NALU_SNIFFER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,8 +12,8 @@ typedef enum {
     NALU_TYPE_UNKNOWN = 0,
     NALU_TYPE_SPS,
     NALU_TYPE_PPS,
-    NALU_TYPE_IDR, // I-Frame
-    NALU_TYPE_NON_IDR, // P/B-Frame
+    NALU_TYPE_IDR,      // I-Frame
+    NALU_TYPE_NON_IDR,  // P/B-Frame
     NALU_TYPE_SEI
 } tsa_nalu_type_t;
 
@@ -34,7 +34,7 @@ typedef struct {
 
     // For Video Frames
     bool is_slice;
-    int slice_type; // -1 if unknown, 0=P, 1=B, 2=I
+    int slice_type;  // -1 if unknown, 0=P, 1=B, 2=I
 } tsa_nalu_info_t;
 
 /**
@@ -51,4 +51,4 @@ void tsa_nalu_sniff(const uint8_t* buf, int size, bool is_h265, tsa_nalu_info_t*
 }
 #endif
 
-#endif // TSA_METROLOGY_NALU_SNIFFER_H
+#endif  // TSA_METROLOGY_NALU_SNIFFER_H

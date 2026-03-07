@@ -15,7 +15,7 @@ RED    := \033[31m
 RESET  := \033[0m
 
 # Only non-file targets should be PHONY
-.PHONY: all clean test full-test rt-test install lint format help tsa_cli_monitor
+.PHONY: all clean test full-test rt-test install lint format check-format help tsa_cli_monitor
 
 all: release
 
@@ -86,7 +86,7 @@ test: release
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
 
 # Comprehensive validation including functional and integration tests
-full-test: release
+full-test: release check-format
 	@echo "$(GREEN)=== Running Full Validation Suite ===$(RESET)"
 	@echo "1. Unit Tests (Timeout: 30s)..."
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
@@ -115,8 +115,11 @@ lint:
 
 format:
 	@echo "$(BLUE)=== Formatting Code ===$(RESET)"
-	@find src include tests -name "*.c" -o -name "*.h" | xargs clang-format -i
+	@find src include tests -name "*.c" -o -name "*.h" | grep -v "mongoose" | xargs clang-format -i
 
+check-format:
+	@echo "$(BLUE)=== Checking Code Format ===$(RESET)"
+	@find src include tests -name "*.c" -o -name "*.h" | grep -v "mongoose" | xargs clang-format --dry-run --Werror
 install: release
 	@echo "$(BLUE)=== Installing to $(INSTALL_PREFIX) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(MAKE) install

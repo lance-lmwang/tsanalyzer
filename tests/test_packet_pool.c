@@ -1,7 +1,8 @@
-#include <stdio.h>
 #include <assert.h>
-#include "tsa_packet_pool.h"
+#include <stdio.h>
+
 #include "tsa_log.h"
+#include "tsa_packet_pool.h"
 
 int main() {
     tsa_log_set_level(TSA_LOG_DEBUG);
@@ -22,7 +23,7 @@ int main() {
     assert(pkt1->ref_count == 1);
 
     tsa_packet_unref(pool, pkt1);
-    assert(pkt1->ref_count == 0); // Returned to pool
+    assert(pkt1->ref_count == 0);  // Returned to pool
 
     tsa_packet_pool_destroy(pool);
     tsa_info("pool_test", "All packet pool tests PASSED.");

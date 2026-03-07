@@ -1,5 +1,6 @@
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
+
 #include "tsa_clock_domain.h"
 #include "tsa_log.h"
 

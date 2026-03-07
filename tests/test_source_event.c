@@ -1,13 +1,13 @@
+#include <arpa/inet.h>
 #include <assert.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <pthread.h>
 
-#include "tsa_source.h"
 #include "tsa_event.h"
+#include "tsa_source.h"
 
 static int g_packet_count = 0;
 
@@ -35,10 +35,7 @@ void test_source_with_reactor() {
     tsa_reactor_t* reactor = tsa_reactor_create();
     assert(reactor != NULL);
 
-    tsa_source_callbacks_t cbs = {
-        .on_packets = on_packets,
-        .on_status = on_status
-    };
+    tsa_source_callbacks_t cbs = {.on_packets = on_packets, .on_status = on_status};
 
     tsa_source_t* src = tsa_source_create(TSA_SOURCE_UDP, "127.0.0.1:9999", NULL, 0, &cbs, NULL);
     assert(src != NULL);

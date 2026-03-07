@@ -24,16 +24,19 @@ static uint32_t get_crc32(const uint8_t* data, int len) {
 }
 
 static uint8_t h264_sps_pps[] = {
-    0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1f, 0x95, 0xa8, 0x1e, 0x00, 0x5b, 0x90, // SPS 720p
-    0x00, 0x00, 0x00, 0x01, 0x68, 0xce, 0x3c, 0x80                                     // PPS
+    0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1f, 0x95, 0xa8, 0x1e, 0x00, 0x5b, 0x90,  // SPS 720p
+    0x00, 0x00, 0x00, 0x01, 0x68, 0xce, 0x3c, 0x80                                       // PPS
 };
 
 static void write_pat(uint8_t* p, uint8_t cc) {
     memset(p, 0xFF, 188);
-    p[0] = 0x47; p[1] = 0x40; p[2] = 0x00; p[3] = 0x10 | (cc & 0x0F); p[4] = 0x00;
-    uint8_t section[] = {
-        0x00, 0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 0xE0 | (0x1000 >> 8), 0x1000 & 0xFF
-    };
+    p[0] = 0x47;
+    p[1] = 0x40;
+    p[2] = 0x00;
+    p[3] = 0x10 | (cc & 0x0F);
+    p[4] = 0x00;
+    uint8_t section[] = {0x00,         0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 0xE0 | (0x1000 >> 8),
+                         0x1000 & 0xFF};
     memcpy(p + 5, section, sizeof(section));
     uint32_t crc = get_crc32(p + 5, sizeof(section));
     p[5 + sizeof(section) + 0] = (crc >> 24) & 0xFF;
@@ -44,12 +47,29 @@ static void write_pat(uint8_t* p, uint8_t cc) {
 
 static void write_pmt(uint8_t* p, uint8_t cc) {
     memset(p, 0xFF, 188);
-    p[0] = 0x47; p[1] = 0x40 | (0x1000 >> 8); p[2] = 0x1000 & 0xFF; p[3] = 0x10 | (cc & 0x0F); p[4] = 0x00;
+    p[0] = 0x47;
+    p[1] = 0x40 | (0x1000 >> 8);
+    p[2] = 0x1000 & 0xFF;
+    p[3] = 0x10 | (cc & 0x0F);
+    p[4] = 0x00;
     uint8_t section[] = {
-        0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00,
-        0xE0 | (0x0100 >> 8), 0x0100 & 0xFF,
-        0xF0, 0x00,
-        0x1B, 0xE0 | (0x0100 >> 8), 0x0100 & 0xFF, 0xF0, 0x00 // H.264 video at 0x0100
+        0x02,
+        0xB0,
+        0x17,
+        0x00,
+        0x01,
+        0xC1,
+        0x00,
+        0x00,
+        0xE0 | (0x0100 >> 8),
+        0x0100 & 0xFF,
+        0xF0,
+        0x00,
+        0x1B,
+        0xE0 | (0x0100 >> 8),
+        0x0100 & 0xFF,
+        0xF0,
+        0x00  // H.264 video at 0x0100
     };
     memcpy(p + 5, section, sizeof(section));
     uint32_t crc = get_crc32(p + 5, sizeof(section));
@@ -61,10 +81,24 @@ static void write_pmt(uint8_t* p, uint8_t cc) {
 
 static void write_video(uint8_t* p, uint8_t cc) {
     memset(p, 0xFF, 188);
-    p[0] = 0x47; p[1] = 0x40 | (0x0100 >> 8); p[2] = 0x0100 & 0xFF; p[3] = 0x10 | (cc & 0x0F);
-    p[4] = 0x00; p[5] = 0x00; p[6] = 0x01; p[7] = 0xe0; // PES
-    p[8] = 0x00; p[9] = 0x00; p[10] = 0x80; p[11] = 0x80; p[12] = 0x05;
-    p[13] = 0x21; p[14] = 0x00; p[15] = 0x01; p[16] = 0x00; p[17] = 0x01;
+    p[0] = 0x47;
+    p[1] = 0x40 | (0x0100 >> 8);
+    p[2] = 0x0100 & 0xFF;
+    p[3] = 0x10 | (cc & 0x0F);
+    p[4] = 0x00;
+    p[5] = 0x00;
+    p[6] = 0x01;
+    p[7] = 0xe0;  // PES
+    p[8] = 0x00;
+    p[9] = 0x00;
+    p[10] = 0x80;
+    p[11] = 0x80;
+    p[12] = 0x05;
+    p[13] = 0x21;
+    p[14] = 0x00;
+    p[15] = 0x01;
+    p[16] = 0x00;
+    p[17] = 0x01;
     memcpy(p + 18, h264_sps_pps, sizeof(h264_sps_pps));
 }
 
@@ -81,18 +115,22 @@ int main() {
     uint64_t now = 1000000000ULL;
 
     write_pat(pkt, 0);
-    tsa_process_packet(h, pkt, now); now += 100000;
+    tsa_process_packet(h, pkt, now);
+    now += 100000;
 
     write_pmt(pkt, 0);
-    tsa_process_packet(h, pkt, now); now += 100000;
+    tsa_process_packet(h, pkt, now);
+    now += 100000;
 
     write_video(pkt, 0);
-    tsa_process_packet(h, pkt, now); now += 100000;
+    tsa_process_packet(h, pkt, now);
+    now += 100000;
 
     // Send a second PUSI packet to flush the first one
     uint8_t pkt2[188];
     memcpy(pkt2, pkt, 188);
-    tsa_process_packet(h, pkt2, now); now += 100000;
+    tsa_process_packet(h, pkt2, now);
+    now += 100000;
 
     tsa_commit_snapshot(h, now + 10000000ULL);
 

@@ -1,8 +1,8 @@
 #include <assert.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #include "tsa_event.h"
 
@@ -27,11 +27,7 @@ void test_event_loop_basic() {
     // Set non-blocking
     fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
 
-    tsa_reactor_event_t ev_read = {
-        .fd = pipefd[0],
-        .on_read = pipe_read_cb,
-        .arg = &pipefd[0]
-    };
+    tsa_reactor_event_t ev_read = {.fd = pipefd[0], .on_read = pipe_read_cb, .arg = &pipefd[0]};
 
     assert(tsa_reactor_add(reactor, &ev_read) == 0);
 

@@ -1,7 +1,8 @@
+#include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
-#include <assert.h>
+
 #include "tsa_internal.h"
 
 void test_perfect_sync() {
@@ -13,7 +14,7 @@ void test_perfect_sync() {
     uint64_t start_pcr = 2000000000ULL;
 
     for (int i = 0; i < 50; i++) {
-        uint64_t sys = start_sys + i * 40000000ULL; // 40ms intervals
+        uint64_t sys = start_sys + i * 40000000ULL;  // 40ms intervals
         uint64_t pcr = start_pcr + i * 40000000ULL;
         ts_pcr_window_add(&w, sys, pcr, 0);
     }
@@ -76,7 +77,7 @@ void test_jitter() {
     srand(42);
     for (int i = 0; i < 100; i++) {
         uint64_t sys = start_sys + i * 40000000ULL;
-        int64_t jitter = (rand() % 200000) - 100000; // +/- 100us jitter
+        int64_t jitter = (rand() % 200000) - 100000;  // +/- 100us jitter
         uint64_t pcr = start_pcr + i * 40000000ULL + jitter;
         ts_pcr_window_add(&w, sys, pcr, 0);
     }
@@ -91,7 +92,7 @@ void test_jitter() {
     printf("  Drift: %f ppm\n", (slope - 1.0) * 1000000.0);
     printf("  Max Err: %ld ns (expected approx 100000)\n", max_err);
 
-    assert(fabs(slope - 1.0) < 0.001); // Should still be very close to 1
+    assert(fabs(slope - 1.0) < 0.001);  // Should still be very close to 1
     assert(max_err > 50000 && max_err < 200000);
 
     ts_pcr_window_destroy(&w);

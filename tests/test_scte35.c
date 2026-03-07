@@ -1,13 +1,14 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
+
 #include "tsa_internal.h"
 
 void test_scte35_parsing() {
     printf("Testing SCTE-35 parsing...\n");
 
-    tsa_config_t cfg = { .is_live = false };
+    tsa_config_t cfg = {.is_live = false};
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

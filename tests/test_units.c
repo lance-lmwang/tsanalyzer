@@ -1,7 +1,8 @@
-#include <stdio.h>
 #include <assert.h>
-#include "tsa_units.h"
+#include <stdio.h>
+
 #include "tsa_log.h"
+#include "tsa_units.h"
 
 int main() {
     tsa_log_set_level(TSA_LOG_DEBUG);
