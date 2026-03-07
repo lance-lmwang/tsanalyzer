@@ -65,6 +65,7 @@ add_library(tsp_core STATIC
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
     src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
+    src/tsa_pcr_clock.c
     src/tsa_pipeline.c src/tsa_packet_pool.c src/tsa_clock_domain.c
     src/tsa_simd.c src/tsa_simd_avx2.c
 )
@@ -163,6 +164,7 @@ tsa_test(test_packet_ring test_packet_ring.c)
 tsa_test(test_pcr_engine test_pcr_engine.c)
 tsa_test(test_pcr_jitter test_pcr_jitter.c)
 tsa_test(test_pcr_mapping test_pcr_mapping.c)
+tsa_test(test_pcr_clock_drift test_pcr_clock_drift.c)
 tsa_test(test_pcr_piecewise test_pcr_piecewise.c)
 tsa_test(test_pid_protection test_pid_protection.c)
 tsa_test(test_pid_tracker test_pid_tracker.c)

@@ -192,8 +192,7 @@ tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
     h->last_pcr_val_tx = INVALID_PCR;
     h->last_ns = 0;
     h->last_t = 0;
-    h->schedule_start_ns = 0;
-    h->schedule_pcr_base = INVALID_PCR;
+    tsa_pcr_clock_init(&h->clk);
 
     if (cfg->url) {
         if (setup_srt(h, cfg->url) != 0) {
@@ -239,16 +238,10 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
                          ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
             uint64_t pcr = b * 300 + (((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11]);
 
-            if (h->schedule_pcr_base == INVALID_PCR || h->schedule_start_ns == 0) {
-                h->schedule_pcr_base = pcr;
-                h->schedule_start_ns = now_ns + 100000000ULL;
-                target_ns = h->schedule_start_ns;
-                tsa_info(TAG, "Pacer schedule anchored: PCR=%lu, TargetNS=%lu (Latency: 100ms)",
-                         pcr, h->schedule_start_ns);
-            } else {
-                uint64_t pcr_delta_ns = (pcr - h->schedule_pcr_base) * 1000 / 27;
-                target_ns = h->schedule_start_ns + pcr_delta_ns;
-            }
+            tsa_pcr_clock_update(&h->clk, pcr, now_ns);
+
+            // Map PCR to system time with 100ms latency buffer
+            target_ns = tsa_pcr_clock_pcr_to_sys(&h->clk, pcr) + 100000000ULL;
 
             // Update detected bitrate for interpolation between PCRs
             if (h->last_pcr_val_tx != INVALID_PCR && pcr > h->last_pcr_val_tx) {
@@ -259,7 +252,8 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
                     uint64_t new_br = dp * 1504ULL * 1000000000ULL / dt_pcr_ns;
                     atomic_store(&h->detected_bitrate, new_br);
                     if (old_br == 0) {
-                        tsa_info(TAG, "Bitrate converged: %.2f Mbps", (double)new_br / 1000000.0);
+                        tsa_info(TAG, "Bitrate converged: %.2f Mbps (Drift: %.1f PPM)",
+                                 (double)new_br / 1000000.0, h->clk.drift_ppm);
                     }
                 }
             }

@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "tsa_pcr_clock.h"
+
 #define TS_PACKET_SIZE 188
 #ifndef RING_BUFFER_SIZE
 #define RING_BUFFER_SIZE (1024 * 128)
@@ -62,9 +64,8 @@ struct tsp_handle {
     _Atomic uint64_t total_udp_sent;
     _Atomic uint64_t detected_bitrate;
 
-    // PCR-Locked Scheduling State
-    uint64_t schedule_start_ns;
-    uint64_t schedule_pcr_base;
+    // High-precision clock & scheduling
+    tsa_pcr_clock_t clk;
     uint64_t last_scheduled_ns;
     uint64_t last_pcr_val_tx;
     uint64_t pkts_since_pcr;
