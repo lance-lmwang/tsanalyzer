@@ -24,7 +24,7 @@ static char g_webhook_url[256] = "";
 static uint64_t g_alert_mask = 0;
 
 typedef struct {
-    char id[32];
+    char id[TSA_ID_MAX];
     int port;
     tsa_handle_t *tsa;
     pthread_t thread;
@@ -80,7 +80,7 @@ static void apply_sys_conf() {
     for (int i = 0; i < g_sys_conf.stream_count; i++) {
         if (g_node_count >= MAX_STREAMS) break;
         node_t *n = &g_nodes[g_node_count++];
-        strncpy(n->id, g_sys_conf.streams[i].id, 31);
+        snprintf(n->id, sizeof(n->id), "%s", g_sys_conf.streams[i].id);
         n->id[31] = '\0';
 
         char *p_str = strrchr(g_sys_conf.streams[i].cfg.url, ':');
@@ -137,20 +137,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/v1/streams"), NULL)) {
         if (mg_strcasecmp(hm->method, mg_str("POST")) == 0) {
             printf("POST /api/v1/streams received, body: %.*s\n", (int)hm->body.len, hm->body.buf);
-            char id[64] = "";
+            char id[TSA_ID_MAX] = "";
             char webhook[256] = "";
             uint64_t mask = g_alert_mask;
 
             char *id_p = mg_json_get_str(hm->body, "$.id");
             if (id_p) {
-                strncpy(id, id_p, 31);
+                snprintf(id, sizeof(id), "%s", id_p);
                 id[31] = '\0';
                 free(id_p);
             }
 
             char *wh_p = mg_json_get_str(hm->body, "$.webhook_url");
             if (wh_p) {
-                strncpy(webhook, wh_p, 255);
+                snprintf(webhook, sizeof(webhook), "%s", wh_p);
                 webhook[255] = '\0';
                 free(wh_p);
             } else
@@ -172,7 +172,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 
                 tsa_config_t cfg = g_sys_conf.vhost_default;
                 cfg.op_mode = TSA_MODE_LIVE;
-                strncpy(cfg.input_label, n->id, 31);
+                snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", n->id);
                 snprintf(cfg.alert.webhook_url, sizeof(cfg.alert.webhook_url), "%s", webhook);
                 cfg.alert.filter_mask = mask;
                 n->tsa = tsa_create(&cfg);

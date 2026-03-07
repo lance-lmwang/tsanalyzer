@@ -78,7 +78,10 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_i_frames, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_p_frames, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_b_frames, uint64_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_closed_gops, uint64_t, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_open_gops, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_has_cea708, bool, TS_PID_MAX);
+    ALLOC_OR_GOTO(h->pid_closed_gop, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_last_pts_33, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_pts_offset_64, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_last_seen_vstc, uint64_t, TS_PID_MAX);
@@ -199,6 +202,8 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_i_frames);
     FREE_IF(h->pid_p_frames);
     FREE_IF(h->pid_b_frames);
+    FREE_IF(h->pid_closed_gops);
+    FREE_IF(h->pid_open_gops);
     FREE_IF(h->pid_labels);
     FREE_IF(h->pid_au_q);
     FREE_IF(h->pid_au_head);
@@ -209,6 +214,7 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_last_seen_vstc);
     FREE_IF(h->pid_last_seen_ns);
     FREE_IF(h->pid_has_cea708);
+    FREE_IF(h->pid_closed_gop);
     FREE_IF(h->prev_snap_base);
     FREE_IF(h->double_buffer.buffers[0]);
     FREE_IF(h->double_buffer.buffers[1]);
@@ -518,8 +524,8 @@ void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t no
                 h->sync_state = TS_SYNC_HUNTING;
                 h->signal_lock = false;
 
-                /* Optimized hunting using SIMD */
-                intptr_t next_sync = tsa_simd_find_sync(data + processed + 1, len - (processed + 1));
+                /* Optimized hunting using global SIMD dispatch */
+                intptr_t next_sync = tsa_simd.find_sync(data + processed + 1, len - (processed + 1));
                 if (next_sync >= 0) {
                     processed += (size_t)next_sync + 1;
                 } else {

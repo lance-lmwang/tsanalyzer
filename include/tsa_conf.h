@@ -10,7 +10,7 @@
 #define MAX_STREAMS_IN_CONF 256
 
 typedef struct {
-    char id[64];
+    char id[TSA_ID_MAX];
     tsa_config_t cfg;
 } tsa_stream_conf_t;
 

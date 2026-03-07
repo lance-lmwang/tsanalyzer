@@ -29,11 +29,11 @@ static bool match(parser_t* p, tsa_token_type_t type) {
 static void parse_metrology(parser_t* p, tsa_config_t* cfg) {
     match(p, TSA_TOKEN_LBRACE);
     while (p->lookahead.type == TSA_TOKEN_WORD) {
-        char key[256];
+        char key[TSA_ID_MAX];
         snprintf(key, sizeof(key), "%s", p->lookahead.text);
         next_token(p);
 
-        char val[256];
+        char val[TSA_ID_MAX];
         snprintf(val, sizeof(val), "%s", p->lookahead.text);
         next_token(p);
         match(p, TSA_TOKEN_SEMICOLON);
@@ -56,7 +56,7 @@ static void parse_stream(parser_t* p, const char* id) {
 
     match(p, TSA_TOKEN_LBRACE);
     while (p->lookahead.type == TSA_TOKEN_WORD) {
-        char block[256];
+        char block[TSA_ID_MAX];
         snprintf(block, sizeof(block), "%s", p->lookahead.text);
         next_token(p);
 
@@ -113,7 +113,7 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
 
     while (p.lookahead.type != TSA_TOKEN_EOF) {
         if (p.lookahead.type == TSA_TOKEN_WORD) {
-            char word[256];
+            char word[TSA_ID_MAX];
             snprintf(word, sizeof(word), "%s", p.lookahead.text);
             next_token(&p);
 
@@ -122,7 +122,7 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
             } else if (strcmp(word, "stream") == 0) {
-                char id[256];
+                char id[TSA_ID_MAX];
                 snprintf(id, sizeof(id), "%s", p.lookahead.text);
                 next_token(&p);
                 parse_stream(&p, id);

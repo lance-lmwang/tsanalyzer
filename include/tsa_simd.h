@@ -6,30 +6,47 @@
 #include <stdint.h>
 
 /**
+ * @brief Professional SIMD Function Dispatch Table (FFmpeg-style)
+ */
+typedef struct {
+    /* Find first 0x47 in buffer */
+    intptr_t (*find_sync)(const uint8_t* buf, size_t len);
+
+    /* Batch extract 8 PIDs from consecutive TS packets */
+    void (*extract_pids_8)(const uint8_t* buf, uint16_t* pids);
+
+    /* Batch check sync bytes for multiple packets */
+    uint64_t (*check_sync_batch)(const uint8_t* buf, size_t packet_count);
+
+    /* Check if current instance is using hardware acceleration */
+    bool is_accelerated;
+} tsa_simd_ops_t;
+
+/**
+ * @brief Global SIMD dispatch table. Initialized on first use or via tsa_simd_init().
+ */
+extern tsa_simd_ops_t tsa_simd;
+
+/**
+ * @brief Initialize the SIMD dispatch table based on runtime CPU detection.
+ * This is thread-safe and can be called multiple times.
+ */
+void tsa_simd_init(void);
+
+/**
  * @brief Find the first occurrence of TS sync byte (0x47) in a buffer using SIMD.
- *
- * @param buf Pointer to the data
- * @param len Length of data to scan
- * @return offset to the first 0x47, or -1 if not found
  */
 intptr_t tsa_simd_find_sync(const uint8_t* buf, size_t len);
 
 /**
- * @brief Batch check sync bytes for multiple 188-byte packets.
- *
- * @param buf Pointer to the start of the first packet (must be aligned to 188)
- * @param packet_count Number of packets to check
- * @return uint64_t Bitmask where bit i is 1 if packet i has valid sync byte
- */
-uint64_t tsa_simd_check_sync_batch(const uint8_t* buf, size_t packet_count);
-
-/**
  * @brief Batch extract PIDs from 8 consecutive TS packets.
- *
- * @param buf Pointer to the start of the packets (must have 188*8 bytes available)
- * @param pids Output array for 8 extracted 13-bit PIDs
  */
 void tsa_simd_extract_pids_8(const uint8_t* buf, uint16_t* pids);
+
+/**
+ * @brief Batch check sync bytes for multiple 188-byte packets.
+ */
+uint64_t tsa_simd_check_sync_batch(const uint8_t* buf, size_t packet_count);
 
 /**
  * @brief Check if current CPU supports required SIMD features.

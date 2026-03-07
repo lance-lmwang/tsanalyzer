@@ -84,6 +84,8 @@ These metrics are labeled by `stream_id`, `pid`, `type`, and `codec` for granula
 | `tsa_essence_pid_video_bit_depth` | Gauge | Essence | Bit depth (e.g. 8, 10). |
 | `tsa_essence_pid_video_chroma_format` | Gauge | Essence | Chroma format (1=4:2:0, 2=4:2:2). |
 | `tsa_essence_pid_video_gop_n` | Gauge | Essence | Group of Pictures (GOP) frame count. |
+| `tsa_essence_pid_closed_gops_total` | Counter | Essence | Total number of Closed GOPs detected. |
+| `tsa_essence_pid_open_gops_total` | Counter | Essence | Total number of Open GOPs detected. |
 
 ---
 

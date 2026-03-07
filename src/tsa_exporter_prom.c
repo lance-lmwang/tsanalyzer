@@ -49,7 +49,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         const char* sid = h->config.input_label;
         if (!sid[0]) sid = "unknown";
 
-        char labels[128];
+        char labels[TSA_LABEL_MAX];
         snprintf(labels, sizeof(labels), "{stream_id=\"%s\"}", sid);
 
         // Tier 1: System & Engine Status
@@ -168,9 +168,14 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
             }
             SAFE_APPEND("tsa_compliance_pid_has_cea708%s %d\n", pid_labels, snap->pids[j].has_cea708 ? 1 : 0);
             SAFE_APPEND("tsa_compliance_pid_has_scte35%s %d\n", pid_labels, snap->pids[j].has_scte35 ? 1 : 0);
+            SAFE_APPEND("tsa_compliance_pid_is_closed_gop%s %d\n", pid_labels, snap->pids[j].is_closed_gop ? 1 : 0);
+            SAFE_APPEND("tsa_essence_pid_closed_gops_total%s %llu\n", pid_labels,
+                        (unsigned long long)snap->pids[j].closed_gops);
+            SAFE_APPEND("tsa_essence_pid_open_gops_total%s %llu\n", pid_labels,
+                        (unsigned long long)snap->pids[j].open_gops);
 
             if (snap->pids[j].width > 0) {
-                char v_labels[256];
+                char v_labels[TSA_LABEL_MAX];
                 snprintf(v_labels, sizeof(v_labels), "{stream_id=\"%s\",pid=\"0x%04x\"}", sid, p);
                 SAFE_APPEND("tsa_essence_pid_video_width%s %u\n", v_labels, snap->pids[j].width);
                 SAFE_APPEND("tsa_essence_pid_video_height%s %u\n", v_labels, snap->pids[j].height);

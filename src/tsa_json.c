@@ -90,9 +90,13 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
             SAFE_JSON(
                 ",\"video_metadata\":{\"width\":%u,\"height\":%u,\"profile\":%u,\"level\":%u,\"chroma_format\":%u,"
                 "\"bit_depth\":%u,\"exact_fps\":%.3f,\"gop_n\":%u,\"gop_ms\":%u,\"has_cea708\":"
-                "%s,\"has_scte35\":%s}",
+                "%s,\"has_scte35\":%s,\"is_closed_gop\":%s,"
+                "\"counters\":{\"i_frames\":%llu,\"p_frames\":%llu,\"b_frames\":%llu,\"closed_gops\":%llu,\"open_"
+                "gops\":%llu}}",
                 p->width, p->height, p->profile, p->level, p->chroma_format, p->bit_depth, p->exact_fps, p->gop_n,
-                p->gop_ms, p->has_cea708 ? "true" : "false", p->has_scte35 ? "true" : "false");
+                p->gop_ms, p->has_cea708 ? "true" : "false", p->has_scte35 ? "true" : "false",
+                p->is_closed_gop ? "true" : "false", (unsigned long long)p->i_frames, (unsigned long long)p->p_frames,
+                (unsigned long long)p->b_frames, (unsigned long long)p->closed_gops, (unsigned long long)p->open_gops);
         }
 
         SAFE_JSON("}");

@@ -186,6 +186,11 @@ void tsa_nalu_sniff(const uint8_t* buf, int size, bool is_h265, tsa_nalu_info_t*
             out_info->nalu_type_abstract = NALU_TYPE_IDR;
             out_info->is_slice = true;
             out_info->slice_type = 2;  // I-slice
+            if (out_info->nalu_type_raw == 19 || out_info->nalu_type_raw == 20) {
+                out_info->is_closed_gop = true;  // IDR is closed
+            } else if (out_info->nalu_type_raw == 21) {
+                out_info->is_closed_gop = false;  // CRA is open
+            }
         } else if (out_info->nalu_type_raw <= 9) {
             out_info->nalu_type_abstract = NALU_TYPE_NON_IDR;
             out_info->is_slice = true;
@@ -225,6 +230,7 @@ void tsa_nalu_sniff(const uint8_t* buf, int size, bool is_h265, tsa_nalu_info_t*
             out_info->nalu_type_abstract = NALU_TYPE_IDR;
             out_info->is_slice = true;
             out_info->slice_type = 2;  // I-slice
+            out_info->is_closed_gop = true;
         } else if (out_info->nalu_type_raw == 1) {
             out_info->nalu_type_abstract = NALU_TYPE_NON_IDR;
             out_info->is_slice = true;

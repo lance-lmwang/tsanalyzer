@@ -40,7 +40,7 @@ typedef struct {
     SRTSOCKET fd;
     int tx_fd; /* Forwarding socket */
     conn_type_t type;
-    char id[64];
+    char id[TSA_ID_MAX];
     tsa_handle_t* tsa;
     spsc_queue_t* tx_q;  /* Forwarding Queue */
     spsc_queue_t* ana_q; /* Analysis Queue */
@@ -87,9 +87,9 @@ static void load_config(const char* file) {
         }
         if (sscanf(line, "%s %s", id, url) == 2) {
             conn_t* c = calloc(1, sizeof(conn_t));
-            strncpy(c->id, id, 63);
+            snprintf(c->id, sizeof(c->id), "%s", id);
             tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
-            strncpy(cfg.input_label, id, 31);
+            snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", id);
 
             if (strncmp(url, "udp://", 6) == 0) {
                 char* p_str = strrchr(url, ':');
@@ -256,7 +256,7 @@ static void* io_thread(void* arg) {
                         nc->type = CONN_SRT_CLIENT;
                         sprintf(nc->id, "SRT-%d", (int)client);
                         tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
-                        strncpy(cfg.input_label, nc->id, 31);
+                        snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", nc->id);
                         nc->tsa = tsa_create(&cfg);
                         nc->tx_q = spsc_queue_create(1024);
                         nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
@@ -523,7 +523,7 @@ static void run_main_loop(struct mg_mgr* mgr, tsa_top_shm_block_t* shm_block) {
                     if (tsa_take_snapshot_full(c->tsa, &snap) == 0) {
                         tsa_top_stream_info_t* info = &shm_block->streams[shm_block->num_active_streams];
                         memset(info, 0, sizeof(*info));
-                        strncpy(info->stream_id, c->id, sizeof(info->stream_id) - 1);
+                        snprintf(info->stream_id, sizeof(info->stream_id), "%s", c->id);
                         info->total_packets = snap.summary.total_packets;
                         info->current_bitrate_mbps = snap.summary.physical_bitrate_bps / 1000000.0;
                         info->master_health = snap.summary.master_health;

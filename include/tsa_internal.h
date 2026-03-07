@@ -285,12 +285,15 @@ struct tsa_handle {
     uint64_t* pid_i_frames;
     uint64_t* pid_p_frames;
     uint64_t* pid_b_frames;
+    uint64_t* pid_closed_gops;
+    uint64_t* pid_open_gops;
     bool* pid_has_cea708;
+    bool* pid_closed_gop;
 
     uint64_t* pid_last_pts_33;
     uint64_t* pid_pts_offset_64;
 
-    char (*pid_labels)[128];
+    char (*pid_labels)[TSA_LABEL_MAX];
     struct {
         uint64_t dts_ns;
         uint32_t size;

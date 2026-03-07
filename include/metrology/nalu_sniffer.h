@@ -36,6 +36,7 @@ typedef struct {
     // For Video Frames
     bool is_slice;
     int slice_type;  // -1 if unknown, 0=P, 1=B, 2=I
+    bool is_closed_gop;
 } tsa_nalu_info_t;
 
 /**

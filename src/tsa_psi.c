@@ -150,7 +150,7 @@ void tsa_precompile_pid_labels(tsa_handle_t* h, uint16_t pid) {
     else if (strcmp(codec, "AAC") == 0 || strcmp(codec, "ADTS-AAC") == 0 || strcmp(codec, "MPEG1-A") == 0 ||
              strcmp(codec, "MPEG2-A") == 0 || strcmp(codec, "AC3") == 0)
         type = "Audio";
-    snprintf(h->pid_labels[pid], 128, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\",codec=\"%s\"}",
+    snprintf(h->pid_labels[pid], TSA_LABEL_MAX, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\",codec=\"%s\"}",
              h->config.input_label[0] ? h->config.input_label : "unknown", pid, type, codec);
 }
 

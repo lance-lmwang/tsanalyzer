@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+#ifndef TSA_ID_MAX
+#define TSA_ID_MAX 256
+#endif
+
 typedef enum {
     TSA_TOKEN_EOF = 0,
     TSA_TOKEN_WORD,       // e.g. "metrology", "on", "15Mbps"
@@ -14,7 +18,7 @@ typedef enum {
 
 typedef struct {
     tsa_token_type_t type;
-    char text[256];
+    char text[TSA_ID_MAX];
     int line;
 } tsa_token_t;
 

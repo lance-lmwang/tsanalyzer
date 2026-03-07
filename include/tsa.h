@@ -18,6 +18,8 @@
 #define NOMINAL_PACKET_INTERVAL_NS (TS_PACKET_BITS * NS_PER_SEC / DEFAULT_REPLAY_BITRATE)
 #define TS_PID_MAX 8192
 #define MAX_ACTIVE_PIDS 128
+#define TSA_ID_MAX 256
+#define TSA_LABEL_MAX 512
 
 typedef struct tsa_handle tsa_handle_t;
 
@@ -160,8 +162,11 @@ typedef struct {
     uint64_t i_frames;
     uint64_t p_frames;
     uint64_t b_frames;
+    uint64_t closed_gops;
+    uint64_t open_gops;
     bool has_cea708;
     bool has_scte35;
+    bool is_closed_gop;
     int64_t scte35_alignment_error_ns;
     float eb_fill_pct;
     float tb_fill_pct;
@@ -195,7 +200,7 @@ typedef enum {
 } tsa_failover_mode_t;
 
 typedef struct {
-    char input_label[64];
+    char input_label[TSA_ID_MAX];
     bool is_live;
     tsa_op_mode_t op_mode;
 

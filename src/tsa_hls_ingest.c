@@ -109,7 +109,7 @@ void *tsa_hls_ingest_start(const char *url, const tsa_source_callbacks_t *cbs, v
     ingest->cbs = *cbs;
     ingest->user_data = user_data;
     ingest->running = true;
-    strncpy(ingest->m3u8_url, url, sizeof(ingest->m3u8_url) - 1);
+    snprintf(ingest->m3u8_url, sizeof(ingest->m3u8_url), "%s", url);
 
     pthread_create(&ingest->thread, NULL, hls_worker, ingest);
     return ingest;

@@ -51,6 +51,13 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                 if (info.bit_depth > 0) h->pid_bit_depth[pid] = info.bit_depth;
                 if (info.width > 0) h->pid_width[pid] = info.width;
                 if (info.height > 0) h->pid_height[pid] = info.height;
+            } else if (info.nalu_type_abstract == NALU_TYPE_IDR) {
+                h->pid_closed_gop[pid] = info.is_closed_gop;
+                if (info.is_closed_gop)
+                    h->pid_closed_gops[pid]++;
+                else
+                    h->pid_open_gops[pid]++;
+                h->pid_i_frames[pid]++;
             } else if (info.nalu_type_abstract == NALU_TYPE_SEI) {
                 if (info.has_cea708) {
                     h->pid_has_cea708[pid] = true;

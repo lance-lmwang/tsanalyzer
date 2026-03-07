@@ -5,9 +5,12 @@
 
 #define TSA_TOP_SHM_NAME "/tsa_top_shm"
 #define TSA_TOP_MAX_STREAMS 128
+#ifndef TSA_ID_MAX
+#define TSA_ID_MAX 256
+#endif
 
 typedef struct {
-    char stream_id[64];
+    char stream_id[TSA_ID_MAX];
 
     // Explicitly aligned metric block
     uint64_t total_packets;
