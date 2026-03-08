@@ -12,101 +12,101 @@
 #include "tsa_pcr_clock.h"
 
 #define TS_PACKET_SIZE 188
-#ifndef RING_BUFFER_SIZE
-#define RING_BUFFER_SIZE (1024 * 128)
-#endif
-#define NS_PER_SEC 1000000000ULL
-#define INVALID_PCR 0xFFFFFFFFFFFFFFFFULL
+#define TS_PACKET_BITS (TS_PACKET_SIZE * 8)
+#define RING_BUFFER_SIZE 65536
 
-typedef enum { TSPACER_MODE_PCR, TSPACER_MODE_ETF, TSPACER_MODE_CBR, TSPACER_MODE_BASIC } tsp_mode_t;
+#ifndef INVALID_PCR
+#define INVALID_PCR ((uint64_t)-1)
+#endif
+
+typedef enum { TSPACER_MODE_BASIC = 0, TSPACER_MODE_PCR, TSPACER_MODE_CBR } tsp_mode_t;
 
 typedef struct {
-    uint64_t total_packets;
-    int64_t max_jitter_ns;
-    int64_t min_jitter_ns;
-    uint64_t drop_events;
+    uint64_t bitrate;
+    const char* dest_ip;
+    int port;
+    int ts_per_udp;
+    int cpu_core;
+    const char* url;
+    uint16_t pcr_pid;
+    tsp_mode_t mode;
+    void (*stats_cb)(void* handle, void* stats, void* user_data);
+    void* user_data;
+} tsp_config_t;
+
+typedef struct {
     uint64_t detected_bitrate;
+    uint64_t total_packets;
     uint64_t pps;
     uint64_t timestamp_ns;
 } tsp_stats_t;
 
-typedef struct tsp_handle tsp_handle_t;
-typedef void (*tsp_stats_cb_t)(tsp_handle_t* h, const tsp_stats_t* stats, void* user_data);
-
-typedef struct {
-    tsp_mode_t mode;
-    uint64_t bitrate;
-    uint32_t ts_per_udp;
-    int cpu_core;
-    const char* url;
-    const char* dest_ip;
-    uint16_t port;
-    uint16_t pcr_pid;
-    uint32_t busy_wait_ns;
-    tsp_stats_cb_t stats_cb;
-    void* user_data;
-} tsp_config_t;
-
-struct tsp_handle {
+typedef struct tsp_handle {
     tsp_config_t cfg;
-    alignas(64) _Atomic uint64_t head;
-    alignas(64) _Atomic uint64_t tail;
     uint8_t* ring_buffer;
     uint64_t* ts_buffer;
-    _Atomic bool running;
-    pthread_t thread;
     int fd;
     struct sockaddr_in dest_addr;
     SRTSOCKET srt_sock;
     bool srt_enabled;
-    uint8_t stuffing_packet[TS_PACKET_SIZE];
+
+    _Atomic uint64_t head;
+    _Atomic uint64_t tail;
+    _Atomic bool running;
+    pthread_t thread;
+
     _Atomic uint64_t total_ts_sent;
     _Atomic uint64_t total_udp_sent;
-    _Atomic uint64_t detected_bitrate;
 
-    // High-precision clock & scheduling
-    tsa_pcr_clock_t clk;
+    /* Professional Pacer State */
+    uint64_t base_pcr_ticks;
+    uint64_t base_wall_ns;
     uint64_t last_scheduled_ns;
     uint64_t last_pcr_val_tx;
-    uint64_t pkts_since_pcr;
+    time_t last_pcr_reset_time;
 
-    // Statistics for PPS calculation
-    uint64_t last_t;
     uint64_t last_ns;
-};
+    uint64_t last_t;
 
-/* API */
-tsp_handle_t* tsp_create(const tsp_config_t* cfg);
-int tsp_start(tsp_handle_t* h);
-int tsp_stop(tsp_handle_t* h);
-void tsp_destroy(tsp_handle_t* h);
-int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count);
-uint64_t tsp_get_detected_bitrate(tsp_handle_t* h);
-uint64_t tsp_get_total_packets(tsp_handle_t* h);
-uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h);
-void tsp_update_bitrate(tsp_handle_t* h, uint64_t new_bitrate);
-uint64_t tsp_get_bitrate(tsp_handle_t* h);
-pthread_t tsp_get_thread(tsp_handle_t* h);
-int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
-                  uint64_t* pps);
-int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* snap);
-uint64_t calculate_target_time(tsp_handle_t* h, uint64_t pcr, uint64_t byte_off, uint64_t now);
+    tsa_pcr_clock_t clk;
+} tsp_handle_t;
 
-// SRT Helpers
-struct tsa_srt_stats;
-typedef struct ts_ingest_srt ts_ingest_srt_t;
+/* --- Ingest Structures (Matching srt_ingest.c) --- */
+typedef struct {
+    SRTSOCKET sock;
+} ts_ingest_srt_t;
+
+typedef struct {
+    int fd;
+} ts_ingest_udp_t;
+
 ts_ingest_srt_t* ts_ingest_srt_create(const char* url);
 void ts_ingest_srt_destroy(ts_ingest_srt_t* ingest);
 int ts_ingest_srt_recv(ts_ingest_srt_t* ingest, uint8_t* buf, int sz);
+struct tsa_srt_stats;
 int ts_ingest_srt_get_stats(ts_ingest_srt_t* ingest, struct tsa_srt_stats* srt);
 
-typedef struct ts_ingest_udp ts_ingest_udp_t;
 ts_ingest_udp_t* ts_ingest_udp_create(const char* ip, uint16_t port);
 void ts_ingest_udp_destroy(ts_ingest_udp_t* ingest);
 int ts_ingest_udp_recv(ts_ingest_udp_t* ingest, uint8_t* buf, int sz);
 
-/* SPSC Ring Mock for tests */
 typedef struct spsc_ring spsc_ring_t;
+
+tsp_handle_t* tsp_create(const tsp_config_t* cfg);
+void tsp_destroy(tsp_handle_t* h);
+int tsp_start(tsp_handle_t* h);
+int tsp_stop(tsp_handle_t* h);
+int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count);
+
+uint64_t tsp_get_detected_bitrate(tsp_handle_t* h);
+uint64_t tsp_get_total_packets(tsp_handle_t* h);
+int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
+                  uint64_t* pps);
+int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s);
+uint64_t tsp_get_bitrate(tsp_handle_t* h);
+pthread_t tsp_get_thread(tsp_handle_t* h);
+
+/* Unit Test Helpers */
 spsc_ring_t* spsc_ring_create(size_t sz);
 void spsc_ring_destroy(spsc_ring_t* r);
 int spsc_ring_push(spsc_ring_t* r, const uint8_t* data, size_t sz);

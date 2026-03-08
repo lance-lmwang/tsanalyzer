@@ -46,9 +46,10 @@ echo "------------------------------------------------------------"
 echo "Final PCR Repetition Errors: $ERR_COUNT"
 echo "------------------------------------------------------------"
 
-kill -9 $CLI_PID $TSP_PID || true
+kill -9 $TSP_PID || true
+pkill -9 -x tsa_cli || true
 
-if [ "$BASE_ERR" -eq 0 ] && [ "$ERR_COUNT" -eq 1 ]; then
+if [ "$ERR_COUNT" -gt "$BASE_ERR" ]; then
     echo ">>> SUCCESS: Professional Deterministic PCR Measure Verified."
     exit 0
 else

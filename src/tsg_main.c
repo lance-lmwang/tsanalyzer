@@ -173,8 +173,11 @@ int main(int argc, char** argv) {
                 for (int i = 0; i + 188 <= len; i += 188) {
                     tsa_gateway_process(g_gw, buf + i, now);
                 }
-            } else
+            } else if (len == -1) {
+                break; /* Fatal error, connection closed */
+            } else {
                 usleep(100);
+            }
             if (now - last_snap_ns > 500000000ULL) {
                 tsa_srt_stats_t srt_stats = {0};
                 ts_ingest_srt_get_stats(ingest, &srt_stats);

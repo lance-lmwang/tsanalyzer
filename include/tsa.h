@@ -226,7 +226,7 @@ typedef struct {
         bool enabled;
         char output_url[256];
         uint64_t bitrate;
-        tsp_mode_t pacing;
+        int pacing_mode;
         bool repair_cc;
         bool repair_pcr;
     } gateway;

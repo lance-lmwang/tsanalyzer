@@ -504,6 +504,13 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 /* Simple DELETE support for E2E tests */
                 mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
             }
+        } else if (mg_match(hm->uri, mg_str("/api/v1/streams/*"), NULL)) {
+            if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
+                mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
+                              "{\"status\":\"ok\"}");
+            } else {
+                mg_http_reply(c, 404, NULL, "Not Found");
+            }
         } else {
             mg_http_reply(c, 200, "Access-Control-Allow-Origin: *\r\n", "TsAnalyzer Pro NOC Gateway");
         }

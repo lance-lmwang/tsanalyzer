@@ -41,6 +41,8 @@ function assert_success {
 # --- Test Execution ---
 print_header "SETUP: Cleaning up environment"
 pkill -9 -x tsa_server || true
+pkill -9 -x tsa_server_pro || true
+pkill -9 -x tsa_cli || true
 pkill -9 -x tsp || true
 pkill -9 -x tsg || true
 rm -rf "$LOG_DIR" && mkdir -p "$LOG_DIR"
@@ -57,7 +59,7 @@ cat << EOF > build/e2e_config.conf
     "nodes": []
 }
 EOF
-./build/tsa_server build/e2e_config.conf > "$LOG_DIR/saas_daemon.log" 2>&1 &
+./build/tsa_server_pro build/e2e_config.conf > "$LOG_DIR/saas_daemon.log" 2>&1 &
 SAAS_PID=$!
 
 echo "-> Waiting for SaaS API to become ready..."

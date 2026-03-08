@@ -1,7 +1,8 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
+
 #include "tsa_internal.h"
 
 /* Helper to simulate a stream being processed using PUBLIC API */
@@ -9,12 +10,12 @@ void feed_pcr_via_api(tsa_handle_t* h, uint64_t pcr_ticks, uint64_t now_ns, int 
     uint8_t pkt[188];
     memset(pkt, 0, 188);
     pkt[0] = 0x47;
-    pkt[1] = 0x01; // PID 0x100 (part 1)
-    pkt[2] = 0x00; // PID 0x100 (part 2)
-    pkt[3] = 0x20; // AF only
-    pkt[4] = 7;    // AF length
-    pkt[5] = 0x10; // PCR flag
-    
+    pkt[1] = 0x01;  // PID 0x100 (part 1)
+    pkt[2] = 0x00;  // PID 0x100 (part 2)
+    pkt[3] = 0x20;  // AF only
+    pkt[4] = 7;     // AF length
+    pkt[5] = 0x10;  // PCR flag
+
     uint64_t base = pcr_ticks / 300;
     uint16_t ext = pcr_ticks % 300;
     pkt[6] = (base >> 25) & 0xFF;
@@ -28,14 +29,14 @@ void feed_pcr_via_api(tsa_handle_t* h, uint64_t pcr_ticks, uint64_t now_ns, int 
     uint8_t plain_pkt[188];
     memset(plain_pkt, 0, 188);
     plain_pkt[0] = 0x47;
-    plain_pkt[1] = 0x01; 
+    plain_pkt[1] = 0x01;
     plain_pkt[2] = 0x00;
-    plain_pkt[3] = 0x10; // Payload only
-    
+    plain_pkt[3] = 0x10;  // Payload only
+
     for (int i = 0; i < pkts_to_add - 1; i++) {
         tsa_feed_data(h, plain_pkt, 188, now_ns);
     }
-    
+
     // Now feed the PCR packet
     tsa_feed_data(h, pkt, 188, now_ns);
 }
@@ -55,11 +56,11 @@ int main() {
     /* 10 Mbps = 10,000,000 bits/s = 6648.9 pkts/s
      * Let's send 1000 packets per 150ms PCR window -> ~10.02 Mbps */
     for (int i = 0; i < 20; i++) {
-        feed_pcr_via_api(h, pcr, wall, 1000); 
-        pcr += (27000 * 150); // 150ms interval
+        feed_pcr_via_api(h, pcr, wall, 1000);
+        pcr += (27000 * 150);  // 150ms interval
         wall += 150000000ULL;
     }
-    
+
     uint64_t initial_br = h->live->pcr_bitrate_bps;
     printf("[INFO] Initial Measured Bitrate: %lu bps\n", initial_br);
     assert(initial_br > 9000000);
@@ -67,7 +68,7 @@ int main() {
     /* 2. Introduce Heavy Physical Jitter
      * We vary the 'wall' time (arrival), but keep PCR domain constant. */
     for (int i = 0; i < 10; i++) {
-        uint64_t jitter_wall = wall + (i % 2 == 0 ? 50000000 : -20000000); // jitter +/- 50ms
+        uint64_t jitter_wall = wall + (i % 2 == 0 ? 50000000 : -20000000);  // jitter +/- 50ms
         feed_pcr_via_api(h, pcr, jitter_wall, 1000);
         pcr += (27000 * 150);
         wall += 150000000ULL;

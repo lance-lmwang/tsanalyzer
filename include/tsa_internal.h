@@ -31,7 +31,6 @@ typedef uint64_t q32_32;
 #define TS_AF_FLAG 0x20
 #define TS_PAYLOAD_FLAG 0x10
 #define TS_PCR_FLAG 0x10
-#define INVALID_PCR 0xFFFFFFFFFFFFFFFFULL
 
 /* TR 101 290 Standard Thresholds (in Nanoseconds) */
 #define TSA_TR101290_PAT_TIMEOUT_NS (500000000ULL)   /* 500ms (P1.3) */
@@ -255,6 +254,15 @@ struct tsa_handle {
     uint64_t last_pcr_ticks;
     uint64_t last_pcr_arrival_ns;
     uint64_t last_pcr_interval_bitrate_bps;
+
+    /* Professional Bitrate Calculator */
+    struct {
+        uint64_t pcr_first;
+        uint64_t packet_acc;
+        uint64_t locked_bitrate_bps;
+        uint64_t last_cc_count;
+        bool is_measuring;
+    } br_calc;
     uint64_t pkts_since_pcr;
     uint64_t pcr_ema_alpha_q32;
 

@@ -61,7 +61,7 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
             return NULL;
         }
 
-        srt_close(s);
+        // srt_close(s); // Leak listener to prevent libsrt crash
         s = client;
     } else {
         // Caller mode
@@ -91,7 +91,12 @@ void ts_ingest_srt_destroy(ts_ingest_srt_t* ingest) {
 }
 
 int ts_ingest_srt_recv(ts_ingest_srt_t* ingest, uint8_t* buf, int sz) {
-    return srt_recv(ingest->sock, (char*)buf, sz);
+    int ret = srt_recv(ingest->sock, (char*)buf, sz);
+    if (ret == SRT_ERROR) {
+        if (srt_getlasterror(NULL) == SRT_EASYNCRCV) return 0;
+        return -1;
+    }
+    return ret;
 }
 
 int ts_ingest_srt_get_stats(ts_ingest_srt_t* ingest, tsa_srt_stats_t* srt) {

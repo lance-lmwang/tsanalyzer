@@ -6,9 +6,10 @@
 #include "tsa_log.h"
 
 #define TAG "CLOCK"
-#define PCR_REPETITION_MAX_TICKS 1080000 /* 40ms */
-/* Industrial Grade: Use a much tighter burst threshold (100us) to avoid missing real recovery gaps */
-#define PCR_BURST_THRESHOLD_NS 100000ULL
+#define PCR_REPETITION_MAX_TICKS 1350000             /* 50ms */
+#define PCR_ARRIVAL_MAX_NS 100000000ULL              /* 100ms */
+#define PCR_SYNC_THRESHOLD_TICKS (PCR_27MHZ_HZ / 10) /* 100ms */
+#define PCR_STABILIZE_COUNT 10
 
 static uint64_t parse_pcr_27mhz(const uint8_t *p) {
     uint64_t base =
@@ -25,7 +26,9 @@ void tsa_clock_reset(tsa_clock_inspector_t *inspector) {
     inspector->last_pcr_local_ns = 0;
     inspector->pcr_count = 0;
     inspector->filtered_rate = 0.027;
+    inspector->pending_discontinuity = false;
     inspector->last_error_pcr_val = 0;
+    /* priority_1_errors is NOT reset here to maintain cumulative counter */
 }
 
 void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns) {
@@ -38,7 +41,7 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
     uint64_t current_pcr = parse_pcr_27mhz(&packet[6]);
     bool has_discontinuity = (packet[5] & 0x80) != 0;
 
-    /* 1. Reset on Backward Jump or Hardware flag */
+    /* 1. Reset on Sequence Break */
     if (has_discontinuity || (inspector->initialized && current_pcr < inspector->last_pcr_val)) {
         tsa_clock_reset(inspector);
     }
@@ -55,39 +58,50 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
     uint64_t pcr_delta = current_pcr - inspector->last_pcr_val;
     uint64_t arrival_delta_ns = (now_ns > inspector->last_pcr_local_ns) ? (now_ns - inspector->last_pcr_local_ns) : 0;
 
-    /* 2. SYNCING Window: Require stable PCRs before allowing errors */
+    /* 2. SYNCING State: Require 30 stable PCRs */
     if (inspector->state == TSA_CLOCK_STATE_SYNCING) {
+        if (pcr_delta > PCR_SYNC_THRESHOLD_TICKS) {
+            inspector->pcr_count = 1;
+        } else {
+            inspector->pcr_count++;
+        }
         inspector->last_pcr_val = current_pcr;
         inspector->last_pcr_local_ns = now_ns;
-        if (++inspector->pcr_count >= 10) {
+        if (inspector->pcr_count >= PCR_STABILIZE_COUNT) {
             inspector->state = TSA_CLOCK_STATE_LOCKED;
         }
         return;
     }
 
-    /* 3. LOCKED state: Deterministic monitoring */
-    if (pcr_delta > PCR_REPETITION_MAX_TICKS) {
-        /* Filter ultra-fast hardware bursts, but capture real OS-level disruptions */
-        if (arrival_delta_ns < PCR_BURST_THRESHOLD_NS) {
-            inspector->last_pcr_val = current_pcr;
-            inspector->last_pcr_local_ns = now_ns;
-            return;
-        }
+    /* 3. LOCKED State: Precise Dual-Criteria Monitoring */
+    bool violation = (pcr_delta > PCR_REPETITION_MAX_TICKS) || (arrival_delta_ns > PCR_ARRIVAL_MAX_NS);
 
+    if (violation) {
         if (pcr_delta > (PCR_27MHZ_HZ * 5)) {
             tsa_clock_reset(inspector);
             return;
         }
 
+        /* Atomic Capture: If this is a new gap, increment and immediately force RE-SYNC */
         if (inspector->last_error_pcr_val != inspector->last_pcr_val) {
             inspector->priority_1_errors++;
             inspector->last_error_pcr_val = inspector->last_pcr_val;
-            tsa_error(TAG, "PID 0x%04x: PCR Repetition Violation! Gap: %.2f ms, Arrival: %.2f ms", inspector->pid,
+
+            /* Physically cut off further errors by dropping out of LOCKED state */
+            inspector->state = TSA_CLOCK_STATE_SYNCING;
+            inspector->pcr_count = 1;
+
+            tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms, A-Gap: %.2f ms. Resetting sync.", inspector->pid,
                       (double)pcr_delta / 27000.0, (double)arrival_delta_ns / 1000000.0);
+
+            /* Final safeguard: Update reference so next packet starts fresh */
+            inspector->last_pcr_val = current_pcr;
+            inspector->last_pcr_local_ns = now_ns;
+            return;
         }
     }
 
-    /* 4. Alpha-Beta Jitter */
+    /* 4. Alpha-Beta Filter Trace */
     if (arrival_delta_ns > 0 && arrival_delta_ns < 1000000000ULL) {
         double predicted = inspector->filtered_rate * (double)arrival_delta_ns;
         double residual = (double)pcr_delta - predicted;
