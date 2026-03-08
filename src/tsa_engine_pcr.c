@@ -92,20 +92,33 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
             ctx->pcr_count_since_regress = 0;
         }
 
-        if (h->last_pcr_ticks > 0) {
-            uint64_t dt_ticks = (pt - h->last_pcr_ticks);
-            if (dt_ticks == 0) dt_ticks = 1;
-            if (dt_ticks < ((uint64_t)1 << 41)) {
-                uint64_t interval_br = (h->pkts_since_pcr * TS_PACKET_BITS * TS_SYSTEM_CLOCK_HZ) / dt_ticks;
-                if (h->live->pcr_bitrate_bps == 0)
-                    h->live->pcr_bitrate_bps = interval_br;
-                else
-                    h->live->pcr_bitrate_bps = (interval_br * 2 + h->live->pcr_bitrate_bps * 8) / 10;
-                h->last_pcr_interval_bitrate_bps = interval_br;
+        /* Constant Bitrate Calculation */
+        uint64_t current_cc_errors = h->live->cc_loss_count + h->live->cc_duplicate_count;
+
+        if (h->last_pcr_ticks != INVALID_PCR && pt > h->last_pcr_ticks) {
+            /* If packet loss occurred in this window, discard results to ensure accuracy */
+            if (h->last_pcr_interval_bitrate_bps == current_cc_errors) {
+                uint64_t dt_ticks = pt - h->last_pcr_ticks;
+                /* Minimum measurement window: 100ms for precision */
+                if (dt_ticks > (27000 * 100)) {
+                    uint64_t bits = h->pkts_since_pcr * TS_PACKET_BITS;
+                    h->live->pcr_bitrate_bps = (bits * 27000000ULL) / dt_ticks;
+
+                    h->last_pcr_ticks = pt;
+                    h->pkts_since_pcr = 0;
+                }
+            } else {
+                /* Discard window due to CC error */
+                h->last_pcr_ticks = pt;
+                h->pkts_since_pcr = 0;
+                h->last_pcr_interval_bitrate_bps = current_cc_errors;
             }
+        } else {
+            /* Initial sync or sequence break: reset window */
+            h->last_pcr_ticks = pt;
+            h->pkts_since_pcr = 0;
+            h->last_pcr_interval_bitrate_bps = current_cc_errors;
         }
-        h->last_pcr_ticks = pt;
-        h->pkts_since_pcr = 0;
     }
 }
 
