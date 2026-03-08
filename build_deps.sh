@@ -33,22 +33,33 @@ make install
 PCAP_VERSION="1.10.4"
 PCAP_SRC_DIR="$DEPS_DIR/libpcap_src"
 PCAP_INSTALL_DIR="$DEPS_DIR/libpcap"
-if [ ! -d "$PCAP_SRC_DIR" ]; then
-    echo "--- Downloading libpcap $PCAP_VERSION ---"
-    cd "$DEPS_DIR"
-    curl -L "https://www.tcpdump.org/release/libpcap-$PCAP_VERSION.tar.gz" -o libpcap.tar.gz
-    tar -xvf libpcap.tar.gz
-    mv "libpcap-$PCAP_VERSION" libpcap_src
-    rm libpcap.tar.gz
-fi
-echo "--- Building libpcap (Static) ---"
-cd "$PCAP_SRC_DIR"
-mkdir -p build && cd build
-if cmake .. -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DBUILD_WITH_LIBNL=OFF; then
-    make -j$(nproc)
-    make install
+
+# Check for build dependencies (flex/bison)
+if ! command -v flex >/dev/null 2>&1 || ! command -v bison >/dev/null 2>&1; then
+    echo "WARNING: flex or bison not found. Skipping libpcap build."
+    echo "Install them using 'sudo yum install flex bison' or 'sudo apt install flex bison' to enable PCAP support."
 else
-    echo "WARNING: libpcap build failed. PCAP support will be limited."
+    if [ ! -d "$PCAP_SRC_DIR" ]; then
+        echo "--- Downloading libpcap $PCAP_VERSION ---"
+        cd "$DEPS_DIR"
+        curl -L "https://www.tcpdump.org/release/libpcap-$PCAP_VERSION.tar.gz" -o libpcap.tar.gz
+        tar -xvf libpcap.tar.gz
+        DIR_NAME=$(tar -tf libpcap.tar.gz | head -1 | cut -f1 -d"/")
+        mv "$DIR_NAME" libpcap_src
+        rm libpcap.tar.gz
+    fi
+    echo "--- Building libpcap (Static) ---"
+    cd "$PCAP_SRC_DIR"
+    if [ -f "CMakeLists.txt" ]; then
+        mkdir -p build && cd build
+        cmake .. -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DBUILD_WITH_LIBNL=OFF
+        make -j$(nproc)
+        make install
+    else
+        ./configure --prefix="$PCAP_INSTALL_DIR" --disable-shared
+        make -j$(nproc)
+        make install
+    fi
 fi
 
 # 3. Build Lua
@@ -60,12 +71,14 @@ if [ ! -d "$LUA_SRC_DIR" ]; then
     cd "$DEPS_DIR"
     curl -L -R -O "https://www.lua.org/ftp/lua-$LUA_VERSION.tar.gz"
     tar -zxf "lua-$LUA_VERSION.tar.gz"
-    mv "lua-$LUA_VERSION" lua_src
+    DIR_NAME=$(tar -tf "lua-$LUA_VERSION.tar.gz" | head -1 | cut -f1 -d"/")
+    mv "$DIR_NAME" lua_src
     rm "lua-$LUA_VERSION.tar.gz"
 fi
 echo "--- Building Lua (Static) ---"
 cd "$LUA_SRC_DIR"
-make linux -j$(nproc)
+# Some systems lack readline, build a generic version for the library
+make posix -j$(nproc) || make generic -j$(nproc)
 # Manual Install for Lua
 mkdir -p "$LUA_INSTALL_DIR/include" "$LUA_INSTALL_DIR/lib"
 cp src/lua.h src/luaconf.h src/lualib.h src/lauxlib.h src/lua.hpp "$LUA_INSTALL_DIR/include/"
