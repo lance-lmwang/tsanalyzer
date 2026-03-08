@@ -112,11 +112,11 @@ Dynamic memory allocation (`malloc/free`) is strictly prohibited in the steady-s
 
 ## 4. Clock Domain Model
 TsAnalyzer maintains four independent clock domains to isolate and diagnose impairments:
-- **SystemClock (Wall)**: Physical UNIX epoch reference (CLOCK_MONOTONIC).
+- **SystemClock (Wall)**: Physical reference (CLOCK_MONOTONIC). Used for **Physical Bitrate** (Total TS Bitrate) calculation via a minimum 500ms sampling window.
 - **IngressClock (Arrival)**: Kernel or hardware timestamps recorded at the NIC ingest point.
-- **PCRClock (Reference)**: The reconstructed 27MHz timeline via a high-order Software PLL (< 10ns precision).
+- **PCRClock (Reference)**: The reconstructed 27MHz timeline. Used for **Business Bitrate** (PCR-Content) calculation per program.
 - **MediaClock (PTS/DTS)**: The 90KHz media timeline extracted from PES headers for A/V synchronization and skew audit.
-- **Metrology**: Calculating the **Drift Trend** between these domains is the foundation of root-cause diagnosis.
+- **Metrology Integrity**: To prevent 10x calculation errors, the engine strictly forbids mixing domains (e.g., dividing bits by STC ticks to get bps) within a single tier. Each tier samples its own reference domain independently.
 
 ## 5. Multi-tenancy & Routing Logic
 ### 5.1 Hierarchical Namespace (Taxonomy)
@@ -146,7 +146,10 @@ Each stream is executed as a dynamically assembled graph of specialized **Stages
 
 ## 7. The 5-Layer Observation Model (Analyzers)
 ### 7.1 Layer 1: Metrology (Physical & Temporal)
-- Software PLL sync (< 10ns precision), Jitter Decomposition (AC/DR/OJ), HLS fetch latency vs. media segment duration, manifest drift tracking, Network MDI (DF/MLR), and IAT Histograms.
+- **High-Precision Bitrate**:
+    - **Physical Tier**: Total TS Bitrate derived from engine-synchronized unique packet counts. Includes PID+CC de-duplication to handle PCAP loopback duplicates.
+    - **Business Tier**: Multi-program (MPTS) aware bitrate calculation. Per-program rates are summed to report global throughput without program collision.
+- **Clock Analysis**: Software PLL sync (< 10ns precision), Jitter Decomposition (AC/DR/OJ), HLS fetch latency vs. media segment duration, manifest drift tracking, Network MDI (DF/MLR), and IAT Histograms.
 ### 7.2 Layer 2: Compliance (ISO/Standard)
 - TR 101 290 (P1, P2, P3), MPTS structure verification, and cross-table (PAT/PMT/SDT) consistency check.
 - **Alert State Machine**: Stateful tracking: `OFF` -> `FIRING` -> `RESOLVED` (with a configurable 5s stability window).

@@ -7,6 +7,8 @@ Welcome to the official documentation for TsAnalyzer Pro, a carrier-grade Transp
 - **[Configuration Reference](./01_architecture/configuration_reference.md)**: Detailed manual for all configuration blocks (`metrology`, `compliance`, `essence`, `qoe`, `pipeline`).
 
 ## 2. In-Depth Technical Deduction
+- **[Clock Domains & Sync](./02_metrology/clock_model.md)**: Definition of the four reference timelines (Wall, Rx, Logic, Media) and isolation principles.
+- **[Bitrate Measurement Standards](./02_metrology/bitrate_measurement.md)**: Industrial definitions for Physical (Layer 2) vs Business (Layer 3) throughput and MPTS aggregation.
 - **[Metrology & Clock Recovery](./02_metrology/pcr_clock_recovery.md)**: Mathematical derivation of the 27MHz Software PLL and 3D jitter decomposition.
 - **[Compliance Engine](./03_engine/tr101290_engine.md)**: $O(1)$ event-driven model for TR 101 290 monitoring and time-wheel scheduling.
 - **[Data Plane Optimization](./03_engine/v3_ring_buffer_deduction.md)**: Memory barrier and cache-line isolation strategy for 10Gbps+ links.
