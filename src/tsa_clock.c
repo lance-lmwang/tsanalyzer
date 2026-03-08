@@ -31,7 +31,7 @@ void tsa_clock_reset(tsa_clock_inspector_t *inspector) {
     /* priority_1_errors is NOT reset here to maintain cumulative counter */
 }
 
-void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns) {
+void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns, bool is_live) {
     if (!packet || !inspector) return;
 
     if (!(packet[3] & 0x20)) return;
@@ -74,7 +74,7 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
     }
 
     /* 3. LOCKED State: Precise Dual-Criteria Monitoring */
-    bool violation = (pcr_delta > PCR_REPETITION_MAX_TICKS) || (arrival_delta_ns > PCR_ARRIVAL_MAX_NS);
+    bool violation = (pcr_delta > PCR_REPETITION_MAX_TICKS) || (is_live && arrival_delta_ns > PCR_ARRIVAL_MAX_NS);
 
     if (violation) {
         if (pcr_delta > (PCR_27MHZ_HZ * 5)) {
@@ -91,8 +91,13 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
             inspector->state = TSA_CLOCK_STATE_SYNCING;
             inspector->pcr_count = 1;
 
-            tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms, A-Gap: %.2f ms. Resetting sync.", inspector->pid,
-                      (double)pcr_delta / 27000.0, (double)arrival_delta_ns / 1000000.0);
+            if (is_live) {
+                tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms, A-Gap: %.2f ms. Resetting sync.", inspector->pid,
+                          (double)pcr_delta / 27000.0, (double)arrival_delta_ns / 1000000.0);
+            } else {
+                tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms. Resetting sync.", inspector->pid,
+                          (double)pcr_delta / 27000.0);
+            }
 
             /* Final safeguard: Update reference so next packet starts fresh */
             inspector->last_pcr_val = current_pcr;

@@ -46,7 +46,7 @@ typedef struct {
     } br_est;
 } tsa_clock_inspector_t;
 
-void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns);
+void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns, bool is_live);
 void tsa_clock_reset(tsa_clock_inspector_t *inspector);
 
 #endif

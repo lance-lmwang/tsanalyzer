@@ -37,7 +37,7 @@ int main() {
     /* 1. Warm up: Establish Lock */
     for (int i = 0; i < 30; i++) {
         make_pcr_packet(pkt, pcr_val);
-        tsa_clock_update(pkt, &inspector, now_ns);
+        tsa_clock_update(pkt, &inspector, now_ns, true);
         pcr_val += 540000;     /* 20ms content gap */
         now_ns += 20000000ULL; /* 20ms wall clock */
     }
@@ -50,7 +50,7 @@ int main() {
     pcr_val += 540000;      /* BUT ONLY 20ms PCR gap (perfect content) */
 
     make_pcr_packet(pkt, pcr_val);
-    tsa_clock_update(pkt, &inspector, now_ns);
+    tsa_clock_update(pkt, &inspector, now_ns, true);
 
     printf("[INFO] Errors after physical gap: %u\n", inspector.priority_1_errors);
     if (inspector.priority_1_errors != 1) {
@@ -65,7 +65,7 @@ int main() {
         now_ns += 100000ULL; /* 100us burst */
         pcr_val += 540000;
         make_pcr_packet(pkt, pcr_val);
-        tsa_clock_update(pkt, &inspector, now_ns);
+        tsa_clock_update(pkt, &inspector, now_ns, true);
     }
     assert(inspector.priority_1_errors == 1);
     printf("[PASS] Burst Recovery: Still exactly 1 error.\n");

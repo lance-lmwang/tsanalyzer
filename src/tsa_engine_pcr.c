@@ -55,7 +55,7 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
         uint64_t last_local_ns = h->clock_inspectors[pid].last_pcr_local_ns;
 
         // Update the ClockInspector (handles jitter calculation)
-        tsa_clock_update(pkt, &h->clock_inspectors[pid], now);
+        tsa_clock_update(pkt, &h->clock_inspectors[pid], now, h->config.is_live);
 
         h->live->pcr_jitter_max_ns = (uint64_t)(fabs(h->clock_inspectors[pid].pcr_jitter_ms) * 1000000.0);
         h->live->pcr_repetition_max_ms = h->clock_inspectors[pid].pcr_interval_max_ticks / (PCR_TICKS_PER_MS);
@@ -131,17 +131,22 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
                 }
 
                 /* 🕰️ Calculate Real-time PPM Drift (relative to local wall clock) */
-                uint64_t wall_dt_ns = (now > last_local_ns && last_local_ns > 0) ? (now - last_local_ns) : 0;
-                if (wall_dt_ns > 0) {
-                    double pcr_duration_ns = (double)dt_ticks * 1000.0 / 27.0;
-                    double instant_drift_ppm = ((pcr_duration_ns - (double)wall_dt_ns) / (double)wall_dt_ns) * 1000000.0;
+                if (h->config.is_live) {
+                    uint64_t wall_dt_ns = (now > last_local_ns && last_local_ns > 0) ? (now - last_local_ns) : 0;
+                    if (wall_dt_ns > 0) {
+                        double pcr_duration_ns = (double)dt_ticks * 1000.0 / 27.0;
+                        double instant_drift_ppm = ((pcr_duration_ns - (double)wall_dt_ns) / (double)wall_dt_ns) * 1000000.0;
 
-                    /* Apply smoothing EMA (10% instant, 90% history) */
-                    h->clock_inspectors[pid].br_est.pcr_drift_ppm =
-                        (h->clock_inspectors[pid].br_est.pcr_drift_ppm * 0.9) + (instant_drift_ppm * 0.1);
+                        /* Apply smoothing EMA (10% instant, 90% history) */
+                        h->clock_inspectors[pid].br_est.pcr_drift_ppm =
+                            (h->clock_inspectors[pid].br_est.pcr_drift_ppm * 0.9) + (instant_drift_ppm * 0.1);
 
-                    /* Export to live stats for this PID */
-                    h->live->pcr_drift_ppm = h->clock_inspectors[pid].br_est.pcr_drift_ppm;
+                        /* Export to live stats for this PID */
+                        h->live->pcr_drift_ppm = h->clock_inspectors[pid].br_est.pcr_drift_ppm;
+                    }
+                } else {
+                    h->clock_inspectors[pid].br_est.pcr_drift_ppm = 0.0;
+                    h->live->pcr_drift_ppm = 0.0;
                 }
 
                 tsa_debug(TAG, "PCR Bitrate Settlement [PID 0x%04x]: pkts=%lu, dt_ticks=%lu, bitrate=%lu bps, tpp=%.2f, drift=%.1f ppm",

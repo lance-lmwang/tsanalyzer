@@ -425,7 +425,7 @@ void tsa_tstd_drain(struct tsa_handle* h, uint16_t pid);
 int16_t tsa_update_pid_tracker(struct tsa_handle* h, uint16_t pid);
 void tsa_reset_pid_stats(struct tsa_handle* h, uint16_t pid);
 void tsa_precompile_pid_labels(struct tsa_handle* h, uint16_t pid);
-void tsa_clock_update(const uint8_t* packet, tsa_clock_inspector_t* inspector, uint64_t now_ns);
+void tsa_clock_update(const uint8_t* packet, tsa_clock_inspector_t* inspector, uint64_t now_ns, bool is_live);
 void tsa_section_filter_push(struct tsa_handle* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
 void tsa_push_event(struct tsa_handle* h, tsa_event_type_t type, uint16_t pid, uint64_t val);
 void tsa_handle_es_payload(struct tsa_handle* h, uint16_t pid, const uint8_t* buf, int len, uint64_t now_ns);

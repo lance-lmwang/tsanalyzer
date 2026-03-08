@@ -38,7 +38,7 @@ int main() {
     /* 1. Warm up: Establish Lock (requires 10 packets in V9) */
     for (int i = 0; i < 10; i++) {
         make_pcr_packet(pkt, pcr_val, false);
-        tsa_clock_update(pkt, &inspector, now_ns);
+        tsa_clock_update(pkt, &inspector, now_ns, true);
         pcr_val += 540000;     /* 20ms gap */
         now_ns += 20000000ULL; /* 20ms wall clock */
     }
@@ -50,7 +50,7 @@ int main() {
     pcr_val += 5400000;     /* 200ms jump */
     now_ns += 200000000ULL; /* 200ms wall clock */
     make_pcr_packet(pkt, pcr_val, false);
-    tsa_clock_update(pkt, &inspector, now_ns);
+    tsa_clock_update(pkt, &inspector, now_ns, true);
 
     assert(inspector.priority_1_errors == 1);
     printf("[PASS] Single Gap: Exactly 1 error reported.\n");
@@ -62,7 +62,7 @@ int main() {
         pcr_val += 1080000; /* 40ms+ jump */
         now_ns += 50000ULL; /* ONLY 50us wall clock (Burst!) */
         make_pcr_packet(pkt, pcr_val, false);
-        tsa_clock_update(pkt, &inspector, now_ns);
+        tsa_clock_update(pkt, &inspector, now_ns, true);
     }
     assert(inspector.priority_1_errors == 1);
     printf("[PASS] Micro-Burst: Still exactly 1 error (Burst ignored as expected).\n");
@@ -72,7 +72,7 @@ int main() {
     pcr_val = 1000000ULL;
     now_ns += 20000000ULL;
     make_pcr_packet(pkt, pcr_val, false);
-    tsa_clock_update(pkt, &inspector, now_ns);
+    tsa_clock_update(pkt, &inspector, now_ns, true);
 
     assert(inspector.priority_1_errors == 1);
     assert(inspector.state == TSA_CLOCK_STATE_SYNCING);
