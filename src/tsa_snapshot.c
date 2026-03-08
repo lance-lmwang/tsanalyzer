@@ -4,31 +4,55 @@
 
 #include "tsa_internal.h"
 
-static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t wall_dt) {
-    /* L2: Ingress Physical Bitrate
-     * Use wall-clock time delta for actual throughput measurement. */
-    if (wall_dt < 10000000ULL) return;  // Need at least 10ms
+#define TAG "METROLOGY"
 
-    uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
-    if (dp > 0) {
-        uint64_t instant_br = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / wall_dt);
+static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
+    uint64_t curr_pkts = h->live->total_ts_packets;
 
-        if (h->live->physical_bitrate_bps == 0) {
-            if (h->live->total_ts_packets > 1000) h->live->physical_bitrate_bps = instant_br;
-        } else {
-            /* Smooth ingress bitrate */
-            h->live->physical_bitrate_bps = (uint64_t)(0.2 * instant_br + 0.8 * h->live->physical_bitrate_bps);
-        }
-
-        if (h->live->physical_bitrate_bps > TS_MAX_BITRATE_BPS) h->live->physical_bitrate_bps = TS_MAX_BITRATE_BPS;
+    if (h->phys_stats.window_start_ns == 0 || n < h->phys_stats.window_start_ns) {
+        h->phys_stats.window_start_ns = n;
+        h->phys_stats.last_snap_bytes = curr_pkts;
+        h->live->physical_bitrate_bps = h->phys_stats.last_bps;
+        return;
     }
 
-    /* MDI and other clock-relative stats still use STC if possible, but fallback to wall_dt */
-    uint64_t stc_dt = h->stc_ns - h->last_snap_ns;
-    if (stc_dt < 1000000ULL || stc_dt > 10000000000ULL) stc_dt = wall_dt;
+    uint64_t dt = n - h->phys_stats.window_start_ns;
 
-    h->live->mdi_mlr_pkts_s =
-        (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * NS_PER_SEC) / stc_dt;
+    /* Threshold: Update physical bitrate only if at least 1ms has passed (test/replay safe) */
+    if (dt < 1000000ULL) {
+        h->live->physical_bitrate_bps = h->phys_stats.last_bps;
+        return;
+    }
+
+    /* Delta Packets from de-duplicated engine counter */
+    uint64_t dp = (curr_pkts >= h->phys_stats.last_snap_bytes) ? (curr_pkts - h->phys_stats.last_snap_bytes) : 0;
+
+    if (dp > 0) {
+        /* Total TS Bitrate = (Packets * 1504 * 1e9) / DeltaTime_ns */
+        uint64_t inst_bps = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
+
+        /* Smooth for display stability (replay/test uses less smoothing for accuracy) */
+        if (h->phys_stats.last_bps == 0) {
+            h->phys_stats.last_bps = inst_bps;
+        } else {
+            h->phys_stats.last_bps = (uint64_t)(0.5 * inst_bps + 0.5 * h->phys_stats.last_bps);
+        }
+
+        tsa_debug("METROLOGY", "Physical Bitrate Update: dp=%lu, dt_ns=%lu, instant=%lu bps, smooth=%lu bps",
+                  (unsigned long)dp, (unsigned long)dt, (unsigned long)inst_bps, (unsigned long)h->phys_stats.last_bps);
+
+        if (h->phys_stats.last_bps > TS_MAX_BITRATE_BPS) h->phys_stats.last_bps = TS_MAX_BITRATE_BPS;    } else {
+        h->phys_stats.last_bps = 0;
+    }
+
+    h->phys_stats.last_snap_bytes = curr_pkts;
+    h->phys_stats.window_start_ns = n;
+    h->live->physical_bitrate_bps = h->phys_stats.last_bps;
+
+    /* Fallback for MDI stats */
+    uint64_t wall_dt = (n > h->last_snap_wall_ns) ? (n - h->last_snap_wall_ns) : 100000000ULL;
+    if (wall_dt < 1000000ULL) wall_dt = 100000000ULL;
+    h->live->mdi_mlr_pkts_s = (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * NS_PER_SEC) / wall_dt;
     h->live->mdi_df_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
     h->live->stream_utc_ms = h->stc_ns / 1000000ULL;
 }
@@ -134,8 +158,23 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     uint64_t wall_dt = (n > h->last_snap_wall_ns) ? (n - h->last_snap_wall_ns) : 0;
     if (wall_dt < 1000000ULL) wall_dt = 100000000ULL;  // Default to 100ms if first snap or jitter
 
-    /* Bitrate is based on wall-clock delta (L2 Tier) */
-    tsa_calc_stream_bitrate(h, wall_dt);
+    /* Bitrate calculation based on consistent logic time 'n' */
+    tsa_calc_stream_bitrate(h, n);
+
+    /* Aggregate Business Bitrate (Sum of all isolated PCR PID rates)
+     * Note: We only sum bitrates from PIDs seen recently to avoid 'zombie' values. */
+    uint64_t total_pcr_br = 0;
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        if (h->live->pid_bitrate_bps[i] > 0) {
+            if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
+                total_pcr_br += h->live->pid_bitrate_bps[i];
+            } else if (n <= h->live->pid_last_seen_ns[i]) {
+                total_pcr_br += h->live->pid_bitrate_bps[i];
+            }
+        }
+    }
+    h->live->pcr_bitrate_bps = total_pcr_br;
+
     tsa_eval_tr101290_alarms(h, n, stc);
 
     // --- Industrial Health Scoring ---
@@ -172,6 +211,14 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
                                   : (ce > 0.6 && cn < 0.2) ? 2
                                   : (cn > 0.4 && ce > 0.4) ? 3
                                                            : 0;
+
+    // Populate Snapshot Summary
+    sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
+    sn->summary.total_packets = h->live->total_ts_packets;
+    sn->summary.signal_lock = h->signal_lock;
+    sn->summary.master_health = h->last_health_score;
+    sn->summary.active_pid_count = h->pid_tracker_count;
+    sn->stats = *h->live;
 
     // --- PID METRICS (L3 Tier: attributed via same common delta window) ---
     uint32_t ai = 0;
@@ -225,7 +272,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].pid = p;
         strncpy(sn->pids[ai].type_str, p_st, sizeof(sn->pids[ai].type_str) - 1);
         sn->pids[ai].type_str[sizeof(sn->pids[ai].type_str) - 1] = '\0';
-        sn->pids[ai].bitrate_q16_16 = (int64_t)h->live->pid_bitrate_bps[p] << 16;
+        sn->pids[ai].bitrate_peak = h->live->pid_bitrate_bps[p];
         sn->pids[ai].cc_errors = h->live->pid_cc_errors[p];
         sn->pids[ai].scrambled_packets = h->live->pid_scrambled_packets[p];
         sn->pids[ai].pes_errors = h->live->pid_pes_errors[p];
@@ -274,10 +321,13 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     h->live->video_fps = max_fps;
     h->live->gop_ms = max_gop;
 
+    /* Populate Snapshot Summary from latest live state before swap */
     sn->summary.master_health = h->last_health_score;
     sn->summary.total_packets = h->live->total_ts_packets;
     sn->summary.signal_lock = h->signal_lock;
     sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
+    sn->summary.pcr_bitrate_bps = h->live->pcr_bitrate_bps;
+
     strncpy(sn->network_name, h->network_name, sizeof(sn->network_name) - 1);
     sn->network_name[sizeof(sn->network_name) - 1] = '\0';
     strncpy(sn->service_name, h->service_name, sizeof(sn->service_name) - 1);
@@ -287,6 +337,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->active_pid_count = ai;
     sn->stats = *h->live;
 
+    /* Finalize snapshot by swapping buffers and updating baseline */
     atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
     *h->prev_snap_base = *h->live;
     h->last_snap_ns = stc;

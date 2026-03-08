@@ -139,6 +139,9 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->last_pcr_ticks = INVALID_PCR;
     h->stc_slope_q64 = ((int128_t)1 << 64);
 
+    /* Professional Metrology: Window will be initialized on first snapshot or packet */
+    h->phys_stats.window_start_ns = 0;
+
     tsa_plugin_register(&tsa_scte35_engine);
     tsa_plugin_register(&tr101290_ops);
     tsa_plugin_register(&pcr_ops);
@@ -469,9 +472,32 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
 
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
+
+    /* 🛡️ Industrial De-duplication: Ignore mirrored packets from PCAP/Loopback
+     * Note: We NEVER apply this to Null packets (0x1FFF) because they legitimately
+     * repeat CC=0 for consecutive stuffing packets. */
+    static __thread uint16_t last_pid = 0xFFFF;
+    static __thread uint8_t last_cc = 0xFF;
+    static __thread uint64_t last_pkt_n = 0;
+
+    bool is_duplicate = false;
+    if (r.pid != 0x1FFF && r.pid == last_pid && r.cc == last_cc) {
+        /* Only de-duplicate if packets arrive within a sub-microsecond window (Hardware mirror) */
+        if (n > 0 && last_pkt_n > 0 && (n - last_pkt_n) < 1000ULL) {
+            is_duplicate = true;
+        }
+    }
+
+    last_pid = r.pid;
+    last_cc = r.cc;
+    last_pkt_n = n;
+
+    if (!is_duplicate) {
+        h->live->total_ts_packets++;
+    }
+
     if (h->config.analysis.enable_reactive_pid_filter && !tsa_stream_demux_check_pid(&h->root_stream, r.pid)) return;
 
-    h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
     if (r.pid < TS_PID_MAX) {

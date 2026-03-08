@@ -33,6 +33,17 @@ typedef struct {
     /* Error Throttling */
     uint64_t last_error_pcr_val;
     bool pending_discontinuity;
+
+    /* PCR Bitrate Estimation Context (Isolated per clock domain) */
+    struct {
+        uint64_t last_pcr_ticks;
+        uint64_t last_cc_count;
+        uint64_t last_bitrate_bps;
+        uint64_t last_total_pkts_anchor;
+        uint64_t ticks_per_packet_q16;
+        double pcr_drift_ppm;
+        bool sync_done;
+    } br_est;
 } tsa_clock_inspector_t;
 
 void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns);

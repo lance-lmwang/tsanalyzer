@@ -133,6 +133,7 @@ typedef struct {
 typedef struct {
     uint64_t total_packets;
     uint64_t physical_bitrate_bps;
+    uint64_t pcr_bitrate_bps;
     bool signal_lock;
     float master_health;
     bool lid_active;

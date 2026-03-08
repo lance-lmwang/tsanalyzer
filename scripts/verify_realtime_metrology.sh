@@ -21,12 +21,12 @@ pkill -9 tsa_cli || true
 pkill -9 tsp || true
 fuser -k -9 $PORT_API/tcp $PORT_UDP/udp > /dev/null 2>&1 || true
 
-./build/tsa_cli --mode=live --udp $PORT_UDP > tsa_cli_metrology.log 2>&1 &
+./build/tsa --mode=live --udp $PORT_UDP > tsa_cli_metrology.log 2>&1 &
 CLI_PID=$!
 sleep 2
 
 echo ">>> Phase 2: Pacing via PCR Clock (Automatic)..."
-./build/tsp -P -l -m 0x0202 -i 127.0.0.1 -p $PORT_UDP -f "$SAMPLE_TS" > /dev/null 2>&1 &
+./build/tsp -P -l -i 127.0.0.1 -p $PORT_UDP -f "$SAMPLE_TS" > /dev/null 2>&1 &
 TSP_PID=$!
 
 echo ">>> Phase 3: Monitoring Stability (30s)..."
@@ -57,20 +57,31 @@ for i in {1..6}; do
     P_MBPS=$(echo "scale=2; $P_BPS / 1000000" | bc)
     C_MBPS=$(echo "scale=2; $C_BPS / 1000000" | bc)
 
-    J_STATUS="[PASS]"
-    if (( $(echo "$JITTER > 10.0" | bc -l) )); then J_STATUS="[WARN]"; fi
+    # 🚨 STRICT VALUE VALIDATION (Target ~10Mbps physical output)
+    # Expected Range: 9.5 - 10.5 Mbps
+    VALID_P=0
+    if (( $(echo "$P_MBPS > 9.5" | bc -l) )) && (( $(echo "$P_MBPS < 10.5" | bc -l) )); then VALID_P=1; fi
 
-    printf "[%2ds] | %13.2f | %16.2f | %7.3f | %s OK\n" $((i*5+5)) "$P_MBPS" "$C_MBPS" "$JITTER" "$J_STATUS"
-    SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+    STATUS="[PASS]"
+    if [ $VALID_P -eq 0 ]; then
+        STATUS="[FAIL]"
+    fi
+
+    printf "[%2ds] | %13.2f | %16.2f | %7.3f | %s\n" $((i*5+5)) "$P_MBPS" "$C_MBPS" "$JITTER" "$STATUS"
+
+    if [ "$STATUS" == "[PASS]" ]; then
+        SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+    fi
 done
 
 echo "------------------------------------------------------------"
 kill -9 $CLI_PID $TSP_PID > /dev/null 2>&1 || true
 
-if [ $SUCCESS_COUNT -gt 0 ]; then
-    echo ">>> METROLOGY VERIFIED: Dual-bitrate analysis stable."
+# Must have at least 4 stable samples out of 6 to pass
+if [ $SUCCESS_COUNT -ge 4 ]; then
+    echo ">>> METROLOGY VERIFIED: Dual-bitrate analysis stable and accurate."
     exit 0
 else
-    echo ">>> METROLOGY FAILED: Could not receive valid metrics."
+    echo ">>> METROLOGY FAILED: Bitrate values out of tolerance or unstable."
     exit 1
 fi

@@ -13,7 +13,7 @@
 
 #define TS_PACKET_SIZE 188
 #define TS_PACKET_BITS (TS_PACKET_SIZE * 8)
-#define RING_BUFFER_SIZE 65536
+#define RING_BUFFER_SIZE (1024 * 1024)
 
 #ifndef INVALID_PCR
 #define INVALID_PCR ((uint64_t)-1)
@@ -63,6 +63,10 @@ typedef struct tsp_handle {
     uint64_t base_wall_ns;
     uint64_t last_scheduled_ns;
     uint64_t last_pcr_val_tx;
+    uint64_t last_pcr_wall_ns;
+    uint64_t pkts_since_pcr;
+    uint64_t estimated_bitrate;
+    uint16_t locked_pcr_pid;
     time_t last_pcr_reset_time;
 
     uint64_t last_ns;
@@ -99,6 +103,7 @@ int tsp_stop(tsp_handle_t* h);
 int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count);
 
 uint64_t tsp_get_detected_bitrate(tsp_handle_t* h);
+uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h);
 uint64_t tsp_get_total_packets(tsp_handle_t* h);
 int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
                   uint64_t* pps);

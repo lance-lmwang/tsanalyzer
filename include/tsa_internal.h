@@ -11,6 +11,7 @@
 #include "tsa_bitstream.h"
 #include "tsa_clock.h"
 #include "tsa_histogram.h"
+#include "tsa_log.h"
 #include "tsa_plugin.h"
 #include "tsa_stream.h"
 #include "tsa_stream_model.h"
@@ -351,6 +352,13 @@ struct tsa_handle {
     uint64_t last_a_pts;
 
     uint64_t last_packet_rx_ns;
+
+    /* Professional Metrology (Atomic Monotonic Counter) */
+    struct {
+        uint64_t last_snap_bytes;           /* Baseline packets for last snapshot */
+        uint64_t last_bps;                  /* Cached result of last calculation */
+        uint64_t window_start_ns;           /* Start time of current measurement window */
+    } phys_stats;
 
     // SCTE-35 Audit State
     uint64_t scte35_target_pts[TS_PID_MAX];
