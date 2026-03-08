@@ -32,13 +32,14 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
 	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX) -DCMAKE_BUILD_TYPE=Release ..
 
 # The actual binaries depend on the CMake config and source files
-$(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server $(BUILD_DIR)/tsa_server_pro: $(BUILD_DIR)/CMakeCache.txt src/*.c include/*.h tests/*.c
+$(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server_pro: $(BUILD_DIR)/CMakeCache.txt src/*.c include/*.h tests/*.c
 	@echo "$(BLUE)=== Building Binaries ===$(RESET)"
 	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
 	@ln -sf tsa_cli build/tsa
+	@ln -sf tsa_server_pro build/tsa_server
 
 # release is now a simple alias for the binaries
-release: $(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server $(BUILD_DIR)/tsa_server_pro
+release: $(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server_pro
 
 # --- Distribution & Packaging ---
 VERSION := 2.3.0

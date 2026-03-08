@@ -97,8 +97,17 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
     fseek(fp, 0, SEEK_END);
     long sz = ftell(fp);
     fseek(fp, 0, SEEK_SET);
+
+    /* Product-level protection: No configuration should be larger than 1MB */
+    if (sz <= 0 || sz > 1024 * 1024) {
+        tsa_error("CONF", "Configuration file size out of bounds (max 1MB)");
+        fclose(fp);
+        return -1;
+    }
+
     char* buf = malloc(sz + 1);
     if (!buf) {
+        tsa_error("CONF", "Out of memory allocating configuration buffer");
         fclose(fp);
         return -1;
     }

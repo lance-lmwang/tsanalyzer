@@ -1,6 +1,7 @@
-#include <string.h>
-#include <stdio.h>
 #include "tsa_stream_model.h"
+
+#include <stdio.h>
+#include <string.h>
 
 void tsa_stream_model_init(tsa_ts_model_t *model) {
     if (!model) return;

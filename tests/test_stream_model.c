@@ -1,6 +1,7 @@
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
+
 #include "tsa_stream_model.h"
 
 void test_hierarchy() {
@@ -16,8 +17,8 @@ void test_hierarchy() {
     assert(model.pid_to_program_idx[0x100] == 0);
 
     // 2. Add ES to Program 101
-    tsa_stream_model_update_es(&model, 0x100, 0x101, 0x1b); // H.264
-    tsa_stream_model_update_es(&model, 0x100, 0x102, 0x0f); // AAC
+    tsa_stream_model_update_es(&model, 0x100, 0x101, 0x1b);  // H.264
+    tsa_stream_model_update_es(&model, 0x100, 0x102, 0x0f);  // AAC
 
     assert(model.programs[0].es_count == 2);
     assert(model.programs[0].es[0].pid == 0x101);
@@ -27,7 +28,7 @@ void test_hierarchy() {
 
     // 3. Add Program 102 with PMT PID 0x200
     tsa_stream_model_update_program(&model, 102, 0x200);
-    tsa_stream_model_update_es(&model, 0x200, 0x201, 0x24); // HEVC
+    tsa_stream_model_update_es(&model, 0x200, 0x201, 0x24);  // HEVC
 
     assert(model.program_count == 2);
     assert(model.programs[1].program_number == 102);

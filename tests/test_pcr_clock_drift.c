@@ -1,6 +1,7 @@
-#include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
+
 #include "tsa_pcr_clock.h"
 
 #define NS_PER_SEC 1000000000ULL
@@ -11,14 +12,14 @@ void test_clock_wrap() {
     tsa_pcr_clock_init(&clk);
 
     const uint64_t MOD = (1ULL << 33) * 300;
-    uint64_t pcr = MOD - 27000000; // 1s before wrap
+    uint64_t pcr = MOD - 27000000;  // 1s before wrap
     uint64_t sys = 1000000000;
 
     tsa_pcr_clock_update(&clk, pcr, sys);
     assert(clk.established);
 
     // Wrap forward
-    pcr = 27000000; // 1s after wrap
+    pcr = 27000000;  // 1s after wrap
     sys += 1000000000;
     tsa_pcr_clock_update(&clk, pcr, sys);
 
@@ -42,7 +43,7 @@ void test_drift_compensation() {
     // 100ppm means in 1s (27M ticks), it actually advanced 2700 ticks extra
     for (int i = 1; i <= 10; i++) {
         sys += 1000000000;
-        pcr += (27000000 + 2700); // 1s + 100ppm
+        pcr += (27000000 + 2700);  // 1s + 100ppm
         tsa_pcr_clock_update(&clk, pcr, sys);
     }
 

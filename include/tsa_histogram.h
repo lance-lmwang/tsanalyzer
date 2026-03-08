@@ -1,8 +1,8 @@
 #ifndef TSA_HISTOGRAM_H
 #define TSA_HISTOGRAM_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define TSA_HIST_RESOLUTION_MS 10
 #define TSA_HIST_WINDOW_MS 1000

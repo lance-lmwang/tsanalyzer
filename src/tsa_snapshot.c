@@ -7,7 +7,7 @@
 static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t wall_dt) {
     /* L2: Ingress Physical Bitrate
      * Use wall-clock time delta for actual throughput measurement. */
-    if (wall_dt < 10000000ULL) return; // Need at least 10ms
+    if (wall_dt < 10000000ULL) return;  // Need at least 10ms
 
     uint64_t dp = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
     if (dp > 0) {
@@ -132,7 +132,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 
     /* For bitrates and FPS, wall-clock delta is much more stable than STC (which can jump). */
     uint64_t wall_dt = (n > h->last_snap_wall_ns) ? (n - h->last_snap_wall_ns) : 0;
-    if (wall_dt < 1000000ULL) wall_dt = 100000000ULL; // Default to 100ms if first snap or jitter
+    if (wall_dt < 1000000ULL) wall_dt = 100000000ULL;  // Default to 100ms if first snap or jitter
 
     /* Bitrate is based on wall-clock delta (L2 Tier) */
     tsa_calc_stream_bitrate(h, wall_dt);
@@ -204,8 +204,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         uint64_t prev_frames = h->prev_snap_base_frames[p];
         if (cur_frames > prev_frames) {
             float inst_fps = (float)((cur_frames - prev_frames) * NS_PER_SEC) / wall_dt;
-            if (h->pid_exact_fps[p] < 0.1) h->pid_exact_fps[p] = inst_fps;
-            else h->pid_exact_fps[p] = 0.1f * inst_fps + 0.9f * h->pid_exact_fps[p];
+            if (h->pid_exact_fps[p] < 0.1)
+                h->pid_exact_fps[p] = inst_fps;
+            else
+                h->pid_exact_fps[p] = 0.1f * inst_fps + 0.9f * h->pid_exact_fps[p];
         } else if (wall_dt >= 2000000000ULL) {
             h->pid_exact_fps[p] = 0;
         }
@@ -236,7 +238,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
             h->live->pid_bitrate_min_bps[p] = h->pid_histograms[p]->min_bps;
         }
 
-        sn->pids[ai].status = (uint8_t)h->pid_status[p];        sn->pids[ai].width = h->pid_width[p];
+        sn->pids[ai].status = (uint8_t)h->pid_status[p];
+        sn->pids[ai].width = h->pid_width[p];
         sn->pids[ai].height = h->pid_height[p];
         sn->pids[ai].profile = h->pid_profile[p];
         sn->pids[ai].level = h->pid_level[p];

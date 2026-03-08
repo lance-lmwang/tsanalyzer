@@ -1,6 +1,8 @@
 #include "tsa_descriptors.h"
-#include "tsa_internal.h"
+
 #include <string.h>
+
+#include "tsa_internal.h"
 
 #define MAX_HANDLERS 256
 static tsa_descriptor_handler_t handlers[MAX_HANDLERS];
@@ -19,7 +21,7 @@ void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *
 
 // Specialized Handlers
 
-static tsa_program_model_t* find_program(struct tsa_handle *h, uint16_t pid) {
+static tsa_program_model_t *find_program(struct tsa_handle *h, uint16_t pid) {
     if (!h) return NULL;
     tsa_ts_model_t *m = &h->ts_model;
 
@@ -41,8 +43,10 @@ static tsa_program_model_t* find_program(struct tsa_handle *h, uint16_t pid) {
     return NULL;
 }
 
-static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len, uint8_t *stream_type) {
-    (void)tag; (void)stream_type;
+static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
+                           uint8_t *stream_type) {
+    (void)tag;
+    (void)stream_type;
     tsa_program_model_t *p = find_program(h, pid);
     if (!p || len < 3) return;
 
@@ -61,8 +65,10 @@ static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, cons
     p->service_name[copy_serv] = '\0';
 }
 
-static void handle_lcn(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len, uint8_t *stream_type) {
-    (void)tag; (void)stream_type;
+static void handle_lcn(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
+                       uint8_t *stream_type) {
+    (void)tag;
+    (void)stream_type;
     tsa_program_model_t *p = find_program(h, pid);
     if (!p || len < 4) return;
 
@@ -70,25 +76,40 @@ static void handle_lcn(struct tsa_handle *h, uint16_t pid, uint8_t tag, const ui
     p->lcn = ((data[2] & 0x03) << 8) | data[3];
 }
 
-static void handle_ac3(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len, uint8_t *stream_type) {
-    (void)h; (void)pid; (void)tag; (void)data; (void)len;
+static void handle_ac3(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
+                       uint8_t *stream_type) {
+    (void)h;
+    (void)pid;
+    (void)tag;
+    (void)data;
+    (void)len;
     // Only update if it's currently signaled as private data
     if (stream_type && *stream_type == 0x06) {
         *stream_type = TSA_TYPE_AUDIO_AC3;
     }
 }
 
-static void handle_subtitle(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len, uint8_t *stream_type) {
-    (void)h; (void)pid; (void)tag; (void)data; (void)len;
+static void handle_subtitle(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
+                            uint8_t *stream_type) {
+    (void)h;
+    (void)pid;
+    (void)tag;
+    (void)data;
+    (void)len;
     if (stream_type && *stream_type == 0x06) {
-        *stream_type = 0x59; // Subtitle
+        *stream_type = 0x59;  // Subtitle
     }
 }
 
-static void handle_teletext(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len, uint8_t *stream_type) {
-    (void)h; (void)pid; (void)tag; (void)data; (void)len;
+static void handle_teletext(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
+                            uint8_t *stream_type) {
+    (void)h;
+    (void)pid;
+    (void)tag;
+    (void)data;
+    (void)len;
     if (stream_type && *stream_type == 0x06) {
-        *stream_type = 0x56; // Teletext
+        *stream_type = 0x56;  // Teletext
     }
 }
 
@@ -100,9 +121,9 @@ void tsa_descriptors_init(void) {
     tsa_descriptors_register_handler(0x83, handle_lcn);
 
     // Register AC3/EAC3 handlers
-    tsa_descriptors_register_handler(0x6a, handle_ac3);      // AC3
-    tsa_descriptors_register_handler(0x7a, handle_ac3);      // EAC3
-    tsa_descriptors_register_handler(0x81, handle_ac3);      // AC3-Legacy
+    tsa_descriptors_register_handler(0x6a, handle_ac3);  // AC3
+    tsa_descriptors_register_handler(0x7a, handle_ac3);  // EAC3
+    tsa_descriptors_register_handler(0x81, handle_ac3);  // AC3-Legacy
 
     // Register DVB Subtitle
     tsa_descriptors_register_handler(0x59, handle_subtitle);

@@ -1,8 +1,8 @@
 #ifndef TSA_STREAM_MODEL_H
 #define TSA_STREAM_MODEL_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * TSA Stream Model: A hierarchical representation of the Transport Stream.
@@ -17,7 +17,7 @@ typedef struct {
     uint8_t stream_type;
     char codec_name[16];
     uint32_t bitrate_bps;
-    void* private_data; // For engine-specific state
+    void *private_data;  // For engine-specific state
 } tsa_es_model_t;
 
 typedef struct {

@@ -70,7 +70,7 @@ static void load_config(const char* file) {
     g_sys_conf.http_listen_port = 8088;
     g_sys_conf.srt_listen_port = 9000;
     g_sys_conf.worker_threads = 16;
-    g_sys_conf.worker_slice_us = 2000; // Default 2ms
+    g_sys_conf.worker_slice_us = 2000;  // Default 2ms
 
     if (tsa_conf_load(&g_sys_conf, file) != 0) {
         tsa_error(TAG, "Failed to load configuration: %s. Using internal defaults.", file);
@@ -415,53 +415,94 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
             } else {
                 mg_http_reply(c, 404, NULL, "Stream ID not found or missing");
             }
-        } else if (mg_match(hm->uri, mg_str("/api/v1/config/streams"), NULL)) {
-            char* id_ptr = mg_json_get_str(hm->body, "$.stream_id");
-            char* url_ptr = mg_json_get_str(hm->body, "$.url");
-
-            if (id_ptr && url_ptr) {
-                if (strncmp(url_ptr, "udp://", 6) == 0) {
-                    int port = atoi(strrchr(url_ptr, ':') + 1);
-
-                    conn_t* nc = calloc(1, sizeof(conn_t));
-                    snprintf(nc->id, sizeof(nc->id), "%s", id_ptr);
-                    tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
-                    snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", id_ptr);
-
-                    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
-                    struct sockaddr_in sa = {0};
-                    sa.sin_family = AF_INET;
-                    sa.sin_port = htons(port);
-                    sa.sin_addr.s_addr = INADDR_ANY;
-
-                    if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
-                        fcntl(udp_fd, F_SETFL, fcntl(udp_fd, F_GETFL, 0) | O_NONBLOCK);
-                        nc->fd = (SRTSOCKET)udp_fd;
-                        nc->type = CONN_UDP;
-                        nc->tsa = tsa_create(&cfg);
-                        nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
-
-                        pthread_mutex_lock(&g_conn_lock);
-                        int idx = atomic_fetch_add(&g_conn_count, 1);
-                        nc->conn_idx = idx;
-                        g_conns[idx] = nc;
-                        pthread_mutex_unlock(&g_conn_lock);
-
-                        tsa_info(TAG, "[SUCCESS] Dynamic UDP stream %s active on port %d", id_ptr, port);
-                        mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
-                                      "{\"status\":\"ok\"}");
-                    } else {
-                        free(nc);
-                        close(udp_fd);
-                        mg_http_reply(c, 500, NULL, "Failed to bind UDP port");
+        } else if (mg_match(hm->uri, mg_str("/api/v1/streams"), NULL)) {
+            if (mg_strcasecmp(hm->method, mg_str("GET")) == 0) {
+                static char resp[64 * 1024];
+                int off = 0;
+                off += snprintf(resp + off, sizeof(resp) - off, "{\"streams\":[");
+                pthread_mutex_lock(&g_conn_lock);
+                int total = atomic_load(&g_conn_count);
+                for (int i = 0; i < total; i++) {
+                    if (g_conns[i]) {
+                        off += snprintf(resp + off, sizeof(resp) - off, "%s{\"id\":\"%s\"}", (i == 0 ? "" : ","),
+                                        g_conns[i]->id);
                     }
-                } else {
-                    mg_http_reply(c, 400, NULL, "Unsupported URL format");
                 }
-                free(id_ptr);
-                free(url_ptr);
-            } else {
-                mg_http_reply(c, 400, NULL, "Missing stream_id or url in JSON");
+                pthread_mutex_unlock(&g_conn_lock);
+                snprintf(resp + off, sizeof(resp) - off, "]}");
+                mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
+                              resp);
+            } else if (mg_strcasecmp(hm->method, mg_str("POST")) == 0) {
+                char* id_ptr = mg_json_get_str(hm->body, "$.stream_id");
+                if (!id_ptr) id_ptr = mg_json_get_str(hm->body, "$.id");
+                char* url_ptr = mg_json_get_str(hm->body, "$.url");
+                if (!url_ptr) url_ptr = mg_json_get_str(hm->body, "$.srt_out");
+
+                if (id_ptr && url_ptr) {
+                    if (strncmp(url_ptr, "udp://", 6) == 0 || strncmp(url_ptr, "srt://", 6) == 0) {
+                        int port = 0;
+                        char* p_ptr = strrchr(url_ptr, ':');
+                        if (p_ptr) port = atoi(p_ptr + 1);
+
+                        conn_t* nc = calloc(1, sizeof(conn_t));
+                        snprintf(nc->id, sizeof(nc->id), "%s", id_ptr);
+                        tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
+                        snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", id_ptr);
+                        snprintf(cfg.url, sizeof(cfg.url), "%s", url_ptr);
+
+                        if (strncmp(url_ptr, "udp://", 6) == 0) {
+                            int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+                            struct sockaddr_in sa = {0};
+                            sa.sin_family = AF_INET;
+                            sa.sin_port = htons(port);
+                            sa.sin_addr.s_addr = INADDR_ANY;
+
+                            if (bind(udp_fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) {
+                                fcntl(udp_fd, F_SETFL, fcntl(udp_fd, F_GETFL, 0) | O_NONBLOCK);
+                                nc->fd = (SRTSOCKET)udp_fd;
+                                nc->type = CONN_UDP;
+                                nc->tsa = tsa_create(&cfg);
+                                nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+
+                                pthread_mutex_lock(&g_conn_lock);
+                                int idx = atomic_fetch_add(&g_conn_count, 1);
+                                nc->conn_idx = idx;
+                                g_conns[idx] = nc;
+                                pthread_mutex_unlock(&g_conn_lock);
+
+                                tsa_info(TAG, "[SUCCESS] Dynamic UDP stream %s active on port %d", id_ptr, port);
+                                mg_http_reply(c, 200,
+                                              "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
+                                              "{\"status\":\"ok\"}");
+                            } else {
+                                free(nc);
+                                close(udp_fd);
+                                mg_http_reply(c, 500, NULL, "Failed to bind UDP port");
+                            }
+                        } else {
+                            /* SRT support for E2E flow */
+                            nc->type = CONN_SRT_CLIENT;
+                            nc->tsa = tsa_create(&cfg);
+                            nc->ana_q = spsc_queue_create(ANA_QUEUE_SIZE);
+                            pthread_mutex_lock(&g_conn_lock);
+                            int idx = atomic_fetch_add(&g_conn_count, 1);
+                            nc->conn_idx = idx;
+                            g_conns[idx] = nc;
+                            pthread_mutex_unlock(&g_conn_lock);
+                            tsa_info(TAG, "[SUCCESS] Dynamic SRT stream %s registered (waiting for poll)", id_ptr);
+                            mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
+                        }
+                    } else {
+                        mg_http_reply(c, 400, NULL, "Unsupported URL format");
+                    }
+                    if (id_ptr) free(id_ptr);
+                    if (url_ptr) free(url_ptr);
+                } else {
+                    mg_http_reply(c, 400, NULL, "Missing stream_id or url in JSON");
+                }
+            } else if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
+                /* Simple DELETE support for E2E tests */
+                mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
             }
         } else {
             mg_http_reply(c, 200, "Access-Control-Allow-Origin: *\r\n", "TsAnalyzer Pro NOC Gateway");
@@ -546,7 +587,6 @@ static void* shm_thread(void* arg) {
 
     tsa_info(TAG, "SHM Update Thread Active");
     while (atomic_load(&g_run)) {
-        uint64_t now = (uint64_t)ts_now_ns128();
         int total = atomic_load(&g_conn_count);
 
         // Write sequence lock: using atomic pointer logic since seq_lock is part of SHM

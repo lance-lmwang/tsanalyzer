@@ -1,4 +1,5 @@
 #include <math.h>
+
 #include "tsa_internal.h"
 
 float tsa_calculate_health(tsa_handle_t* h) {

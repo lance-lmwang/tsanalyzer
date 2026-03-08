@@ -1,8 +1,14 @@
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "tsa.h"
 #include "tsa_internal.h"
+
+/* Helper to ensure Prometheus metrics are never NaN or Inf */
+static double safe_val(double v) {
+    return isfinite(v) ? v : 0.0;
+}
 
 void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz) {
     if (!handles || !buf || sz < 4096) return;
@@ -29,9 +35,11 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
             }
         }
     }
-    if (valid_streams >= 3 && (double)alarmed_streams / valid_streams > 0.5) {
-        SAFE_APPEND("# HELP tsa_system_global_incident 1 if more than 50%% streams are failing\n");
-        SAFE_APPEND("tsa_system_global_incident 1\n");
+    if (valid_streams > 0 && (double)alarmed_streams / valid_streams > 0.5) {
+        if (valid_streams >= 3) {
+            SAFE_APPEND("# HELP tsa_system_global_incident 1 if more than 50%% streams are failing\n");
+            SAFE_APPEND("tsa_system_global_incident 1\n");
+        }
     } else {
         SAFE_APPEND("tsa_system_global_incident 0\n");
     }
@@ -54,7 +62,7 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
 
         // Tier 1: System & Engine Status
         SAFE_APPEND("tsa_system_signal_locked%s %d\n", labels, snap->summary.signal_lock ? 1 : 0);
-        SAFE_APPEND("tsa_system_health_score%s %.1f\n", labels, snap->predictive.master_health);
+        SAFE_APPEND("tsa_system_health_score%s %.1f\n", labels, (float)safe_val(snap->predictive.master_health));
         SAFE_APPEND("tsa_system_internal_drop_count%s %llu\n", labels, (unsigned long long)s->internal_analyzer_drop);
         SAFE_APPEND("tsa_system_worker_overruns%s %llu\n", labels, (unsigned long long)s->worker_slice_overruns);
         SAFE_APPEND("tsa_system_engine_latency_ns%s %llu\n", labels,
@@ -62,9 +70,9 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
 
         // Tier 2: Transport & Link Layer
         SAFE_APPEND("tsa_transport_srt_rtt_ms%s %lld\n", labels, (long long)snap->srt.rtt_ms);
-        SAFE_APPEND("tsa_transport_srt_retransmit_rate%s %.4f\n", labels, (float)snap->srt.retransmit_tax);
-        SAFE_APPEND("tsa_transport_mdi_mlr_pkts_s%s %.2f\n", labels, (float)s->mdi_mlr_pkts_s);
-        SAFE_APPEND("tsa_transport_mdi_df_ms%s %.2f\n", labels, (float)s->mdi_df_ms);
+        SAFE_APPEND("tsa_transport_srt_retransmit_rate%s %.4f\n", labels, (float)safe_val(snap->srt.retransmit_tax));
+        SAFE_APPEND("tsa_transport_mdi_mlr_pkts_s%s %.2f\n", labels, (float)safe_val(s->mdi_mlr_pkts_s));
+        SAFE_APPEND("tsa_transport_mdi_df_ms%s %.2f\n", labels, (float)safe_val(s->mdi_df_ms));
 
         SAFE_APPEND("tsa_transport_iat_histogram{stream_id=\"%s\",le=\"1ms\"} %llu\n", sid,
                     (unsigned long long)s->iat_hist.bucket_under_1ms);
@@ -134,21 +142,23 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_metrology_pcr_bitrate_bps%s %llu\n", labels, (unsigned long long)s->pcr_bitrate_bps);
         SAFE_APPEND("tsa_metrology_pcr_bitrate_piecewise_bps%s %llu\n", labels,
                     (unsigned long long)s->last_pcr_interval_bitrate_bps);
-        SAFE_APPEND("tsa_metrology_pcr_jitter_ms%s %.3f\n", labels, s->pcr_jitter_avg_ns / 1000000.0);
-        SAFE_APPEND("tsa_metrology_pcr_accuracy_ns%s %.2f\n", labels, (float)s->pcr_accuracy_ns);
+        SAFE_APPEND("tsa_metrology_pcr_jitter_ms%s %.3f\n", labels, safe_val(s->pcr_jitter_avg_ns) / 1000000.0);
+        SAFE_APPEND("tsa_metrology_pcr_accuracy_ns%s %.2f\n", labels, (float)safe_val(s->pcr_accuracy_ns));
         SAFE_APPEND("tsa_metrology_pcr_accuracy_piecewise_ms%s %.3f\n", labels,
-                    s->pcr_accuracy_ns_piecewise / 1000000.0);
-        SAFE_APPEND("tsa_metrology_stc_wall_drift_ppm%s %.3f\n", labels, snap->predictive.stc_wall_drift_ppm);
-        SAFE_APPEND("tsa_metrology_long_term_drift_ppm%s %.3f\n", labels, snap->predictive.long_term_drift_ppm);
+                    safe_val(s->pcr_accuracy_ns_piecewise) / 1000000.0);
+        SAFE_APPEND("tsa_metrology_stc_wall_drift_ppm%s %.3f\n", labels, safe_val(snap->predictive.stc_wall_drift_ppm));
+        SAFE_APPEND("tsa_metrology_long_term_drift_ppm%s %.3f\n", labels,
+                    safe_val(snap->predictive.long_term_drift_ppm));
 
         // Tier 5: Essence & Quality
-        SAFE_APPEND("tsa_essence_video_fps%s %.2f\n", labels, (float)s->video_fps);
+        SAFE_APPEND("tsa_essence_video_fps%s %.2f\n", labels, (float)safe_val(s->video_fps));
         SAFE_APPEND("tsa_essence_gop_ms%s %u\n", labels, s->gop_ms);
         SAFE_APPEND("tsa_essence_av_sync_ms%s %d\n", labels, s->av_sync_ms);
         SAFE_APPEND("tsa_essence_entropy_freeze_total%s %llu\n", labels, (unsigned long long)s->entropy_freeze.count);
 
         // Tier 6: Predictive Simulation
-        SAFE_APPEND("tsa_predictive_rst_network_seconds%s %.2f\n", labels, snap->predictive.rst_network_s);
+        SAFE_APPEND("tsa_predictive_rst_network_seconds%s %.2f\n", labels,
+                    (float)safe_val(snap->predictive.rst_network_s));
         SAFE_APPEND("tsa_predictive_tstd_underflow_total%s %llu\n", labels,
                     (unsigned long long)s->tstd_underflow.count);
         SAFE_APPEND("tsa_predictive_tstd_overflow_total%s %llu\n", labels, (unsigned long long)s->tstd_overflow.count);

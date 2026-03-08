@@ -1,78 +1,57 @@
 #!/bin/bash
-# TsAnalyzer: PCR Repetition & Heartbeat E2E Verification
-# Validates TR 101 290 1.1 (40ms) using the lightweight CLI.
+# TsAnalyzer: Professional PCR Diagnostic Verification
 
 set -e
 PORT_API=8088
 PORT_UDP=19001
 SAMPLE_TS="./sample/test_1m.ts"
 [ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="../sample/test_1m.ts"
-[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="/home/lmwang/dev/sample/test_1m.ts"
 
-echo ">>> TsAnalyzer: PCR Repetition Verification (via CLI)"
+echo ">>> TsAnalyzer: Diagnostic PCR Repetition Verification"
 
-# 0. Check dependencies
-if [ ! -f "$SAMPLE_TS" ]; then
-    echo "[FAIL] ERROR: Sample TS not found."
-    exit 1
-fi
-
-# 1. Start CLI in live mode
-echo ">>> Phase 1: Starting Lightweight Analyzer..."
+# 1. Clean Environment
 pkill -9 tsa_cli || true
 pkill -9 tsp || true
-./build/tsa_cli --mode=live --udp $PORT_UDP > /dev/null 2>&1 &
+sleep 1
+
+# 2. Run Analyzer WITH LOGS ENABLED (to stdout)
+./build/tsa_cli --mode=live --udp $PORT_UDP 2>&1 | grep "CLOCK" &
 CLI_PID=$!
 sleep 2
 
-# 2. Push valid stream
-echo ">>> Phase 2: Pushing valid stream (20Mbps)..."
+# 3. Phase 1: High-frequency loops
+echo ">>> Phase 1: Pushing stream with high-frequency loops..."
 ./build/tsp -P -l -b 20000000 -i 127.0.0.1 -p $PORT_UDP -f "$SAMPLE_TS" > /dev/null 2>&1 &
 TSP_PID=$!
 sleep 5
 
-# 3. Verify Signal Lock
-echo ">>> Waiting for Signal Lock..."
-MAX_RETRIES=15
-for i in $(seq 1 $MAX_RETRIES); do
-    METRICS=$(curl -s http://localhost:$PORT_API/metrics || echo "")
-    if echo "$METRICS" | grep -q 'tsa_system_signal_locked.* 1'; then
-        echo "    [PASS] Signal Locked"
-        break
-    fi
-    sleep 1
-done
+METRICS=$(curl -s http://localhost:$PORT_API/metrics)
+BASE_ERR=$(echo "$METRICS" | grep "tsa_compliance_pcr_repetition_errors" | awk '{print $2}' || echo "0")
 
-if [ "$i" -eq "$MAX_RETRIES" ]; then
-    echo "    [FAIL] FAILED: Signal not locked after $MAX_RETRIES seconds"
-    kill -9 $CLI_PID $TSP_PID || true
-    exit 1
-fi
+echo "------------------------------------------------------------"
+echo "Baseline Errors: $BASE_ERR"
+echo "------------------------------------------------------------"
 
-# 4. Simulate PCR Gap (TR 101 290 1.1)
-echo ">>> Phase 3: Simulating 200ms PCR Gap (Stream Pause)..."
-# Get baseline errors
-BASE_ERR=$(echo "$METRICS" | grep "tsa_compliance_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
-
+# 4. Phase 2: real disruption
+echo ">>> Phase 2: Simulating 200ms real gap (斷流)..."
 kill -STOP $TSP_PID
-sleep 1.0
+sleep 0.5
 kill -CONT $TSP_PID
-sleep 5
+sleep 3
 
-# 5. Check Error Counter
 FINAL_METRICS=$(curl -s http://localhost:$PORT_API/metrics)
-ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_compliance_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
+ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_compliance_pcr_repetition_errors" | awk '{print $2}' || echo "0")
 
 echo "------------------------------------------------------------"
-echo "PCR Repetition Errors (Baseline: $BASE_ERR): $ERR_COUNT"
+echo "Final PCR Repetition Errors: $ERR_COUNT"
 echo "------------------------------------------------------------"
 
-kill -9 $CLI_PID $TSP_PID > /dev/null 2>&1 || true
+kill -9 $CLI_PID $TSP_PID || true
 
-if [ "$ERR_COUNT" -gt "$BASE_ERR" ]; then
-    echo ">>> PCR COMPLIANCE VERIFIED: Alpha-Beta & Heartbeat active."
+if [ "$BASE_ERR" -eq 0 ] && [ "$ERR_COUNT" -eq 1 ]; then
+    echo ">>> SUCCESS: Professional Deterministic PCR Measure Verified."
     exit 0
 else
-    echo ">>> PCR COMPLIANCE FAILED: No new error reported for 200ms gap."
+    echo ">>> FAILURE: Non-deterministic result. Check CLOCK logs above."
     exit 1
 fi

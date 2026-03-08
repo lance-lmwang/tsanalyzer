@@ -108,7 +108,8 @@ cd "$CURL_SRC_DIR"
             --enable-static --disable-shared --disable-ftp --disable-ldap --disable-ldaps \
             --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp \
             --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher \
-            --disable-mqtt --with-zlib="$ZLIB_INSTALL_DIR" --with-openssl --without-libpsl --without-libidn2
+            --disable-mqtt --with-zlib="$ZLIB_INSTALL_DIR" --with-openssl \
+            --without-libpsl --without-libidn2 --without-brotli --without-zstd --without-librtmp
 make -j$(nproc)
 make install
 

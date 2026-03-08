@@ -1,11 +1,12 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <assert.h>
 #include <time.h>
+#include <unistd.h>
+
 #include "tsp.h"
 
-#define TEST_BITRATE 8000000ULL // 8Mbps
+#define TEST_BITRATE 8000000ULL  // 8Mbps
 #define TEST_DURATION_S 5
 
 int main() {
@@ -21,7 +22,7 @@ int main() {
 
     uint8_t pkts[188 * 1000];
     memset(pkts, 0, sizeof(pkts));
-    for(int i=0; i<1000; i++) pkts[i*188] = 0x47;
+    for (int i = 0; i < 1000; i++) pkts[i * 188] = 0x47;
 
     printf("Unit Test: Pushing %llu bps for %d seconds...\n", TEST_BITRATE, TEST_DURATION_S);
 
@@ -32,13 +33,13 @@ int main() {
 
     // Simulate file reading at high speed
     printf("[DEBUG] Entering enqueue loop...\n");
-    for(int s=0; s < TEST_DURATION_S * 100; s++) {
+    for (int s = 0; s < TEST_DURATION_S * 100; s++) {
         // Enqueue 1000 packets at a time
         int enq = tsp_enqueue(h, pkts, 1000);
         if (enq > 0) {
             count += enq;
         }
-        usleep(10000); // 10ms interval
+        usleep(10000);  // 10ms interval
         if (s % 100 == 0) printf("[DEBUG] Progress: %d/500\n", s);
     }
 

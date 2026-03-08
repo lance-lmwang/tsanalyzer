@@ -127,7 +127,7 @@ static void* tx_loop(void* arg) {
         uint64_t target_ns = h->ts_buffer[tail % RING_BUFFER_SIZE];
 
         if (now_ns >= target_ns) {
-            if (now_ns > target_ns + 50000000ULL) { // More than 50ms late
+            if (now_ns > target_ns + 50000000ULL) {  // More than 50ms late
                 static uint64_t last_warn_pkts = 0;
                 uint64_t cur_pkts = atomic_load(&h->total_ts_sent);
                 if (cur_pkts > last_warn_pkts + 10000) {
@@ -138,8 +138,8 @@ static void* tx_loop(void* arg) {
             }
             // Precision dispatch: send exactly BATCH_SIZE packets
             for (int i = 0; i < BATCH_SIZE; i++) {
-                memcpy(batch_buf + i * TS_PACKET_SIZE, h->ring_buffer + ((tail + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE,
-                       TS_PACKET_SIZE);
+                memcpy(batch_buf + i * TS_PACKET_SIZE,
+                       h->ring_buffer + ((tail + i) % RING_BUFFER_SIZE) * TS_PACKET_SIZE, TS_PACKET_SIZE);
             }
 
             if (h->srt_enabled) {
@@ -155,8 +155,8 @@ static void* tx_loop(void* arg) {
         } else {
             // Ahead of schedule: wait
             uint64_t diff = target_ns - now_ns;
-            if (diff > 1000000ULL) { // > 1ms, safe to sleep
-                struct timespec ts = {0, 500000}; // 0.5ms sleep
+            if (diff > 1000000ULL) {               // > 1ms, safe to sleep
+                struct timespec ts = {0, 500000};  // 0.5ms sleep
                 nanosleep(&ts, NULL);
             } else {
                 // Microsecond precision: busy wait
@@ -252,8 +252,8 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
                     uint64_t new_br = dp * 1504ULL * 1000000000ULL / dt_pcr_ns;
                     atomic_store(&h->detected_bitrate, new_br);
                     if (old_br == 0) {
-                        tsa_info(TAG, "Bitrate converged: %.2f Mbps (Drift: %.1f PPM)",
-                                 (double)new_br / 1000000.0, h->clk.drift_ppm);
+                        tsa_info(TAG, "Bitrate converged: %.2f Mbps (Drift: %.1f PPM)", (double)new_br / 1000000.0,
+                                 h->clk.drift_ppm);
                     }
                 }
             }
@@ -327,7 +327,9 @@ pthread_t tsp_get_thread(tsp_handle_t* h) {
 
 int tsp_get_stats(tsp_handle_t* h, uint64_t* t, int64_t* mx, int64_t* mn, uint64_t* d, uint64_t* dr, uint64_t* pps) {
     if (!h) return -1;
-    (void)mx; (void)mn; (void)d;
+    (void)mx;
+    (void)mn;
+    (void)d;
     if (t) *t = atomic_load(&h->total_ts_sent);
     if (dr) *dr = atomic_load(&h->detected_bitrate);
 

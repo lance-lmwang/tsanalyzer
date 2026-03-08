@@ -1,7 +1,7 @@
-#include <stdio.h>
-#include <stdint.h>
 #include <assert.h>
 #include <math.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #define TS_PACKET_SIZE 188
 #define NS_PER_SEC 1000000000ULL
@@ -29,9 +29,9 @@ uint64_t calculate_to_send(pacer_state_t* s, uint64_t now_ns) {
 }
 
 void test_basic_pacing() {
-    pacer_state_t s = {0, 0, 10000000}; // 10 Mbps
+    pacer_state_t s = {0, 0, 10000000};  // 10 Mbps
 
-    uint64_t now = 1000000000ULL; // 1s
+    uint64_t now = 1000000000ULL;  // 1s
     uint64_t to_send = calculate_to_send(&s, now);
     assert(s.start_ns == now);
     assert(to_send == 0);

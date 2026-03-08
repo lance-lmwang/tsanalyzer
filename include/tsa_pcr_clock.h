@@ -1,8 +1,8 @@
 #ifndef TSA_PCR_CLOCK_H
 #define TSA_PCR_CLOCK_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * TSA PCR Clock: A high-precision clock abstraction that synchronizes
@@ -20,8 +20,8 @@ typedef struct {
     uint64_t unwrapped_pcr_ticks;
 
     /* Drift Compensation (Exponential Moving Average) */
-    double drift_ppm;         // Drift in Parts Per Million
-    double rate_scale;        // 1.0 = perfect, 1.0001 = stream is fast
+    double drift_ppm;   // Drift in Parts Per Million
+    double rate_scale;  // 1.0 = perfect, 1.0001 = stream is fast
 
     bool established;
     uint32_t pcr_count;

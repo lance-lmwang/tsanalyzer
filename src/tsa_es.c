@@ -80,8 +80,9 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                     uint64_t now = stc_ns;
                     if (h->pid_last_idr_ns[pid] > 0) {
                         h->pid_gop_ms[pid] = (uint32_t)((now - h->pid_last_idr_ns[pid]) / 1000000ULL);
-                        if (h->pid_gop_ms[pid] >= 0) {
-                            tsa_debug(TAG, "PID 0x%04x GOP: %u ms (now=%lu, last=%lu)", pid, h->pid_gop_ms[pid], now, h->pid_last_idr_ns[pid]);
+                        if (h->pid_gop_ms[pid] > 0) {
+                            tsa_debug(TAG, "PID 0x%04x GOP: %u ms (now=%lu, last=%lu)", pid, h->pid_gop_ms[pid], now,
+                                      h->pid_last_idr_ns[pid]);
                         }
                         h->pid_last_gop_n[pid] = h->pid_gop_n[pid];
                         if (h->pid_gop_ms[pid] < h->pid_gop_min[pid]) h->pid_gop_min[pid] = h->pid_gop_ms[pid];
@@ -118,8 +119,10 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* pay, in
                 } else {
                     h->pid_gop_n[pid]++;
                     if (!frame_counted) {
-                        if (info.slice_type == 1) h->pid_b_frames[pid]++;
-                        else h->pid_p_frames[pid]++;
+                        if (info.slice_type == 1)
+                            h->pid_b_frames[pid]++;
+                        else
+                            h->pid_p_frames[pid]++;
                         frame_counted = true;
                     }
                 }

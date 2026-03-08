@@ -15,7 +15,8 @@ struct tsa_handle;
  * @param len Descriptor length
  * @param stream_type Pointer to the current stream type, can be modified by the handler
  */
-typedef void (*tsa_descriptor_handler_t)(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len, uint8_t *stream_type);
+typedef void (*tsa_descriptor_handler_t)(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data,
+                                         uint8_t len, uint8_t *stream_type);
 
 /**
  * @brief Register a descriptor handler
@@ -40,4 +41,4 @@ void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *
  */
 void tsa_descriptors_init(void);
 
-#endif // TSA_DESCRIPTORS_H
+#endif  // TSA_DESCRIPTORS_H

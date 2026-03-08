@@ -38,7 +38,11 @@ void test_pcr_mapping() {
     printf("Test 2: Exactly 1 second worth of PCR ticks...\n");
     // PCR = 27,000,000 (1 second)
     // Base 33-bit = 90,000. 90000 * 300 = 27,000,000
-    pkt[6] = 0x00; pkt[7] = 0x01; pkt[8] = 0x5F; pkt[9] = 0x90; pkt[10] = 0x00;
+    pkt[6] = 0x00;
+    pkt[7] = 0x01;
+    pkt[8] = 0x5F;
+    pkt[9] = 0x90;
+    pkt[10] = 0x00;
 
     tsp_enqueue(h, pkt, 1);
     uint64_t target = h->ts_buffer[(h->tail + 1) % RING_BUFFER_SIZE];

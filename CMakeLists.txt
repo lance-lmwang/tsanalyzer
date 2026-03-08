@@ -61,8 +61,8 @@ add_library(tsp_core STATIC
     src/tsa_descriptors.c
     src/tsa_health.c
     src/tsa_histogram.c
-    src/tsa_exporter_prom.c src/srt_utils.c src/tsa_gateway.c src/srt_ingest.c
-    src/tsa_source.c src/dummy.cpp src/alloc_tracker.c src/spsc_queue.c
+    src/tsa_exporter_prom.c  src/tsa_gateway.c src/srt_ingest.c
+    src/tsa_source.c  src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
     src/mongoose.c src/metrology/nalu_sniffer.c src/tsa_lua.c
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
@@ -76,12 +76,12 @@ add_library(tsp_core STATIC
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set_source_files_properties(src/tsa_simd_avx2.c PROPERTIES COMPILE_FLAGS "-mavx2")
 endif()
-target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
 
 # Main Executables
 macro(tsa_exe name src)
     add_executable(${name} ${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
 endmacro()
 
 tsa_exe(tsp src/tsp_main.c)
@@ -89,7 +89,7 @@ tsa_exe(tsa_cli src/tsa_cli.c)
 target_compile_options(tsa_cli PRIVATE -Wno-all -Wno-extra -Wno-error)
 tsa_exe(tsg src/tsg_main.c)
 target_compile_options(tsg PRIVATE -Wno-all -Wno-extra -Wno-error)
-tsa_exe(tsa_server src/tsa_server.c)
+tsa_exe(tsa_server src/tsa_server_pro.c)
 tsa_exe(tsa_server_pro src/tsa_server_pro.c)
 
 # Standalone Utilities
@@ -104,7 +104,7 @@ tsa_exe(tsa_hls_test tools/tsa_hls_test.c)
 enable_testing()
 macro(tsa_test name src)
     add_executable(${name} tests/${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto)
+    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
     add_test(NAME ${name} COMMAND ${name})
 endmacro()
 

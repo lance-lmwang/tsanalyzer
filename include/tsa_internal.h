@@ -99,6 +99,10 @@ void tsa_mbuf_append_char(tsa_metric_buffer_t* b, char c);
 int tsa_fast_itoa(char* buf, int64_t val);
 int tsa_fast_ftoa(char* buf, float val, int prec);
 
+/* Extended SRT URL Parser: srt://host:port?mode=caller&latency=200&passphrase=abc&pbkeylen=16 */
+int parse_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
+                  int* pbkeylen);
+
 typedef struct {
     uint8_t stream_id;
     bool has_pts;
@@ -117,12 +121,12 @@ ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 
 /* Stream Type IDs (MPEG-TS Standard) */
 #define TSA_TYPE_VIDEO_MPEG2 0x02
-#define TSA_TYPE_VIDEO_H264  0x1b
-#define TSA_TYPE_VIDEO_HEVC  0x24
-#define TSA_TYPE_AUDIO_AAC   0x0f
-#define TSA_TYPE_AUDIO_AC3   0x81
-#define TSA_TYPE_PRIVATE     0x06
-#define TSA_TYPE_SCTE35      0x86
+#define TSA_TYPE_VIDEO_H264 0x1b
+#define TSA_TYPE_VIDEO_HEVC 0x24
+#define TSA_TYPE_AUDIO_AAC 0x0f
+#define TSA_TYPE_AUDIO_AC3 0x81
+#define TSA_TYPE_PRIVATE 0x06
+#define TSA_TYPE_SCTE35 0x86
 
 static inline bool tsa_is_h264(uint8_t type) {
     return type == TSA_TYPE_VIDEO_H264 || type == 0x00 || type == TSA_TYPE_PRIVATE;

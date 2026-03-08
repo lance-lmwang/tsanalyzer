@@ -71,7 +71,7 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
     int pi = ((p[10] & 0x0F) << 8) | p[11];
 
     // Process program-level descriptors
-    for (int d = 12; d < 12 + pi && d < sl + 3 - 4; ) {
+    for (int d = 12; d < 12 + pi && d < sl + 3 - 4;) {
         tsa_descriptors_process(h, pid, &p[d], NULL);
         d += 2 + p[d + 1];
     }

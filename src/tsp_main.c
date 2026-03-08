@@ -8,8 +8,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "tsp.h"
 #include "tsa_log.h"
+#include "tsp.h"
 
 static volatile sig_atomic_t keep_running = 1;
 
@@ -41,8 +41,8 @@ static void print_stats(tsp_handle_t* h, uint32_t ts_per_udp) {
     // Physical bitrate = (UDP Packets/sec) * (TS packets per UDP) * (TS packet size) * 8
     double cur_mbps = (double)udp_pps * ts_per_udp * 188.0 * 8.0 / 1000000.0;
 
-    tsa_info("STATS", "Pkts: %lu, PPS: %lu, Cur Rate: %.2f Mbps, PCR Rate: %.2f Mbps, Drops: %lu",
-             total_ts, udp_pps, cur_mbps, (double)det_rate / 1000000.0, drops);
+    tsa_info("STATS", "Pkts: %lu, PPS: %lu, Cur Rate: %.2f Mbps, PCR Rate: %.2f Mbps, Drops: %lu", total_ts, udp_pps,
+             cur_mbps, (double)det_rate / 1000000.0, drops);
 }
 
 int main(int argc, char* argv[]) {
@@ -150,9 +150,10 @@ int main(int argc, char* argv[]) {
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
-    uint8_t buf[188 * 5000]; // 940KB buffer
+    uint8_t buf[188 * 5000];  // 940KB buffer
     uint64_t last_stats_ns = 0;
-    tsa_info("MAIN", "TsPacer started. Bitrate: %lu bps, Dest: %s:%d", cfg.bitrate, cfg.dest_ip ? cfg.dest_ip : "SRT", cfg.port);
+    tsa_info("MAIN", "TsPacer started. Bitrate: %lu bps, Dest: %s:%d", cfg.bitrate, cfg.dest_ip ? cfg.dest_ip : "SRT",
+             cfg.port);
 
     while (keep_running) {
         size_t n = fread(buf, 1, sizeof(buf), in);

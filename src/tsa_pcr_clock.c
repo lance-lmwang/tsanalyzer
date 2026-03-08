@@ -1,8 +1,10 @@
 #include "tsa_pcr_clock.h"
-#include <string.h>
-#include <math.h>
 
-#define PCR_27MHZ_MAX_VAL (1ULL << 42) // 33-bit * 300 + 9-bit ext actually is smaller, but let's use 2^33 * 300 roughly
+#include <math.h>
+#include <string.h>
+
+#define PCR_27MHZ_MAX_VAL \
+    (1ULL << 42)  // 33-bit * 300 + 9-bit ext actually is smaller, but let's use 2^33 * 300 roughly
 #define PCR_TICKS_PER_NS 0.027
 #define NS_PER_PCR_TICK (1000000000ULL / 27000000.0)
 
@@ -23,16 +25,15 @@ static uint64_t unwrap_pcr(uint64_t current, uint64_t last, uint64_t *unwrapped)
     const uint64_t MOD = (1ULL << 33) * 300;
 
     if (current < last && (last - current) > (MOD / 2)) {
-        // Forward wrap detected (e.g. 0x1FFFFFFFF -> 0x00000000)
+        /* Real Forward Wrap Detected */
         *unwrapped += (MOD - last + current);
-    } else if (current < (last / 10)) {
-        // Massive backward jump detected (e.g. 1000s -> 0s in file loop)
-        // Treat as a forward wrap to keep global timeline monotonic
-        *unwrapped += (MOD - last + current);
+    } else if (current < last) {
+        /* Real Backward Jump (Looping) - DO NOT fake forward jump!
+         * Reset unwrapped to current to signal a restart. */
+        *unwrapped = current;
     } else {
-        // Normal progression (forward or small jitter backward)
-        int64_t diff = (int64_t)current - (int64_t)last;
-        *unwrapped += diff;
+        /* Normal progression */
+        *unwrapped += (current - last);
     }
     return *unwrapped;
 }
@@ -59,7 +60,7 @@ void tsa_pcr_clock_update(tsa_pcr_clock_t *clk, uint64_t pcr_ticks, uint64_t sys
     uint64_t elapsed_pcr_ns = (uint64_t)((clk->unwrapped_pcr_ticks - clk->base_pcr_ticks) * NS_PER_PCR_TICK);
     uint64_t elapsed_sys_ns = sys_ns - clk->base_sys_ns;
 
-    if (elapsed_sys_ns > 1000000000ULL) { // Wait 1s before estimating drift
+    if (elapsed_sys_ns > 1000000000ULL) {  // Wait 1s before estimating drift
         double current_rate = (double)elapsed_pcr_ns / (double)elapsed_sys_ns;
 
         // Clamping: only allow drift within +/- 5000 PPM (0.5%)

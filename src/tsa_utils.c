@@ -435,3 +435,45 @@ struct timespec ns128_to_timespec(int128_t ns) {
     ts.tv_nsec = (long)(ns % NS_PER_SEC);
     return ts;
 }
+
+/* Extended SRT URL Parser: srt://host:port?mode=caller&latency=200&passphrase=abc&pbkeylen=16 */
+int parse_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
+                  int* pbkeylen) {
+    if (strncmp(url, "srt://", 6) != 0) return -1;
+    char buf[256];
+    strncpy(buf, url + 6, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char* query = strchr(buf, '?');
+    if (query) *query++ = '\0';
+    char* colon = strchr(buf, ':');
+    if (!colon) return -1;
+    *colon++ = '\0';
+    strcpy(host, buf);
+    *port = atoi(colon);
+    if (is_listener) *is_listener = (strlen(host) == 0 || strcmp(host, "0.0.0.0") == 0);
+    if (latency) *latency = 120;
+    if (passphrase) passphrase[0] = '\0';
+    if (pbkeylen) *pbkeylen = 0;
+    if (query) {
+        char* q_copy = strdup(query);
+        char* token = strtok(q_copy, "&");
+        while (token) {
+            if (strncmp(token, "mode=", 5) == 0 && is_listener) {
+                if (strcmp(token + 5, "listener") == 0)
+                    *is_listener = 1;
+                else if (strcmp(token + 5, "caller") == 0)
+                    *is_listener = 0;
+            } else if (strncmp(token, "latency=", 8) == 0 && latency) {
+                *latency = atoi(token + 8);
+            } else if (strncmp(token, "passphrase=", 11) == 0 && passphrase) {
+                strncpy(passphrase, token + 11, 127);
+                passphrase[127] = '\0';
+            } else if (strncmp(token, "pbkeylen=", 9) == 0 && pbkeylen) {
+                *pbkeylen = atoi(token + 9);
+            }
+            token = strtok(NULL, "&");
+        }
+        free(q_copy);
+    }
+    return 0;
+}

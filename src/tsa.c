@@ -11,8 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "tsa_internal.h"
 #include "tsa_descriptors.h"
+#include "tsa_internal.h"
 #include "tsa_log.h"
 #include "tsa_plugin.h"
 #include "tsa_simd.h"

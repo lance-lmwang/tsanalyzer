@@ -1,6 +1,7 @@
 #include "tsa_histogram.h"
-#include <string.h>
+
 #include <stdlib.h>
+#include <string.h>
 
 #define NS_PER_MS 1000000ULL
 #define NS_PER_RESOLUTION (TSA_HIST_RESOLUTION_MS * NS_PER_MS)
