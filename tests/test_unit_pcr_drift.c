@@ -1,7 +1,7 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
 
 #include "tsa.h"
 #include "tsa_internal.h"
@@ -77,8 +77,8 @@ int main() {
     /* 🚨 VERIFICATION: Should be close to 100 PPM after enough samples for EMA to converge */
 
     for (int loop = 2; loop <= 100; loop++) {
-        uint64_t wall_ns = 1000000000ULL + (loop * 1000000000ULL);
-        uint64_t pcr = loop * 27002700;
+        uint64_t wall_ns = 1000000000ULL + ((uint64_t)loop * 1000000000ULL);
+        uint64_t pcr = (uint64_t)loop * 27002700ULL;
         make_pcr_packet(pkt, 0x100, pcr, loop % 16);
         tsa_process_packet(h, pkt, wall_ns);
     }

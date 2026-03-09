@@ -255,6 +255,7 @@ struct tsa_handle {
     uint64_t last_pcr_ticks;
     uint64_t last_pcr_arrival_ns;
     uint64_t last_pcr_interval_bitrate_bps;
+    uint16_t master_pcr_pid;
 
     /* Professional Bitrate Calculator */
     struct {
@@ -355,9 +356,9 @@ struct tsa_handle {
 
     /* Professional Metrology (Atomic Monotonic Counter) */
     struct {
-        uint64_t last_snap_bytes;           /* Baseline packets for last snapshot */
-        uint64_t last_bps;                  /* Cached result of last calculation */
-        uint64_t window_start_ns;           /* Start time of current measurement window */
+        uint64_t last_snap_bytes; /* Baseline packets for last snapshot */
+        uint64_t last_bps;        /* Cached result of last calculation */
+        uint64_t window_start_ns; /* Start time of current measurement window */
     } phys_stats;
 
     // SCTE-35 Audit State

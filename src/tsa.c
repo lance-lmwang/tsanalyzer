@@ -137,6 +137,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
     h->last_health_score = 100.0f;
     h->last_pcr_ticks = INVALID_PCR;
+    h->master_pcr_pid = 0x1FFF;
     h->stc_slope_q64 = ((int128_t)1 << 64);
 
     /* Professional Metrology: Window will be initialized on first snapshot or packet */
@@ -473,7 +474,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
 
-    /* 🛡️ Industrial De-duplication: Ignore mirrored packets from PCAP/Loopback
+    /* De-duplication: Ignore mirrored packets from PCAP/Loopback
      * Note: We NEVER apply this to Null packets (0x1FFF) because they legitimately
      * repeat CC=0 for consecutive stuffing packets. */
     static __thread uint16_t last_pid = 0xFFFF;

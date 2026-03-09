@@ -40,6 +40,7 @@ typedef struct {
         uint64_t last_cc_count;
         uint64_t last_bitrate_bps;
         uint64_t last_total_pkts_anchor;
+        uint64_t last_pid_pkts_anchor;
         uint64_t ticks_per_packet_q16;
         double pcr_drift_ppm;
         bool sync_done;

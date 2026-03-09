@@ -28,16 +28,34 @@ Metrology must be verifiable and honest. TsAnalyzer implements a "Discard on Err
 To support complex MPTS streams without "Value Overwriting" or "Scaling Spikes":
 *   **Isolated Contexts**: Each PCR PID maintains its own `br_est` structure (containing anchors and sync flags).
 *   **Independent State Machines**: PCRs from different programs are processed in parallel clock domains.
-*   **Aggregation**: The global `pcr_bitrate_bps` is the algebraic sum of all independent program bitrates.
+*   **Master PCR PID Locking**: The first identified PCR PID is locked as the "System Time Clock (STC) Master" to prevent clock collisions across programs while maintaining independent bitrate settlements.
 
-## 3. Comparison & Mapping
+## 3. Developer Caveats & Pitfalls (Lessons Learned)
 
-| Feature | Industrial Standard | TsAnalyzer Implementation |
-| :--- | :--- | :--- |
-| **Packet Counting** | Interval-based increment | Global Anchor ($P_{total} - P_{anchor}$) |
-| **Sync Check** | PCR pair validation | `br_est.sync_done` flag |
-| **Error Handling** | Reset on CC mismatch | Check `last_cc_count` per window |
-| **Multi-Program** | State machine per PID | `clock_inspectors[pid].br_est` |
+During the implementation of industrial-grade metrology, several critical issues were identified and resolved:
+
+### 3.1 MPTS Clock Collisions
+*   **Issue**: In early versions, every PCR PID attempted to update the global logical STC. Minor differences in PCR sampling led to STC jumps, causing all bitrate calculations to spike or drop to zero.
+*   **Fix**: Implemented `master_pcr_pid` locking. Only the master PID drives the global STC regression, while other PIDs perform isolated anchor-based settlements.
+
+### 3.2 Clock Domain Hijacking in LIVE Mode
+*   **Issue**: Using logical STC for physical bitrate (L2 rate) in `LIVE` mode caused spikes. Processing bursts (e.g., clearing a backlog) appeared as high bitrates (e.g., 600Mbps for a 10Mbps stream) because many packets were processed in a tiny slice of logical time.
+*   **Fix**: Physical bitrate MUST use **CLOCK_MONOTONIC** in `LIVE` mode. Logical STC is only used in `REPLAY` mode for determinism.
+
+### 3.3 Minimum Settlement Window
+*   **Issue**: Windows smaller than 500ms amplified OS scheduling jitter into bitrate "noise" or "jittery spikes".
+*   **Fix**: Enforced a **500ms minimum sampling window**. Bitrate updates are deferred until at least 500ms of real wall-clock time has elapsed.
+
+### 3.4 Aggregate Bitrate Double-Counting
+*   **Issue**: `pcr_bitrate_bps` jumped to 20Mbps for 10Mbps streams because the sum included both PCR-calculated mux rates and snapshot-estimated essence rates.
+*   **Fix**:
+    1.  The PCR engine calculates the high-precision Program Rate.
+    2.  The Snapshot logic provides fallback estimation ONLY for non-PCR PIDs.
+    3.  `pcr_bitrate_bps` is defined as the sum of all individual PID contributions where PCR-based values take precedence.
+
+### 3.5 Pacer Burst Management
+*   **Issue**: TsPacer attempted to "catch up" with line speed (2Gbps+) during file loops or network lag, overwhelming the metrology engine.
+*   **Fix**: Reduced queue sizes and implemented "Lag Throttling" where the pacer shifts its base clock forward instead of bursting to catch up.
 
 ## 4. Conclusion
-By aligning with the anchor-based model, TsAnalyzer eliminates software-induced jitter from its statistics. This methodology provides a stable, "linear" bitrate report that matches the performance of high-end hardware probes.
+By aligning with the anchor-based model and strictly isolating clock domains, TsAnalyzer provides a stable, carrier-grade bitrate report that remains accurate under high CPU load and complex MPTS scenarios.

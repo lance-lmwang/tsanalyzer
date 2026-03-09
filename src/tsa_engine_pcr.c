@@ -51,7 +51,7 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
         h->live->pid_is_referenced[pid] = true;
         tsa_update_pid_tracker(h, pid);
 
-        /* 🕰️ Capture baseline BEFORE update for accurate drift measurement */
+        /* Capture baseline BEFORE update for accurate drift measurement */
         uint64_t last_local_ns = h->clock_inspectors[pid].last_pcr_local_ns;
 
         // Update the ClockInspector (handles jitter calculation)
@@ -66,13 +66,19 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 
         /* Layer 3: Synchronized anchor-based metrology (Per-PID context) */
         uint64_t pid_pkts_now = h->live->pid_packet_count[pid];
-        uint64_t pkts_in_interval = (pid_pkts_now >= h->clock_inspectors[pid].br_est.last_total_pkts_anchor) ?
-                                    (pid_pkts_now - h->clock_inspectors[pid].br_est.last_total_pkts_anchor) : 0;
+        uint64_t total_pkts_now = h->live->total_ts_packets;
+        uint64_t pkts_in_interval_mux = (total_pkts_now >= h->clock_inspectors[pid].br_est.last_total_pkts_anchor)
+                                            ? (total_pkts_now - h->clock_inspectors[pid].br_est.last_total_pkts_anchor)
+                                            : 0;
+        uint64_t pkts_in_interval_pid = (pid_pkts_now >= h->clock_inspectors[pid].br_est.last_pid_pkts_anchor)
+                                            ? (pid_pkts_now - h->clock_inspectors[pid].br_est.last_pid_pkts_anchor)
+                                            : 0;
 
-        // Piecewise bitrate analysis
+        // Piecewise bitrate analysis (using Mux Rate for timing)
         if (h->clock_inspectors[pid].br_est.sync_done && h->clock_inspectors[pid].br_est.last_bitrate_bps > 0) {
-            uint64_t bits = pkts_in_interval * TS_PACKET_BITS;
-            uint64_t expected = h->clock_inspectors[pid].br_est.last_pcr_ticks + (bits * TS_SYSTEM_CLOCK_HZ / h->clock_inspectors[pid].br_est.last_bitrate_bps);
+            uint64_t bits = pkts_in_interval_mux * TS_PACKET_BITS;
+            uint64_t expected = h->clock_inspectors[pid].br_est.last_pcr_ticks +
+                                (bits * TS_SYSTEM_CLOCK_HZ / h->clock_inspectors[pid].br_est.last_bitrate_bps);
             int64_t diff = (int64_t)pt - (int64_t)expected;
             if (diff < -((int64_t)1 << 41))
                 diff += ((int64_t)1 << 42);
@@ -81,83 +87,99 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
             h->live->pcr_accuracy_ns_piecewise = (double)diff * 1000.0 / 27.0;
         }
 
-        // Real-time Regression Trigger
-        ts_pcr_window_add(&h->pcr_window, now, pcr_ns, pkts_in_interval);
-        ts_pcr_window_add(&h->pcr_long_window, now, pcr_ns, pkts_in_interval);
-
-        if (!h->stc_locked) {
-            h->stc_ns = pcr_ns;
-            h->stc_locked = true;
+        // Real-time Regression Trigger (Follow only one PID for global STC to avoid MPTS collision)
+        bool is_master = false;
+        if (h->master_pcr_pid == 0x1FFF) {
+            h->master_pcr_pid = pid;
+            tsa_info(TAG, "Locking global STC to Master PCR PID 0x%04x", pid);
+        }
+        if (h->master_pcr_pid == pid) {
+            is_master = true;
         }
 
-        if (++ctx->pcr_count_since_regress >= 16) {
-            double sl = 1.0, ic = 0.0;
-            int64_t pa = 0;
-            if (ts_pcr_window_regress(&h->pcr_window, &sl, &ic, &pa) == 0) {
-                h->stc_slope_q64 = (int128_t)(sl * 18446744073709551616.0);
-                h->stc_intercept_q64 = (int128_t)(ic * 18446744073709551616.0);
-                h->live->pcr_accuracy_ns = (double)pa;
-                double instant_drift = (sl - 1.0) * 1000000.0;
-                if (instant_drift > 1000000.0)
-                    instant_drift = 1000000.0;
-                else if (instant_drift < -1000000.0)
-                    instant_drift = -1000000.0;
-                h->live->pcr_drift_ppm = (h->live->pcr_drift_ppm * 0.9) + (instant_drift * 0.1);
-                h->stc_wall_drift_ppm = h->live->pcr_drift_ppm;
+        if (is_master) {
+            ts_pcr_window_add(&h->pcr_window, now, pcr_ns, pkts_in_interval_mux);
+            ts_pcr_window_add(&h->pcr_long_window, now, pcr_ns, pkts_in_interval_mux);
+
+            if (!h->stc_locked) {
+                h->stc_ns = pcr_ns;
+                h->stc_locked = true;
             }
-            ctx->pcr_count_since_regress = 0;
+
+            if (++ctx->pcr_count_since_regress >= 16) {
+                double sl = 1.0, ic = 0.0;
+                int64_t pa = 0;
+                if (ts_pcr_window_regress(&h->pcr_window, &sl, &ic, &pa) == 0) {
+                    h->stc_slope_q64 = (int128_t)(sl * 18446744073709551616.0);
+                    h->stc_intercept_q64 = (int128_t)(ic * 18446744073709551616.0);
+                    h->live->pcr_accuracy_ns = (double)pa;
+                    double instant_drift = (sl - 1.0) * 1000000.0;
+                    if (instant_drift > 1000000.0)
+                        instant_drift = 1000000.0;
+                    else if (instant_drift < -1000000.0)
+                        instant_drift = -1000000.0;
+                    h->live->pcr_drift_ppm = (h->live->pcr_drift_ppm * 0.9) + (instant_drift * 0.1);
+                    h->stc_wall_drift_ppm = h->live->pcr_drift_ppm;
+                }
+                ctx->pcr_count_since_regress = 0;
+            }
         }
 
         /* Constant Bitrate Calculation (libeasyice style) */
         uint64_t current_cc_errors = h->live->cc_loss_count + h->live->cc_duplicate_count;
-        bool seq_break = (h->clock_inspectors[pid].br_est.sync_done && pt < h->clock_inspectors[pid].br_est.last_pcr_ticks);
+        bool seq_break =
+            (h->clock_inspectors[pid].br_est.sync_done && pt < h->clock_inspectors[pid].br_est.last_pcr_ticks);
 
-        /* 🛡️ Integrity Check: Discard window if any packet loss occurred since last PCR */
+        /* Integrity Check: Discard window if any packet loss occurred since last PCR */
         bool integrity_lost = (h->clock_inspectors[pid].br_est.last_cc_count != current_cc_errors);
 
         if (h->clock_inspectors[pid].br_est.sync_done && !seq_break && !integrity_lost) {
             uint64_t dt_ticks = pt - h->clock_inspectors[pid].br_est.last_pcr_ticks;
             if (dt_ticks > 0) {
-                uint64_t bits = pkts_in_interval * TS_PACKET_BITS;
-                uint64_t inst_bps = (uint64_t)(((unsigned __int128)bits * 27000000ULL) / dt_ticks);
+                uint64_t bits_mux = pkts_in_interval_mux * TS_PACKET_BITS;
+                uint64_t inst_bps_mux = (uint64_t)(((unsigned __int128)bits_mux * 27000000ULL) / dt_ticks);
+
+                uint64_t bits_pid = pkts_in_interval_pid * TS_PACKET_BITS;
+                uint64_t inst_bps_pid = (uint64_t)(((unsigned __int128)bits_pid * 27000000ULL) / dt_ticks);
 
                 /* Store result per PID to support MPTS */
-                h->live->pid_bitrate_bps[pid] = inst_bps;
-                h->clock_inspectors[pid].br_est.last_bitrate_bps = inst_bps;
+                h->live->pid_bitrate_bps[pid] = inst_bps_pid;
+                h->clock_inspectors[pid].br_est.last_bitrate_bps = inst_bps_mux;
 
-                /* 📈 Calculate precise Ticks Per Packet (Q16.16) for pacing analysis */
-                if (pkts_in_interval > 0) {
-                    h->clock_inspectors[pid].br_est.ticks_per_packet_q16 = (dt_ticks << 16) / pkts_in_interval;
+                /* Calculate precise Ticks Per Packet (Q16.16) for pacing analysis */
+                if (pkts_in_interval_mux > 0) {
+                    h->clock_inspectors[pid].br_est.ticks_per_packet_q16 = (dt_ticks << 16) / pkts_in_interval_mux;
                 }
 
-                /* 🕰️ Calculate Real-time PPM Drift (relative to local wall clock) */
-                if (h->config.is_live) {
-                    uint64_t wall_dt_ns = (now > last_local_ns && last_local_ns > 0) ? (now - last_local_ns) : 0;
-                    if (wall_dt_ns > 0) {
-                        double pcr_duration_ns = (double)dt_ticks * 1000.0 / 27.0;
-                        double instant_drift_ppm = ((pcr_duration_ns - (double)wall_dt_ns) / (double)wall_dt_ns) * 1000000.0;
+                /* Calculate Real-time PPM Drift (relative to local wall clock) */
+                uint64_t wall_dt_ns = (now > last_local_ns && last_local_ns > 0) ? (now - last_local_ns) : 0;
+                if (wall_dt_ns > 0) {
+                    double pcr_duration_ns = (double)dt_ticks * 1000.0 / 27.0;
+                    double instant_drift_ppm =
+                        ((pcr_duration_ns - (double)wall_dt_ns) / (double)wall_dt_ns) * 1000000.0;
 
-                        /* Apply smoothing EMA (10% instant, 90% history) */
-                        h->clock_inspectors[pid].br_est.pcr_drift_ppm =
-                            (h->clock_inspectors[pid].br_est.pcr_drift_ppm * 0.9) + (instant_drift_ppm * 0.1);
+                    /* Apply smoothing EMA (10% instant, 90% history) */
+                    h->clock_inspectors[pid].br_est.pcr_drift_ppm =
+                        (h->clock_inspectors[pid].br_est.pcr_drift_ppm * 0.9) + (instant_drift_ppm * 0.1);
 
-                        /* Export to live stats for this PID */
-                        h->live->pcr_drift_ppm = h->clock_inspectors[pid].br_est.pcr_drift_ppm;
-                    }
-                } else {
-                    h->clock_inspectors[pid].br_est.pcr_drift_ppm = 0.0;
-                    h->live->pcr_drift_ppm = 0.0;
+                    /* Export to live stats for this PID */
+                    h->live->pcr_drift_ppm = h->clock_inspectors[pid].br_est.pcr_drift_ppm;
                 }
 
-                tsa_debug(TAG, "PCR Bitrate Settlement [PID 0x%04x]: pkts=%lu, dt_ticks=%lu, bitrate=%lu bps, tpp=%.2f, drift=%.1f ppm",
-                          pid, (unsigned long)pkts_in_interval, (unsigned long)dt_ticks, (unsigned long)inst_bps,
-                          (double)h->clock_inspectors[pid].br_est.ticks_per_packet_q16 / 65536.0,
-                          h->clock_inspectors[pid].br_est.pcr_drift_ppm);                /* 🔄 Immediate MPTS Aggregation: Update global rate now
-                 * Note: We only sum bitrates from PIDs seen in the last 5 seconds to avoid 'zombie' values. */
+                tsa_debug(
+                    TAG,
+                    "PCR Bitrate Settlement [PID 0x%04x]: pkts=%lu, dt_ticks=%lu, bitrate=%lu bps, tpp=%.2f, "
+                    "drift=%.1f ppm",
+                    pid, (unsigned long)pkts_in_interval_mux, (unsigned long)dt_ticks, (unsigned long)inst_bps_mux,
+                    (double)h->clock_inspectors[pid].br_est.ticks_per_packet_q16 / 65536.0,
+                    h->clock_inspectors[pid].br_est.pcr_drift_ppm); /* Immediate MPTS Aggregation: Update global rate
+                                                                     * now Note: We only sum bitrates from PIDs seen in
+                                                                     * the last 5 seconds to avoid 'zombie' values. */
                 uint64_t total_br = 0;
                 for (int i = 0; i < TS_PID_MAX; i++) {
                     if (h->live->pid_bitrate_bps[i] > 0) {
-                        if (now > h->live->pid_last_seen_ns[i] && (now - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
+                        if (now > h->live->pid_last_seen_ns[i] &&
+                            (now - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
                             total_br += h->live->pid_bitrate_bps[i];
                         } else if (now <= h->live->pid_last_seen_ns[i]) {
                             /* Time might be stationary in tests */
@@ -168,17 +190,19 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
                 h->live->pcr_bitrate_bps = total_br;
 
                 h->clock_inspectors[pid].br_est.last_pcr_ticks = pt;
-                h->clock_inspectors[pid].br_est.last_total_pkts_anchor = pid_pkts_now;
+                h->clock_inspectors[pid].br_est.last_total_pkts_anchor = total_pkts_now;
+                h->clock_inspectors[pid].br_est.last_pid_pkts_anchor = pid_pkts_now;
                 h->clock_inspectors[pid].br_est.last_cc_count = current_cc_errors;
             }
         } else {
             /* Initial sync, sequence break, or CC error: Reset baseline to ensure next window is accurate */
             if (integrity_lost && !seq_break) {
-                tsa_warn(TAG, "PID 0x%04x: Metrology window discarded due to CC error (Pkts lost: %lu)",
-                         pid, current_cc_errors - h->clock_inspectors[pid].br_est.last_cc_count);
+                tsa_warn(TAG, "PID 0x%04x: Metrology window discarded due to CC error (Pkts lost: %lu)", pid,
+                         current_cc_errors - h->clock_inspectors[pid].br_est.last_cc_count);
             }
             h->clock_inspectors[pid].br_est.last_pcr_ticks = pt;
-            h->clock_inspectors[pid].br_est.last_total_pkts_anchor = pid_pkts_now;
+            h->clock_inspectors[pid].br_est.last_total_pkts_anchor = total_pkts_now;
+            h->clock_inspectors[pid].br_est.last_pid_pkts_anchor = pid_pkts_now;
             h->clock_inspectors[pid].br_est.last_cc_count = current_cc_errors;
             h->clock_inspectors[pid].br_est.sync_done = true;
             h->live->pid_bitrate_bps[pid] = h->clock_inspectors[pid].br_est.last_bitrate_bps;

@@ -13,7 +13,7 @@
 
 #define TS_PACKET_SIZE 188
 #define TS_PACKET_BITS (TS_PACKET_SIZE * 8)
-#define RING_BUFFER_SIZE (1024 * 1024)
+#define RING_BUFFER_SIZE (16 * 1024)
 
 #ifndef INVALID_PCR
 #define INVALID_PCR ((uint64_t)-1)

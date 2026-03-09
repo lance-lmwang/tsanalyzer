@@ -92,8 +92,8 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
             inspector->pcr_count = 1;
 
             if (is_live) {
-                tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms, A-Gap: %.2f ms. Resetting sync.", inspector->pid,
-                          (double)pcr_delta / 27000.0, (double)arrival_delta_ns / 1000000.0);
+                tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms, A-Gap: %.2f ms. Resetting sync.",
+                          inspector->pid, (double)pcr_delta / 27000.0, (double)arrival_delta_ns / 1000000.0);
             } else {
                 tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms. Resetting sync.", inspector->pid,
                           (double)pcr_delta / 27000.0);

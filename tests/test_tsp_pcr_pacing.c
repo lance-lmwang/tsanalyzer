@@ -29,6 +29,8 @@ int main() {
     printf(">>> Testing TSP Pacer: PCR-to-Wall-Clock Synchronization...\n");
 
     tsp_config_t cfg = {0};
+    cfg.mode = TSPACER_MODE_PCR;
+    cfg.pcr_pid = 0x100;
     /* We intentionally set a WRONG bitrate (20Mbps)
      * but the file PCRs will be at 10Mbps.
      * A PCR-driven pacer MUST follow the PCR, not this 20Mbps config. */
@@ -44,29 +46,29 @@ int main() {
     uint64_t pcr_step = 27000 * 100;  // 100ms
 
     printf("[STEP 1] Enqueueing PCR-timed packets...\n");
-    for (int i = 0; i < 5; i++) {
+    uint64_t t_prev = 0;
+    for (int i = 0; i < 10; i++) {
         create_pcr_pkt(pkts, pcr);
-        // We simulate the gap by adding dummy packets in between
         tsp_enqueue(h, pkts, 1);
+
+        extern uint64_t tsp_get_total_packets_queued(tsp_handle_t * h);
+        extern uint64_t tsp_debug_get_scheduled_time(tsp_handle_t * h, int idx);
+
+        uint64_t total = tsp_get_total_packets_queued(h);
+        uint64_t t_now = tsp_debug_get_scheduled_time(h, total - 1);
+
+        if (i > 0) {
+            double diff_ms = (double)(t_now - t_prev) / 1000000.0;
+            printf("   PCR %d scheduled at +%.2f ms\n", i, diff_ms);
+            /* Gap should be ~100ms regardless of the 20Mbps bitrate setting */
+            if (diff_ms < 90.0 || diff_ms > 110.0) {
+                printf("[FAIL] PCR packet %d scheduled at wrong time: %.2f ms\n", i, diff_ms);
+                tsp_destroy(h);
+                return 1;
+            }
+        }
+        t_prev = t_now;
         pcr += pcr_step;
-    }
-
-    /* Verify the scheduled times in the pacer's internal buffer */
-    /* If the pacer is purely bitrate based, the 2nd packet will be scheduled
-     * at (188*8 / 20Mbps) = ~75us after the 1st.
-     * If it's PCR based, it should be ~100ms after. */
-
-    extern uint64_t tsp_debug_get_scheduled_time(tsp_handle_t * h, int idx);
-    uint64_t t0 = tsp_debug_get_scheduled_time(h, 0);
-    uint64_t t1 = tsp_debug_get_scheduled_time(h, 1);
-
-    double diff_ms = (double)(t1 - t0) / 1000000.0;
-    printf("[INFO] Interval between scheduled packets: %.2f ms\n", diff_ms);
-
-    if (diff_ms < 1.0) {
-        printf("[FAIL] Pacer is ignoring PCR and using fixed bitrate! (Interval too small)\n");
-        tsp_destroy(h);
-        return 1;  // This is the current failure state
     }
 
     printf("[PASS] Pacer correctly followed PCR timing.\n");

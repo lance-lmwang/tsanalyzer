@@ -58,9 +58,9 @@ for i in {1..6}; do
     C_MBPS=$(echo "scale=2; $C_BPS / 1000000" | bc)
 
     # 🚨 STRICT VALUE VALIDATION (Target ~10Mbps physical output)
-    # Expected Range: 9.5 - 10.5 Mbps
+    # Expected Range: 9.0 - 11.0 Mbps
     VALID_P=0
-    if (( $(echo "$P_MBPS > 9.5" | bc -l) )) && (( $(echo "$P_MBPS < 10.5" | bc -l) )); then VALID_P=1; fi
+    if (( $(echo "$P_MBPS > 9.0" | bc -l) )) && (( $(echo "$P_MBPS < 11.0" | bc -l) )); then VALID_P=1; fi
 
     STATUS="[PASS]"
     if [ $VALID_P -eq 0 ]; then

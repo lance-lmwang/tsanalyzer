@@ -35,7 +35,9 @@ static uint64_t get_now_ns() {
 
 static void pacer_sync_wallclock(tsp_handle_t* h, uint64_t pcr, uint64_t now_ns) {
     h->base_pcr_ticks = pcr;
-    h->base_wall_ns = now_ns + 100000000ULL;
+    /* Ensure the new base clock doesn't jump backwards if we are already scheduled in the future */
+    uint64_t next_start = (h->last_scheduled_ns > now_ns) ? h->last_scheduled_ns : now_ns;
+    h->base_wall_ns = next_start + 10000000ULL; /* 10ms guard gap */
     h->last_scheduled_ns = h->base_wall_ns;
     h->last_pcr_wall_ns = h->base_wall_ns;
     h->last_pcr_reset_time = time(NULL);
@@ -89,14 +91,15 @@ static void* tx_loop(void* arg) {
         uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
         uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
         if (head - tail < (uint64_t)BATCH_SIZE) {
-            struct timespec ts = {0, 100000}; nanosleep(&ts, NULL);
+            struct timespec ts = {0, 100000};
+            nanosleep(&ts, NULL);
             continue;
         }
         uint64_t now_ns = get_now_ns();
         uint64_t target_ns = h->ts_buffer[tail % RING_BUFFER_SIZE];
         if (now_ns >= target_ns) {
             if (now_ns > target_ns + 500000000ULL) {
-                tsa_warn(TAG, "Sync Resync (Lag %lu ms)", (now_ns - target_ns)/1000000ULL);
+                tsa_warn(TAG, "Sync Resync (Lag %lu ms)", (now_ns - target_ns) / 1000000ULL);
                 h->base_pcr_ticks = INVALID_PCR;
             }
             for (int i = 0; i < BATCH_SIZE; i++) {
@@ -114,7 +117,8 @@ static void* tx_loop(void* arg) {
         } else {
             uint64_t diff = target_ns - now_ns;
             if (diff > 2000000ULL) {
-                struct timespec sleep_ts = {0, 1000000}; nanosleep(&sleep_ts, NULL);
+                struct timespec sleep_ts = {0, 1000000};
+                nanosleep(&sleep_ts, NULL);
             } else if (diff > 200000ULL) {
                 usleep(0);
             } else {
@@ -139,7 +143,10 @@ static void push_packet(tsp_handle_t* h, const uint8_t* pkt, uint64_t ts_ns) {
 static void push_null_packet(tsp_handle_t* h, uint64_t ts_ns) {
     uint8_t null_pkt[TS_PACKET_SIZE];
     memset(null_pkt, 0xFF, TS_PACKET_SIZE);
-    null_pkt[0] = 0x47; null_pkt[1] = 0x1F; null_pkt[2] = 0xFF; null_pkt[3] = 0x10;
+    null_pkt[0] = 0x47;
+    null_pkt[1] = 0x1F;
+    null_pkt[2] = 0xFF;
+    null_pkt[3] = 0x10;
     push_packet(h, null_pkt, ts_ns);
 }
 
@@ -147,18 +154,21 @@ tsp_handle_t* tsp_create(const tsp_config_t* cfg) {
     tsp_handle_t* h = calloc(1, sizeof(tsp_handle_t));
     if (!h) return NULL;
     h->cfg = *cfg;
+    h->locked_pcr_pid = 0x1FFF;
     h->ring_buffer = malloc(RING_BUFFER_SIZE * TS_PACKET_SIZE);
     h->ts_buffer = malloc(RING_BUFFER_SIZE * sizeof(uint64_t));
     h->fd = socket(AF_INET, SOCK_DGRAM, 0);
     h->srt_sock = SRT_INVALID_SOCK;
     h->base_pcr_ticks = INVALID_PCR;
     h->last_pcr_val_tx = INVALID_PCR;
-    h->locked_pcr_pid = 0x1FFF; // Initialize as invalid
+    h->locked_pcr_pid = 0x1FFF;  // Initialize as invalid
     if (cfg->url) {
         if (setup_srt(h, cfg->url) != 0) {
-            free(h->ring_buffer); free(h->ts_buffer);
+            free(h->ring_buffer);
+            free(h->ts_buffer);
             if (h->fd >= 0) close(h->fd);
-            free(h); return NULL;
+            free(h);
+            return NULL;
         }
     } else if (cfg->dest_ip) {
         h->dest_addr.sin_family = AF_INET;
@@ -192,39 +202,42 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
                 }
                 if (pid != h->locked_pcr_pid) has_pcr = false;
             }
+
+            if (has_pcr) {
+                uint64_t b = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
+                             ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
+                uint64_t pcr = b * 300 + (((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11]);
+
+                if (h->base_pcr_ticks == INVALID_PCR || pcr < h->last_pcr_val_tx) {
+                    pacer_sync_wallclock(h, pcr, now_ns);
+                } else {
+                    uint64_t pcr_delta = pcr - h->base_pcr_ticks;
+                    uint64_t target_wall_ns = h->base_wall_ns + (pcr_delta * 1000ULL / 27ULL);
+
+                    if (target_wall_ns > h->last_pcr_wall_ns) {
+                        uint64_t br = ((h->pkts_since_pcr + 1) * (uint64_t)TS_PACKET_BITS * 1000000000ULL) /
+                                      (target_wall_ns - h->last_pcr_wall_ns);
+                        h->estimated_bitrate = h->estimated_bitrate ? (h->estimated_bitrate * 15 + br) / 16 : br;
+                    }
+
+                    uint64_t target_br = h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
+                    if (target_br > 0) {
+                        uint64_t ns_per_pkt = ((uint64_t)TS_PACKET_BITS * 1000000000ULL) / target_br;
+                        while (h->last_scheduled_ns + ns_per_pkt < target_wall_ns) {
+                            h->last_scheduled_ns += ns_per_pkt;
+                            push_null_packet(h, h->last_scheduled_ns);
+                            if (atomic_load(&h->head) - atomic_load(&h->tail) >= RING_BUFFER_SIZE - 20) break;
+                        }
+                    }
+                    h->last_scheduled_ns = target_wall_ns;
+                    h->last_pcr_wall_ns = target_wall_ns;
+                    h->pkts_since_pcr = 0;
+                }
+                h->last_pcr_val_tx = pcr;
+            }
         }
 
-        if (h->cfg.mode == TSPACER_MODE_PCR && has_pcr) {
-            uint64_t b = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
-                         ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
-            uint64_t pcr = b * 300 + (((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11]);
-
-            if (h->base_pcr_ticks == INVALID_PCR || pcr < h->last_pcr_val_tx) {
-                pacer_sync_wallclock(h, pcr, now_ns);
-            } else {
-                uint64_t pcr_delta = pcr - h->base_pcr_ticks;
-                uint64_t target_wall_ns = h->base_wall_ns + (pcr_delta * 1000ULL / 27ULL);
-
-                if (target_wall_ns > h->last_pcr_wall_ns) {
-                    uint64_t br = ((h->pkts_since_pcr + 1) * (uint64_t)TS_PACKET_BITS * 1000000000ULL) / (target_wall_ns - h->last_pcr_wall_ns);
-                    h->estimated_bitrate = h->estimated_bitrate ? (h->estimated_bitrate * 15 + br) / 16 : br;
-                }
-
-                uint64_t target_br = h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
-                if (target_br > 0) {
-                    uint64_t ns_per_pkt = ((uint64_t)TS_PACKET_BITS * 1000000000ULL) / target_br;
-                    while (h->last_scheduled_ns + ns_per_pkt < target_wall_ns) {
-                        h->last_scheduled_ns += ns_per_pkt;
-                        push_null_packet(h, h->last_scheduled_ns);
-                        if (atomic_load(&h->head) - atomic_load(&h->tail) >= RING_BUFFER_SIZE - 20) break;
-                    }
-                }
-                h->last_scheduled_ns = target_wall_ns;
-                h->last_pcr_wall_ns = target_wall_ns;
-                h->pkts_since_pcr = 0;
-            }
-            h->last_pcr_val_tx = pcr;
-        } else {
+        if (h->cfg.mode != TSPACER_MODE_PCR || !has_pcr) {
             uint64_t br = h->cfg.bitrate ? h->cfg.bitrate : (h->estimated_bitrate ? h->estimated_bitrate : 10000000);
             uint64_t ns_per_pkt = ((uint64_t)TS_PACKET_BITS * 1000000000ULL) / br;
             if (h->last_scheduled_ns == 0) h->last_scheduled_ns = now_ns;
@@ -252,22 +265,34 @@ void tsp_destroy(tsp_handle_t* h) {
     if (atomic_load(&h->running)) tsp_stop(h);
     if (h->srt_enabled) srt_close(h->srt_sock);
     if (h->fd >= 0) close(h->fd);
-    free(h->ring_buffer); free(h->ts_buffer);
+    free(h->ring_buffer);
+    free(h->ts_buffer);
     free(h);
 }
 
 /* --- API --- */
-uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) { return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate; }
-uint64_t tsp_get_bitrate(tsp_handle_t* h) { return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate; }
-uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h) { return h->estimated_bitrate; }
-uint64_t tsp_get_total_packets(tsp_handle_t* h) { return atomic_load(&h->total_ts_sent); }
+uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) {
+    return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
+}
+uint64_t tsp_get_bitrate(tsp_handle_t* h) {
+    return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
+}
+uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h) {
+    return h->estimated_bitrate;
+}
+uint64_t tsp_get_total_packets(tsp_handle_t* h) {
+    return atomic_load(&h->total_ts_sent);
+}
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h) {
     uint64_t br = tsp_get_bitrate(h);
     int ts_per_udp = h->cfg.ts_per_udp ? h->cfg.ts_per_udp : 7;
     return br / (ts_per_udp * TS_PACKET_SIZE * 8);
 }
-int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate, uint64_t* pps) {
-    (void)max_j; (void)min_j; (void)drops;
+int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min_j, uint64_t* drops, uint64_t* det_rate,
+                  uint64_t* pps) {
+    (void)max_j;
+    (void)min_j;
+    (void)drops;
     if (!h) return -1;
     if (total) *total = atomic_load(&h->total_ts_sent);
     if (det_rate) *det_rate = tsp_get_bitrate(h);
@@ -275,7 +300,8 @@ int tsp_get_stats(tsp_handle_t* h, uint64_t* total, int64_t* max_j, int64_t* min
         uint64_t now = get_now_ns();
         uint64_t cur_t = atomic_load(&h->total_udp_sent);
         if (h->last_ns > 0 && now > h->last_ns) *pps = (cur_t - h->last_t) * 1000000000ULL / (now - h->last_ns);
-        h->last_t = cur_t; h->last_ns = now;
+        h->last_t = cur_t;
+        h->last_ns = now;
     }
     return 0;
 }
@@ -288,28 +314,51 @@ int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s) {
     uint64_t cur_t = atomic_load(&h->total_udp_sent);
     if (h->last_ns > 0 && s->timestamp_ns > h->last_ns)
         s->pps = (cur_t - h->last_t) * 1000000000ULL / (s->timestamp_ns - h->last_ns);
-    h->last_t = cur_t; h->last_ns = s->timestamp_ns;
+    h->last_t = cur_t;
+    h->last_ns = s->timestamp_ns;
     return 0;
 }
-pthread_t tsp_get_thread(tsp_handle_t* h) { return h->thread; }
+pthread_t tsp_get_thread(tsp_handle_t* h) {
+    return h->thread;
+}
+
 uint64_t tsp_debug_get_scheduled_time(tsp_handle_t* h, int idx) {
-    uint64_t tail = atomic_load(&h->tail);
+    uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
     return h->ts_buffer[(tail + idx) % RING_BUFFER_SIZE];
 }
+
+uint64_t tsp_get_total_packets_queued(tsp_handle_t* h) {
+    if (!h) return 0;
+    uint64_t head = atomic_load_explicit(&h->head, memory_order_acquire);
+    uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);
+    return head - tail;
+}
+
 spsc_ring_t* spsc_ring_create(size_t sz) {
- spsc_ring_t* r = calloc(1, sizeof(struct spsc_ring)); r->sz = sz; r->buffer = malloc(sz * 8); return r; }
-void spsc_ring_destroy(spsc_ring_t* r) { if (r) { free(r->buffer); free(r); } }
+    spsc_ring_t* r = calloc(1, sizeof(struct spsc_ring));
+    r->sz = sz;
+    r->buffer = malloc(sz * 8);
+    return r;
+}
+void spsc_ring_destroy(spsc_ring_t* r) {
+    if (r) {
+        free(r->buffer);
+        free(r);
+    }
+}
 int spsc_ring_push(spsc_ring_t* r, const uint8_t* data, size_t sz) {
     (void)sz;
     uint64_t head = atomic_load(&r->head), tail = atomic_load(&r->tail);
     if (head - tail >= r->sz) return -1;
     memcpy(r->buffer + (head % r->sz) * 8, data, 8);
-    atomic_store(&r->head, head + 1); return 0;
+    atomic_store(&r->head, head + 1);
+    return 0;
 }
 int spsc_ring_pop(spsc_ring_t* r, uint8_t* data, size_t sz) {
     (void)sz;
     uint64_t head = atomic_load(&r->head), tail = atomic_load(&r->tail);
     if (head == tail) return -1;
     memcpy(data, r->buffer + (tail % r->sz) * 8, 8);
-    atomic_store(&r->tail, tail + 1); return 0;
+    atomic_store(&r->tail, tail + 1);
+    return 0;
 }

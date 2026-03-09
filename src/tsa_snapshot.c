@@ -9,17 +9,28 @@
 static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
     uint64_t curr_pkts = h->live->total_ts_packets;
 
-    if (h->phys_stats.window_start_ns == 0 || n < h->phys_stats.window_start_ns) {
-        h->phys_stats.window_start_ns = n;
+    /* Metrology Standard: For physical bitrate, use independent monotonic clock in LIVE mode
+     * to avoid bias from processing bursts or logic-clock jumps. */
+    uint64_t now_metrology;
+    if (h->config.op_mode == TSA_MODE_LIVE) {
+        now_metrology = (uint64_t)ts_now_ns128();
+    } else {
+        now_metrology = n;
+    }
+
+    if (h->phys_stats.window_start_ns == 0 || now_metrology < h->phys_stats.window_start_ns) {
+        h->phys_stats.window_start_ns = now_metrology;
         h->phys_stats.last_snap_bytes = curr_pkts;
         h->live->physical_bitrate_bps = h->phys_stats.last_bps;
         return;
     }
 
-    uint64_t dt = n - h->phys_stats.window_start_ns;
+    uint64_t dt = now_metrology - h->phys_stats.window_start_ns;
 
-    /* Threshold: Update physical bitrate only if at least 1ms has passed (test/replay safe) */
-    if (dt < 1000000ULL) {
+    /* Metrology Standard: sampling window for physical bitrate MUST be enforced at a minimum of 500ms
+     * to ensure stability against OS scheduling jitter. (REPLAY mode allows 100ms). */
+    uint64_t min_window = (h->config.op_mode == TSA_MODE_REPLAY) ? 100000000ULL : 500000000ULL;
+    if (dt < min_window) {
         h->live->physical_bitrate_bps = h->phys_stats.last_bps;
         return;
     }
@@ -28,31 +39,35 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
     uint64_t dp = (curr_pkts >= h->phys_stats.last_snap_bytes) ? (curr_pkts - h->phys_stats.last_snap_bytes) : 0;
 
     if (dp > 0) {
-        /* Total TS Bitrate = (Packets * 1504 * 1e9) / DeltaTime_ns */
+        /* Total TS Bitrate = (ΔUnique_Packets * 1504 * 1e9) / ΔWall_Clock_ns */
         uint64_t inst_bps = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
 
-        /* Smooth for display stability (replay/test uses less smoothing for accuracy) */
+        /* Apply strong EMA smoothing (20% instant / 80% history) for stable "line speed". */
+        float alpha = (h->config.op_mode == TSA_MODE_REPLAY) ? 0.5f : 0.2f;
         if (h->phys_stats.last_bps == 0) {
             h->phys_stats.last_bps = inst_bps;
         } else {
-            h->phys_stats.last_bps = (uint64_t)(0.5 * inst_bps + 0.5 * h->phys_stats.last_bps);
+            h->phys_stats.last_bps = (uint64_t)(alpha * inst_bps + (1.0f - alpha) * h->phys_stats.last_bps);
         }
 
-        tsa_debug("METROLOGY", "Physical Bitrate Update: dp=%lu, dt_ns=%lu, instant=%lu bps, smooth=%lu bps",
-                  (unsigned long)dp, (unsigned long)dt, (unsigned long)inst_bps, (unsigned long)h->phys_stats.last_bps);
+        if (h->phys_stats.last_bps > TS_MAX_BITRATE_BPS) h->phys_stats.last_bps = TS_MAX_BITRATE_BPS;
 
-        if (h->phys_stats.last_bps > TS_MAX_BITRATE_BPS) h->phys_stats.last_bps = TS_MAX_BITRATE_BPS;    } else {
+        tsa_debug(TAG, "Physical Bitrate Settlement: dp=%lu, dt_ns=%lu, bitrate=%lu bps (%s)", (unsigned long)dp,
+                  (unsigned long)dt, (unsigned long)h->phys_stats.last_bps,
+                  (h->config.op_mode == TSA_MODE_LIVE ? "wall" : "logic"));
+    } else {
         h->phys_stats.last_bps = 0;
     }
 
     h->phys_stats.last_snap_bytes = curr_pkts;
-    h->phys_stats.window_start_ns = n;
+    h->phys_stats.window_start_ns = now_metrology;
     h->live->physical_bitrate_bps = h->phys_stats.last_bps;
 
     /* Fallback for MDI stats */
     uint64_t wall_dt = (n > h->last_snap_wall_ns) ? (n - h->last_snap_wall_ns) : 100000000ULL;
     if (wall_dt < 1000000ULL) wall_dt = 100000000ULL;
-    h->live->mdi_mlr_pkts_s = (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * NS_PER_SEC) / wall_dt;
+    h->live->mdi_mlr_pkts_s =
+        (double)((h->live->cc_loss_count - h->prev_snap_base->cc_loss_count) * NS_PER_SEC) / wall_dt;
     h->live->mdi_df_ms = (double)h->live->pcr_jitter_max_ns / 1000000.0;
     h->live->stream_utc_ms = h->stc_ns / 1000000ULL;
 }
@@ -154,27 +169,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         tsa_tstd_drain(h, h->pid_active_list[i]);
     }
 
-    /* For bitrates and FPS, wall-clock delta is much more stable than STC (which can jump). */
-    uint64_t wall_dt = (n > h->last_snap_wall_ns) ? (n - h->last_snap_wall_ns) : 0;
-    if (wall_dt < 1000000ULL) wall_dt = 100000000ULL;  // Default to 100ms if first snap or jitter
+    /* For bitrates and FPS, use logic clock (STC) if in REPLAY mode and locked,
+     * otherwise fall back to wall-clock. This is critical for REPLAY mode accuracy. */
+    bool use_logic = (h->config.op_mode == TSA_MODE_REPLAY && h->stc_locked && dt > 1000000ULL);
+    uint64_t logic_dt = use_logic ? dt : (n - h->last_snap_wall_ns);
+    if (logic_dt < 1000000ULL) logic_dt = 100000000ULL;  // Default to 100ms if jittery
 
-    /* Bitrate calculation based on consistent logic time 'n' */
-    tsa_calc_stream_bitrate(h, n);
-
-    /* Aggregate Business Bitrate (Sum of all isolated PCR PID rates)
-     * Note: We only sum bitrates from PIDs seen recently to avoid 'zombie' values. */
-    uint64_t total_pcr_br = 0;
-    for (int i = 0; i < TS_PID_MAX; i++) {
-        if (h->live->pid_bitrate_bps[i] > 0) {
-            if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
-                total_pcr_br += h->live->pid_bitrate_bps[i];
-            } else if (n <= h->live->pid_last_seen_ns[i]) {
-                total_pcr_br += h->live->pid_bitrate_bps[i];
-            }
-        }
-    }
-    h->live->pcr_bitrate_bps = total_pcr_br;
-
+    /* Bitrate calculation: Physical bitrate follows wall-clock in LIVE to show real line speed,
+     * but follows STC in REPLAY to show the file's intended bitrate. */
+    tsa_calc_stream_bitrate(h, use_logic ? stc : n);
     tsa_eval_tr101290_alarms(h, n, stc);
 
     // --- Industrial Health Scoring ---
@@ -234,15 +237,22 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         if (p >= TS_PID_MAX) continue;
         uint64_t p_pd = h->live->pid_packet_count[p] - h->prev_snap_base->pid_packet_count[p];
         if (p_pd > 0) {
-            uint64_t cb = (p_pd * TS_PACKET_BITS * NS_PER_SEC) / wall_dt;
+            uint64_t cb = (p_pd * TS_PACKET_BITS * NS_PER_SEC) / logic_dt;
             if (cb > TS_MAX_BITRATE_BPS) cb = TS_MAX_BITRATE_BPS;
 
-            float alpha = is_initial ? 0.5f : 0.15f;
-            if (h->live->pid_bitrate_bps[p] == 0)
-                h->live->pid_bitrate_bps[p] = cb;
-            else
-                h->live->pid_bitrate_bps[p] = (uint64_t)(alpha * cb + (1.0f - alpha) * h->live->pid_bitrate_bps[p]);
-        } else if (wall_dt >= 500000000ULL) {
+            /* Protection: Only update PID bitrate if it's NOT a PCR PID.
+             * PCR-based bitrates are handled exclusively by the PCR engine.
+             * This avoids logic-clock jitter and double-counting issues. */
+            bool is_pcr_pid = (h->clock_inspectors[p].initialized);
+
+            if (!is_pcr_pid) {
+                float alpha = is_initial ? 0.5f : 0.15f;
+                if (h->live->pid_bitrate_bps[p] == 0)
+                    h->live->pid_bitrate_bps[p] = cb;
+                else
+                    h->live->pid_bitrate_bps[p] = (uint64_t)(alpha * cb + (1.0f - alpha) * h->live->pid_bitrate_bps[p]);
+            }
+        } else if (logic_dt >= 500000000ULL) {
             h->live->pid_bitrate_bps[p] = 0;
         }
 
@@ -250,12 +260,12 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         uint64_t cur_frames = h->pid_i_frames[p] + h->pid_p_frames[p] + h->pid_b_frames[p];
         uint64_t prev_frames = h->prev_snap_base_frames[p];
         if (cur_frames > prev_frames) {
-            float inst_fps = (float)((cur_frames - prev_frames) * NS_PER_SEC) / wall_dt;
+            float inst_fps = (float)((cur_frames - prev_frames) * NS_PER_SEC) / logic_dt;
             if (h->pid_exact_fps[p] < 0.1)
                 h->pid_exact_fps[p] = inst_fps;
             else
                 h->pid_exact_fps[p] = 0.1f * inst_fps + 0.9f * h->pid_exact_fps[p];
-        } else if (wall_dt >= 2000000000ULL) {
+        } else if (logic_dt >= 2000000000ULL) {
             h->pid_exact_fps[p] = 0;
         }
         h->prev_snap_base_frames[p] = cur_frames;
@@ -320,7 +330,20 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 
     h->live->video_fps = max_fps;
     h->live->gop_ms = max_gop;
-
+    /* Aggregate Business Bitrate (Sum of all individual PID rates)
+     * Now that master_pcr_pid protects global STC stability, we can safely
+     * sum all PID contributions to get the total business bitrate. */
+    uint64_t total_pcr_br = 0;
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        if (h->live->pid_bitrate_bps[i] > 0) {
+            if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
+                total_pcr_br += h->live->pid_bitrate_bps[i];
+            } else if (n <= h->live->pid_last_seen_ns[i]) {
+                total_pcr_br += h->live->pid_bitrate_bps[i];
+            }
+        }
+    }
+    h->live->pcr_bitrate_bps = total_pcr_br;
     /* Populate Snapshot Summary from latest live state before swap */
     sn->summary.master_health = h->last_health_score;
     sn->summary.total_packets = h->live->total_ts_packets;

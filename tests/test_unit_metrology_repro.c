@@ -40,6 +40,7 @@ int test_repro_physical_metrics() {
     printf("Checking Physical Bitrate & Filtering...\n");
     int failed = 0;
     tsa_config_t cfg = {0};
+    cfg.op_mode = TSA_MODE_REPLAY;
     cfg.analysis.enable_reactive_pid_filter = true;
     tsa_handle_t* h = tsa_create(&cfg);
 
@@ -110,6 +111,9 @@ int test_repro_mpts_collision() {
     for (int i = 0; i < 1196; i++) tsa_process_packet(h2, dummy, 0);
     make_pcr_packet(pkt_pcr, 0x100, 2700000);
     tsa_process_packet(h2, pkt_pcr, 0);
+
+    /* 4. Force Snapshot Commit to calculate bitrates for all PIDs (including dummy 0x50) */
+    tsa_commit_snapshot(h2, 100000000ULL); /* 100ms */
 
     printf("   MPTS Rate: %lu bps\n", (unsigned long)h2->live->pcr_bitrate_bps);
 

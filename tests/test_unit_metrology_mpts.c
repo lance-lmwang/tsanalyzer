@@ -1,7 +1,8 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
+
 #include "tsa.h"
 
 #define TS_PKT_SIZE 188
@@ -51,21 +52,28 @@ void test_mpts_bitrate_isolation() {
     printf(">>> Testing MPTS Isolation: Total=%lu, PID_A=%lu, PID_B=%lu\n", total_pkts, pkts_a, pkts_b);
 
     // Initial Sync
-    generate_pcr_pkt(pkt, PID_A, 0); tsa_process_packet(h, pkt, now_ns);
-    generate_pcr_pkt(pkt, PID_B, 0); tsa_process_packet(h, pkt, now_ns);
+    generate_pcr_pkt(pkt, PID_A, 0);
+    tsa_process_packet(h, pkt, now_ns);
+    generate_pcr_pkt(pkt, PID_B, 0);
+    tsa_process_packet(h, pkt, now_ns);
 
     // Data Phase
     for (uint64_t i = 0; i < total_pkts; i++) {
         now_ns += 150000;
         memset(pkt, 0xFF, TS_PKT_SIZE);
         uint16_t pid = (i < pkts_a) ? PID_A : PID_B;
-        pkt[0] = 0x47; pkt[1] = (pid >> 8) & 0x1F; pkt[2] = pid & 0xFF; pkt[3] = 0x10;
+        pkt[0] = 0x47;
+        pkt[1] = (pid >> 8) & 0x1F;
+        pkt[2] = pid & 0xFF;
+        pkt[3] = 0x10;
         tsa_process_packet(h, pkt, now_ns);
     }
 
     // Final PCR Settlement
-    generate_pcr_pkt(pkt, PID_A, interval_ticks); tsa_process_packet(h, pkt, now_ns);
-    generate_pcr_pkt(pkt, PID_B, interval_ticks); tsa_process_packet(h, pkt, now_ns);
+    generate_pcr_pkt(pkt, PID_A, interval_ticks);
+    tsa_process_packet(h, pkt, now_ns);
+    generate_pcr_pkt(pkt, PID_B, interval_ticks);
+    tsa_process_packet(h, pkt, now_ns);
 
     // Force commit to export live stats
     tsa_commit_snapshot(h, now_ns);

@@ -119,10 +119,11 @@ static void* analysis_thread_func(void* arg) {
         if (spsc_queue_pop(g_pkt_queue, &pkt)) {
             tsa_feed_data(h, pkt.data, 188, pkt.timestamp_ns);
 
-            /* Snapshot trigger: every 100ms of virtual time or 5000 packets */
-            if (h->stc_locked && (h->stc_ns - last_snap_vstc >= 100000000ULL)) {
+            /* Snapshot trigger: every 100ms of wall-clock time in LIVE mode */
+            uint64_t now_wall = (uint64_t)ts_now_ns128();
+            if (now_wall - last_snap_vstc >= 100000000ULL) {
                 tsa_commit_snapshot(h, pkt.timestamp_ns);
-                last_snap_vstc = h->stc_ns;
+                last_snap_vstc = now_wall;
             }
         } else {
             struct timespec ts = {0, 1000000}; /* 1ms sleep */
