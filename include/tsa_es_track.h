@@ -28,11 +28,7 @@ typedef struct {
 
     /* PES Accumulator State (ZERO-COPY) */
     struct {
-        enum {
-            TSA_PES_HUNTING,
-            TSA_PES_ACCUMULATING,
-            TSA_PES_FINISHING
-        } state;
+        enum { TSA_PES_HUNTING, TSA_PES_ACCUMULATING, TSA_PES_FINISHING } state;
 
         /* Pointers to packets in global pool instead of local buffer copy */
         tsa_packet_t* refs[TSA_PES_MAX_REFS];

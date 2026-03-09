@@ -23,12 +23,12 @@
 typedef __int128_t int128_t;
 typedef int128_t q64_64;
 
-#define TO_Q64_64(x) ((int128_t)((x) * 18446744073709551616.0))
+#define TO_Q64_64(x) ((int128_t)((x)*18446744073709551616.0))
 #define INT_TO_Q64_64(x) ((int128_t)(x) << 64)
 #define FROM_Q64_64(x) ((double)(x) / 18446744073709551616.0)
 
 typedef uint64_t q32_32;
-#define TO_Q32_32(x) ((uint64_t)((x) * 4294967296.0))
+#define TO_Q32_32(x) ((uint64_t)((x)*4294967296.0))
 
 /* --- Global Limits --- */
 #define MAX_EVENT_QUEUE 1024
@@ -50,16 +50,8 @@ typedef uint64_t q32_32;
 #define TSA_TR101290_PID_TIMEOUT_NS (5000000000ULL)  /* 5s    (P3.x) */
 
 /* --- Enums --- */
-typedef enum {
-    TS_SYNC_HUNTING,
-    TS_SYNC_CONFIRMING,
-    TS_SYNC_LOCKED
-} tsa_sync_state_t;
-typedef enum {
-    TSA_STATUS_VALID = 0,
-    TSA_STATUS_INVALID = 1,
-    TSA_STATUS_DEGRADED = 2
-} tsa_measurement_status_t;
+typedef enum { TS_SYNC_HUNTING, TS_SYNC_CONFIRMING, TS_SYNC_LOCKED } tsa_sync_state_t;
+typedef enum { TSA_STATUS_VALID = 0, TSA_STATUS_INVALID = 1, TSA_STATUS_DEGRADED = 2 } tsa_measurement_status_t;
 
 typedef enum {
     TSA_EVENT_SCTE35,
@@ -83,12 +75,7 @@ typedef enum {
     TSA_EVENT_PES_ERROR
 } tsa_event_type_t;
 
-typedef enum {
-    TS_CC_OK,
-    TS_CC_DUPLICATE,
-    TS_CC_LOSS,
-    TS_CC_OUT_OF_ORDER
-} ts_cc_status_t;
+typedef enum { TS_CC_OK, TS_CC_DUPLICATE, TS_CC_LOSS, TS_CC_OUT_OF_ORDER } ts_cc_status_t;
 
 typedef struct {
     uint64_t last_occurrence_ns;
@@ -141,8 +128,12 @@ ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 #define TSA_TYPE_PRIVATE 0x06
 #define TSA_TYPE_SCTE35 0x86
 
-static inline bool tsa_is_h264(uint8_t type) { return type == TSA_TYPE_VIDEO_H264; }
-static inline bool tsa_is_hevc(uint8_t type) { return type == TSA_TYPE_VIDEO_HEVC; }
+static inline bool tsa_is_h264(uint8_t type) {
+    return type == TSA_TYPE_VIDEO_H264;
+}
+static inline bool tsa_is_hevc(uint8_t type) {
+    return type == TSA_TYPE_VIDEO_HEVC;
+}
 static inline bool tsa_is_video(uint8_t type) {
     return type == TSA_TYPE_VIDEO_H264 || type == TSA_TYPE_VIDEO_HEVC || type == TSA_TYPE_VIDEO_MPEG2;
 }

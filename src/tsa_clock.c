@@ -1,10 +1,10 @@
-#include "tsa_bitstream.h"
 #include "tsa_clock.h"
 
 #include <math.h>
 #include <stdio.h>
 
 #include "tsa.h"
+#include "tsa_bitstream.h"
 #include "tsa_log.h"
 #include "tsa_units.h"
 

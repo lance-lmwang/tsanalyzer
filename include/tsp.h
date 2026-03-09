@@ -16,11 +16,7 @@
 #define TS_PACKET_BITS (TS_PACKET_SIZE * 8)
 #define RING_BUFFER_SIZE (16 * 1024)
 
-typedef enum {
-    TSPACER_MODE_BASIC = 0,
-    TSPACER_MODE_PCR,
-    TSPACER_MODE_CBR
-} tsp_mode_t;
+typedef enum { TSPACER_MODE_BASIC = 0, TSPACER_MODE_PCR, TSPACER_MODE_CBR } tsp_mode_t;
 
 typedef struct {
     uint64_t bitrate;

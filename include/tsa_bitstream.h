@@ -72,7 +72,7 @@ static inline int32_t br_read_se(bit_reader_t* r) {
  * Returns INVALID_PCR if no PCR is present or packet is invalid.
  */
 #ifndef INVALID_PCR
-#define INVALID_PCR ((uint64_t) - 1)
+#define INVALID_PCR ((uint64_t)-1)
 #endif
 
 static inline uint64_t tsa_pkt_get_pcr(const uint8_t* pkt) {

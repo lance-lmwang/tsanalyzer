@@ -269,10 +269,18 @@ void tsp_destroy(tsp_handle_t* h) {
 }
 
 /* --- API --- */
-uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) { return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate; }
-uint64_t tsp_get_bitrate(tsp_handle_t* h) { return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate; }
-uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h) { return h->estimated_bitrate; }
-uint64_t tsp_get_total_packets(tsp_handle_t* h) { return atomic_load(&h->total_ts_sent); }
+uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) {
+    return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
+}
+uint64_t tsp_get_bitrate(tsp_handle_t* h) {
+    return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
+}
+uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h) {
+    return h->estimated_bitrate;
+}
+uint64_t tsp_get_total_packets(tsp_handle_t* h) {
+    return atomic_load(&h->total_ts_sent);
+}
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h) {
     uint64_t br = tsp_get_bitrate(h);
     int ts_per_udp = h->cfg.ts_per_udp ? h->cfg.ts_per_udp : 7;
@@ -308,7 +316,9 @@ int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s) {
     h->last_ns = s->timestamp_ns;
     return 0;
 }
-pthread_t tsp_get_thread(tsp_handle_t* h) { return h->thread; }
+pthread_t tsp_get_thread(tsp_handle_t* h) {
+    return h->thread;
+}
 
 uint64_t tsp_debug_get_scheduled_time(tsp_handle_t* h, int idx) {
     uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);

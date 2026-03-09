@@ -18,8 +18,9 @@ void test_pat_assembly() {
     pkt1[4] = 0x00;  // Pointer field
 
     // PAT: 0x00, 0xB0, 0x11, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 0xE1, 0x00, 0x00, 0x02, 0xE2, 0x00, CRC(4)
-    uint8_t full_pat[20] = {0x00, 0xB0, 0x11, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 0xE1,
-                            0x00, 0x00, 0x02, 0xE2, 0x00, 0x00, 0x00, 0x00, 0x00  // CRC placeholder
+    uint8_t full_pat[20] = {
+        0x00, 0xB0, 0x11, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01,
+        0xE1, 0x00, 0x00, 0x02, 0xE2, 0x00, 0x00, 0x00, 0x00, 0x00  // CRC placeholder
     };
     uint32_t real_crc = mpegts_crc32(full_pat, 16);
     full_pat[16] = (real_crc >> 24) & 0xFF;
@@ -60,19 +61,20 @@ void test_sdt_assembly() {
     tsa_config_t cfg = {0};
     tsa_handle_t* h = tsa_create(&cfg);
 
-    uint8_t sdt[] = {0x42, 0xF0, 0x25,  // table_id (SDT actual), len=37
-                     0x00, 0x01,        // ts_id
-                     0xC1, 0x00, 0x00,  // version 0, etc
-                     0x00, 0x01,        // original_net_id
-                     0xFF,              // reserved
-                     // Service loop
-                     0x00, 0x01,  // service_id
-                     0xFC,        // EIT schedule=0, present/following=0, running=0, free_ca=0
-                     0x80, 0x19,  // descriptors_loop_len=25
-                     0x48, 0x17,  // service_descriptor, len=23
-                     0x01,        // service_type (digital TV)
-                     0x08, 'P',  'r',  'o', 'v', 'i', 'd', 'e', 'r',  0x0C, 'M',  'y', ' ', 'S',
-                     'e',  'r',  'v',  'i', 'c', 'e', ' ', '1', 0x00, 0x00, 0x00, 0x00  // CRC
+    uint8_t sdt[] = {
+        0x42, 0xF0, 0x25,  // table_id (SDT actual), len=37
+        0x00, 0x01,        // ts_id
+        0xC1, 0x00, 0x00,  // version 0, etc
+        0x00, 0x01,        // original_net_id
+        0xFF,              // reserved
+        // Service loop
+        0x00, 0x01,  // service_id
+        0xFC,        // EIT schedule=0, present/following=0, running=0, free_ca=0
+        0x80, 0x19,  // descriptors_loop_len=25
+        0x48, 0x17,  // service_descriptor, len=23
+        0x01,        // service_type (digital TV)
+        0x08, 'P', 'r', 'o', 'v', 'i', 'd', 'e', 'r', 0x0C, 'M', 'y', ' ', 'S', 'e', 'r', 'v', 'i', 'c', 'e', ' ', '1',
+        0x00, 0x00, 0x00, 0x00  // CRC
     };
     uint32_t crc = mpegts_crc32(sdt, sizeof(sdt) - 4);
     sdt[sizeof(sdt) - 4] = (crc >> 24) & 0xFF;

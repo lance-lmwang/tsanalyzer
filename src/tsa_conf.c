@@ -14,7 +14,9 @@ typedef struct {
     tsa_full_conf_t* conf;
 } parser_t;
 
-static void next_token(parser_t* p) { p->lookahead = tsa_lexer_next(&p->lex); }
+static void next_token(parser_t* p) {
+    p->lookahead = tsa_lexer_next(&p->lex);
+}
 
 static bool match(parser_t* p, tsa_token_type_t type) {
     if (p->lookahead.type == type) {

@@ -50,4 +50,6 @@ bool tsa_units_to_bool(const char* s) {
     return false;
 }
 
-double tsa_pcr_to_ns_f(double pcr_ticks) { return pcr_ticks * 1000000000.0 / (double)TS_SYSTEM_CLOCK_HZ; }
+double tsa_pcr_to_ns_f(double pcr_ticks) {
+    return pcr_ticks * 1000000000.0 / (double)TS_SYSTEM_CLOCK_HZ;
+}

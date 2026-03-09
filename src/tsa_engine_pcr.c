@@ -117,4 +117,8 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 }
 
 tsa_plugin_ops_t pcr_ops = {
-    .name = "PCR_ANALYZER", .create = pcr_create, .destroy = pcr_destroy, .get_stream = pcr_get_stream, };
+    .name = "PCR_ANALYZER",
+    .create = pcr_create,
+    .destroy = pcr_destroy,
+    .get_stream = pcr_get_stream,
+};

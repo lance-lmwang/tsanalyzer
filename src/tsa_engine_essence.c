@@ -26,7 +26,11 @@ static tsa_stream_t* essence_get_stream(void* self);
 static void essence_on_ts(void* self, const uint8_t* pkt);
 
 tsa_plugin_ops_t essence_plugin_ops = {
-    .name = "essence", .create = essence_create, .destroy = essence_destroy, .get_stream = essence_get_stream, };
+    .name = "essence",
+    .create = essence_create,
+    .destroy = essence_destroy,
+    .get_stream = essence_get_stream,
+};
 
 /**
  * ISO/IEC 13818-1 T-STD Leakage Logic with EB Backpressure

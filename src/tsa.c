@@ -391,11 +391,17 @@ void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     return p;
 }
 
-float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) { return (float)(h->es_tracks[p].tstd.tb_fill_q64 >> 64); }
+float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) {
+    return (float)(h->es_tracks[p].tstd.tb_fill_q64 >> 64);
+}
 
-float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t p) { return (float)(h->es_tracks[p].tstd.mb_fill_q64 >> 64); }
+float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t p) {
+    return (float)(h->es_tracks[p].tstd.mb_fill_q64 >> 64);
+}
 
-float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t p) { return (float)(h->es_tracks[p].tstd.eb_fill_q64 >> 64); }
+float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t p) {
+    return (float)(h->es_tracks[p].tstd.eb_fill_q64 >> 64);
+}
 
 void tsa_reset_latched_errors(tsa_handle_t* h) {
     if (h && h->live) h->live->latched_cc_error = 0;

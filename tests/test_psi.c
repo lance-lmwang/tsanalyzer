@@ -10,26 +10,28 @@
 // Mock PAT: TID=0, TSID=0x0099, Version=10, Program 1 -> PMT 0x1BE9
 // Data: 00 b0 0d 00 99 e1 00 00 00 01 bb e9
 // CRC calculated: 0xBC447FE0
-static uint8_t mock_pat_packet[188] = {0x47, 0x40, 0x00, 0x10,        // Header: PUSI=1, PID=0, CC=0
-                                       0x00,                          // Pointer Field = 0
-                                       0x00, 0xb0, 0x0d,              // Section Header: TID=0, Len=13
-                                       0x00, 0x99, 0xe1, 0x00, 0x00,  // TSID, Version, SecNum, LastSecNum
-                                       0x00, 0x01, 0xbb, 0xe9,        // Program 1 -> PMT PID 0x1BE9
-                                       0xbc, 0x44, 0x7f, 0xe0         // CRC32
+static uint8_t mock_pat_packet[188] = {
+    0x47, 0x40, 0x00, 0x10,        // Header: PUSI=1, PID=0, CC=0
+    0x00,                          // Pointer Field = 0
+    0x00, 0xb0, 0x0d,              // Section Header: TID=0, Len=13
+    0x00, 0x99, 0xe1, 0x00, 0x00,  // TSID, Version, SecNum, LastSecNum
+    0x00, 0x01, 0xbb, 0xe9,        // Program 1 -> PMT PID 0x1BE9
+    0xbc, 0x44, 0x7f, 0xe0         // CRC32
 };
 
 // Mock PMT: TID=2, Prog=1, Version=0, PCR=0x0202, Stream=H.264 (0x1B) on 0x0202
 // Data: 02 b0 12 00 01 c1 00 00 e2 02 f0 00 1b e2 02 f0 00
 // CRC calculated: 0xD3F8FCBF
-static uint8_t mock_pmt_packet_with_af[188] = {0x47, 0x5b, 0xe9, 0x30,  // Header: PUSI=1, PID=0x1BE9, AF+Payload, CC=0
-                                               0x09, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  // AF: Len 9
-                                               0x00,                          // Pointer Field = 0
-                                               0x02, 0xb0, 0x12,              // Section Header: TID=2 (PMT), Len=18
-                                               0x00, 0x01, 0xc1, 0x00, 0x00,  // Program 1, Version, etc.
-                                               0xe2, 0x02,                    // PCR PID 0x0202
-                                               0xf0, 0x00,                    // Program Info Len 0
-                                               0x1b, 0xe2, 0x02, 0xf0, 0x00,  // Stream: H.264, PID 0x0202
-                                               0xd3, 0xf8, 0xfc, 0xbf         // CRC32
+static uint8_t mock_pmt_packet_with_af[188] = {
+    0x47, 0x5b, 0xe9, 0x30,                                      // Header: PUSI=1, PID=0x1BE9, AF+Payload, CC=0
+    0x09, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  // AF: Len 9
+    0x00,                                                        // Pointer Field = 0
+    0x02, 0xb0, 0x12,                                            // Section Header: TID=2 (PMT), Len=18
+    0x00, 0x01, 0xc1, 0x00, 0x00,                                // Program 1, Version, etc.
+    0xe2, 0x02,                                                  // PCR PID 0x0202
+    0xf0, 0x00,                                                  // Program Info Len 0
+    0x1b, 0xe2, 0x02, 0xf0, 0x00,                                // Stream: H.264, PID 0x0202
+    0xd3, 0xf8, 0xfc, 0xbf                                       // CRC32
 };
 
 void test_crc32_vectors() {

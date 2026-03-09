@@ -6,7 +6,9 @@
 #include "tsa_internal.h"
 
 /* Helper to ensure Prometheus metrics are never NaN or Inf */
-static double safe_val(double v) { return isfinite(v) ? v : 0.0; }
+static double safe_val(double v) {
+    return isfinite(v) ? v : 0.0;
+}
 
 void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t sz) {
     if (!handles || !buf || sz < 4096) return;
@@ -209,7 +211,9 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
 }
 
 // Compatibility wrapper for older tests
-void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz) { tsa_exporter_prom_v2(&h, 1, buf, sz); }
+void tsa_export_prometheus(tsa_handle_t* h, char* buf, size_t sz) {
+    tsa_exporter_prom_v2(&h, 1, buf, sz);
+}
 
 void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t sz) {
     if (!handles || !buf || sz < 1024) return;

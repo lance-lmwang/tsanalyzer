@@ -54,7 +54,7 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
     printf("[%s] SCTE-35: 0x%04x | Command: %s (0x%02x) | Adj: %lu\n",
            h->config.input_label[0] ? h->config.input_label : "GLOBAL", pid, cmd_name, splice_command_type, pts_adjust);
 
-    if (splice_command_type == 0x05) {/* Splice Insert */
+    if (splice_command_type == 0x05) { /* Splice Insert */
         uint32_t event_id = br_read(&r, 32);
         bool cancel = br_read(&r, 1);
         br_read(&r, 7); /* Reserved */
@@ -69,7 +69,7 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
                    out_of_network, program_splice, immediate);
 
             if (program_splice && !immediate) {
-                if (br_read(&r, 1)) {/* time_specified_flag */
+                if (br_read(&r, 1)) { /* time_specified_flag */
                     uint64_t pts_time = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
                     printf("  Scheduled PTS: %lu\n", pts_time);
 
@@ -90,8 +90,8 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
                 printf("  Break Duration: %.3f sec\n", (double)duration / 90000.0);
             }
         }
-    } else if (splice_command_type == 0x06) {/* Time Signal */
-        if (br_read(&r, 1)) {                /* time_specified_flag */
+    } else if (splice_command_type == 0x06) { /* Time Signal */
+        if (br_read(&r, 1)) {                 /* time_specified_flag */
             uint64_t pts_time = ((uint64_t)br_read(&r, 1) << 32) | br_read(&r, 32);
             printf("  Time Signal PTS: %lu\n", pts_time);
         }

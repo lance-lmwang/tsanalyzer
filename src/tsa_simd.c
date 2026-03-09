@@ -49,7 +49,7 @@ bool tsa_simd_capable(void) {
 
     unsigned int eax, ebx, ecx, edx;
     if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
-        if (ecx & (1 << 28)) {/* OSXSAVE */
+        if (ecx & (1 << 28)) { /* OSXSAVE */
             unsigned int eax7, ebx7, ecx7, edx7;
             if (__get_cpuid_count(7, 0, &eax7, &ebx7, &ecx7, &edx7)) {
                 cached_result = (ebx7 & (1 << 5)) != 0; /* AVX2 bit */
@@ -69,8 +69,11 @@ static void tsa_simd_init_impl(void) {
     }
 }
 #else
-bool tsa_simd_capable(void) { return false; }
-static void tsa_simd_init_impl(void) {}
+bool tsa_simd_capable(void) {
+    return false;
+}
+static void tsa_simd_init_impl(void) {
+}
 #endif
 
 void tsa_simd_init(void) {
@@ -79,13 +82,19 @@ void tsa_simd_init(void) {
 }
 
 /* Auto-initialize on first use if not already done */
-__attribute__((constructor)) static void tsa_simd_auto_init(void) { tsa_simd_init(); }
+__attribute__((constructor)) static void tsa_simd_auto_init(void) {
+    tsa_simd_init();
+}
 
 /* --- Compatibility Wrappers --- */
 
-intptr_t tsa_simd_find_sync(const uint8_t* buf, size_t len) { return tsa_simd.find_sync(buf, len); }
+intptr_t tsa_simd_find_sync(const uint8_t* buf, size_t len) {
+    return tsa_simd.find_sync(buf, len);
+}
 
-void tsa_simd_extract_pids_8(const uint8_t* buf, uint16_t* pids) { tsa_simd.extract_pids_8(buf, pids); }
+void tsa_simd_extract_pids_8(const uint8_t* buf, uint16_t* pids) {
+    tsa_simd.extract_pids_8(buf, pids);
+}
 
 uint64_t tsa_simd_check_sync_batch(const uint8_t* buf, size_t packet_count) {
     return tsa_simd.check_sync_batch(buf, packet_count);
