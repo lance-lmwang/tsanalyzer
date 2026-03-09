@@ -14,13 +14,16 @@ typedef struct tsa_plugin_ops_s {
     const char* name;
 
     // Allocate and initialize the plugin instance
-    // context_buf is a pointer to h->plugins[slot].context
+    // context_buf is a pointer to h->plugins[slot].context, MUST be used for in-place init instead of calloc
     void* (*create)(void* config_or_parent, void* context_buf);
 
-    // Destroy the plugin
+    // Destroy the plugin (do not free the instance memory as it's owned by the handle)
     void (*destroy)(void* self);
 
-    // Optional: Get the stream node of this plugin (to attach to a parent)
+    // Process a single TS packet. Handlers should read h->current_res for parsed headers.
+    void (*on_ts)(void* self, const uint8_t* pkt);
+
+    // Optional: Get the stream node of this plugin (to attach to a parent) - deprecated in flat dispatch
     tsa_stream_t* (*get_stream)(void* self);
 
     // Optional: Reset internal state
