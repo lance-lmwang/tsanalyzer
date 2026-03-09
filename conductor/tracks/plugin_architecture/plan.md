@@ -14,7 +14,7 @@
 
 ### Phase 1: 核心接口重塑 (The API Redesign)
 **目标文件**: `include/tsa_plugin.h`
-- [ ] **Step 1**: 在 `tsa_plugin_ops_t` 结构体中直接增加 `void (*on_ts)(void* self, const uint8_t* pkt);` 回调函数。
+- [ ] **Step 1**: 在 `tsa_plugin_ops_t` 结构体中直接增加 `void (*on_ts)(void* self, const uint8_t* pkt);` 回调函数。*(注意：各引擎在回调内应直接读取 `h->current_res` 以避免重复解析包头)*。
 - [ ] **Step 2**: 在注释中明确声明 `create` 函数的 `context_buf` 必须用于“就地初始化”，插件不得自行 `calloc` 内存。
 - [ ] **Step 3**: 导出注册中心方法：`tsa_plugins_init_registry()`, `tsa_plugins_attach_builtin(struct tsa_handle* h)`, `tsa_plugins_destroy_all(struct tsa_handle* h)`。
 
@@ -31,6 +31,7 @@
 - [ ] **Step 2**: 修改 `tsa_create`，移除 `root_stream` 初始化以及所有硬编码的 `extern` 注册，替换为仅调用 `tsa_plugins_init_registry()` 和 `tsa_plugins_attach_builtin(h)`。
 - [ ] **Step 3**: 修改 `tsa_destroy`，将老旧的清理逻辑替换为统一的 `tsa_plugins_destroy_all(h)`。
 - [ ] **Step 4**: 修改 `tsa_process_packet`，移除 `tsa_stream_send`，改为极其简单的循环：`for (i=0; i<MAX; i++) if (plugin_in_use) plugin->on_ts(instance, pkt);`。
+- [ ] **Step 5**: **处理 Reactive Demux 残留**：彻底废弃并移除 `tsa_process_packet` 中的 `enable_reactive_pid_filter` 及 `tsa_stream_demux_check_pid` 相关代码（扁平架构下直接分发，由引擎自行判断 PID）。
 
 ### Phase 4: 引擎就地初始化适配 (The Engine Adaptation)
 **目标文件**: `src/tsa_engine_essence.c`, `src/tsa_engine_pcr.c`, `src/tsa_engine_tr101290.c`, `src/tsa_engine_scte35.c`
