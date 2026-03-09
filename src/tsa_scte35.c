@@ -75,9 +75,10 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
 
                     // We broadcast this target PTS to all video PIDs for them to audit their next IDR frame
                     for (int i = 0; i < TS_PID_MAX; i++) {
-                        if (h->pid_seen[i] &&
-                            (h->pid_stream_type[i] == 0x1B || h->pid_stream_type[i] == 0x24)) {  // H.264 or HEVC
-                            h->scte35_target_pts[i] = pts_time;
+                        if (h->pid_seen[i] && (h->es_tracks[i].stream_type == 0x1B ||
+                                               h->es_tracks[i].stream_type == 0x24)) {  // H.264 or HEVC
+                            h->es_tracks[i].scte35.target_pts = pts_time;
+                            h->es_tracks[i].scte35.pending_splice = true;
                         }
                     }
                 }

@@ -95,7 +95,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
             h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
             h->live->pid_cc_errors[pid]++;
             h->live->latched_cc_error = 1;
-            h->pid_status[pid] = TSA_STATUS_DEGRADED;
+            h->es_tracks[pid].status = TSA_STATUS_DEGRADED;
             tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, (uint64_t)res->cc);
         }
     }

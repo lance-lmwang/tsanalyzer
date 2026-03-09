@@ -12,7 +12,7 @@ void test_hevc_tstd_logic() {
     tsa_handle_t* h = tsa_create(&cfg);
 
     uint16_t video_pid = 0x101;
-    h->pid_stream_type[video_pid] = 0x24;  // Manually mark as HEVC
+    h->es_tracks[video_pid].stream_type = 0x24;  // Manually mark as HEVC
     h->live->pid_is_referenced[video_pid] = true;
 
     uint8_t pkt[188] = {0x47, 0x01, 0x01, 0x10};  // PID 0x101, Payload only
@@ -31,7 +31,7 @@ void test_hevc_tstd_logic() {
     assert(snap.stats.pid_eb_fill_bytes[video_pid] > 0);
 
     uint16_t audio_pid = 0x102;
-    h->pid_stream_type[audio_pid] = 0x0f;  // ADTS-AAC
+    h->es_tracks[audio_pid].stream_type = 0x0f;  // ADTS-AAC
     h->live->pid_is_referenced[audio_pid] = true;
     pkt[2] = 0x02;
 

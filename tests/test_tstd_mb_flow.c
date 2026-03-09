@@ -17,7 +17,7 @@ void test_tstd_mb_flow_backpressure() {
     tsa_handle_t* h = tsa_create(&cfg);
 
     uint16_t pid = 0x100;
-    h->pid_stream_type[pid] = TSA_TYPE_VIDEO_H264;
+    h->es_tracks[pid].stream_type = TSA_TYPE_VIDEO_H264;
     h->live->pid_is_referenced[pid] = true;
     h->live->pid_bitrate_bps[pid] = 10000000;  // 10 Mbps
 

@@ -42,7 +42,7 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
 
     /* Q64.64 Precision factor for (bits/s * ns) -> bits */
     double factor = (18446744073709551616.0 / 1000000000.0);
-    uint8_t st = h->pid_stream_type[es->pid];
+    uint8_t st = es->stream_type;
     bool is_video = tsa_is_video(st);
 
     /* 1. TB Leakage: R_x flows into MB (or EB for non-video) */

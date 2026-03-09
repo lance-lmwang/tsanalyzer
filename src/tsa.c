@@ -37,7 +37,6 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
 
     tsa_stream_init(&h->root_stream, h, NULL);
     ALLOC_OR_GOTO(h->pid_filters, ts_section_filter_t, TS_PID_MAX);
-    ALLOC_OR_GOTO(h->pid_status, tsa_measurement_status_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_cc_error_suppression, uint32_t, TS_PID_MAX);
 
     h->pcr_tracks = calloc(TS_PID_MAX, sizeof(tsa_pcr_track_t));
@@ -45,13 +44,9 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->es_tracks = calloc(TS_PID_MAX, sizeof(tsa_es_track_t));
     if (!h->es_tracks) goto fail;
 
-    ALLOC_OR_GOTO(h->pid_bitrate_ema, double, TS_PID_MAX);
-    ALLOC_OR_GOTO(h->pid_bitrate_min, uint64_t, TS_PID_MAX);
-    ALLOC_OR_GOTO(h->pid_bitrate_max, uint64_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_seen, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_is_pmt, bool, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_is_scte35, bool, TS_PID_MAX);
-    ALLOC_OR_GOTO(h->pid_stream_type, uint8_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->prev_snap_base_frames, uint64_t, TS_PID_MAX);
 
     h->pid_labels = calloc(TS_PID_MAX, sizeof(*h->pid_labels));
@@ -99,7 +94,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         es->video.gop_min = 0xFFFFFFFF;
         es->last_cc = 0x10;
         es->pes.last_pts_33 = 0x1FFFFFFFFULL;
-        h->scte35_target_pts[i] = 0xFFFFFFFFFFFFFFFFULL;
+        es->scte35.target_pts = 0xFFFFFFFFFFFFFFFFULL;
         h->pid_to_active_idx[i] = -1;
     }
     h->pid_tracker_count = 0;
@@ -147,7 +142,6 @@ void tsa_destroy(tsa_handle_t* h) {
     if (h->pool_base) free(h->pool_base);
 
     FREE_IF(h->pid_filters);
-    FREE_IF(h->pid_status);
     FREE_IF(h->pid_cc_error_suppression);
     if (h->pcr_tracks) {
         for (int i = 0; i < TS_PID_MAX; i++) tsa_pcr_track_destroy(&h->pcr_tracks[i]);
@@ -156,15 +150,11 @@ void tsa_destroy(tsa_handle_t* h) {
     if (h->es_tracks) {
         free(h->es_tracks);
     }
-    FREE_IF(h->pid_bitrate_ema);
-    FREE_IF(h->pid_bitrate_min);
-    FREE_IF(h->pid_bitrate_max);
     for (int i = 0; i < TS_PID_MAX; i++)
         if (h->pid_histograms[i]) free(h->pid_histograms[i]);
     FREE_IF(h->pid_seen);
     FREE_IF(h->pid_is_pmt);
     FREE_IF(h->pid_is_scte35);
-    FREE_IF(h->pid_stream_type);
     FREE_IF(h->prev_snap_base_frames);
     FREE_IF(h->pid_labels);
     FREE_IF(h->live);
@@ -401,17 +391,11 @@ void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     return p;
 }
 
-float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) {
-    return (float)(h->es_tracks[p].tstd.tb_fill_q64 >> 64);
-}
+float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) { return (float)(h->es_tracks[p].tstd.tb_fill_q64 >> 64); }
 
-float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t p) {
-    return (float)(h->es_tracks[p].tstd.mb_fill_q64 >> 64);
-}
+float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t p) { return (float)(h->es_tracks[p].tstd.mb_fill_q64 >> 64); }
 
-float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t p) {
-    return (float)(h->es_tracks[p].tstd.eb_fill_q64 >> 64);
-}
+float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t p) { return (float)(h->es_tracks[p].tstd.eb_fill_q64 >> 64); }
 
 void tsa_reset_latched_errors(tsa_handle_t* h) {
     if (h && h->live) h->live->latched_cc_error = 0;

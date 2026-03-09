@@ -50,7 +50,7 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* legacy_
     tsa_es_track_t* es = &h->es_tracks[pid];
     if (es->pes.total_length < 4) return;
 
-    uint8_t st_id = h->pid_stream_type[pid];
+    uint8_t st_id = es->stream_type;
     bool is_h264 = tsa_is_h264(st_id);
     bool is_h265 = tsa_is_hevc(st_id);
     if (!is_h264 && !is_h265) return;

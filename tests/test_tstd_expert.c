@@ -46,7 +46,7 @@ void test_tstd_dts_removal() {
     h->last_snap_ns = now_ns;
 
     uint16_t pid = 0x100;
-    h->pid_stream_type[pid] = 0x1b;  // H.264
+    h->es_tracks[pid].stream_type = 0x1b;  // H.264
     h->live->pid_is_referenced[pid] = true;
 
     uint8_t pkt[188];

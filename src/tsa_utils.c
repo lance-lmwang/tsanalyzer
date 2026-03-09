@@ -217,7 +217,7 @@ const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
     if (p == 0) return "PAT";
     if (p == 0x1FFF) return "Stuffing";
     if (h->pid_is_pmt[p]) return "PMT";
-    uint8_t ty = h->pid_stream_type[p];
+    uint8_t ty = h->es_tracks[p].stream_type;
     if (ty == 0) {
         for (uint32_t i = 0; i < h->program_count; i++)
             for (uint32_t j = 0; j < h->programs[i].stream_count; j++)

@@ -56,7 +56,7 @@ void test_tstd_overflow_detection() {
     tsa_handle_t* h = tsa_create(&cfg);
 
     // Mock a Video PID 0x100
-    h->pid_stream_type[0x100] = 0x1b;  // H.264
+    h->es_tracks[0x100].stream_type = 0x1b;  // H.264
     h->live->pid_is_referenced[0x100] = true;
     tsa_update_pid_tracker(h, 0x100);
 

@@ -18,10 +18,21 @@ typedef struct {
     uint16_t pid;
     uint8_t stream_type;
     bool active;
+    uint8_t status; /* tsa_measurement_status_t */
+
+    /* Bitrate Statistics */
+    double bitrate_ema;
+    uint64_t bitrate_min;
+    uint64_t bitrate_max;
+    uint64_t bitrate_peak;
 
     /* PES Accumulator State (ZERO-COPY) */
     struct {
-        enum { TSA_PES_HUNTING, TSA_PES_ACCUMULATING, TSA_PES_FINISHING } state;
+        enum {
+            TSA_PES_HUNTING,
+            TSA_PES_ACCUMULATING,
+            TSA_PES_FINISHING
+        } state;
 
         /* Pointers to packets in global pool instead of local buffer copy */
         tsa_packet_t* refs[TSA_PES_MAX_REFS];
@@ -77,6 +88,13 @@ typedef struct {
         uint32_t sample_rate;
         uint8_t channels;
     } audio;
+
+    /* SCTE-35 Splicing State */
+    struct {
+        uint64_t target_pts;
+        int64_t alignment_error_ns;
+        bool pending_splice;
+    } scte35;
 
     /* T-STD Buffer Simulation (ISO/IEC 13818-1) */
     struct {

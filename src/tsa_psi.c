@@ -79,8 +79,8 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
             tsa_descriptors_process(h, spid, &p[d], &ty);
             d += 2 + p[d + 1];
         }
-        if (h->pid_stream_type[spid] != ty) {
-            h->pid_stream_type[spid] = ty;
+        if (h->es_tracks[spid].stream_type != ty) {
+            h->es_tracks[spid].stream_type = ty;
             tsa_stream_model_update_es(&h->ts_model, pid, spid, ty);
             tsa_precompile_pid_labels(h, spid);
         }
@@ -152,16 +152,16 @@ void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->live->pid_cc_errors[pid] = 0;
     h->live->pid_scrambled_packets[pid] = 0;
     h->live->pid_pes_errors[pid] = 0;
-    h->pid_bitrate_min[pid] = 0;
-    h->pid_bitrate_max[pid] = 0;
-    h->pid_status[pid] = TSA_STATUS_VALID;
 
     tsa_es_track_t* es = &h->es_tracks[pid];
+    uint8_t st = es->stream_type;
     memset(es, 0, sizeof(tsa_es_track_t));
     es->pid = pid;
+    es->stream_type = st;
     es->video.gop_min = 0xFFFFFFFF;
     es->last_cc = 0x10;
     es->pes.last_pts_33 = 0x1FFFFFFFFULL;
+    es->status = TSA_STATUS_VALID;
 
     tsa_pcr_track_reset(&h->pcr_tracks[pid]);
 }

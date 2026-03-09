@@ -10,7 +10,7 @@
 void mock_pmt_reference(tsa_handle_t* h, uint16_t pid, uint8_t stream_type) {
     h->live->pid_is_referenced[pid] = true;
     h->pid_seen[pid] = true;
-    h->pid_stream_type[pid] = stream_type;
+    h->es_tracks[pid].stream_type = stream_type;
     h->program_count = 1;
     h->programs[0].stream_count = 1;
     h->programs[0].streams[0].pid = pid;
