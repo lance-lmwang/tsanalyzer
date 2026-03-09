@@ -44,9 +44,12 @@ int main(int argc, char* argv[]) {
     int sleep_us = DEFAULT_SLEEP_US;
     unsigned long max_count = 0;
 
-    static struct option long_options[] = {{"ip", required_argument, 0, 'i'},    {"port", required_argument, 0, 'p'},
-                                           {"sleep", required_argument, 0, 's'}, {"count", required_argument, 0, 'c'},
-                                           {"help", no_argument, 0, 'h'},        {0, 0, 0, 0}};
+    static struct option long_options[] = {{"ip", required_argument, 0, 'i'},
+                                           {"port", required_argument, 0, 'p'},
+                                           {"sleep", required_argument, 0, 's'},
+                                           {"count", required_argument, 0, 'c'},
+                                           {"help", no_argument, 0, 'h'},
+                                           {0, 0, 0, 0}};
 
     int opt;
     int option_index = 0;

@@ -130,8 +130,4 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 }
 
 tsa_plugin_ops_t tr101290_ops = {
-    .name = "TR101290_CORE",
-    .create = tr_create,
-    .destroy = tr_destroy,
-    .get_stream = tr_get_stream,
-};
+    .name = "TR101290_CORE", .create = tr_create, .destroy = tr_destroy, .get_stream = tr_get_stream, };

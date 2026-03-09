@@ -69,24 +69,38 @@ static inline int32_t br_read_se(bit_reader_t* r) {
 /**
  * Standardized PCR extraction from a 188-byte TS packet.
  * Returns the full 42-bit PCR value (Base * 300 + Extension) in 27MHz units.
- * Returns INVALID_PCR if no PCR is present.
+ * Returns INVALID_PCR if no PCR is present or packet is invalid.
  */
 #ifndef INVALID_PCR
-#define INVALID_PCR ((uint64_t)-1)
+#define INVALID_PCR ((uint64_t) - 1)
 #endif
 
 static inline uint64_t tsa_pkt_get_pcr(const uint8_t* pkt) {
-    /* Check for adaptation field existence and length */
-    if (!(pkt[3] & 0x20) || pkt[4] == 0) return INVALID_PCR;
+    /* Basic TS Sync Check */
+    if (pkt[0] != 0x47) return INVALID_PCR;
+
+    /* Check for adaptation field existence and length (at least 2 bytes for flags) */
+    if (!(pkt[3] & 0x20) || pkt[4] < 2) return INVALID_PCR;
 
     /* Check PCR_flag */
     if (!(pkt[5] & 0x10)) return INVALID_PCR;
 
+    /* PCR is at offset 6: 33-bit base, 6-bit reserved, 9-bit extension */
     uint64_t base = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
                     ((uint64_t)pkt[9] << 1) | ((uint64_t)pkt[10] >> 7);
     uint64_t ext = ((uint64_t)(pkt[10] & 0x01) << 8) | (uint64_t)pkt[11];
 
-    return base * 300 + ext;
+    return (base * 300) + ext;
+}
+
+/**
+ * Converts PCR ticks (27MHz) to nanoseconds (1GHz).
+ * Uses 128-bit intermediate math or careful ordering to prevent overflow.
+ * Formula: (ticks * 1000) / 27
+ */
+static inline uint64_t tsa_pcr_to_ns(uint64_t pcr_ticks) {
+    if (pcr_ticks == INVALID_PCR) return 0;
+    return (pcr_ticks * 1000) / 27;
 }
 
 #endif

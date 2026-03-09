@@ -25,11 +25,6 @@ uint64_t tsa_units_to_size(const char* s);
 bool tsa_units_to_bool(const char* s);
 
 /**
- * Convert PCR ticks (27MHz) to nanoseconds.
- */
-uint64_t tsa_pcr_to_ns(uint64_t pcr_ticks);
-
-/**
  * Convert PCR ticks (27MHz) to nanoseconds (double).
  */
 double tsa_pcr_to_ns_f(double pcr_ticks);

@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define NS_PER_MS 1000000ULL
-#define NS_PER_RESOLUTION (TSA_HIST_RESOLUTION_MS * NS_PER_MS)
+#define NS_PER_RESOLUTION (TSA_HIST_RESOLUTION_MS* NS_PER_MS)
 
 void tsa_hist_init(tsa_histogram_t* h) {
     if (!h) return;

@@ -1,3 +1,4 @@
+#include "tsa_bitstream.h"
 #include "tsa_clock.h"
 
 #include <math.h>
@@ -12,13 +13,6 @@
 #define PCR_ARRIVAL_MAX_NS 100000000ULL                    /* 100ms */
 #define PCR_SYNC_THRESHOLD_TICKS (TS_SYSTEM_CLOCK_HZ / 10) /* 100ms */
 #define PCR_STABILIZE_COUNT 10
-
-static uint64_t parse_pcr_27mhz(const uint8_t *p) {
-    uint64_t base =
-        ((uint64_t)p[0] << 25) | ((uint64_t)p[1] << 17) | ((uint64_t)p[2] << 9) | ((uint64_t)p[3] << 1) | (p[4] >> 7);
-    uint16_t ext = ((uint16_t)(p[4] & 0x01) << 8) | p[5];
-    return base * 300 + ext;
-}
 
 void tsa_clock_reset(tsa_clock_inspector_t *inspector) {
     if (!inspector) return;
@@ -36,11 +30,9 @@ void tsa_clock_reset(tsa_clock_inspector_t *inspector) {
 void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, uint64_t now_ns, bool is_live) {
     if (!packet || !inspector) return;
 
-    if (!(packet[3] & 0x20)) return;
-    uint8_t af_len = packet[4];
-    if (af_len < 7 || !(packet[5] & 0x10)) return;
+    uint64_t current_pcr = tsa_pkt_get_pcr(packet);
+    if (current_pcr == INVALID_PCR) return;
 
-    uint64_t current_pcr = parse_pcr_27mhz(&packet[6]);
     bool has_discontinuity = (packet[5] & 0x80) != 0;
 
     /* 1. Reset on Sequence Break */

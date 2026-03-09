@@ -30,7 +30,7 @@ int tsa_fast_itoa(char* buf, int64_t val) {
         return 1;
     }
     int i = 0, sign = (val < 0);
-    uint64_t v = sign ? (uint64_t)-val : (uint64_t)val;
+    uint64_t v = sign ? (uint64_t) - val : (uint64_t)val;
     while (v > 0) {
         buf[i++] = (v % 10) + '0';
         v /= 10;
@@ -145,9 +145,7 @@ uint32_t mpegts_crc32(const uint8_t* d, int l) {
     return c;
 }
 
-uint32_t tsa_crc32_check(const uint8_t* data, int len) {
-    return mpegts_crc32(data, len);
-}
+uint32_t tsa_crc32_check(const uint8_t* data, int len) { return mpegts_crc32(data, len); }
 
 int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h) {
     if (len < 6 || p[0] != 0 || p[1] != 0 || p[2] != 1) return -1;
@@ -423,9 +421,7 @@ void tsa_forensic_generate_json(tsa_handle_t* h, char* b, size_t s) {
 
 /* --- 6. Time Utilities --- */
 
-int128_t ts_time_to_ns128(struct timespec ts) {
-    return (int128_t)ts.tv_sec * NS_PER_SEC + ts.tv_nsec;
-}
+int128_t ts_time_to_ns128(struct timespec ts) { return (int128_t)ts.tv_sec * NS_PER_SEC + ts.tv_nsec; }
 struct timespec ns128_to_timespec(int128_t ns) {
     struct timespec ts;
     ts.tv_sec = (time_t)(ns / NS_PER_SEC);

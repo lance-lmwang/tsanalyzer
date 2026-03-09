@@ -22,9 +22,7 @@ void tsa_pcr_track_init(tsa_pcr_track_t* track, uint32_t pid, uint32_t prg_id) {
     track->program_id = prg_id;
 }
 
-void tsa_pcr_track_destroy(tsa_pcr_track_t* track) {
-    (void)track;
-}
+void tsa_pcr_track_destroy(tsa_pcr_track_t* track) { (void)track; }
 
 void tsa_pcr_track_reset(tsa_pcr_track_t* track) {
     if (!track) return;

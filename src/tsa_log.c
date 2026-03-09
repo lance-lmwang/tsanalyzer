@@ -18,13 +18,9 @@ static int last_log_idx = 0;
 
 const char* level_strs[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR"};
 
-void tsa_log_set_level(tsa_log_level_t level) {
-    g_log_level = level;
-}
+void tsa_log_set_level(tsa_log_level_t level) { g_log_level = level; }
 
-void tsa_log_set_json(bool enabled) {
-    g_log_json = enabled;
-}
+void tsa_log_set_json(bool enabled) { g_log_json = enabled; }
 
 void tsa_log_impl(tsa_log_level_t level, const char* file, int line, const char* tag, const char* fmt, ...) {
     if (level < g_log_level) return;

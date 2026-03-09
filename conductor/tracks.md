@@ -36,7 +36,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: V3 Architecture - Programmable Pipeline**
   *Link: [./tracks/arch-v3-core/](./tracks/arch-v3-core/)*
 
-- [~] **Track: Metrology Refactor (Algorithm & Data Structure Refactor)**
+- [x] **Track: Metrology Refactor (Algorithm & Data Structure Refactor)**
   *Link: [./tracks/metrology-refactor/](./tracks/metrology-refactor/)*
 
 - [ ] **Track: ES & T-STD Model Refactor (Buffer & GOP Analytics)**
@@ -45,7 +45,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track: Unified Alert & Debounce Engine (Industrial Reliability)**
   *Link: [./tracks/alert-engine-refactor/](./tracks/alert-engine-refactor/)*
 
-- [ ] **Track: Industrial Integration (ltntstools)**
+- [x] **Track: Industrial Integration (ltntstools)**
   *Link: [./tracks/industrial_integration_ltntstools/](./tracks/industrial_integration_ltntstools/)*
 
 - [ ] **Track: Astra Architecture Integration (PAUSED - Postponed until Analyzer is fully mature)**

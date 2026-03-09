@@ -34,7 +34,11 @@
 #define PACKET_BUF_SIZE 65536
 #define ANA_QUEUE_SIZE 4096
 
-typedef enum { CONN_UDP, CONN_SRT_LISTENER, CONN_SRT_CLIENT } conn_type_t;
+typedef enum {
+    CONN_UDP,
+    CONN_SRT_LISTENER,
+    CONN_SRT_CLIENT
+} conn_type_t;
 
 typedef struct {
     SRTSOCKET fd;

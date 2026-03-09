@@ -204,15 +204,13 @@ int tsp_enqueue(tsp_handle_t* h, const uint8_t* ts_packets, size_t count) {
             }
 
             if (has_pcr) {
-                uint64_t b = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
-                             ((uint64_t)pkt[9] << 1) | (pkt[10] >> 7);
-                uint64_t pcr = b * 300 + (((uint16_t)(pkt[10] & 0x01) << 8) | pkt[11]);
+                uint64_t pcr = tsa_pkt_get_pcr(pkt);
 
                 if (h->base_pcr_ticks == INVALID_PCR || pcr < h->last_pcr_val_tx) {
                     pacer_sync_wallclock(h, pcr, now_ns);
                 } else {
                     uint64_t pcr_delta = pcr - h->base_pcr_ticks;
-                    uint64_t target_wall_ns = h->base_wall_ns + (pcr_delta * 1000ULL / 27ULL);
+                    uint64_t target_wall_ns = h->base_wall_ns + tsa_pcr_to_ns(pcr_delta);
 
                     if (target_wall_ns > h->last_pcr_wall_ns) {
                         uint64_t br = ((h->pkts_since_pcr + 1) * (uint64_t)TS_PACKET_BITS * 1000000000ULL) /
@@ -271,18 +269,10 @@ void tsp_destroy(tsp_handle_t* h) {
 }
 
 /* --- API --- */
-uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) {
-    return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
-}
-uint64_t tsp_get_bitrate(tsp_handle_t* h) {
-    return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate;
-}
-uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h) {
-    return h->estimated_bitrate;
-}
-uint64_t tsp_get_total_packets(tsp_handle_t* h) {
-    return atomic_load(&h->total_ts_sent);
-}
+uint64_t tsp_get_detected_bitrate(tsp_handle_t* h) { return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate; }
+uint64_t tsp_get_bitrate(tsp_handle_t* h) { return h->cfg.bitrate ? h->cfg.bitrate : h->estimated_bitrate; }
+uint64_t tsp_get_estimated_bitrate(tsp_handle_t* h) { return h->estimated_bitrate; }
+uint64_t tsp_get_total_packets(tsp_handle_t* h) { return atomic_load(&h->total_ts_sent); }
 uint64_t tsp_get_udp_rate_scaled(tsp_handle_t* h) {
     uint64_t br = tsp_get_bitrate(h);
     int ts_per_udp = h->cfg.ts_per_udp ? h->cfg.ts_per_udp : 7;
@@ -318,9 +308,7 @@ int tsp_get_stats_snapshot(tsp_handle_t* h, tsp_stats_t* s) {
     h->last_ns = s->timestamp_ns;
     return 0;
 }
-pthread_t tsp_get_thread(tsp_handle_t* h) {
-    return h->thread;
-}
+pthread_t tsp_get_thread(tsp_handle_t* h) { return h->thread; }
 
 uint64_t tsp_debug_get_scheduled_time(tsp_handle_t* h, int idx) {
     uint64_t tail = atomic_load_explicit(&h->tail, memory_order_acquire);

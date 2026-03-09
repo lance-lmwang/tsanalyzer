@@ -72,6 +72,15 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 
         if (h->pcr_tracks[pid].bitrate_bps > 0) {
             h->live->pid_bitrate_bps[pid] = h->pcr_tracks[pid].bitrate_bps;
+
+            /* Aggregation: Update global PCR bitrate as the sum of all active program rates */
+            uint64_t total_pcr_br = 0;
+            for (int i = 0; i < TS_PID_MAX; i++) {
+                if (h->pcr_tracks[i].initialized && h->pcr_tracks[i].bitrate_bps > 0) {
+                    total_pcr_br += h->pcr_tracks[i].bitrate_bps;
+                }
+            }
+            h->live->pcr_bitrate_bps = total_pcr_br;
         }
 
         /* 3. Master STC Handling (for global pacing/MDI) */
@@ -108,8 +117,4 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 }
 
 tsa_plugin_ops_t pcr_ops = {
-    .name = "PCR_ANALYZER",
-    .create = pcr_create,
-    .destroy = pcr_destroy,
-    .get_stream = pcr_get_stream,
-};
+    .name = "PCR_ANALYZER", .create = pcr_create, .destroy = pcr_destroy, .get_stream = pcr_get_stream, };

@@ -7,9 +7,7 @@
 #define MAX_HANDLERS 256
 static tsa_descriptor_handler_t handlers[MAX_HANDLERS];
 
-void tsa_descriptors_register_handler(uint8_t tag, tsa_descriptor_handler_t handler) {
-    handlers[tag] = handler;
-}
+void tsa_descriptors_register_handler(uint8_t tag, tsa_descriptor_handler_t handler) { handlers[tag] = handler; }
 
 void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *data, uint8_t *stream_type) {
     uint8_t tag = data[0];

@@ -89,12 +89,18 @@ int main(int argc, char** argv) {
     int udp_in_port = 0;
     bool pacing_pcr = false;
 
-    static struct option long_options[] = {{"srt-in", required_argument, 0, 1},  {"udp-in", required_argument, 0, 2},
-                                           {"dest-ip", required_argument, 0, 3}, {"dest-port", required_argument, 0, 4},
-                                           {"bitrate", required_argument, 0, 5}, {"pacing-pcr", no_argument, 0, 6},
-                                           {"repair-cc", no_argument, 0, 7},     {"repair-pcr", no_argument, 0, 8},
-                                           {"forensics", no_argument, 0, 9},     {"http", required_argument, 0, 10},
-                                           {"help", no_argument, 0, 'h'},        {0, 0, 0, 0}};
+    static struct option long_options[] = {{"srt-in", required_argument, 0, 1},
+                                           {"udp-in", required_argument, 0, 2},
+                                           {"dest-ip", required_argument, 0, 3},
+                                           {"dest-port", required_argument, 0, 4},
+                                           {"bitrate", required_argument, 0, 5},
+                                           {"pacing-pcr", no_argument, 0, 6},
+                                           {"repair-cc", no_argument, 0, 7},
+                                           {"repair-pcr", no_argument, 0, 8},
+                                           {"forensics", no_argument, 0, 9},
+                                           {"http", required_argument, 0, 10},
+                                           {"help", no_argument, 0, 'h'},
+                                           {0, 0, 0, 0}};
 
     int opt;
     while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
