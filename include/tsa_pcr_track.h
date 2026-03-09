@@ -25,9 +25,10 @@ typedef struct {
     uint32_t program_id;  // Parent Program ID for MPTS aggregation
 
     /* Layer 1: Raw Sampling (27MHz & Wall-clock) */
-    uint64_t last_pcr_ticks;   // Last extracted 42-bit PCR
-    uint64_t last_arrival_ns;  // CLOCK_MONOTONIC arrival time
-    uint64_t pcr_count;        // Total PCRs seen for this PID
+    uint64_t last_pcr_ticks;         // Last extracted 42-bit PCR
+    uint64_t last_unwrapped_pcr_ns;  // Monotonic cumulative PCR nanoseconds
+    uint64_t last_arrival_ns;        // CLOCK_MONOTONIC arrival time
+    uint64_t pcr_count;              // Total PCRs seen for this PID
 
     /* Layer 2: Clock Domain (Linear Regression Model) */
     struct {
