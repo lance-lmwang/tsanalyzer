@@ -1,17 +1,32 @@
-# ES & T-STD Model Refactor - Implementation Plan (Ultimate Edition)
+# ES & T-STD Model Refactor - Implementation Plan (Ultimate Director's Edition)
+
+## Phase 0: Metrology & STC Refinement (Hotfix Task)
+**Goal**: Solve LRM precision collapse and feedback loop issues found in Phase 1 review.
+
+### Task 0.1: LRM Numerical Stability
+- **Files**: `src/tsa_pcr_track.c`
+- **Action**: Update `pcr_track_regress` to use the window's oldest sample as a baseline offset (`samples[(head - count + size) % size]`). Use $(X - X_{base})$ and $(Y - Y_{base})$ for all calculations to preserve nanosecond precision in `double` operations.
+- **Validation**: Verify that `pcr_jitter_ms` becomes mathematically stable and `verify_pcr_repetition.sh` returns `exit 0`.
+
+### Task 0.2: Predictive Loop Suppression
+- **Files**: `src/tsa_engine_pcr.c`
+- **Action**: Prevent predicted PCR values (unwrapped PCR from non-PCR packets) from entering the LRM regression model. Only update the regression window when `pcr_ticks != INVALID_PCR`.
+- **Validation**: Run long-term drift verification on sparse streams to ensure no artificial drift accumulates.
+
+---
 
 ## Phase 1: Data Structs & Zero-Copy Accumulation
 **Goal**: Encapsulate ES state and implement robust PES packet reassembly.
 
 ### Task 1.1: Define Consolidated `tsa_es_track_t`
 - **Files**: `include/tsa_stream_model.h`, `include/tsa_internal.h`
-- **Action**: Migrate all PID-indexed arrays (GOP, frame counts, codec types) into this struct. Add `tsa_pes_state_t` for reassembly tracking.
-- **Validation**: Compilation and basic stream info display in `tsa_cli`.
+- **Action**: Migrate all PID-indexed arrays (GOP, frame counts, codec types) into this consolidated struct. Add the `accumulator` struct for state tracking.
+- **Validation**: Ensure compilation succeeds and basic stream info displays correctly in `tsa_cli`.
 
 ### Task 1.2: Implement PES Payload Accumulator
 - **Files**: `src/tsa_es.c`
-- **Action**: Implement a state machine to handle cross-packet PES headers. Ensure zero-copy by storing pointers to the `tsa_packet_pool`.
-- **Validation**: Verify large PES packet (4K/HEVC) reassembly using a test PCAP.
+- **Action**: Implement a state machine (HUNTING, ACCUMULATING, FINISHING) to handle cross-packet PES headers. Ensure strict zero-copy by storing pointers to the `tsa_packet_pool`.
+- **Validation**: Verify large PES packet (4K/HEVC) reassembly using a high-bitrate test PCAP.
 
 ---
 
@@ -20,38 +35,48 @@
 
 ### Task 2.1: Implement Zero-Copy NALU Sniffer
 - **Files**: `src/tsa_es.c`
-- **Action**: Implement `tsa_au_sniff()` to detect Access Unit Boundaries (AUB) and Slice Types (I/P/B) for H.264/H.265.
-- **Validation**: Use `verify_es_accuracy.sh` and check GOP length reporting accuracy.
+- **Action**: Implement `tsa_au_sniff()` to detect Access Unit Boundaries (AUB) and Slice Types (I, P, B, IDR) for H.264/H.265 directly from the packet pool.
+- **Validation**: Run `verify_es_accuracy.sh` and ensure frame boundaries match reference standard.
 
 ### Task 2.2: GOP Stability Metrics
 - **Files**: `src/tsa_es.c`
-- **Action**: Calculate $N$ (Length), $M$ (Structure), and IDR-to-IDR Interval. Implement variance calculation for GOP stability.
-- **Validation**: Verify GOP metrics against a known golden stream.
+- **Action**: Calculate $N$ (Length), $M$ (Structure), and IDR-to-IDR Interval. Implement an Exponential Moving Average (EMA) for GOP length to measure stability.
+- **Validation**: Verify GOP metrics output against a known golden stream.
 
 ---
 
 ## Phase 3: T-STD Buffer Simulation Engine
-**Goal**: Industrial-grade leaky bucket simulation according to Annex D.
+**Goal**: Industrial-grade leaky bucket simulation according to ISO/IEC 13818-1 Annex D.
 
 ### Task 3.1: TB/MB/EB Leaky Bucket Operators
 - **Files**: `src/tsa_es.c`
-- **Action**: Implement `tsa_tstd_fill()` (ingress) and `tsa_tstd_drain()` (at $t=DTS$). Use fixed-point Q64 math.
-- **Validation**: Check `pid_tb_fill` and `pid_eb_fill` levels. Waveform should be a stable sawtooth for CBR.
+- **Action**: Implement `tsa_tstd_fill()` (ingress) and `tsa_tstd_drain()` (at $t=DTS$) using fixed-point Q64 math.
+- **Validation**: Check `pid_tb_fill` and `pid_eb_fill` levels. The waveform must be a stable sawtooth for CBR streams.
 
-### Task 3.2: Discontinuity & Sync Recovery
+### Task 3.2: DTS Extrapolation & Sync Recovery
 - **Files**: `src/tsa_es.c`
-- **Action**: Implement model reset on CC errors or Discontinuity markers. Tie $R_{rx}$ (TB Leak Rate) to the **Phase 1 Physical Bitrate**.
-- **Validation**: Inject CC errors using `tsa_chaos_injector.sh` and verify the T-STD model recovers at the next PUSI.
+- **Action**: Implement DTS extrapolation for PES headers missing DTS. Implement model reset on CC errors/Discontinuity markers.
+- **Validation**: Inject CC errors using `tsa_chaos_injector.sh` and verify the T-STD model recovers gracefully at the next PUSI.
+
+### Task 3.3: Dynamic Leak Rate Sync
+- **Files**: `src/tsa_es.c`, `src/tsa_engine_pcr.c`
+- **Action**: Dynamically tie $R_{rx}$ (TB Leak Rate) to the real-time Physical Bitrate calculated in Phase 1.
+- **Validation**: Run `verify_realtime_metrology.sh` to ensure buffer simulation does not drift over long durations.
 
 ---
 
-## Phase 4: A/V Sync & Temporal Metrology
-**Goal**: Measure synchronization and temporal quality.
+## Phase 4: A/V Sync & Violation Monitoring
+**Goal**: Measure synchronization and trigger alerts for buffer violations.
 
 ### Task 4.1: A/V Skew & PTS/DTS Jitter
 - **Files**: `src/tsa_es.c`, `src/tsa_engine_pcr.c`
-- **Action**: Calculate skew between Video and Audio PTS. Measure PTS/DTS jitter relative to the **Reconstructed STC**.
-- **Validation**: Verify that A/V skew matches professional analyzer results.
+- **Action**: Calculate skew between Video and Audio PTS. Measure PTS/DTS jitter relative to the Reconstructed STC.
+- **Validation**: Verify that A/V skew matches professional lab-grade analyzer results.
+
+### Task 4.2: T-STD Violation Detection
+- **Files**: `src/tsa_es.c`, `src/tsa_alert.c`
+- **Action**: Implement Overflow (fill > max) and Underflow (DTS < STC) detection logic. Trigger appropriate alerts.
+- **Validation**: Feed a known-broken TS stream and verify that underflow alerts are correctly generated.
 
 ---
 
@@ -59,6 +84,6 @@
 **Goal**: Export metrics and ensure performance.
 
 ### Task 5.1: JSON Snapshot & CLI Integration
-- **Files**: `src/tsa_snapshot.c`, `src/tsa_json.c`
-- **Action**: Export GOP stability, T-STD fill levels, and A/V skew to the JSON snapshot. Update CLI monitor.
-- **Validation**: Run `verify_30s_smoke.sh` and `make test`.
+- **Files**: `src/tsa_snapshot.c`, `src/tsa_json.c`, `src/tsa_cli.c`
+- **Action**: Export GOP stability, T-STD fill levels, and A/V skew to the JSON snapshot. Update the CLI monitor UI to display these metrics.
+- **Validation**: Run `verify_30s_smoke.sh` and execute `make test` for memory leak (valgrind) checks.

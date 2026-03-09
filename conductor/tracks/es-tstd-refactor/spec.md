@@ -1,53 +1,81 @@
-# ES & T-STD Model Refactor Spec (Enhanced Director's Edition)
+# ES & T-STD Model Refactor Spec (Ultimate Director's Edition)
 
-## 1. 核心目标 (Core Objectives)
-- **标准化 T-STD 仿真**: 严格遵循 ISO/IEC 13818-1 Annex D，实现 TB, MB, EB 的泄露算法。
-- **解耦解析状态**: 引入独立的 PES 状态机，支持跨包重组。
-- **GOP & AUB 识别**: 零拷贝探测 Access Unit Boundary (AUB) 与 NALU 结构。
+## 1. Core Objectives
+- **Metrology Integrity (Phase 0)**: Resolve LRM (Linear Regression Model) numerical instability using baseline offsets.
+- **T-STD Compliance**: Implement TB (Transport), MB (Multiplexing), and EB (Elementary) buffer models per ISO/IEC 13818-1 Annex D.
+- **AU-Aware Analytics**: Identify Access Unit (AU) boundaries and GOP structures (N/M) for H.264/H.265.
 
-## 2. 核心数学模型
+## 2. Technical Models
 
-### 2.1 T-STD 泄露速率定义
-- **TB Rate ($R_{rx}$)**: $R_{rx} = 1.2 \times Bitrate_{physical}$ (或根据标准指定的固定倍率)。
-- **EB Removal**: 在 $t = DTS$ 的时刻，瞬间将 $Size(AU)$ 从 EB 中移除。
+### 2.1 Refined LRM (Phase 0)
+- **Baseline Alignment**: $T_{base} = samples[ oldest\_idx ]$. All calculations use $(X - X_{base})$ and $(Y - Y_{base})$ to preserve nanosecond precision in `double` operations.
+- **No Feedback Loop**: The regression window MUST only contain **real observed PCR samples**. Predictive/Unwrapped values are strictly forbidden for regression.
 
-### 2.2 PES 重组状态机 (PES Accumulator)
-- **State**: `HUNTING` (寻头) -> `ACCUMULATING` (累加数据) -> `FINISHING` (提交 AU)。
-- **Zero-Copy**: 仅记录每个 TS 载荷在 Packet Pool 中的指针和偏移，不进行数据 `memcpy`。
+### 2.2 T-STD Leaky Bucket & Removal
+- **Leak Rate ($R_{rx}$)**: Synchronized with the high-precision Physical Bitrate from the Metrology Engine.
+- **AU Removal**: At the exact moment of $t = DTS$, remove precisely one AU ($Size(AU)$) from the EB.
+- **DTS Extrapolation**: If DTS is missing in the PES header, it must be extrapolated using the sequence frame rate: $DTS_{n} = DTS_{n-1} + Duration_{frame}$.
 
-## 3. 核心数据结构
+### 2.3 Buffer Violation Logic
+- **Overflow**: Triggered when $F(t) > Buffer\_Size_{standard}$ for the specific level (TB/MB/EB).
+- **Underflow**: Triggered when $DTS_{n} < STC(t)$, meaning the data required by the decoder has not arrived by its scheduled removal time.
 
-### 3.1 增强型 `tsa_es_track_t`
+## 3. Data Structures
+
+### 3.1 Consolidated `tsa_es_track_t`
 ```c
 typedef struct {
     uint16_t pid;
-    
-    /* Layer 1: PES State Machine */
+    uint8_t codec_type;
+
+    /* Layer 1: PES/AU Accumulator (Zero-Copy) */
     struct {
-        uint8_t state;
-        uint32_t current_pes_len;
+        uint8_t state;           // HUNTING, ACCUMULATING, FINISHING
         uint64_t last_pts;
         uint64_t last_dts;
-    } pes;
+        uint32_t bytes_received;
+        bool has_pts;
+        bool has_dts;
+    } accumulator;
 
-    /* Layer 2: T-STD Buffers (Q64 Fixed-Point) */
+    /* Layer 2: T-STD Simulation (Fixed-point Q64) */
     struct {
-        int128_t tb_fill;   // Transport Buffer
-        int128_t mb_fill;   // Multiplexing Buffer
-        int128_t eb_fill;   // Elementary Buffer
-        uint64_t last_update_vstc;
-        bool sync_lost;     // 遇到 CC 错误时标记为同步丢失
+        int128_t tb_fill;        // Transport Buffer fill level
+        int128_t mb_fill;        // Multiplexing Buffer fill level
+        int128_t eb_fill;        // Elementary Buffer fill level
+        uint64_t last_leak_vstc;
+        bool sync_lost;          // Mark as sync-lost on CC errors
+        bool violation_active;   // Overflow/Underflow status
     } tstd;
 
-    /* Layer 3: GOP Analysis */
+    /* Layer 3: GOP Analysis (Temporal analytics) */
     struct {
-        uint32_t gop_n;
+        uint32_t gop_n;          // Number of frames in GOP
+        uint32_t gop_m;          // Distance between anchors
+        uint64_t last_idr_ns;    // Timestamp of last IDR
         uint32_t idr_interval_ms;
         uint8_t last_slice_type;
     } gop;
 } tsa_es_track_t;
 ```
 
-## 4. 异常处理 (Error Handling)
-- **CC Error**: 立即标记 `tstd.sync_lost = true`。直到下一个 `payload_unit_start_indicator` (PUSI) 且 PES 头部完整时，重置 T-STD 模型。
-- **Missing DTS**: 如果 PES 中只有 PTS，则 $DTS = PTS$。
+### 3.2 Unified Frame Abstraction `tsa_au_t`
+```c
+typedef struct {
+    uint64_t pts_ns;
+    uint64_t dts_ns;
+    uint32_t size;
+    uint8_t frame_type;      // I, P, B, IDR
+    bool is_idr;
+    uint64_t pos_in_stream;  // Byte offset for forensic correlation
+} tsa_au_t;
+```
+
+## 4. Error Handling
+- **CC Error**: Immediately mark `tstd.sync_lost = true`. Reset and re-sync the T-STD model only when the next PUSI is detected and a valid PES header is successfully parsed.
+- **Discontinuity**: Upon detecting a discontinuity indicator, re-align the physical leak rate $R_{rx}$ with the latest metrology anchor.
+
+## 5. Validation Criteria
+- **Bitrate Coupling**: T-STD leak must strictly follow the calculated physical bitrate.
+- **Deterministic Removal**: Verify that buffer fill levels drop precisely at the DTS timestamp.
+- **Zero-Copy Performance**: No extra memory allocation or `memcpy` during PES payload reassembly.
