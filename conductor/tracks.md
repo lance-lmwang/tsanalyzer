@@ -39,6 +39,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [/] **Track: Metrology Refactor (Algorithm & Data Structure Refactor)**
   *Link: [./tracks/metrology-refactor/](./tracks/metrology-refactor/)*
 
+- [ ] **Track: ES & T-STD Model Refactor (Buffer & GOP Analytics)**
+  *Link: [./tracks/es-tstd-refactor/](./tracks/es-tstd-refactor/)*
+
 - [ ] **Track: Industrial Integration (ltntstools)**
   *Link: [./tracks/industrial_integration_ltntstools/](./tracks/industrial_integration_ltntstools/)*
 
