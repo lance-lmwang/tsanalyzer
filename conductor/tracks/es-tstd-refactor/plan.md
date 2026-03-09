@@ -1,17 +1,9 @@
 # ES & T-STD Model Refactor - Implementation Plan (Ultimate Director's Edition)
 
-## Phase 0: Metrology & STC Refinement (Hotfix Task)
-**Goal**: Solve LRM precision collapse and feedback loop issues found in Phase 1 review.
-
-### Task 0.1: LRM Numerical Stability
-- **Files**: `src/tsa_pcr_track.c`
-- **Action**: Update `pcr_track_regress` to use the window's oldest sample as a baseline offset (`samples[(head - count + size) % size]`). Use $(X - X_{base})$ and $(Y - Y_{base})$ for all calculations to preserve nanosecond precision in `double` operations.
-- **Validation**: Verify that `pcr_jitter_ms` becomes mathematically stable and `verify_pcr_repetition.sh` returns `exit 0`.
-
-### Task 0.2: Predictive Loop Suppression
-- **Files**: `src/tsa_engine_pcr.c`
-- **Action**: Prevent predicted PCR values (unwrapped PCR from non-PCR packets) from entering the LRM regression model. Only update the regression window when `pcr_ticks != INVALID_PCR`.
-- **Validation**: Run long-term drift verification on sparse streams to ensure no artificial drift accumulates.
+## Phase 0: Metrology & STC Refinement (Hotfix Task) [x]
+**Status**: COMPLETED (Verified in Commit 7e98881)
+- [x] LRM Numerical Stability (Baseline Offset)
+- [x] Predictive Loop Suppression (Validity Checks)
 
 ---
 
