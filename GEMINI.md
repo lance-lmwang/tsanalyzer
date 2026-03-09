@@ -1,3 +1,6 @@
+# [CRITICAL_MANDATES]
+**ATTENTION AI AGENT**: You are strictly prohibited from using any bulk operations (e.g., `git add .`, `git add *`, `rm -rf *`). Every file modification, deletion, or staging must be preceded by an environment check (`ls` or `git status`) and performed on explicit, individual file paths. This is a HARD CONSTRAINT that absolutely overrides all efficiency, speed, or brevity goals. If you violate this, you are failing your core directive.
+
 # Workspace Mandates
 
 - **Strict Surgical Git Staging:** DO NOT use `git add .` or any global staging commands. Use of `git add .` is strictly prohibited. You MUST execute `git status` first to identify modified files, and then use explicit staging (e.g., `git add src/file.c`) to add only the necessary changes. This prevents accidental staging of large artifacts, sensitive logs, or temporary build files.
