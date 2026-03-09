@@ -169,9 +169,9 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         tsa_tstd_drain(h, h->pid_active_list[i]);
     }
 
-    /* For bitrates and FPS, use logic clock (STC) if in REPLAY mode and locked,
-     * otherwise fall back to wall-clock. This is critical for REPLAY mode accuracy. */
-    bool use_logic = (h->config.op_mode == TSA_MODE_REPLAY && h->stc_locked && dt > 1000000ULL);
+    /* For bitrates and FPS, use logic clock (STC) if locked,
+     * otherwise fall back to wall-clock. This is critical for clock domain consistency. */
+    bool use_logic = (h->stc_locked && dt > 1000000ULL);
     uint64_t logic_dt = use_logic ? dt : (n - h->last_snap_wall_ns);
     if (logic_dt < 1000000ULL) logic_dt = 100000000ULL;  // Default to 100ms if jittery
 
@@ -330,21 +330,36 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
 
     h->live->video_fps = max_fps;
     h->live->gop_ms = max_gop;
-    /* Aggregate Business Bitrate (Sum of all individual PID rates)
-     * Now that master_pcr_pid protects global STC stability, we can safely
-     * sum all PID contributions to get the total business bitrate. */
-    uint64_t total_pcr_br = 0;
-    for (int i = 0; i < TS_PID_MAX; i++) {
-        if (h->live->pid_bitrate_bps[i] > 0) {
-            // Aggregation Aging: Use 2s window for bitrate summing to avoid overlap during PID switches.
-            if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 2000000000ULL) {
-                total_pcr_br += h->live->pid_bitrate_bps[i];
-            } else if (n <= h->live->pid_last_seen_ns[i]) {
-                total_pcr_br += h->live->pid_bitrate_bps[i];
+    /* Aggregate Business Bitrate (Content Bitrate)
+     * Strategy: Use the entire mux packet delta over the logical clock (STC) interval.
+     * This provides a stable, 1-second average that matches the stream's intended bitrate
+     * and eliminates system-clock drift. */
+    uint64_t dp_total = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
+    if (h->stc_locked && logic_dt > 0 && dp_total > 0) {
+        uint64_t content_bps = (uint64_t)(((unsigned __int128)dp_total * TS_PACKET_BITS * NS_PER_SEC) / logic_dt);
+
+        // Apply EMA for professional display stability
+        float alpha_global = 0.2f;
+        if (h->live->pcr_bitrate_bps == 0) {
+            h->live->pcr_bitrate_bps = content_bps;
+        } else {
+            h->live->pcr_bitrate_bps = (uint64_t)(alpha_global * (double)content_bps +
+                                       (1.0f - alpha_global) * (double)h->live->pcr_bitrate_bps);
+        }
+    } else {
+        /* Fallback: Sum individual PID rates if STC is not yet locked */
+        uint64_t total_pcr_br = 0;
+        for (int i = 0; i < TS_PID_MAX; i++) {
+            if (h->live->pid_bitrate_bps[i] > 0) {
+                if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 2000000000ULL) {
+                    total_pcr_br += h->live->pid_bitrate_bps[i];
+                } else if (n <= h->live->pid_last_seen_ns[i]) {
+                    total_pcr_br += h->live->pid_bitrate_bps[i];
+                }
             }
         }
+        h->live->pcr_bitrate_bps = total_pcr_br;
     }
-    h->live->pcr_bitrate_bps = total_pcr_br;
     /* Populate Snapshot Summary from latest live state before swap */
     sn->summary.master_health = h->last_health_score;
     sn->summary.total_packets = h->live->total_ts_packets;

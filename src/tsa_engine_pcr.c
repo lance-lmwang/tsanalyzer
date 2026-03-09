@@ -153,8 +153,13 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
                 uint64_t bits_pid = pkts_in_interval_pid * TS_PACKET_BITS;
                 uint64_t inst_bps_pid = (uint64_t)(((unsigned __int128)bits_pid * 27000000ULL) / dt_ticks);
 
-                /* Store result per PID to support MPTS */
-                h->live->pid_bitrate_bps[pid] = inst_bps_pid;
+                /* Store result per PID to support MPTS. Apply EMA for stability. */
+                float alpha = 0.15f; // Match tsa_snapshot.c default alpha
+                if (h->live->pid_bitrate_bps[pid] == 0) {
+                    h->live->pid_bitrate_bps[pid] = inst_bps_pid;
+                } else {
+                    h->live->pid_bitrate_bps[pid] = (uint64_t)(alpha * (double)inst_bps_pid + (1.0f - alpha) * (double)h->live->pid_bitrate_bps[pid]);
+                }
                 h->clock_inspectors[pid].br_est.last_bitrate_bps = inst_bps_mux;
 
                 /* Calculate precise Ticks Per Packet (Q16.16) for pacing analysis */
@@ -183,25 +188,10 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
                     "drift=%.1f ppm",
                     pid, (unsigned long)pkts_in_interval_mux, (unsigned long)dt_ticks, (unsigned long)inst_bps_mux,
                     (double)h->clock_inspectors[pid].br_est.ticks_per_packet_q16 / 65536.0,
-                    h->clock_inspectors[pid].br_est.pcr_drift_ppm); /* Immediate MPTS Aggregation: Update global rate
-                                                                     * now Note: We only sum bitrates from PIDs seen in
-                                                                     * the last 5 seconds to avoid 'zombie' values. */
-                uint64_t total_br = 0;
-                for (int i = 0; i < TS_PID_MAX; i++) {
-                    if (h->live->pid_bitrate_bps[i] > 0) {
-                        // Aggregation Aging: Use 2s window for bitrate summing to avoid overlap during PID switches.
-                        if (now > h->live->pid_last_seen_ns[i] &&
-                            (now - h->live->pid_last_seen_ns[i]) < 2000000000ULL) {
-                            total_br += h->live->pid_bitrate_bps[i];
-                        } else if (now <= h->live->pid_last_seen_ns[i]) {
-                            /* Time might be stationary in tests */
-                            total_br += h->live->pid_bitrate_bps[i];
-                        }
-                    }
-                }
-                h->live->pcr_bitrate_bps = total_br;
+                    h->clock_inspectors[pid].br_est.pcr_drift_ppm);
 
                 h->clock_inspectors[pid].br_est.last_pcr_ticks = pt;
+                h->clock_inspectors[pid].br_est.last_total_pkts_anchor = total_pkts_now;
                 h->clock_inspectors[pid].br_est.last_total_pkts_anchor = total_pkts_now;
                 h->clock_inspectors[pid].br_est.last_pid_pkts_anchor = pid_pkts_now;
                 h->clock_inspectors[pid].br_est.last_cc_count = current_cc_errors;
