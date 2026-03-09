@@ -70,14 +70,14 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 
     // 2. Continuity Counter (CC) Check
     bool cc_error_detected = false;
-    if (h->last_cc[pid] != 0x10 && !res->has_discontinuity) {
-        ts_cc_status_t s =
-            cc_classify_error(h->last_cc[pid], res->cc, res->has_payload, (pkt[3] & 0x20) && !(pkt[3] & 0x10));
+    if (h->es_tracks[pid].last_cc != 0x10 && !res->has_discontinuity) {
+        ts_cc_status_t s = cc_classify_error(h->es_tracks[pid].last_cc, res->cc, res->has_payload,
+                                             (pkt[3] & 0x20) && !(pkt[3] & 0x10));
 
         if (s == TS_CC_LOSS || s == TS_CC_OUT_OF_ORDER) {
             cc_error_detected = true;
             if (s == TS_CC_LOSS) {
-                h->live->cc_loss_count += (res->cc - ((h->last_cc[pid] + 1) & 0x0F)) & 0x0F;
+                h->live->cc_loss_count += (res->cc - ((h->es_tracks[pid].last_cc + 1) & 0x0F)) & 0x0F;
             }
         }
     }
@@ -87,7 +87,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
     if (cc_error_detected) cc_currently_active = true;
 
     if (tsa_debounce_update(&h->debounce_cc, cc_currently_active, now, 100000000ULL, 2000000000ULL)) {
-        if (!h->ignore_next_cc[pid]) {
+        if (!h->es_tracks[pid].ignore_next_cc) {
             if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
             h->live->cc_error.count++;
             h->live->cc_error.last_timestamp_ns = now;
@@ -99,13 +99,13 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
             tsa_push_event(h, TSA_EVENT_CC_ERROR, pid, (uint64_t)res->cc);
         }
     }
-    h->ignore_next_cc[pid] = false;
+    h->es_tracks[pid].ignore_next_cc = false;
 
     // 3. PTS Error Check (P2.5)
     bool pts_error_detected = false;
     uint64_t pts_diff_ms = 0;
     if (res->has_pes_header) {
-        uint64_t last_pts_ns = h->pid_last_seen_vstc[pid];
+        uint64_t last_pts_ns = h->es_tracks[pid].last_seen_vstc;
         if (last_pts_ns > 0) {
             uint64_t diff_ns = h->stc_ns - last_pts_ns;
             if (diff_ns > 700000000ULL) {  // 700ms threshold
@@ -113,7 +113,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
                 pts_diff_ms = diff_ns / 1000000ULL;
             }
         }
-        h->pid_last_seen_vstc[pid] = h->stc_ns;
+        h->es_tracks[pid].last_seen_vstc = h->stc_ns;
     }
 
     bool pts_active = (now - h->debounce_pts.last_occurrence_ns < 1000000000ULL);
@@ -126,7 +126,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
         tsa_push_event(h, TSA_EVENT_PTS_ERROR, pid, pts_diff_ms);
     }
 
-    h->last_cc[pid] = res->cc;
+    h->es_tracks[pid].last_cc = res->cc;
 }
 
 tsa_plugin_ops_t tr101290_ops = {

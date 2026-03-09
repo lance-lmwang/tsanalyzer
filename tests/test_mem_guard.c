@@ -21,7 +21,8 @@ void test_pes_quota() {
         pkt[2] = p & 0xFF;
         h->live->pid_is_referenced[p] = true;
         tsa_process_packet(h, pkt, now + p * 1000);
-        if (h->pid_pes_buf[p]) allocated_count++;
+        /* Zero-copy: An active PES accumulation is indicated by having packet references */
+        if (h->es_tracks[p].pes.ref_count > 0) allocated_count++;
     }
 
     printf("Allocated PIDs: %d, Total Memory: %zu bytes\n", allocated_count, h->pes_total_allocated);

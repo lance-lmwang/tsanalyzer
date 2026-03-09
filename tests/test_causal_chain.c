@@ -41,7 +41,7 @@ int main() {
     }
     h->seen_pat = h->seen_pmt = true;
     h->last_pat_ns = h->last_pmt_ns = now;
-    h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
+    h->es_tracks[0x0100].tstd.eb_fill_q64 = INT_TO_Q64_64(50000000);
     h->stc_slope_q64 = (int128_t)1 << 64;
 
     tsa_commit_snapshot(h, now);
@@ -67,7 +67,7 @@ int main() {
         cc = (cc + 1) & 0x0F;
     }
     h->last_pat_ns = h->last_pmt_ns = now;
-    h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
+    h->es_tracks[0x0100].tstd.eb_fill_q64 = INT_TO_Q64_64(50000000);
     h->stc_slope_q64 = (int128_t)1 << 64;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &s1);
@@ -87,7 +87,7 @@ int main() {
         cc = (cc + 1) & 0x0F;
     }
     h->last_pat_ns = h->last_pmt_ns = now;
-    h->pid_eb_fill_q64[0x0100] = INT_TO_Q64_64(50000000);
+    h->es_tracks[0x0100].tstd.eb_fill_q64 = INT_TO_Q64_64(50000000);
     h->stc_slope_q64 = (int128_t)1 << 64;
     tsa_commit_snapshot(h, now);
     tsa_take_snapshot_full(h, &s1);

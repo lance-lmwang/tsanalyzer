@@ -10,6 +10,7 @@
 #include "tsa_alert.h"
 #include "tsa_bitstream.h"
 #include "tsa_clock.h"
+#include "tsa_es_track.h"
 #include "tsa_histogram.h"
 #include "tsa_log.h"
 #include "tsa_pcr_track.h"
@@ -29,6 +30,13 @@ typedef int128_t q64_64;
 typedef uint64_t q32_32;
 #define TO_Q32_32(x) ((uint64_t)((x)*4294967296.0))
 
+/* --- Global Limits --- */
+#define MAX_EVENT_QUEUE 1024
+#define MAX_PROGRAMS 16
+#define MAX_STREAMS_PER_PROG 32
+#define MAX_TSA_PLUGINS 16
+#define MAX_PLUGIN_CONTEXT_SIZE 32768
+
 /* --- MPEG-TS Constants --- */
 #define TS_AF_FLAG 0x20
 #define TS_PAYLOAD_FLAG 0x10
@@ -43,7 +51,6 @@ typedef uint64_t q32_32;
 
 /* --- Enums --- */
 typedef enum { TS_SYNC_HUNTING, TS_SYNC_CONFIRMING, TS_SYNC_LOCKED } tsa_sync_state_t;
-
 typedef enum { TSA_STATUS_VALID = 0, TSA_STATUS_INVALID = 1, TSA_STATUS_DEGRADED = 2 } tsa_measurement_status_t;
 
 typedef enum {
@@ -77,10 +84,6 @@ typedef struct {
     bool is_fired;
 } tsa_debounce_t;
 
-#define MAX_EVENT_QUEUE 1024
-#define MAX_PROGRAMS 16
-#define MAX_STREAMS_PER_PROG 32
-
 /* --- Utility Prototypes --- */
 typedef struct {
     char* base;
@@ -100,7 +103,6 @@ void tsa_mbuf_append_char(tsa_metric_buffer_t* b, char c);
 int tsa_fast_itoa(char* buf, int64_t val);
 int tsa_fast_ftoa(char* buf, float val, int prec);
 
-/* Extended SRT URL Parser: srt://host:port?mode=caller&latency=200&passphrase=abc&pbkeylen=16 */
 int parse_url_ext(const char* url, char* host, int* port, int* is_listener, int* latency, char* passphrase,
                   int* pbkeylen);
 
@@ -116,10 +118,8 @@ typedef struct {
 int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h);
 uint32_t mpegts_crc32(const uint8_t* data, int len);
 uint32_t tsa_crc32_check(const uint8_t* data, int len);
-
 ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 
-/* Stream Type IDs (MPEG-TS Standard) */
 #define TSA_TYPE_VIDEO_MPEG2 0x02
 #define TSA_TYPE_VIDEO_H264 0x1b
 #define TSA_TYPE_VIDEO_HEVC 0x24
@@ -131,11 +131,9 @@ ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 static inline bool tsa_is_h264(uint8_t type) {
     return type == TSA_TYPE_VIDEO_H264;
 }
-
 static inline bool tsa_is_hevc(uint8_t type) {
     return type == TSA_TYPE_VIDEO_HEVC;
 }
-
 static inline bool tsa_is_video(uint8_t type) {
     return type == TSA_TYPE_VIDEO_H264 || type == TSA_TYPE_VIDEO_HEVC || type == TSA_TYPE_VIDEO_MPEG2;
 }
@@ -157,7 +155,6 @@ typedef struct {
     uint64_t dts;
 } ts_decode_result_t;
 
-/* --- Section Filtering --- */
 typedef struct {
     uint8_t buffer[4096];
     uint32_t len;
@@ -166,12 +163,10 @@ typedef struct {
     bool seen_before;
     uint8_t last_ver;
 } ts_section_filter_t;
-
 typedef struct {
     uint16_t pid;
     uint8_t stream_type;
 } tsa_stream_info_t;
-
 typedef struct {
     uint16_t program_number;
     uint16_t pmt_pid;
@@ -180,34 +175,29 @@ typedef struct {
     tsa_stream_info_t streams[MAX_STREAMS_PER_PROG];
 } tsa_program_info_t;
 
-/* --- PCR Window --- */
 typedef struct {
     tsa_pcr_sample_t* samples;
     uint32_t size;
     uint32_t count;
     uint32_t head;
 } ts_pcr_window_t;
-
 void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t s);
 void ts_pcr_window_destroy(ts_pcr_window_t* w);
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t s, uint64_t p, uint64_t o);
 int ts_pcr_window_regress(ts_pcr_window_t* w, double* slope, double* intercept, int64_t* max_err);
 
-/* --- Events --- */
 typedef struct {
     tsa_event_type_t type;
     uint16_t pid;
     uint64_t timestamp_ns;
     uint64_t value;
 } tsa_event_t;
-
 typedef struct {
     tsa_event_t events[MAX_EVENT_QUEUE];
     _Atomic size_t head;
     _Atomic size_t tail;
 } tsa_event_ring_t;
 
-/* --- Forensic & Ring --- */
 typedef struct tsa_packet_ring tsa_packet_ring_t;
 tsa_packet_ring_t* tsa_packet_ring_create(size_t sz);
 void tsa_packet_ring_destroy(tsa_packet_ring_t* r);
@@ -223,21 +213,17 @@ void tsa_forensic_writer_stop(tsa_forensic_writer_t* w);
 int tsa_forensic_writer_write_all(tsa_forensic_writer_t* w);
 void tsa_forensic_generate_json(struct tsa_handle* h, char* buf, size_t sz);
 
-/* --- Core Structure --- */
 struct tsa_handle {
     tsa_config_t config;
     tsa_alert_state_t alerts[TSA_ALERT_MAX];
-
     tsa_sync_state_t sync_state;
     uint32_t sync_confirm_count;
     uint8_t sync_buffer[TS_PACKET_SIZE];
     size_t sync_buffer_len;
-
     uint32_t consecutive_sync_errors;
     uint32_t consecutive_good_syncs;
     bool signal_lock;
     bool sync_loss_alert_active;
-
     bool engine_started;
     uint64_t start_ns;
     uint64_t last_snap_ns;
@@ -246,13 +232,10 @@ struct tsa_handle {
     bool stc_locked;
     int128_t stc_slope_q64;
     int128_t stc_intercept_q64;
-
     uint64_t last_pcr_ticks;
     uint64_t last_pcr_arrival_ns;
     uint64_t last_pcr_interval_bitrate_bps;
     uint16_t master_pcr_pid;
-
-    /* Professional Bitrate Calculator */
     struct {
         uint64_t pcr_first;
         uint64_t packet_acc;
@@ -262,104 +245,43 @@ struct tsa_handle {
     } br_calc;
     uint64_t pkts_since_pcr;
     uint64_t pcr_ema_alpha_q32;
-
     ts_pcr_window_t pcr_window;
     ts_pcr_window_t pcr_long_window;
     uint64_t last_long_pcr_sample_ns;
     double long_term_drift_ppm;
     double stc_wall_drift_ppm;
-
     tsa_tr101290_stats_t* live;
     tsa_tr101290_stats_t* prev_snap_base;
-
     struct {
         tsa_snapshot_full_t* buffers[2];
         _Atomic uint8_t active_idx;
     } double_buffer;
-
     bool pending_snapshot;
     uint64_t snapshot_stc;
-
     float last_health_score;
-
-    /* PID state arrays (indexed by PID) */
     bool* pid_seen;
     bool* pid_is_pmt;
     bool* pid_is_scte35;
     uint8_t* pid_stream_type;
-    uint8_t* last_cc;
-    bool* ignore_next_cc;
     uint32_t* pid_cc_error_suppression;
     tsa_measurement_status_t* pid_status;
     tsa_pcr_track_t* pcr_tracks;
-    int128_t* pid_eb_fill_q64;
-    int128_t* pid_tb_fill_q64;
-    int128_t* pid_mb_fill_q64;
-    uint64_t* last_buffer_leak_vstc;
+    tsa_es_track_t* es_tracks;
     double* pid_bitrate_ema;
     uint64_t* pid_bitrate_min;
     uint64_t* pid_bitrate_max;
-    uint64_t* pid_last_seen_vstc;
-    uint64_t* pid_last_seen_ns;
     uint64_t* prev_snap_base_frames;
-
-    // Codec metadata
-    uint8_t** pid_pes_buf;
-    uint32_t* pid_pes_len;
-    uint32_t* pid_pes_cap;
-    uint16_t* pid_width;
-    uint16_t* pid_height;
-    uint8_t* pid_profile;
-    uint8_t* pid_level;
-    uint8_t* pid_chroma_format;
-    uint8_t* pid_bit_depth;
-    float* pid_exact_fps;
-    uint32_t* pid_audio_sample_rate;
-    uint8_t* pid_audio_channels;
-    uint8_t* pid_log2_max_frame_num;
-    uint32_t* pid_last_frame_num;
-    bool* pid_frame_num_valid;
-    uint32_t* pid_gop_n;
-    uint32_t* pid_last_gop_n;
-    uint32_t* pid_gop_min;
-    uint32_t* pid_gop_max;
-    uint64_t* pid_last_idr_ns;
-    uint32_t* pid_gop_ms;
-    uint64_t* pid_i_frames;
-    uint64_t* pid_p_frames;
-    uint64_t* pid_b_frames;
-    uint64_t* pid_closed_gops;
-    uint64_t* pid_open_gops;
-    bool* pid_has_cea708;
-    bool* pid_closed_gop;
-
-    uint64_t* pid_last_pts_33;
-    uint64_t* pid_pts_offset_64;
-
     char (*pid_labels)[TSA_LABEL_MAX];
-    struct {
-        uint64_t dts_ns;
-        uint32_t size;
-    } (*pid_au_q)[32];
-    uint8_t* pid_au_head;
-    uint8_t* pid_au_tail;
-    uint64_t* pid_pending_dts;
     uint64_t last_v_pts;
     uint64_t last_a_pts;
-
     uint64_t last_packet_rx_ns;
-
-    /* Professional Metrology (Atomic Monotonic Counter) */
     struct {
-        uint64_t last_snap_bytes; /* Baseline packets for last snapshot */
-        uint64_t last_bps;        /* Cached result of last calculation */
-        uint64_t window_start_ns; /* Start time of current measurement window */
+        uint64_t last_snap_bytes;
+        uint64_t last_bps;
+        uint64_t window_start_ns;
     } phys_stats;
-
-    // SCTE-35 Audit State
     uint64_t scte35_target_pts[TS_PID_MAX];
     int64_t scte35_alignment_error_ns[TS_PID_MAX];
-
     ts_section_filter_t* pid_filters;
     uint32_t program_count;
     tsa_program_info_t programs[MAX_PROGRAMS];
@@ -369,39 +291,27 @@ struct tsa_handle {
     char provider_name[256];
     bool seen_pat, seen_pmt;
     uint64_t last_pat_ns, last_pmt_ns, last_sdt_ns, last_nit_ns;
-
     uint16_t pid_active_list[MAX_ACTIVE_PIDS];
     int16_t pid_to_active_idx[TS_PID_MAX];
     uint32_t pid_tracker_count;
-
     tsa_op_mode_t op_mode;
     tsa_srt_stats_t srt_live;
-
     void* pool_base;
     size_t pool_offset;
     size_t pool_size;
     uint32_t pes_pool_used;
     uint64_t pes_total_allocated;
     uint64_t pes_max_quota;
-
     int last_trigger_reason;
     uint64_t last_forensic_alarm_count;
-
     tsa_event_ring_t* event_q;
     tsa_webhook_engine_t* webhook;
-
-    /* --- Industrial Debounce States --- */
     tsa_debounce_t debounce_cc;
     tsa_debounce_t debounce_transport;
     tsa_debounce_t debounce_pts;
-
-    /* --- Stream Tree & Plugins --- */
     tsa_stream_t root_stream;
     uint64_t current_ns;
     ts_decode_result_t current_res;
-
-#define MAX_TSA_PLUGINS 16
-#define MAX_PLUGIN_CONTEXT_SIZE 32768
     struct {
         void* instance;
         tsa_plugin_ops_t* ops;
@@ -409,11 +319,9 @@ struct tsa_handle {
         alignas(16) uint8_t context[MAX_PLUGIN_CONTEXT_SIZE];
     } plugins[MAX_TSA_PLUGINS];
     int plugin_count;
-
     tsa_histogram_t* pid_histograms[TS_PID_MAX];
 };
 
-/* --- Internal APIs --- */
 int128_t ts_now_ns128(void);
 int128_t ts_time_to_ns128(struct timespec ts);
 struct timespec ns128_to_timespec(int128_t ns);
@@ -425,18 +333,18 @@ void tsa_clock_update(const uint8_t* packet, tsa_clock_inspector_t* inspector, u
 void tsa_section_filter_push(struct tsa_handle* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
 void tsa_push_event(struct tsa_handle* h, tsa_event_type_t type, uint16_t pid, uint64_t val);
 void tsa_handle_es_payload(struct tsa_handle* h, uint16_t pid, const uint8_t* buf, int len, uint64_t now_ns);
-
 float tsa_get_pid_tb_fill(struct tsa_handle* h, uint16_t pid);
 float tsa_get_pid_mb_fill(struct tsa_handle* h, uint16_t pid);
 float tsa_get_pid_eb_fill(struct tsa_handle* h, uint16_t pid);
-
 void tsa_decode_packet(struct tsa_handle* h, const uint8_t* p, uint64_t n, ts_decode_result_t* r);
 void tsa_decode_packet_pure(struct tsa_handle* h, const uint8_t* p, uint64_t n, ts_decode_result_t* r);
-
 double calculate_shannon_entropy(const uint32_t* counts, int len);
 double calculate_pcr_jitter(uint64_t pcr, uint64_t now, double* drift);
 void tsa_scte35_process(struct tsa_handle* h, uint16_t pid, const uint8_t* data, int len);
-
 float tsa_calculate_health(struct tsa_handle* h);
+void tsa_descriptors_init(void);
+void tsa_register_tr101290_engine(tsa_handle_t* h);
+void tsa_register_pcr_engine(tsa_handle_t* h);
+void tsa_register_essence_engine(tsa_handle_t* h);
 
 #endif  // TSANALYZER_INTERNAL_H

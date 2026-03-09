@@ -63,7 +63,7 @@ void test_tstd_overflow_detection() {
     // Manually stuff the EB (Elementary Buffer)
     // In a real scenario, this happens via tsa_handle_es_payload
     // Here we test the draining logic dependency on STC
-    h->pid_eb_fill_q64[0x100] = INT_TO_Q64_64(1000000);  // 1MB full
+    h->es_tracks[0x100].tstd.eb_fill_q64 = INT_TO_Q64_64(1000000);  // 1MB full
 
     // Set STC but don't advance it yet
     h->stc_ns = NS_PER_SEC;
@@ -80,10 +80,10 @@ void test_tstd_overflow_detection() {
     assert(snap.pids[idx].eb_fill_pct > 80.0);  // Should remain high
 
     // Now advance STC past some DTS
-    h->pid_au_q[0x100][0].dts_ns = 1100000000ULL;
-    h->pid_au_q[0x100][0].size = 500000;
-    h->pid_au_head[0x100] = 0;
-    h->pid_au_tail[0x100] = 1;
+    h->es_tracks[0x100].au_q.queue[0].dts_ns = 1100000000ULL;
+    h->es_tracks[0x100].au_q.queue[0].size = 500000;
+    h->es_tracks[0x100].au_q.head = 0;
+    h->es_tracks[0x100].au_q.tail = 1;
 
     h->stc_ns = 1200000000ULL;  // Past DTS
     tsa_commit_snapshot(h, 1200000000ULL);
