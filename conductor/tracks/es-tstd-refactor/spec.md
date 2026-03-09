@@ -1,63 +1,53 @@
-# ES & T-STD Model Refactor Spec
+# ES & T-STD Model Refactor Spec (Enhanced Director's Edition)
 
 ## 1. 核心目标 (Core Objectives)
-- **解耦状态管理**: 将散落在 `tsa_handle` 中的 PID 缓冲状态封装为 `tsa_es_track_t`。
-- **标准化 T-STD 仿真**: 严格遵循 ISO/IEC 13818-1 Annex D，实现 TB (Transport), MB (Multiplexing), EB (Elementary) 的实时漏桶算法。
-- **GOP 深度分析**: 实现闭合/开放 GOP 识别、IDR 间隔统计及 I/P/B 帧分布建模。
+- **标准化 T-STD 仿真**: 严格遵循 ISO/IEC 13818-1 Annex D，实现 TB, MB, EB 的泄露算法。
+- **解耦解析状态**: 引入独立的 PES 状态机，支持跨包重组。
+- **GOP & AUB 识别**: 零拷贝探测 Access Unit Boundary (AUB) 与 NALU 结构。
 
-## 2. 数学与逻辑模型 (Mathematical Model)
+## 2. 核心数学模型
 
-### 2.1 T-STD 漏桶算法 (Leaky Bucket)
-对于每个 Buffer $B_n$，其填充量 $F(t)$ 定义为：
-$$F(t) = F(t_0) + \int_{t_0}^{t} R_{in}(\tau) d\tau - \int_{t_0}^{t} R_{out}(\tau) d\tau$$
-- **TB (Transport Buffer)**: 输入为 TS 负载，输出以固定速率 $R_{rx}$ 泄露。
-- **EB (Elementary Buffer)**: 输入为 PES 负载，输出为瞬时从 Buffer 中移除一整帧 (Access Unit)。
+### 2.1 T-STD 泄露速率定义
+- **TB Rate ($R_{rx}$)**: $R_{rx} = 1.2 \times Bitrate_{physical}$ (或根据标准指定的固定倍率)。
+- **EB Removal**: 在 $t = DTS$ 的时刻，瞬间将 $Size(AU)$ 从 EB 中移除。
 
-### 2.2 A/V Skew & PTS Drift
-- **Skew**: $Diff_{AV} = |(PTS_v - STC) - (PTS_a - STC)|$。
-- **Drift**: 统计连续 $N$ 帧 PTS 与重建 STC 之间的线性漂移趋势。
+### 2.2 PES 重组状态机 (PES Accumulator)
+- **State**: `HUNTING` (寻头) -> `ACCUMULATING` (累加数据) -> `FINISHING` (提交 AU)。
+- **Zero-Copy**: 仅记录每个 TS 载荷在 Packet Pool 中的指针和偏移，不进行数据 `memcpy`。
 
-## 3. 核心数据结构 (Data Structures)
+## 3. 核心数据结构
 
-### 3.1 统一帧抽象 `tsa_au_t`
-```c
-typedef struct {
-    uint64_t pts_ns;          // 归一化后的 PTS
-    uint64_t dts_ns;          // 归一化后的 DTS
-    uint32_t size;            // 帧大小 (Bytes)
-    uint8_t frame_type;       // I, P, B, IDR
-    bool complete;            // 是否已完整接收
-} tsa_au_t;
-```
-
-### 3.2 ES 追踪器 `tsa_es_track_t`
+### 3.1 增强型 `tsa_es_track_t`
 ```c
 typedef struct {
     uint16_t pid;
-    uint8_t codec_type;       // H.264, H.265, AAC...
     
-    /* Layer 1: Buffer Simulation (T-STD) */
+    /* Layer 1: PES State Machine */
     struct {
-        int128_t tb_fill_q64; // TB 填充度 (Q64 固定点数)
-        int128_t mb_fill_q64; // MB 填充度
-        int128_t eb_fill_q64; // EB 填充度
-        uint64_t last_leak_vstc;
+        uint8_t state;
+        uint32_t current_pes_len;
+        uint64_t last_pts;
+        uint64_t last_dts;
+    } pes;
+
+    /* Layer 2: T-STD Buffers (Q64 Fixed-Point) */
+    struct {
+        int128_t tb_fill;   // Transport Buffer
+        int128_t mb_fill;   // Multiplexing Buffer
+        int128_t eb_fill;   // Elementary Buffer
+        uint64_t last_update_vstc;
+        bool sync_lost;     // 遇到 CC 错误时标记为同步丢失
     } tstd;
 
-    /* Layer 2: GOP & Sequence */
+    /* Layer 3: GOP Analysis */
     struct {
-        uint32_t gop_n;       // GOP 长度
-        uint32_t gop_ms;      // GOP 时长 (ms)
-        bool is_closed;       // 是否闭合 GOP
-        uint64_t last_idr_ns;
+        uint32_t gop_n;
+        uint32_t idr_interval_ms;
+        uint8_t last_slice_type;
     } gop;
-
-    /* Layer 3: Audio/Video Skew */
-    int64_t pts_stc_delta_ns; // PTS 相对于 STC 的偏移
 } tsa_es_track_t;
 ```
 
-## 4. 验证标准 (Validation Standards)
-- **Buffer Integrity**: 在恒定码率下，TB 缓冲区的波形应呈现锯齿状平稳分布。
-- **GOP Accuracy**: 必须准确识别出 H.264/H.265 的 Access Unit Boundary (AUB)。
-- **Zero-Copy**: 整个 PES 解析逻辑不得产生额外的内存拷贝。
+## 4. 异常处理 (Error Handling)
+- **CC Error**: 立即标记 `tstd.sync_lost = true`。直到下一个 `payload_unit_start_indicator` (PUSI) 且 PES 头部完整时，重置 T-STD 模型。
+- **Missing DTS**: 如果 PES 中只有 PTS，则 $DTS = PTS$。
