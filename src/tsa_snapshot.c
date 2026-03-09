@@ -336,7 +336,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     uint64_t total_pcr_br = 0;
     for (int i = 0; i < TS_PID_MAX; i++) {
         if (h->live->pid_bitrate_bps[i] > 0) {
-            if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
+            // Aggregation Aging: Use 2s window for bitrate summing to avoid overlap during PID switches.
+            if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 2000000000ULL) {
                 total_pcr_br += h->live->pid_bitrate_bps[i];
             } else if (n <= h->live->pid_last_seen_ns[i]) {
                 total_pcr_br += h->live->pid_bitrate_bps[i];

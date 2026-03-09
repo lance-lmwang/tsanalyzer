@@ -89,6 +89,17 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 
         // Real-time Regression Trigger (Follow only one PID for global STC to avoid MPTS collision)
         bool is_master = false;
+
+        // Master survival monitor: If master PID hasn't been seen for > 5 seconds, release the lock.
+        if (h->master_pcr_pid != 0x1FFF) {
+            if (now > h->live->pid_last_seen_ns[h->master_pcr_pid] &&
+                (now - h->live->pid_last_seen_ns[h->master_pcr_pid]) > 5000000000ULL) {
+                tsa_warn(TAG, "Master PCR PID 0x%04x disappeared for > 5s, releasing lock", h->master_pcr_pid);
+                h->master_pcr_pid = 0x1FFF;
+                h->stc_locked = false;  // Force re-sync for the next master
+            }
+        }
+
         if (h->master_pcr_pid == 0x1FFF) {
             h->master_pcr_pid = pid;
             tsa_info(TAG, "Locking global STC to Master PCR PID 0x%04x", pid);
@@ -178,8 +189,9 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
                 uint64_t total_br = 0;
                 for (int i = 0; i < TS_PID_MAX; i++) {
                     if (h->live->pid_bitrate_bps[i] > 0) {
+                        // Aggregation Aging: Use 2s window for bitrate summing to avoid overlap during PID switches.
                         if (now > h->live->pid_last_seen_ns[i] &&
-                            (now - h->live->pid_last_seen_ns[i]) < 5000000000ULL) {
+                            (now - h->live->pid_last_seen_ns[i]) < 2000000000ULL) {
                             total_br += h->live->pid_bitrate_bps[i];
                         } else if (now <= h->live->pid_last_seen_ns[i]) {
                             /* Time might be stationary in tests */
