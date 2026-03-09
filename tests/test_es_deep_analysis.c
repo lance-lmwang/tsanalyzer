@@ -21,7 +21,7 @@ void mock_pmt_reference(tsa_handle_t* h, uint16_t pid, uint8_t stream_type) {
 
 void test_aac_parsing() {
     printf("Testing AAC ADTS parsing...\n");
-    tsa_config_t cfg = {.is_live = true};
+    tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE};
     tsa_handle_t* h = tsa_create(&cfg);
     uint16_t pid = 100;
     mock_pmt_reference(h, pid, 0x0F);  // AAC

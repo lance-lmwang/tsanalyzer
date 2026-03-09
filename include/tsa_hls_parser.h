@@ -19,7 +19,7 @@ typedef struct {
     uint32_t version;
     uint64_t target_duration;
     uint64_t media_sequence;
-    bool is_live;
+    bool is_live_playlist;
 
     // Callback for each segment found
     void (*on_segment)(void *user_data, const tsa_hls_segment_t *seg);

@@ -1,4 +1,4 @@
-#include "metrology/nalu_sniffer.h"
+#include "nalu_sniffer.h"
 
 #include <string.h>
 

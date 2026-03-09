@@ -19,7 +19,7 @@ static void set_pcr(uint8_t* pkt, uint64_t ticks) {
 int main() {
     printf("Testing Piecewise PCR Accuracy...\n");
     tsa_config_t cfg = {0};
-    cfg.is_live = false;
+    cfg.op_mode = TSA_MODE_REPLAY;
     cfg.analysis.pcr_ema_alpha = 0.1;
     tsa_handle_t* h = tsa_create(&cfg);
 

@@ -22,7 +22,7 @@ void encode_pcr(uint8_t* pkt, uint64_t pcr_ticks) {
 
 int main() {
     tsa_config_t cfg = {0};
-    cfg.is_live = true;
+    cfg.op_mode = TSA_MODE_LIVE;
     tsa_handle_t* h = tsa_create(&cfg);
 
     uint64_t bitrate = 10000000;

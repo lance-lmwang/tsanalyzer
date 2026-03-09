@@ -198,10 +198,11 @@ int main(int argc, char** argv) {
     while ((opt = getopt_long(argc, argv, "m:u:s:i:pl:H:a:h", long_options, NULL)) != -1) {
         switch (opt) {
             case 'm':
-                if (strcasecmp(optarg, "live") == 0)
+                if (strcasecmp(optarg, "live") == 0) {
                     cfg.op_mode = TSA_MODE_LIVE;
-                else if (strcasecmp(optarg, "replay") == 0)
+                } else if (strcasecmp(optarg, "replay") == 0) {
                     cfg.op_mode = TSA_MODE_REPLAY;
+                }
                 break;
             case 'u':
                 udp_port = atoi(optarg);

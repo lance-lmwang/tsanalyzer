@@ -36,7 +36,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: V3 Architecture - Programmable Pipeline**
   *Link: [./tracks/arch-v3-core/](./tracks/arch-v3-core/)*
 
-- [/] **Track: Metrology Refactor (Algorithm & Data Structure Refactor)**
+- [~] **Track: Metrology Refactor (Algorithm & Data Structure Refactor)**
   *Link: [./tracks/metrology-refactor/](./tracks/metrology-refactor/)*
 
 - [ ] **Track: ES & T-STD Model Refactor (Buffer & GOP Analytics)**

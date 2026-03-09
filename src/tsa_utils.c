@@ -174,13 +174,6 @@ int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h) {
     return 0;
 }
 
-uint64_t extract_pcr(const uint8_t* p) {
-    if (!(p[3] & 0x20) || p[4] == 0 || !(p[5] & 0x10)) return INVALID_PCR;
-    uint64_t b =
-        ((uint64_t)p[6] << 25) | ((uint64_t)p[7] << 17) | ((uint64_t)p[8] << 9) | ((uint64_t)p[9] << 1) | (p[10] >> 7);
-    return b * 300 + (((uint16_t)(p[10] & 0x01) << 8) | p[11]);
-}
-
 ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a) {
     if (!p || a) return TS_CC_OK;
     if (c == l) return TS_CC_DUPLICATE;
@@ -241,13 +234,17 @@ const char* tsa_get_pid_type_name(const tsa_handle_t* h, uint16_t p) {
 /* --- 3. PCR Window Management --- */
 
 void ts_pcr_window_init(ts_pcr_window_t* w, uint32_t s) {
-    w->samples = calloc(s, sizeof(ts_pcr_sample_t));
+    w->samples = calloc(s, sizeof(tsa_pcr_sample_t));
     w->size = s;
     w->count = 0;
     w->head = 0;
 }
 void ts_pcr_window_destroy(ts_pcr_window_t* w) {
     if (w->samples) free(w->samples);
+    w->samples = NULL;
+    w->size = 0;
+    w->count = 0;
+    w->head = 0;
 }
 void ts_pcr_window_add(ts_pcr_window_t* w, uint64_t s, uint64_t p, uint64_t o) {
     (void)o;

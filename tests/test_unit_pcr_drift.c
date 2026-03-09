@@ -52,17 +52,17 @@ int main() {
     printf("   Step 1: Simulating +100 PPM drift stream...\n");
 
     // T=0 (Wall Clock)
-    uint64_t t0_ns = 1000000000ULL;
+    uint64_t t0_ns = 1000ULL;
     make_pcr_packet(pkt, 0x100, 0, 0);
     tsa_process_packet(h, pkt, t0_ns);
 
     // T=1.0s (Wall Clock)
-    uint64_t t1_ns = 2000000000ULL;
+    uint64_t t1_ns = 1000000000ULL + t0_ns;
 
     // Feed some data in between
     for (int i = 0; i < 100; i++) {
         make_packet(pkt, 0x101, i % 16);
-        tsa_process_packet(h, pkt, t0_ns + (i * 10000000ULL));
+        tsa_process_packet(h, pkt, t0_ns + (i * 100000ULL));
     }
 
     // Drifted PCR
@@ -70,20 +70,20 @@ int main() {
     make_pcr_packet(pkt, 0x100, drifted_pcr, 1);
     tsa_process_packet(h, pkt, t1_ns);
 
-    double drift = h->clock_inspectors[0x100].br_est.pcr_drift_ppm;
+    double drift = h->pcr_tracks[0x100].drift_ppm;
 
     printf("   Measured Drift: %.2f PPM (Target: ~100.00 PPM)\n", drift);
 
     /* 🚨 VERIFICATION: Should be close to 100 PPM after enough samples for EMA to converge */
 
     for (int loop = 2; loop <= 100; loop++) {
-        uint64_t wall_ns = 1000000000ULL + ((uint64_t)loop * 1000000000ULL);
+        uint64_t wall_ns = t0_ns + ((uint64_t)loop * 1000000000ULL);
         uint64_t pcr = (uint64_t)loop * 27002700ULL;
         make_pcr_packet(pkt, 0x100, pcr, loop % 16);
         tsa_process_packet(h, pkt, wall_ns);
     }
 
-    drift = h->clock_inspectors[0x100].br_est.pcr_drift_ppm;
+    drift = h->pcr_tracks[0x100].drift_ppm;
     printf("   Measured Drift (After 100 samples): %.2f PPM\n", drift);
 
     if (drift < 95.0 || drift > 105.0) {

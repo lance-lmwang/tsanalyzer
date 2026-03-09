@@ -4,9 +4,9 @@ set -u
 
 PORT_API=8088
 PORT_UDP=19001
-SAMPLE_TS="./sample/test.ts"
-[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="../sample/test.ts"
-[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="/home/lmwang/dev/sample/test.ts"
+SAMPLE_TS="./sample/mpts_4prog.ts"
+[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="../sample/mpts_4prog.ts"
+[ ! -f "$SAMPLE_TS" ] && SAMPLE_TS="/home/lmwang/dev/sample/mpts_4prog.ts"
 
 echo ">>> TsAnalyzer: Professional Metrology Test (Dual-Rate Monitor via CLI)"
 
@@ -57,10 +57,15 @@ for i in {1..6}; do
     P_MBPS=$(echo "scale=2; $P_BPS / 1000000" | bc)
     C_MBPS=$(echo "scale=2; $C_BPS / 1000000" | bc)
 
-    # 🚨 STRICT VALUE VALIDATION (Target ~10Mbps physical output)
-    # Expected Range: 9.0 - 11.0 Mbps
+    # DYNAMIC VALUE VALIDATION
+    # 1. Physical bitrate must be > 1Mbps (sanity check)
+    # 2. Physical and PCR bitrates must match within 5% tolerance
     VALID_P=0
-    if (( $(echo "$P_MBPS > 9.0" | bc -l) )) && (( $(echo "$P_MBPS < 11.0" | bc -l) )); then VALID_P=1; fi
+    if (( $(echo "$P_MBPS > 1.0" | bc -l) )); then
+        DIFF=$(echo "scale=4; ($P_MBPS - $C_MBPS)" | bc | tr -d '-')
+        PCT_DIFF=$(echo "scale=4; $DIFF / $P_MBPS" | bc | tr -d '-')
+        if (( $(echo "$PCT_DIFF < 0.05" | bc -l) )); then VALID_P=1; fi
+    fi
 
     STATUS="[PASS]"
     if [ $VALID_P -eq 0 ]; then

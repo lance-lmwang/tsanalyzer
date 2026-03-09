@@ -42,8 +42,8 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
         /* Total TS Bitrate = (ΔUnique_Packets * 1504 * 1e9) / ΔWall_Clock_ns */
         uint64_t inst_bps = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
 
-        /* Apply strong EMA smoothing (20% instant / 80% history) for stable "line speed". */
-        float alpha = (h->config.op_mode == TSA_MODE_REPLAY) ? 0.5f : 0.2f;
+        /* Apply EMA smoothing: fast response for REPLAY, stable for LIVE. */
+        float alpha = (h->config.op_mode == TSA_MODE_REPLAY) ? 0.8f : 0.2f;
         if (h->phys_stats.last_bps == 0) {
             h->phys_stats.last_bps = inst_bps;
         } else {
@@ -243,7 +243,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
             /* Protection: Only update PID bitrate if it's NOT a PCR PID.
              * PCR-based bitrates are handled exclusively by the PCR engine.
              * This avoids logic-clock jitter and double-counting issues. */
-            bool is_pcr_pid = (h->clock_inspectors[p].initialized);
+            bool is_pcr_pid = (h->pcr_tracks[p].initialized);
 
             if (!is_pcr_pid) {
                 float alpha = is_initial ? 0.5f : 0.15f;
@@ -336,29 +336,20 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
      * and eliminates system-clock drift. */
     uint64_t dp_total = h->live->total_ts_packets - h->prev_snap_base->total_ts_packets;
     if (h->stc_locked && logic_dt > 0 && dp_total > 0) {
+        /* Business Rate = (Total Packets * 1504 * 1e9) / Delta_STC_ns */
         uint64_t content_bps = (uint64_t)(((unsigned __int128)dp_total * TS_PACKET_BITS * NS_PER_SEC) / logic_dt);
 
-        // Apply EMA for professional display stability
-        float alpha_global = 0.2f;
+        /* Fast response for REPLAY, stable for LIVE. */
+        float alpha_global = (h->config.op_mode == TSA_MODE_REPLAY) ? 0.9f : 0.3f;
         if (h->live->pcr_bitrate_bps == 0) {
             h->live->pcr_bitrate_bps = content_bps;
         } else {
             h->live->pcr_bitrate_bps = (uint64_t)(alpha_global * (double)content_bps +
-                                       (1.0f - alpha_global) * (double)h->live->pcr_bitrate_bps);
+                                                  (1.0f - alpha_global) * (double)h->live->pcr_bitrate_bps);
         }
-    } else {
-        /* Fallback: Sum individual PID rates if STC is not yet locked */
-        uint64_t total_pcr_br = 0;
-        for (int i = 0; i < TS_PID_MAX; i++) {
-            if (h->live->pid_bitrate_bps[i] > 0) {
-                if (n > h->live->pid_last_seen_ns[i] && (n - h->live->pid_last_seen_ns[i]) < 2000000000ULL) {
-                    total_pcr_br += h->live->pid_bitrate_bps[i];
-                } else if (n <= h->live->pid_last_seen_ns[i]) {
-                    total_pcr_br += h->live->pid_bitrate_bps[i];
-                }
-            }
-        }
-        h->live->pcr_bitrate_bps = total_pcr_br;
+    } else if (logic_dt > 0 && dp_total > 0) {
+        /* Fallback if STC is not yet stable, use logical progression */
+        h->live->pcr_bitrate_bps = (uint64_t)(((unsigned __int128)dp_total * TS_PACKET_BITS * NS_PER_SEC) / logic_dt);
     }
     /* Populate Snapshot Summary from latest live state before swap */
     sn->summary.master_health = h->last_health_score;

@@ -42,6 +42,7 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
         "\"pid_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu}},"
         "\"p2\":{\"pcr_jitter_ms\":%.3f,\"pcr_accuracy_piecewise_ms\":%.3f,\"piecewise_pcr_bitrate_bps\":%llu,"
         "\"pcr_repetition\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu},"
+        "\"tsa_compliance_pcr_repetition_errors\": %llu,"
         "\"pts_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu},"
         "\"crc_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu},"
         "\"transport_error\":{\"count\":%llu,\"first_occur\":%llu,\"last_occur\":%llu}}},",
@@ -56,11 +57,12 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
         st->pcr_accuracy_ns_piecewise / 1000000.0, (unsigned long long)st->last_pcr_interval_bitrate_bps,
         (unsigned long long)st->pcr_repetition_error.count,
         (unsigned long long)st->pcr_repetition_error.first_timestamp_ns,
-        (unsigned long long)st->pcr_repetition_error.last_timestamp_ns, (unsigned long long)st->pts_error.count,
-        (unsigned long long)st->pts_error.first_timestamp_ns, (unsigned long long)st->pts_error.last_timestamp_ns,
-        (unsigned long long)st->crc_error.count, (unsigned long long)st->crc_error.first_timestamp_ns,
-        (unsigned long long)st->crc_error.last_timestamp_ns, (unsigned long long)st->transport_error.count,
-        (unsigned long long)st->transport_error.first_timestamp_ns,
+        (unsigned long long)st->pcr_repetition_error.last_timestamp_ns,
+        (unsigned long long)st->pcr_repetition_error.count,  // Flat key
+        (unsigned long long)st->pts_error.count, (unsigned long long)st->pts_error.first_timestamp_ns,
+        (unsigned long long)st->pts_error.last_timestamp_ns, (unsigned long long)st->crc_error.count,
+        (unsigned long long)st->crc_error.first_timestamp_ns, (unsigned long long)st->crc_error.last_timestamp_ns,
+        (unsigned long long)st->transport_error.count, (unsigned long long)st->transport_error.first_timestamp_ns,
         (unsigned long long)st->transport_error.last_timestamp_ns);
 
     // Tier 5/6: Essence & Payload Dynamics

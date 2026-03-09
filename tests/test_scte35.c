@@ -8,7 +8,7 @@
 void test_scte35_parsing() {
     printf("Testing SCTE-35 parsing...\n");
 
-    tsa_config_t cfg = {.is_live = false};
+    tsa_config_t cfg = {.op_mode = TSA_MODE_REPLAY};
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

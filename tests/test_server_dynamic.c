@@ -12,7 +12,7 @@ void test_dynamic_injection_logic() {
     printf("=== RUNNING DYNAMIC INJECTION LOGIC TEST ===\n");
 
     // 1. Create configuration
-    tsa_config_t cfg = {.is_live = true};
+    tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE};
     snprintf(cfg.input_label, sizeof(cfg.input_label), "TEST-1");
 
     // 2. Create instance

@@ -64,7 +64,8 @@ add_library(tsp_core STATIC
     src/tsa_exporter_prom.c  src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c  src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
-    src/mongoose.c src/metrology/nalu_sniffer.c src/tsa_lua.c
+    src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c
+    src/tsa_lua.c
     src/tsa_hls_parser.c src/tsa_hls_ingest.c
     src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
@@ -242,3 +243,8 @@ tsa_test(test_pcr_determinism test_pcr_determinism.c)
 tsa_test(test_pacer_throughput test_pacer_throughput.c)
 tsa_test(test_health_debounce test_health_debounce.c)
 tsa_test(test_pcr_reselection test_pcr_reselection.c)
+
+add_executable(test_pcr_null_inclusion tests/test_pcr_null_inclusion.c)
+target_link_libraries(test_pcr_null_inclusion tsp_core m pthread)
+add_test(NAME test_unit_pcr_null_inclusion COMMAND test_pcr_null_inclusion)
+

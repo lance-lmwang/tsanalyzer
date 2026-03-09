@@ -42,7 +42,13 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ALLOC_OR_GOTO(h->pid_filters, ts_section_filter_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_status, tsa_measurement_status_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_cc_error_suppression, uint32_t, TS_PID_MAX);
-    ALLOC_OR_GOTO(h->clock_inspectors, tsa_clock_inspector_t, TS_PID_MAX);
+    h->pcr_tracks = calloc(TS_PID_MAX, sizeof(tsa_pcr_track_t));
+    if (!h->pcr_tracks) goto fail;
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        tsa_pcr_track_init(&h->pcr_tracks[i], i, 0);
+        h->pid_to_active_idx[i] = -1;
+    }
+    h->pid_tracker_count = 0;
     ALLOC_OR_GOTO(h->pid_eb_fill_q64, int128_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_tb_fill_q64, int128_t, TS_PID_MAX);
     ALLOC_OR_GOTO(h->pid_mb_fill_q64, int128_t, TS_PID_MAX);
@@ -130,7 +136,6 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pid_to_active_idx[i] = -1;
         h->pid_gop_min[i] = 0xFFFFFFFF;
         h->pid_last_pts_33[i] = 0x1FFFFFFFFULL;
-        h->clock_inspectors[i].pid = i;
         h->last_cc[i] = 0x10;
         h->scte35_target_pts[i] = 0xFFFFFFFFFFFFFFFFULL;
     }
@@ -173,7 +178,10 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->pid_pes_buf);
     FREE_IF(h->pid_status);
     FREE_IF(h->pid_cc_error_suppression);
-    FREE_IF(h->clock_inspectors);
+    if (h->pcr_tracks) {
+        for (int i = 0; i < TS_PID_MAX; i++) tsa_pcr_track_destroy(&h->pcr_tracks[i]);
+        free(h->pcr_tracks);
+    }
     FREE_IF(h->pid_eb_fill_q64);
     FREE_IF(h->pid_tb_fill_q64);
     FREE_IF(h->pid_mb_fill_q64);

@@ -9,7 +9,7 @@
 void test_rst_encoder_drift() {
     printf("Running test_rst_encoder_drift...\n");
     tsa_config_t cfg = {0};
-    cfg.is_live = true;
+    cfg.op_mode = TSA_MODE_LIVE;
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

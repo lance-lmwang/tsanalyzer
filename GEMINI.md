@@ -1,6 +1,6 @@
 # Workspace Mandates
 
-- **Strict Surgical Git Staging:** DO NOT use `git add .` or any global staging commands. Every file must be added explicitly or through directory-specific patterns (e.g., `git add src/*.c`) to prevent accidental staging of artifacts or sensitive data.
+- **Strict Surgical Git Staging:** DO NOT use `git add .` or any global staging commands. Use of `git add .` is strictly prohibited. You MUST execute `git status` first to identify modified files, and then use explicit staging (e.g., `git add src/file.c`) to add only the necessary changes. This prevents accidental staging of large artifacts, sensitive logs, or temporary build files.
 - **Language Standard:** ALL source code, technical comments, commit messages, and project documentation MUST be written in **English**. Dialogue with the user remains in Chinese as per global configuration.
 - **Artifact Protection:** Rigorously verify `git status` before committing to ensure no `.ts`, `.json`, or temporary log files are included in the index.
 - **Mandatory Formatting Check:** Before any `git commit`, I MUST execute `make format` followed by `git diff --exit-code` to ensure all code adheres to the project's style guidelines. Any identified formatting changes must be staged before finalizing the commit.

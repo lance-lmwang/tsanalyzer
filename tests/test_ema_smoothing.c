@@ -43,7 +43,7 @@ void test_pid_bitrate_ema() {
     printf("Testing PID Bitrate EMA Smoothing...\n");
 
     tsa_config_t cfg = {
-        .is_live = true,
+        .op_mode = TSA_MODE_LIVE,
         .analysis.pcr_ema_alpha = 0.1  // 10% weight to new value
     };
     tsa_handle_t* h = tsa_create(&cfg);

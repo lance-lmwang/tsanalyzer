@@ -48,7 +48,7 @@ static void process_buffer_stateful(mock_stream_node_t *s, uint8_t *buf, int len
 
 void test_stateful_reassembly() {
     printf("Testing Stateful Reassembly... ");
-    tsa_config_t cfg = {.is_live = true};
+    tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE};
     tsa_handle_t *h = tsa_create(&cfg);
     mock_stream_node_t node = {.tsa = h, .remainder_len = 0};
 

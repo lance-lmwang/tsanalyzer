@@ -107,7 +107,7 @@ int main() {
     init_crc32();
 
     tsa_config_t cfg = {0};
-    cfg.is_live = false;
+    cfg.op_mode = TSA_MODE_REPLAY;
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h);
 

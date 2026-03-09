@@ -22,6 +22,7 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 }
 
 static void on_segment_found(void *user_data, const tsa_hls_segment_t *seg) {
+    (void)user_data;
     printf("  [SEG] Seq: %lu, Duration: %.2fs, URL: %s\n", seg->sequence, seg->duration, seg->url);
 }
 
@@ -40,13 +41,11 @@ int main(int argc, char **argv) {
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "TsAnalyzer-HLS/1.0");
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 
-    printf("Fetching M3U8: %s\n", url);
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        // Fallback to local file
+        // Fallback to local file if curl fails
         FILE *fp = fopen(url, "rb");
         if (fp) {
             fseek(fp, 0, SEEK_END);
@@ -65,7 +64,7 @@ int main(int argc, char **argv) {
     if (chunk.data) {
         tsa_hls_context_t ctx = {0};
         strncpy(ctx.master_url, url, sizeof(ctx.master_url) - 1);
-        ctx.is_live = true;
+        ctx.is_live_playlist = true;
         ctx.on_segment = on_segment_found;
 
         if (tsa_hls_parse_m3u8(&ctx, chunk.data, chunk.size) == 0) {

@@ -7,7 +7,7 @@
 
 int main() {
     tsa_config_t cfg = {0};
-    cfg.is_live = true;
+    cfg.op_mode = TSA_MODE_LIVE;
     tsa_handle_t* h = tsa_create(&cfg);
 
     // 1. Verify Network RST

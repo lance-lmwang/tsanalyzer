@@ -15,11 +15,11 @@ RED    := \033[31m
 RESET  := \033[0m
 
 # Only non-file targets should be PHONY
-.PHONY: all clean test full-test rt-test install lint format check-format help tsa_cli_monitor
+.PHONY: all clean test full-test rt-test install lint format check-format help tsa_cli_monitor release debug package docker-image
 
 all: release
 
-# --- File-based Build Targets ---
+# --- Build Targets ---
 
 # Sentinel file to track CMake configuration
 $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
@@ -31,15 +31,13 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
 	@mkdir -p $(BUILD_DIR)
 	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX) -DCMAKE_BUILD_TYPE=Release ..
 
-# The actual binaries depend on the CMake config and source files
-$(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server_pro: $(BUILD_DIR)/CMakeCache.txt src/*.c include/*.h tests/*.c
+# Always delegate to the CMake-generated Makefile in the build directory
+# This ensures that CMake handles all dependencies (src, include, tools, etc.) correctly
+release: $(BUILD_DIR)/CMakeCache.txt
 	@echo "$(BLUE)=== Building Binaries ===$(RESET)"
 	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
 	@ln -sf tsa_cli build/tsa
 	@ln -sf tsa_server_pro build/tsa_server
-
-# release is now a simple alias for the binaries
-release: $(BUILD_DIR)/tsa_cli $(BUILD_DIR)/tsa_server_pro
 
 # --- Distribution & Packaging ---
 VERSION := 2.3.0
@@ -129,6 +127,7 @@ check-format:
 	else \
 		echo "WARNING: clang-format not found, skipping format check."; \
 	fi
+
 install: release
 	@echo "$(BLUE)=== Installing to $(INSTALL_PREFIX) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(MAKE) install

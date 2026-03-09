@@ -51,22 +51,27 @@ int main() {
 
     printf("   Step 1: Simulating 10Mbps stream...\n");
     make_pcr_packet(pkt, 0x100, 0, 0);
-    tsa_process_packet(h, pkt, 0);
+    tsa_process_packet(h, pkt, 1000);
 
     // Feed 1000 packets
     for (int i = 1; i <= 1000; i++) {
         make_packet(pkt, 0x101, i % 16);
-        tsa_process_packet(h, pkt, 0);
+        // 10Mbps = 13.3 packets per ms. So 1000 packets / 13.3 = ~75ms total.
+        // Let's use 100us per packet -> 100ms total.
+        tsa_process_packet(h, pkt, 1000 + (i * 100000ULL));
     }
 
     /* 1000 packets at 10Mbps takes: (1000 * 188 * 8) / 10,000,000 = 0.1504 seconds
      * 0.1504s * 27,000,000 = 4,060,800 ticks */
     uint64_t next_pcr = 4060800;
     make_pcr_packet(pkt, 0x100, next_pcr, 1);
-    tsa_process_packet(h, pkt, 0);
+    tsa_process_packet(h, pkt, 1000 + 150400000ULL);
 
-    uint64_t tpp_q16 = h->clock_inspectors[0x100].br_est.ticks_per_packet_q16;
-    double tpp = (double)tpp_q16 / 65536.0;
+    uint64_t mux_bps = h->pcr_tracks[0x100].mux_bitrate_bps;
+    double tpp = 0;
+    if (mux_bps > 0) {
+        tpp = (27000000.0 * 188.0 * 8.0) / (double)mux_bps;
+    }
 
     printf("   Calculated Ticks Per Packet: %.4f (Expected: ~4060.8)\n", tpp);
 

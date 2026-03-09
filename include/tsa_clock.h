@@ -5,10 +5,10 @@
 #include <stdint.h>
 #include <time.h>
 
-#define PCR_27MHZ_HZ 27000000ULL
+#include "tsa.h"
+
 #define NS_PER_PCR_TICK 37
-#define PCR_TICKS_PER_MS 27000
-#define TR101290_P1_1_THRESHOLD_TICKS 1080000 /* 40ms */
+#define TR101290_P1_1_THRESHOLD_TICKS (TS_SYSTEM_CLOCK_HZ * 40 / 1000) /* 40ms */
 
 typedef enum { TSA_CLOCK_STATE_RESET = 0, TSA_CLOCK_STATE_SYNCING, TSA_CLOCK_STATE_LOCKED } tsa_clock_state_t;
 

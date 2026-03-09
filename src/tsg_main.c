@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
 
     if (cfg.pacing.bitrate == 0) cfg.pacing.bitrate = 10000000;  // Default 10Mbps
 
-    cfg.analysis_primary.is_live = true;
+    cfg.analysis_primary.op_mode = TSA_MODE_LIVE;
     cfg.enable_action_engine = (cfg.enable_null_substitution || cfg.enable_pcr_restamp || pacing_pcr);
     if (pacing_pcr) cfg.pacing.mode = TSPACER_MODE_PCR;
 

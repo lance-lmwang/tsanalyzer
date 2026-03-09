@@ -11,7 +11,7 @@ void test_handle_limit() {
     printf("Testing handle limit and concurrency...\n");
     tsa_handle_t* handles[50];  // Reduced for faster CI
     tsa_config_t cfg = {0};
-    cfg.is_live = true;
+    cfg.op_mode = TSA_MODE_LIVE;
 
     for (int i = 0; i < 50; i++) {
         handles[i] = tsa_create(&cfg);

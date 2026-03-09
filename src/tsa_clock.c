@@ -3,12 +3,14 @@
 #include <math.h>
 #include <stdio.h>
 
+#include "tsa.h"
 #include "tsa_log.h"
+#include "tsa_units.h"
 
 #define TAG "CLOCK"
-#define PCR_REPETITION_MAX_TICKS 1350000             /* 50ms */
-#define PCR_ARRIVAL_MAX_NS 100000000ULL              /* 100ms */
-#define PCR_SYNC_THRESHOLD_TICKS (PCR_27MHZ_HZ / 10) /* 100ms */
+#define PCR_REPETITION_MAX_TICKS 1350000                   /* 50ms */
+#define PCR_ARRIVAL_MAX_NS 100000000ULL                    /* 100ms */
+#define PCR_SYNC_THRESHOLD_TICKS (TS_SYSTEM_CLOCK_HZ / 10) /* 100ms */
 #define PCR_STABILIZE_COUNT 10
 
 static uint64_t parse_pcr_27mhz(const uint8_t *p) {
@@ -77,7 +79,7 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
     bool violation = (pcr_delta > PCR_REPETITION_MAX_TICKS) || (is_live && arrival_delta_ns > PCR_ARRIVAL_MAX_NS);
 
     if (violation) {
-        if (pcr_delta > (PCR_27MHZ_HZ * 5)) {
+        if (pcr_delta > (TS_SYSTEM_CLOCK_HZ * 5)) {
             tsa_clock_reset(inspector);
             return;
         }
@@ -93,10 +95,11 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
 
             if (is_live) {
                 tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms, A-Gap: %.2f ms. Resetting sync.",
-                          inspector->pid, (double)pcr_delta / 27000.0, (double)arrival_delta_ns / 1000000.0);
+                          inspector->pid, tsa_pcr_to_ns_f((double)pcr_delta) / 1000000.0,
+                          (double)arrival_delta_ns / 1000000.0);
             } else {
                 tsa_error(TAG, "PID 0x%04x: PCR Violation. P-Gap: %.2f ms. Resetting sync.", inspector->pid,
-                          (double)pcr_delta / 27000.0);
+                          tsa_pcr_to_ns_f((double)pcr_delta) / 1000000.0);
             }
 
             /* Final safeguard: Update reference so next packet starts fresh */
@@ -111,7 +114,7 @@ void tsa_clock_update(const uint8_t *packet, tsa_clock_inspector_t *inspector, u
         double predicted = inspector->filtered_rate * (double)arrival_delta_ns;
         double residual = (double)pcr_delta - predicted;
         inspector->filtered_rate += (0.005 / (double)arrival_delta_ns) * residual;
-        double instant_jitter = residual / 27000.0;
+        double instant_jitter = tsa_pcr_to_ns_f(residual) / 1000000.0;
         inspector->pcr_jitter_ms = (inspector->pcr_jitter_ms * 0.9) + (instant_jitter * 0.1);
     }
 

@@ -3,10 +3,12 @@
 #include <math.h>
 #include <string.h>
 
+#include "tsa.h"
+
 #define PCR_27MHZ_MAX_VAL \
     (1ULL << 42)  // 33-bit * 300 + 9-bit ext actually is smaller, but let's use 2^33 * 300 roughly
-#define PCR_TICKS_PER_NS 0.027
-#define NS_PER_PCR_TICK (1000000000ULL / 27000000.0)
+#define PCR_TICKS_PER_NS ((double)TS_SYSTEM_CLOCK_HZ / 1000000000.0)
+#define NS_PER_PCR_TICK (1000000000.0 / (double)TS_SYSTEM_CLOCK_HZ)
 
 void tsa_pcr_clock_init(tsa_pcr_clock_t *clk) {
     if (!clk) return;

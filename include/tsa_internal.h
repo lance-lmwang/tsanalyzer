@@ -12,6 +12,7 @@
 #include "tsa_clock.h"
 #include "tsa_histogram.h"
 #include "tsa_log.h"
+#include "tsa_pcr_track.h"
 #include "tsa_plugin.h"
 #include "tsa_stream.h"
 #include "tsa_stream_model.h"
@@ -115,7 +116,6 @@ typedef struct {
 int tsa_parse_pes_header(const uint8_t* p, int len, tsa_pes_header_t* h);
 uint32_t mpegts_crc32(const uint8_t* data, int len);
 uint32_t tsa_crc32_check(const uint8_t* data, int len);
-uint64_t extract_pcr(const uint8_t* p);
 
 ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 
@@ -129,7 +129,7 @@ ts_cc_status_t cc_classify_error(uint8_t l, uint8_t c, bool p, bool a);
 #define TSA_TYPE_SCTE35 0x86
 
 static inline bool tsa_is_h264(uint8_t type) {
-    return type == TSA_TYPE_VIDEO_H264 || type == 0x00 || type == TSA_TYPE_PRIVATE;
+    return type == TSA_TYPE_VIDEO_H264;
 }
 
 static inline bool tsa_is_hevc(uint8_t type) {
@@ -182,12 +182,7 @@ typedef struct {
 
 /* --- PCR Window --- */
 typedef struct {
-    uint64_t sys_ns;
-    uint64_t pcr_ns;
-} ts_pcr_sample_t;
-
-typedef struct {
-    ts_pcr_sample_t* samples;
+    tsa_pcr_sample_t* samples;
     uint32_t size;
     uint32_t count;
     uint32_t head;
@@ -296,7 +291,7 @@ struct tsa_handle {
     bool* ignore_next_cc;
     uint32_t* pid_cc_error_suppression;
     tsa_measurement_status_t* pid_status;
-    tsa_clock_inspector_t* clock_inspectors;
+    tsa_pcr_track_t* pcr_tracks;
     int128_t* pid_eb_fill_q64;
     int128_t* pid_tb_fill_q64;
     int128_t* pid_mb_fill_q64;

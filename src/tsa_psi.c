@@ -194,6 +194,7 @@ void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->live->pid_eb_fill_pct[pid] = 0;
     h->last_buffer_leak_vstc[pid] = 0;
     h->pid_status[pid] = TSA_STATUS_VALID;
+    tsa_pcr_track_reset(&h->pcr_tracks[pid]);
 }
 
 int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {

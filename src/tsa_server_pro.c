@@ -252,7 +252,7 @@ static void* io_thread(void* arg) {
                         nc->fd = client;
                         nc->type = CONN_SRT_CLIENT;
                         sprintf(nc->id, "SRT-%d", (int)client);
-                        tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
+                        tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE, .analysis.pcr_ema_alpha = 0.1};
                         snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", nc->id);
                         nc->tsa = tsa_create(&cfg);
                         nc->tx_q = spsc_queue_create(1024);
@@ -446,7 +446,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
 
                         conn_t* nc = calloc(1, sizeof(conn_t));
                         snprintf(nc->id, sizeof(nc->id), "%s", id_ptr);
-                        tsa_config_t cfg = {.is_live = true, .analysis.pcr_ema_alpha = 0.1};
+                        tsa_config_t cfg = {.op_mode = TSA_MODE_LIVE, .analysis.pcr_ema_alpha = 0.1};
                         snprintf(cfg.input_label, sizeof(cfg.input_label), "%s", id_ptr);
                         snprintf(cfg.url, sizeof(cfg.url), "%s", url_ptr);
 

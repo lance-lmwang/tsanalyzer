@@ -10,7 +10,7 @@ void test_bitrate_atomic_sync() {
     printf("Testing Bitrate Atomic Sync...\n");
 
     tsa_config_t cfg = {0};
-    cfg.is_live = true;
+    cfg.op_mode = TSA_MODE_LIVE;
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h != NULL);
 

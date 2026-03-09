@@ -69,7 +69,7 @@ int tsa_hls_parse_m3u8(tsa_hls_context_t *ctx, const char *data, size_t len) {
         } else if (strncmp(p, "#EXT-X-DISCONTINUITY", 20) == 0) {
             is_discontinuity = true;
         } else if (strncmp(p, "#EXT-X-ENDLIST", 14) == 0) {
-            ctx->is_live = false;
+            ctx->is_live_playlist = false;
         } else if (*p != '#') {
             // This is a URL
             tsa_hls_segment_t seg;

@@ -209,7 +209,6 @@ typedef enum {
 
 typedef struct {
     char input_label[TSA_ID_MAX];
-    bool is_live;
     tsa_op_mode_t op_mode;
 
     struct {
@@ -261,6 +260,7 @@ typedef struct {
 tsa_handle_t* tsa_create(const tsa_config_t* cfg);
 void tsa_destroy(tsa_handle_t* h);
 void tsa_process_packet(tsa_handle_t* h, const uint8_t* pkt, uint64_t timestamp_ns);
+void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t now_ns);
 void tsa_handle_internal_drop(tsa_handle_t* h, uint64_t drop_count);
 void tsa_commit_snapshot(tsa_handle_t* h, uint64_t timestamp_ns);
 int tsa_take_snapshot_full(tsa_handle_t* h, tsa_snapshot_full_t* s);

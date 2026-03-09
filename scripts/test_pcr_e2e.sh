@@ -3,9 +3,9 @@ set -e
 
 PORT_API=8088  # tsa_cli default
 PORT_UDP=19001
-SAMPLE_TS="./sample/btvhd.ts"
+SAMPLE_TS="./sample/mpts_4prog.ts"
 if [ ! -f "$SAMPLE_TS" ]; then
-    SAMPLE_TS="sample/btvhd.ts"
+    SAMPLE_TS="sample/mpts_4prog.ts"
 fi
 
 echo ">>> E2E PCR Verification via tsa_cli (Live Mode)"

@@ -12,6 +12,7 @@
 
 #include "tsa.h"
 #include "tsa_internal.h"
+#include "tsa_bitstream.h"
 
 void print_usage(const char* prog) {
     printf("Usage: %s [options] <input.ts> <output.ts>\n", prog);
@@ -58,15 +59,15 @@ int main(int argc, char** argv) {
     if (!ifh) { perror("fopen input"); return 1; }
 
     /* Phase 1: Scan for first PCR and auto-detect PID if needed */
-    uint8_t pkt[188];
+    uint8_t pkt[(int)TS_PACKET_SIZE];
     uint64_t first_pcr = INVALID_PCR;
     int detected_pcr_pid = -1;
 
     printf("Scanning for timing baseline...\n");
-    while (fread(pkt, 1, 188, ifh) == 1) {
+    while (fread(pkt, 1, (int)TS_PACKET_SIZE, ifh) == (int)TS_PACKET_SIZE) {
         if (pkt[0] != 0x47) continue;
         uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-        uint64_t pcr = extract_pcr(pkt);
+        uint64_t pcr = tsa_pkt_get_pcr(pkt);
         if (pcr != INVALID_PCR) {
             if (pcr_pid == -1 || pid == pcr_pid) {
                 first_pcr = pcr;
@@ -88,8 +89,8 @@ int main(int argc, char** argv) {
     FILE* ofh = fopen(out_path, "wb");
     if (!ofh) { perror("fopen output"); fclose(ifh); return 1; }
 
-    uint64_t start_pcr = first_pcr + (uint64_t)(start_sec * 27000000.0);
-    uint64_t end_pcr = (duration_sec > 0) ? (start_pcr + (uint64_t)(duration_sec * 27000000.0)) : 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t start_pcr = first_pcr + (uint64_t)(start_sec * (double)TS_SYSTEM_CLOCK_HZ);
+    uint64_t end_pcr = (duration_sec > 0) ? (start_pcr + (uint64_t)(duration_sec * (double)TS_SYSTEM_CLOCK_HZ)) : 0xFFFFFFFFFFFFFFFFULL;
 
     printf("Slicing from %.2fs to %.2fs...\n", start_sec, start_sec + (duration_sec > 0 ? duration_sec : 0));
 
@@ -98,10 +99,10 @@ int main(int argc, char** argv) {
     uint64_t last_known_pcr = first_pcr;
     (void)last_known_pcr;
 
-    while (fread(pkt, 1, 188, ifh) == 1) {
+    while (fread(pkt, 1, (int)TS_PACKET_SIZE, ifh) == (int)TS_PACKET_SIZE) {
         if (pkt[0] != 0x47) continue;
         uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-        uint64_t pcr = extract_pcr(pkt);
+        uint64_t pcr = tsa_pkt_get_pcr(pkt);
 
         if (pcr != INVALID_PCR && pid == detected_pcr_pid) {
             last_known_pcr = pcr;
@@ -113,13 +114,13 @@ int main(int argc, char** argv) {
         }
 
         if (in_range) {
-            fwrite(pkt, 1, 188, ofh);
+            fwrite(pkt, 1, (int)TS_PACKET_SIZE, ofh);
             pkts_written++;
         }
     }
 
     printf("Slice complete. Written %lu packets (%.2f MB).\n",
-           pkts_written, (double)pkts_written * 188 / (1024 * 1024));
+           pkts_written, (double)pkts_written * (int)TS_PACKET_SIZE / (1024 * 1024));
 
     fclose(ifh);
     fclose(ofh);

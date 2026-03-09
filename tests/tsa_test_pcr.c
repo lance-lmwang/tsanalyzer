@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "tsa_bitstream.h"
 #include "tsa_internal.h"
 
 // Include source to test static function
@@ -29,7 +30,7 @@ void test_pcr_extraction() {
     pkt[10] = 0x80;
     pkt[11] = 0;
 
-    uint64_t pcr = extract_pcr(pkt);
+    uint64_t pcr = tsa_pkt_get_pcr(pkt);
     printf("Extracted PCR: %lu\n", pcr);
     assert(pcr == 300);
 
@@ -40,7 +41,7 @@ void test_pcr_extraction() {
     pkt[9] = 0xFF;
     pkt[10] = 0x81;
     pkt[11] = 0x2B;
-    pcr = extract_pcr(pkt);
+    pcr = tsa_pkt_get_pcr(pkt);
     printf("Extracted PCR (large): %lu\n", pcr);
     uint64_t expected = (0x1FFFFFFFFULL * 300) + 299;
     (void)expected;

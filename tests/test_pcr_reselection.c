@@ -1,10 +1,6 @@
 /**
  * @file test_pcr_reselection.c
  * @brief Regression test for Master PCR Reselection and Bitrate Aging.
- *
- * Verifies the fixes for:
- * 1. Master PID Disappearance (Reselection logic)
- * 2. Bitrate Aggregation Overlap (2s Aging logic)
  */
 
 #include <assert.h>
@@ -13,9 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tsa.h"
 #include "tsa_internal.h"
-
-#define PCR_27MHZ_HZ 27000000ULL
 
 /**
  * @brief Utility to feed a packet with PCR into the analyzer.
@@ -25,9 +20,9 @@ static void feed_pcr_pkt(tsa_handle_t *h, uint16_t pid, uint64_t pcr_val_27mhz, 
     pkt[0] = 0x47;
     pkt[1] = (pid >> 8) & 0x1F;
     pkt[2] = pid & 0xFF;
-    pkt[3] = 0x30; // Adapt + Payload
-    pkt[4] = 7;    // AF length
-    pkt[5] = 0x10; // PCR flag
+    pkt[3] = 0x30;  // Adapt + Payload
+    pkt[4] = 7;     // AF length
+    pkt[5] = 0x10;  // PCR flag
 
     uint64_t base = pcr_val_27mhz / 300;
     uint16_t ext = pcr_val_27mhz % 300;
@@ -55,34 +50,31 @@ static void test_master_reselection_on_timeout() {
     cfg.op_mode = TSA_MODE_LIVE;
 
     tsa_handle_t *h = tsa_create(&cfg);
-    uint64_t now = 1000000000ULL; // Start at 1s
+    uint64_t now = 1000000000ULL;  // Start at 1s
 
     // 1. Initial lock to PID 100
-    feed_pcr_pkt(h, 100, 100 * PCR_27MHZ_HZ, now);
+    feed_pcr_pkt(h, 100, 100 * TS_SYSTEM_CLOCK_HZ, now);
     assert(h->master_pcr_pid == 100);
     assert(h->stc_locked == true);
     printf("  [PASS] Initial lock to PID 100 established.\n");
 
     // 2. Continuous flow of PID 100 and a candidate PID 200
-    now += 100000000ULL; // +100ms
-    feed_pcr_pkt(h, 100, 100 * PCR_27MHZ_HZ + 2700000ULL, now);
-    feed_pcr_pkt(h, 200, 200 * PCR_27MHZ_HZ, now);
-    assert(h->master_pcr_pid == 100); // Lock should remain on 100
+    now += 100000000ULL;  // +100ms
+    feed_pcr_pkt(h, 100, 100 * TS_SYSTEM_CLOCK_HZ + 2700000ULL, now);
+    feed_pcr_pkt(h, 200, 200 * TS_SYSTEM_CLOCK_HZ, now);
+    assert(h->master_pcr_pid == 100);  // Lock should remain on 100
 
     // 3. Simulated blackout of PID 100 for 6 seconds
     // Only PID 200 continues to arrive.
     for (int i = 0; i < 60; i++) {
-        now += 100000000ULL; // 100ms steps
-        feed_pcr_pkt(h, 200, 200 * PCR_27MHZ_HZ + (i+1)*2700000ULL, now);
-
-        // At i=50, we reach 5s of absence for PID 100.
-        // The logic in tsa_engine_pcr.c should trigger reselection.
+        now += 100000000ULL;  // 100ms steps
+        feed_pcr_pkt(h, 200, 200 * TS_SYSTEM_CLOCK_HZ + (i + 1) * 2700000ULL, now);
     }
 
     // 4. Verify reselection
     // After 6s of absence, PID 100 should be released and PID 200 should take over.
     assert(h->master_pcr_pid == 200);
-    assert(h->stc_locked == true); // Should have re-locked to PID 200
+    assert(h->stc_locked == true);  // Should have re-locked to PID 200
     printf("  [PASS] Master successfully migrated to PID 200 after PID 100 timeout.\n");
 
     tsa_destroy(h);
@@ -102,8 +94,8 @@ static void test_bitrate_aging_2s() {
 
     // 1. Establish bitrate for PID 300 (Active)
     for (int i = 0; i < 50; i++) {
-        now += 10000000ULL; // 10ms
-        uint8_t pkt[188] = {0x47, 0x01, 0x2C, 0x10}; // PID 300
+        now += 10000000ULL;                           // 10ms
+        uint8_t pkt[188] = {0x47, 0x01, 0x2C, 0x10};  // PID 300
         tsa_process_packet(h, pkt, now);
     }
 
@@ -113,8 +105,6 @@ static void test_bitrate_aging_2s() {
     printf("  [INFO] PID 300 established at %lu bps.\n", initial_br);
 
     // 2. Stop PID 300 and wait for 2.1 seconds.
-    // In the old logic (5s), it would still be included in sum.
-    // In the new logic (2s), it should be excluded.
     now += 2100000000ULL;
 
     // Send a dummy packet from another PID to trigger snapshot logic

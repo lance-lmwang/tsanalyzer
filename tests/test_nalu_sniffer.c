@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "metrology/nalu_sniffer.h"
+#include "nalu_sniffer.h"
 
 void test_h264_sps() {
     printf("Testing H.264 SPS parsing...\n");

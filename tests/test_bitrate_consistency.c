@@ -43,7 +43,7 @@ void feed_pcr_via_api(tsa_handle_t* h, uint64_t pcr_ticks, uint64_t now_ns, int 
 
 int main() {
     tsa_config_t cfg = {0};
-    cfg.is_live = true;
+    cfg.op_mode = TSA_MODE_LIVE;
     tsa_handle_t* h = tsa_create(&cfg);
     assert(h);
 

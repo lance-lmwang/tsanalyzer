@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "metrology/nalu_sniffer.h"
+#include "nalu_sniffer.h"
 #include "tsa_internal.h"
 #include "tsa_log.h"
 

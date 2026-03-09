@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "tsa_units.h"
+
 typedef struct {
     const uint8_t* buf;
     const uint8_t* buf_end;
@@ -62,6 +64,29 @@ static inline int32_t br_read_se(bit_reader_t* r) {
     } else {
         return (int32_t)((ue + 1) / 2);
     }
+}
+
+/**
+ * Standardized PCR extraction from a 188-byte TS packet.
+ * Returns the full 42-bit PCR value (Base * 300 + Extension) in 27MHz units.
+ * Returns INVALID_PCR if no PCR is present.
+ */
+#ifndef INVALID_PCR
+#define INVALID_PCR ((uint64_t)-1)
+#endif
+
+static inline uint64_t tsa_pkt_get_pcr(const uint8_t* pkt) {
+    /* Check for adaptation field existence and length */
+    if (!(pkt[3] & 0x20) || pkt[4] == 0) return INVALID_PCR;
+
+    /* Check PCR_flag */
+    if (!(pkt[5] & 0x10)) return INVALID_PCR;
+
+    uint64_t base = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
+                    ((uint64_t)pkt[9] << 1) | ((uint64_t)pkt[10] >> 7);
+    uint64_t ext = ((uint64_t)(pkt[10] & 0x01) << 8) | (uint64_t)pkt[11];
+
+    return base * 300 + ext;
 }
 
 #endif
