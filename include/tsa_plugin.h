@@ -3,10 +3,18 @@
 
 #include "tsa_stream.h"
 
+#define MAX_TSA_PLUGINS 16
+
+struct tsa_handle;
+
+/**
+ * Plugin Operations Interface
+ */
 typedef struct tsa_plugin_ops_s {
     const char* name;
 
     // Allocate and initialize the plugin instance
+    // context_buf is a pointer to h->plugins[slot].context
     void* (*create)(void* config_or_parent, void* context_buf);
 
     // Destroy the plugin
@@ -23,24 +31,18 @@ typedef struct tsa_plugin_ops_s {
 
 } tsa_plugin_ops_t;
 
-#define TSA_MAX_PLUGINS 32
-
+/**
+ * Registry Management
+ */
+void tsa_plugins_init_registry(void);
 void tsa_plugin_register(tsa_plugin_ops_t* ops);
 tsa_plugin_ops_t* tsa_plugin_find(const char* name);
 
-struct tsa_handle;
+/**
+ * Handle Management
+ */
+void tsa_plugins_attach_builtin(struct tsa_handle* h);
 void tsa_plugin_attach_instance(struct tsa_handle* h, tsa_plugin_ops_t* ops);
-void tsa_destroy_engines(struct tsa_handle* h);
-
-void tsa_register_tr101290_engine(struct tsa_handle* h);
-void tsa_register_codec_engine(struct tsa_handle* h);
-void tsa_register_pcr_engine(struct tsa_handle* h);
-void tsa_register_essence_engine(struct tsa_handle* h);
-
-// Default plugin ops
-extern tsa_plugin_ops_t tsa_scte35_engine;
-extern tsa_plugin_ops_t tr101290_ops;
-extern tsa_plugin_ops_t pcr_ops;
-extern tsa_plugin_ops_t essence_ops;
+void tsa_plugins_destroy_all(struct tsa_handle* h);
 
 #endif  // TSA_PLUGIN_H

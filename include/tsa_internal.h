@@ -347,8 +347,5 @@ double calculate_pcr_jitter(uint64_t pcr, uint64_t now, double* drift);
 void tsa_scte35_process(struct tsa_handle* h, uint16_t pid, const uint8_t* data, int len);
 float tsa_calculate_health(struct tsa_handle* h);
 void tsa_descriptors_init(void);
-void tsa_register_tr101290_engine(tsa_handle_t* h);
-void tsa_register_pcr_engine(tsa_handle_t* h);
-void tsa_register_essence_engine(tsa_handle_t* h);
 
 #endif  // TSANALYZER_INTERNAL_H

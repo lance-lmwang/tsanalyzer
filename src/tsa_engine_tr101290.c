@@ -135,8 +135,3 @@ tsa_plugin_ops_t tr101290_ops = {
     .destroy = tr_destroy,
     .get_stream = tr_get_stream,
 };
-
-void tsa_register_tr101290_engine(tsa_handle_t* h) {
-    extern void tsa_plugin_attach_instance(tsa_handle_t * h, tsa_plugin_ops_t * ops);
-    tsa_plugin_attach_instance(h, &tr101290_ops);
-}

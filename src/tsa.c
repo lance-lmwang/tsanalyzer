@@ -13,6 +13,7 @@
 
 #include "tsa_descriptors.h"
 #include "tsa_internal.h"
+#include "tsa_plugin.h"
 #include "tsa_simd.h"
 
 #define TAG "CORE"
@@ -114,20 +115,9 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->phys_stats.last_bps = 0;
     }
 
-    extern tsa_plugin_ops_t tsa_scte35_engine;
-    extern tsa_plugin_ops_t tr101290_ops;
-    extern tsa_plugin_ops_t pcr_ops;
-    extern tsa_plugin_ops_t essence_ops;
-
-    tsa_plugin_register(&tsa_scte35_engine);
-    tsa_plugin_register(&tr101290_ops);
-    tsa_plugin_register(&pcr_ops);
-    tsa_plugin_register(&essence_ops);
-
-    tsa_plugin_attach_instance(h, &tsa_scte35_engine);
-    tsa_register_tr101290_engine(h);
-    tsa_register_pcr_engine(h);
-    tsa_register_essence_engine(h);
+    /* Initialize Plugin Registry and Attach Builtin Plugins */
+    tsa_plugins_init_registry();
+    tsa_plugins_attach_builtin(h);
 
     tsa_stream_model_init(&h->ts_model);
     return h;
@@ -150,7 +140,7 @@ void tsa_destroy_engines(tsa_handle_t* h) {
 
 void tsa_destroy(tsa_handle_t* h) {
     if (!h) return;
-    tsa_destroy_engines(h);
+    tsa_plugins_destroy_all(h);
     ts_pcr_window_destroy(&h->pcr_window);
     ts_pcr_window_destroy(&h->pcr_long_window);
     if (h->pkt_pool) tsa_packet_pool_destroy(h->pkt_pool);
@@ -184,27 +174,6 @@ void tsa_destroy(tsa_handle_t* h) {
     FREE_IF(h->event_q);
     if (h->webhook) tsa_webhook_destroy(h->webhook);
     free(h);
-}
-
-void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
-    if (!h || !ops || h->plugin_count >= MAX_TSA_PLUGINS) return;
-    int slot = -1;
-    for (int i = 0; i < MAX_TSA_PLUGINS; i++)
-        if (!h->plugins[i].in_use) {
-            slot = i;
-            break;
-        }
-    if (slot == -1) return;
-    void* instance = ops->create(h, h->plugins[slot].context);
-    if (!instance) return;
-    h->plugins[slot].ops = ops;
-    h->plugins[slot].instance = instance;
-    h->plugins[slot].in_use = true;
-    if (ops->get_stream) {
-        tsa_stream_t* child = ops->get_stream(instance);
-        if (child) tsa_stream_attach(&h->root_stream, child);
-    }
-    h->plugin_count++;
 }
 
 static uint64_t tsa_recover_pts_64(tsa_handle_t* h, uint16_t pid, uint64_t pts_33) {

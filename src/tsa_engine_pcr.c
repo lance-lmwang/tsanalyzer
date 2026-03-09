@@ -108,13 +108,8 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
 }
 
 tsa_plugin_ops_t pcr_ops = {
-    .name = "PCR_ANALYSIS",
+    .name = "PCR_ANALYZER",
     .create = pcr_create,
     .destroy = pcr_destroy,
     .get_stream = pcr_get_stream,
 };
-
-void tsa_register_pcr_engine(tsa_handle_t* h) {
-    extern void tsa_plugin_attach_instance(tsa_handle_t * h, tsa_plugin_ops_t * ops);
-    tsa_plugin_attach_instance(h, &pcr_ops);
-}
