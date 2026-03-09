@@ -78,18 +78,28 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.analysis.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 128);
     ts_pcr_window_init(&h->pcr_long_window, 1024);
+
+    /* Professional Packet Pool Initialization */
+    h->pkt_pool = tsa_packet_pool_create(16384);
+    if (!h->pkt_pool) goto fail;
+
+    /* General Memory Pool for non-TS structures (PES buffers, etc.) */
     h->pool_size = 1024 * 1024 + 32 * 65536;
-    if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) h->pool_base = malloc(h->pool_size);
+    if (posix_memalign(&h->pool_base, 64, h->pool_size) != 0) {
+        h->pool_base = malloc(h->pool_size);
+    }
+    h->pool_offset = 0;
 
     for (int i = 0; i < TS_PID_MAX; i++) {
         tsa_pcr_track_init(&h->pcr_tracks[i], i, 0);
-        h->pid_to_active_idx[i] = -1;
+
         tsa_es_track_t* es = &h->es_tracks[i];
         es->pid = i;
         es->video.gop_min = 0xFFFFFFFF;
         es->last_cc = 0x10;
         es->pes.last_pts_33 = 0x1FFFFFFFFULL;
         h->scte35_target_pts[i] = 0xFFFFFFFFFFFFFFFFULL;
+        h->pid_to_active_idx[i] = -1;
     }
     h->pid_tracker_count = 0;
     h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
@@ -98,9 +108,11 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     h->master_pcr_pid = 0x1FFF;
     h->stc_slope_q64 = ((int128_t)1 << 64);
 
-    h->phys_stats.window_start_ns = 0;
-    h->phys_stats.last_snap_bytes = 0;
-    h->phys_stats.last_bps = 0;
+    if (!h->engine_started) {
+        h->phys_stats.window_start_ns = 0;
+        h->phys_stats.last_snap_bytes = 0;
+        h->phys_stats.last_bps = 0;
+    }
 
     extern tsa_plugin_ops_t tsa_scte35_engine;
     extern tsa_plugin_ops_t tr101290_ops;
@@ -141,7 +153,9 @@ void tsa_destroy(tsa_handle_t* h) {
     tsa_destroy_engines(h);
     ts_pcr_window_destroy(&h->pcr_window);
     ts_pcr_window_destroy(&h->pcr_long_window);
+    if (h->pkt_pool) tsa_packet_pool_destroy(h->pkt_pool);
     if (h->pool_base) free(h->pool_base);
+
     FREE_IF(h->pid_filters);
     FREE_IF(h->pid_status);
     FREE_IF(h->pid_cc_error_suppression);
@@ -408,6 +422,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* s) {
     if (h && s) h->srt_live = *s;
 }
+
 void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     if (!h || !h->pool_base) return NULL;
     size_t al = (h->pool_offset + 63) & ~63;
@@ -416,15 +431,19 @@ void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     h->pool_offset = al + ((sz > 64) ? sz : 64);
     return p;
 }
+
 float tsa_get_pid_tb_fill(tsa_handle_t* h, uint16_t p) {
     return (float)(h->es_tracks[p].tstd.tb_fill_q64 >> 64);
 }
+
 float tsa_get_pid_mb_fill(tsa_handle_t* h, uint16_t p) {
     return (float)(h->es_tracks[p].tstd.mb_fill_q64 >> 64);
 }
+
 float tsa_get_pid_eb_fill(tsa_handle_t* h, uint16_t p) {
     return (float)(h->es_tracks[p].tstd.eb_fill_q64 >> 64);
 }
+
 void tsa_reset_latched_errors(tsa_handle_t* h) {
     if (h && h->live) h->live->latched_cc_error = 0;
 }

@@ -296,10 +296,14 @@ struct tsa_handle {
     uint32_t pid_tracker_count;
     tsa_op_mode_t op_mode;
     tsa_srt_stats_t srt_live;
+
+    tsa_packet_pool_t* pkt_pool;
+    uint32_t pes_pool_used;
+
     void* pool_base;
     size_t pool_offset;
     size_t pool_size;
-    uint32_t pes_pool_used;
+
     uint64_t pes_total_allocated;
     uint64_t pes_max_quota;
     int last_trigger_reason;
