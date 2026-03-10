@@ -93,8 +93,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     sn->stats = *h->live;
 
     uint32_t ai = 0;
-    for (uint32_t i = 0; i < h->pid_tracker_count; i++) {
+    uint32_t limit = (h->pid_tracker_count < MAX_ACTIVE_PIDS) ? h->pid_tracker_count : MAX_ACTIVE_PIDS;
+    for (uint32_t i = 0; i < limit; i++) {
         uint16_t p = h->pid_active_list[i];
+        if (p >= TS_PID_MAX) continue;
         tsa_es_track_t* es = &h->es_tracks[p];
         sn->pids[ai].pid = p;
         sn->pids[ai].cc_errors = h->live->pid_cc_errors[p];

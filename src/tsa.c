@@ -45,9 +45,13 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (!h->es_tracks) goto fail;
 
     ALLOC_OR_GOTO(h->pid_seen, bool, TS_PID_MAX);
+    memset(h->pid_seen, 0, TS_PID_MAX * sizeof(bool));
     ALLOC_OR_GOTO(h->pid_is_pmt, bool, TS_PID_MAX);
+    memset(h->pid_is_pmt, 0, TS_PID_MAX * sizeof(bool));
     ALLOC_OR_GOTO(h->pid_is_scte35, bool, TS_PID_MAX);
+    memset(h->pid_is_scte35, 0, TS_PID_MAX * sizeof(bool));
     ALLOC_OR_GOTO(h->prev_snap_base_frames, uint64_t, TS_PID_MAX);
+    memset(h->prev_snap_base_frames, 0, TS_PID_MAX * sizeof(uint64_t));
 
     h->pid_labels = calloc(TS_PID_MAX, sizeof(*h->pid_labels));
     h->live = calloc(1, sizeof(tsa_tr101290_stats_t));
@@ -98,6 +102,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->pid_to_active_idx[i] = -1;
     }
     h->pid_tracker_count = 0;
+    memset(h->plugins, 0, sizeof(h->plugins));
     h->op_mode = cfg ? cfg->op_mode : TSA_MODE_LIVE;
     h->last_health_score = 100.0f;
     h->last_pcr_ticks = INVALID_PCR;

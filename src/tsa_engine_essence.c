@@ -165,11 +165,12 @@ static void essence_destroy(void* self) {
 
     /* Securely cleanup PES references in the packet pool */
     for (int i = 0; i < TS_PID_MAX; i++) {
-        if (h->pid_seen[i]) {
-            tsa_es_track_t* es = &h->es_tracks[i];
+        tsa_es_track_t* es = &h->es_tracks[i];
+        if (es->pes.ref_count > 0 && es->pes.ref_count <= TSA_PES_MAX_REFS) {
             for (uint32_t j = 0; j < es->pes.ref_count; j++) {
                 if (es->pes.refs[j]) {
                     tsa_packet_unref(h->pkt_pool, es->pes.refs[j]);
+                    es->pes.refs[j] = NULL;
                 }
             }
             es->pes.ref_count = 0;
