@@ -23,10 +23,10 @@
 ## Phase 3: Business Logic Integration
 **Goal**: Migrate existing hardcoded alerts to the new engine.
 
-### Task 3.1: Migrate CC & Sync Loss [/]
+### Task 3.1: Migrate CC & Sync Loss [x]
 - **Files**: `src/tsa_engine_tr101290.c`, `src/tsa_decode.c`, `src/tsa_alert.c`
-- **Action**: Replace `tsa_debounce_t` calls with `tsa_alert_push_event()` (integrated via `tsa_alert_check_resolutions`).
-- **Status**: IN PROGRESS. Initial integration for PAT/PMT/SDT/NIT timeouts implemented.
+- **Action**: Replace `tsa_debounce_t` calls with `tsa_alert_update()` (integrated via `tsa_alert_check_resolutions`).
+- **Validation**: COMPLETED. TR 101 290 core checks now use the unified engine with suppression logic. Verified via `test_health_debounce`.
 
 ---
 
@@ -43,5 +43,5 @@
 ## Phase 5: Exporter & API Update [x]
 - **Task**: Update Prometheus exporter to use the new alert status. [x]
 - **Task**: Standardize Webhook JSON payload. [x]
-- **Task**: Update CLI monitor to show "Active Alerts" list. [ ]
-- **Validation**: COMPLETED. New metric `tsa_alert_status` added to `src/tsa_exporter_prom.c`.
+- **Task**: Update CLI monitor to show "Active Alerts" list. [x]
+- **Validation**: COMPLETED. New metric `tsa_alert_status` added to Exporter and real-time display added to `tsa_top`.
