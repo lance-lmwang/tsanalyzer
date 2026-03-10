@@ -37,9 +37,9 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
     h->live->physical_bitrate_bps = h->phys_stats.last_bps;
 }
 
-static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) {
-    h->live->alarm_sync_loss = !h->signal_lock;
-    h->live->alarm_cc_error = (h->live->cc_error.count > h->prev_snap_base->cc_error.count);
+static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t stc) {
+    h->live->alarm_sync_loss = (h->alerts[TSA_ALERT_SYNC].status == TSA_ALERT_STATE_FIRING);
+    h->live->alarm_cc_error = (h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_FIRING);
 
     uint64_t total_pcr_rep_err = 0;
     if (h->pcr_tracks) {
@@ -52,17 +52,26 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
     h->live->pcr_repetition_error.count = total_pcr_rep_err;
 
     if (!h->stc_locked || h->live->total_ts_packets < 1000) return;
+
+    /* Professional PID Timeout Monitoring (P1.6) */
     for (int i = 0; i < TS_PID_MAX; i++) {
         if (h->live->pid_is_referenced[i]) {
             uint64_t last_seen = h->es_tracks[i].last_seen_vstc;
             if (last_seen > 0 && (stc - last_seen) > TSA_TR101290_PID_TIMEOUT_NS) {
-                if (h->live->pid_error.count == 0) h->live->pid_error.first_timestamp_ns = n;
-                h->live->pid_error.count++;
-                h->live->pid_error.last_timestamp_ns = n;
-                tsa_push_event(h, TSA_EVENT_PID_ERROR, i, 0);
+                tsa_alert_update(h, TSA_ALERT_PID, true, "PID", i);
             }
         }
     }
+
+    /* Compute Active Alerts Mask for Exporter */
+    uint64_t mask = 0;
+    for (int i = 0; i < TSA_ALERT_MAX; i++) {
+        if (h->alerts[i].status == TSA_ALERT_STATE_FIRING) {
+            mask |= tsa_alert_get_mask((tsa_alert_id_t)i);
+        }
+    }
+    h->live->active_alerts_mask = mask;
+
     h->live->alarm_pcr_repetition_error =
         (h->live->pcr_repetition_error.count > h->prev_snap_base->pcr_repetition_error.count);
     h->live->alarm_pcr_accuracy_error =
@@ -79,7 +88,7 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     tsa_snapshot_full_t* sn = h->double_buffer.buffers[inactive_idx];
 
     tsa_calc_stream_bitrate(h, n);
-    tsa_eval_tr101290_alarms(h, n, stc);
+    tsa_eval_tr101290_alarms(h, stc);
 
     h->live->pcr_bitrate_bps = h->live->physical_bitrate_bps;
 

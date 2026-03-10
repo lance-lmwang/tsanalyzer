@@ -74,6 +74,7 @@ typedef struct {
     uint64_t cc_duplicate_count;
     uint64_t physical_bitrate_bps;
     uint64_t pcr_bitrate_bps;
+    uint64_t active_alerts_mask;
     double pcr_jitter_avg_ns;
     uint64_t pcr_jitter_rms_ns;
     uint64_t pcr_jitter_max_ns;

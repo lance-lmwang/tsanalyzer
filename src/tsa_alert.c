@@ -7,39 +7,6 @@
 #include "tsa_internal.h"
 #include "tsa_log.h"
 
-static uint64_t get_mask_for_id(tsa_alert_id_t id) {
-    switch (id) {
-        case TSA_ALERT_SYNC:
-            return TSA_ALERT_MASK_P1_1_SYNC;
-        case TSA_ALERT_PAT:
-            return TSA_ALERT_MASK_P1_3_PAT;
-        case TSA_ALERT_PMT:
-            return TSA_ALERT_MASK_P1_5_PMT;
-        case TSA_ALERT_PID:
-            return TSA_ALERT_MASK_P1_6_PID;
-        case TSA_ALERT_CC:
-            return TSA_ALERT_MASK_P1_4_CC;
-        case TSA_ALERT_TRANSPORT:
-            return TSA_ALERT_MASK_P2_1_TRANSPORT;
-        case TSA_ALERT_CRC:
-            return TSA_ALERT_MASK_P2_2_CRC;
-        case TSA_ALERT_PCR:
-            return TSA_ALERT_MASK_P2_3_PCR;
-        case TSA_ALERT_PTS:
-            return TSA_ALERT_MASK_P2_5_PTS;
-        case TSA_ALERT_TSTD:
-            return TSA_ALERT_MASK_TSTD;
-        case TSA_ALERT_ENTROPY:
-            return TSA_ALERT_MASK_ENTROPY;
-        case TSA_ALERT_SDT:
-            return TSA_ALERT_MASK_SDT;
-        case TSA_ALERT_NIT:
-            return TSA_ALERT_MASK_NIT;
-        default:
-            return 0;
-    }
-}
-
 void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const char* name, uint16_t pid) {
     tsa_alert_state_t* s = &h->alerts[id];
     uint64_t now = h->stc_ns;
@@ -62,7 +29,7 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
                      h->config.input_label[0] ? h->config.input_label : "unknown");
 
             /* Check filter mask before sending webhook */
-            uint64_t mask = get_mask_for_id(id);
+            uint64_t mask = tsa_alert_get_mask(id);
             uint64_t user_mask = h->config.alert_filter_mask;
             if (user_mask == 0) user_mask = TSA_ALERT_MASK_ALL;  // Default: All enabled
 
@@ -77,8 +44,6 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
 
 void tsa_alert_check_resolutions(tsa_handle_t* h) {
     uint64_t now = h->stc_ns;
-    const char* names[] = {"SYNC",      "PAT", "PMT",  "PID",     "CC",  "CRC", "PCR",
-                           "TRANSPORT", "PTS", "TSTD", "ENTROPY", "SDT", "NIT"};
     const uint64_t RESOLVE_TIMEOUT_NS = TSA_TR101290_PID_TIMEOUT_NS;
 
     // Active Watchdogs for Repetition (TR 101 290)
@@ -101,18 +66,19 @@ void tsa_alert_check_resolutions(tsa_handle_t* h) {
         if (s->status == TSA_ALERT_STATE_FIRING) {
             if (now - s->last_occurrence_ns > RESOLVE_TIMEOUT_NS) {
                 s->status = TSA_ALERT_STATE_OFF;
+                const char* name = tsa_alert_get_name((tsa_alert_id_t)i);
 
-                tsa_info("ALERT", "RESOLVED: %s Error stabilized (stream=%s)", names[i],
+                tsa_info("ALERT", "RESOLVED: %s Error stabilized (stream=%s)", name,
                          h->config.input_label[0] ? h->config.input_label : "unknown");
 
-                uint64_t mask = get_mask_for_id((tsa_alert_id_t)i);
+                uint64_t mask = tsa_alert_get_mask((tsa_alert_id_t)i);
                 uint64_t user_mask = h->config.alert_filter_mask;
                 if (user_mask == 0) user_mask = TSA_ALERT_MASK_ALL;
 
                 if (s->needs_resolve_msg && h->webhook && (user_mask & mask)) {
                     char msg[256];
-                    snprintf(msg, sizeof(msg), "OK: %s Error resolved and stabilized", names[i]);
-                    tsa_webhook_push_event(h->webhook, h->config.input_label, names[i], msg);
+                    snprintf(msg, sizeof(msg), "OK: %s Error resolved and stabilized", name);
+                    tsa_webhook_push_event(h->webhook, h->config.input_label, name, msg);
                 }
                 s->needs_resolve_msg = false;
                 s->count_in_window = 0;

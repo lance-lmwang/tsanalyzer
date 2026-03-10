@@ -145,6 +145,15 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_compliance_pcr_accuracy_errors%s %llu\n", labels,
                     (unsigned long long)s->pcr_accuracy_error.count);
 
+        // Tier 3.1: Active Alerts Status
+        for (int k = 0; k < TSA_ALERT_MAX; k++) {
+            const char* alert_name = tsa_alert_get_name((tsa_alert_id_t)k);
+            if (strcmp(alert_name, "UNKNOWN") == 0) continue;
+            uint64_t mask = tsa_alert_get_mask((tsa_alert_id_t)k);
+            int is_firing = (s->active_alerts_mask & mask) ? 1 : 0;
+            SAFE_APPEND("tsa_alert_status{stream_id=\"%s\",alert_id=\"%s\"} %d\n", sid, alert_name, is_firing);
+        }
+
         // Tier 4: Metrology & Timing
         SAFE_APPEND("tsa_metrology_physical_bitrate_bps%s %llu\n", labels, (unsigned long long)s->physical_bitrate_bps);
         SAFE_APPEND("tsa_metrology_pcr_bitrate_bps%s %llu\n", labels, (unsigned long long)s->pcr_bitrate_bps);

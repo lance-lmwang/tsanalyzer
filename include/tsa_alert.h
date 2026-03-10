@@ -53,6 +53,78 @@ typedef struct {
 struct tsa_handle;  // Forward declaration
 
 /**
+ * Get the bitmask for a specific alert ID.
+ */
+static inline uint64_t tsa_alert_get_mask(tsa_alert_id_t id) {
+    switch (id) {
+        case TSA_ALERT_SYNC:
+            return TSA_ALERT_MASK_P1_1_SYNC;
+        case TSA_ALERT_PAT:
+            return TSA_ALERT_MASK_P1_3_PAT;
+        case TSA_ALERT_PMT:
+            return TSA_ALERT_MASK_P1_5_PMT;
+        case TSA_ALERT_PID:
+            return TSA_ALERT_MASK_P1_6_PID;
+        case TSA_ALERT_CC:
+            return TSA_ALERT_MASK_P1_4_CC;
+        case TSA_ALERT_TRANSPORT:
+            return TSA_ALERT_MASK_P2_1_TRANSPORT;
+        case TSA_ALERT_CRC:
+            return TSA_ALERT_MASK_P2_2_CRC;
+        case TSA_ALERT_PCR:
+            return TSA_ALERT_MASK_P2_3_PCR;
+        case TSA_ALERT_PTS:
+            return TSA_ALERT_MASK_P2_5_PTS;
+        case TSA_ALERT_TSTD:
+            return TSA_ALERT_MASK_TSTD;
+        case TSA_ALERT_ENTROPY:
+            return TSA_ALERT_MASK_ENTROPY;
+        case TSA_ALERT_SDT:
+            return TSA_ALERT_MASK_SDT;
+        case TSA_ALERT_NIT:
+            return TSA_ALERT_MASK_NIT;
+        default:
+            return 0;
+    }
+}
+
+/**
+ * Get the string name for a specific alert ID.
+ */
+static inline const char* tsa_alert_get_name(tsa_alert_id_t id) {
+    switch (id) {
+        case TSA_ALERT_SYNC:
+            return "SYNC";
+        case TSA_ALERT_PAT:
+            return "PAT";
+        case TSA_ALERT_PMT:
+            return "PMT";
+        case TSA_ALERT_PID:
+            return "PID";
+        case TSA_ALERT_CC:
+            return "CC";
+        case TSA_ALERT_TRANSPORT:
+            return "TRANSPORT";
+        case TSA_ALERT_CRC:
+            return "CRC";
+        case TSA_ALERT_PCR:
+            return "PCR";
+        case TSA_ALERT_PTS:
+            return "PTS";
+        case TSA_ALERT_TSTD:
+            return "TSTD";
+        case TSA_ALERT_ENTROPY:
+            return "ENTROPY";
+        case TSA_ALERT_SDT:
+            return "SDT";
+        case TSA_ALERT_NIT:
+            return "NIT";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+/**
  * Update the state of a specific alert.
  */
 void tsa_alert_update(struct tsa_handle* h, tsa_alert_id_t id, bool has_error, const char* name, uint16_t pid);

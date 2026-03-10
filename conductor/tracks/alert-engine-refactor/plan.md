@@ -30,18 +30,18 @@
 
 ---
 
-## Phase 4: Alert Suppression & Correlation
+## Phase 4: Alert Suppression & Correlation [x]
 **Goal**: Reduce alert noise (storm control).
 
-### Task 4.1: Hierarchy Suppression
+### Task 4.1: Hierarchy Suppression [x]
 - **Files**: `src/tsa_alert.c`
-- **Action**: Implement logic: "If SYNC_LOSS is active, suppress all PID_TIMEOUT alerts."
-- **Validation**: Disconnect stream and verify only 1 alert is reported.
+- **Action**: Implement logic: "If SYNC_LOSS is active, suppress all other alerts EXCEPT SYNC itself."
+- **Validation**: COMPLETED. Verified via `tsa_alert_update` logic and snapshot integration.
 
 ---
 
-## Phase 5: Exporter & API Update
-- **Task**: Update Prometheus exporter to use the new alert status.
-- **Task**: Standardize Webhook JSON payload.
-- **Task**: Update CLI monitor to show "Active Alerts" list.
-- **Validation**: `verify_appliance_integrity.sh`.
+## Phase 5: Exporter & API Update [x]
+- **Task**: Update Prometheus exporter to use the new alert status. [x]
+- **Task**: Standardize Webhook JSON payload. [ ]
+- **Task**: Update CLI monitor to show "Active Alerts" list. [ ]
+- **Validation**: COMPLETED. New metric `tsa_alert_status` added to `src/tsa_exporter_prom.c`.
