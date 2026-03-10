@@ -37,6 +37,7 @@ typedef struct {
 
     uint64_t has_cea708;
     uint64_t has_scte35;
+    uint64_t active_alerts_mask;
     uint64_t is_active;
 } __attribute__((aligned(64))) tsa_top_stream_info_t;
 

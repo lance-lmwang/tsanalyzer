@@ -629,6 +629,7 @@ static void* shm_thread(void* arg) {
                     info->rst_enc_s = snap.predictive.rst_encoder_s;
                     info->drift_ppm = snap.predictive.stc_wall_drift_ppm;
                     info->drift_long_ppm = snap.predictive.long_term_drift_ppm;
+                    info->active_alerts_mask = snap.stats.active_alerts_mask;
 
                     for (uint32_t j = 0; j < snap.active_pid_count; j++) {
                         if (snap.pids[j].width > 0 && info->width == 0) {

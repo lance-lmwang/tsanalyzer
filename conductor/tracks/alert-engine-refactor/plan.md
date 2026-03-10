@@ -42,6 +42,6 @@
 
 ## Phase 5: Exporter & API Update [x]
 - **Task**: Update Prometheus exporter to use the new alert status. [x]
-- **Task**: Standardize Webhook JSON payload. [ ]
+- **Task**: Standardize Webhook JSON payload. [x]
 - **Task**: Update CLI monitor to show "Active Alerts" list. [ ]
 - **Validation**: COMPLETED. New metric `tsa_alert_status` added to `src/tsa_exporter_prom.c`.

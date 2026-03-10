@@ -18,6 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "tsa_alert.h"
 #include "tsa_top_shm.h"
 
 /* --- Configuration & Constants --- */
@@ -60,6 +61,18 @@ static void draw_stream_row(int row, int max_x, const tsa_top_stream_info_t* s) 
         attron(COLOR_PAIR(5)); /* Cyan for Video Metadata */
         printw("  RES: %.0fx%.0f @ %.1f fps (GOP: %.0fms)", s->width, s->height, s->fps, s->gop_ms);
         attroff(COLOR_PAIR(5));
+    }
+
+    if (s->active_alerts_mask != 0) {
+        attron(COLOR_PAIR(4) | A_BOLD); /* Red for Alerts */
+        printw("  [ALERTS: ");
+        for (int i = 0; i < TSA_ALERT_MAX; i++) {
+            if (s->active_alerts_mask & tsa_alert_get_mask((tsa_alert_id_t)i)) {
+                printw("%s ", tsa_alert_get_name((tsa_alert_id_t)i));
+            }
+        }
+        printw("]");
+        attroff(COLOR_PAIR(4) | A_BOLD);
     }
 }
 
