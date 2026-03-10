@@ -7,7 +7,6 @@
 
 typedef struct {
     tsa_handle_t* h;
-    tsa_stream_t stream;
 } tr101290_ctx_t;
 
 static void tr_on_ts(void* self, const uint8_t* pkt);
@@ -16,7 +15,7 @@ static bool tsa_debounce_update(tsa_debounce_t* d, bool active, uint64_t now, ui
     if (active) {
         if (d->last_absence_ns == 0) d->last_absence_ns = now;
         d->last_occurrence_ns = now;
-        if (!d->is_fired && (now - d->last_absence_ns >= fire_ns)) {
+        if (! d->is_fired && (now - d->last_absence_ns >= fire_ns)) {
             d->is_fired = true;
             d->fired_time_ns = now;
         }
@@ -25,10 +24,8 @@ static bool tsa_debounce_update(tsa_debounce_t* d, bool active, uint64_t now, ui
         if (d->is_fired && d->last_occurrence_ns > 0 && (now - d->last_occurrence_ns >= resolve_ns)) {
             d->is_fired = false;
         }
-        if (!d->is_fired) {
+        if (! d->is_fired) {
             d->last_absence_ns = now;
-            // If not fired and not active, we haven't seen an error yet, so reset absence tracker
-            // to now to ensure fire_ns starts from the next 'active' event.
         }
     }
     return d->is_fired;
@@ -38,18 +35,11 @@ static void* tr_create(void* h, void* context_buf) {
     tr101290_ctx_t* ctx = (tr101290_ctx_t*)context_buf;
     memset(ctx, 0, sizeof(tr101290_ctx_t));
     ctx->h = (tsa_handle_t*)h;
-    tsa_stream_init(&ctx->stream, ctx, tr_on_ts);
     return ctx;
 }
 
 static void tr_destroy(void* engine) {
-    tr101290_ctx_t* ctx = (tr101290_ctx_t*)engine;
-    tsa_stream_destroy(&ctx->stream);
-}
-
-static tsa_stream_t* tr_get_stream(void* engine) {
-    tr101290_ctx_t* ctx = (tr101290_ctx_t*)engine;
-    return &ctx->stream;
+    (void)engine;
 }
 
 static void tr_on_ts(void* self, const uint8_t* pkt) {
@@ -70,9 +60,9 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 
     // 2. Continuity Counter (CC) Check
     bool cc_error_detected = false;
-    if (h->es_tracks[pid].last_cc != 0x10 && !res->has_discontinuity) {
+    if (h->es_tracks[pid].last_cc != 0x10 && ! res->has_discontinuity) {
         ts_cc_status_t s = cc_classify_error(h->es_tracks[pid].last_cc, res->cc, res->has_payload,
-                                             (pkt[3] & 0x20) && !(pkt[3] & 0x10));
+                                             (pkt[3] & 0x20) && ! (pkt[3] & 0x10));
 
         if (s == TS_CC_LOSS || s == TS_CC_OUT_OF_ORDER) {
             cc_error_detected = true;
@@ -87,7 +77,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
     if (cc_error_detected) cc_currently_active = true;
 
     if (tsa_debounce_update(&h->debounce_cc, cc_currently_active, now, 100000000ULL, 2000000000ULL)) {
-        if (!h->es_tracks[pid].ignore_next_cc) {
+        if (! h->es_tracks[pid].ignore_next_cc) {
             if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
             h->live->cc_error.count++;
             h->live->cc_error.last_timestamp_ns = now;
@@ -133,5 +123,5 @@ tsa_plugin_ops_t tr101290_ops = {
     .name = "TR101290_CORE",
     .create = tr_create,
     .destroy = tr_destroy,
-    .get_stream = tr_get_stream,
+    .on_ts = tr_on_ts,
 };

@@ -18,7 +18,7 @@ extern tsa_plugin_ops_t pcr_ops;
 extern tsa_plugin_ops_t essence_plugin_ops;
 
 void tsa_plugin_register(tsa_plugin_ops_t* ops) {
-    if (!ops || s_registry_count >= MAX_TSA_PLUGINS) {
+    if (! ops || s_registry_count >= MAX_TSA_PLUGINS) {
         tsa_error(TAG, "Failed to register plugin: registry full or invalid ops");
         return;
     }
@@ -33,7 +33,7 @@ void tsa_plugin_register(tsa_plugin_ops_t* ops) {
 }
 
 tsa_plugin_ops_t* tsa_plugin_find(const char* name) {
-    if (!name) return NULL;
+    if (! name) return NULL;
     for (int i = 0; i < s_registry_count; i++) {
         if (s_registry[i] && s_registry[i]->name && strcmp(s_registry[i]->name, name) == 0) {
             return s_registry[i];
@@ -58,7 +58,7 @@ void tsa_plugins_init_registry(void) {
  * Attach all registered builtin plugins to the handle.
  */
 void tsa_plugins_attach_builtin(tsa_handle_t* h) {
-    if (!h) return;
+    if (! h) return;
     tsa_info(TAG, "Attaching %d builtin plugins to handle %p", s_registry_count, h);
     for (int i = 0; i < s_registry_count; i++) {
         tsa_plugin_attach_instance(h, s_registry[i]);
@@ -69,7 +69,7 @@ void tsa_plugins_attach_builtin(tsa_handle_t* h) {
  * Instantiate a plugin using the handle's pre-allocated context buffer (In-Place Init).
  */
 void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
-    if (!h || !ops) return;
+    if (! h || ! ops) return;
 
     if (h->plugin_count >= MAX_TSA_PLUGINS) {
         tsa_error(TAG, "Cannot attach plugin [%s]: maximum plugins reached (%d)", ops->name, MAX_TSA_PLUGINS);
@@ -79,7 +79,7 @@ void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
     /* Find an empty slot in the handle's plugins array */
     int slot = -1;
     for (int i = 0; i < MAX_TSA_PLUGINS; i++) {
-        if (!h->plugins[i].in_use) {
+        if (! h->plugins[i].in_use) {
             slot = i;
             break;
         }
@@ -97,7 +97,7 @@ void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
 
     /* Phase 2.3: In-Place Initialization using handle's pre-allocated buffer */
     void* instance = ops->create(h, h->plugins[slot].context);
-    if (!instance) {
+    if (! instance) {
         tsa_error(TAG, "Failed to create plugin instance for [%s]", ops->name);
         return;
     }
@@ -105,14 +105,6 @@ void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
     h->plugins[slot].ops = ops;
     h->plugins[slot].instance = instance;
     h->plugins[slot].in_use = true;
-
-    /* Legacy Support: Stream tree attachment (to be removed in Phase 3) */
-    if (ops->get_stream) {
-        tsa_stream_t* child = ops->get_stream(instance);
-        if (child) {
-            tsa_stream_attach(&h->root_stream, child);
-        }
-    }
 
     h->plugin_count++;
     tsa_info(TAG, "Plugin [%s] attached to handle successfully", ops->name);
@@ -123,13 +115,15 @@ void tsa_plugin_attach_instance(tsa_handle_t* h, tsa_plugin_ops_t* ops) {
  * Note: Only calls destroy callback; memory is managed by the handle.
  */
 void tsa_plugins_destroy_all(tsa_handle_t* h) {
-    if (!h) return;
+    if (! h) return;
     tsa_info(TAG, "Destroying all plugins for handle %p", h);
 
     for (int i = 0; i < MAX_TSA_PLUGINS; i++) {
         if (h->plugins[i].in_use) {
-            if (h->plugins[i].ops && h->plugins[i].ops->destroy) {
-                h->plugins[i].ops->destroy(h->plugins[i].instance);
+            if (h->plugins[i].ops) {
+                if (h->plugins[i].ops->destroy) {
+                    h->plugins[i].ops->destroy(h->plugins[i].instance);
+                }
             }
             h->plugins[i].in_use = false;
             h->plugins[i].instance = NULL;

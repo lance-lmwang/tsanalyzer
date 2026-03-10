@@ -16,26 +16,25 @@
 
 typedef struct {
     tsa_handle_t* h;
-    tsa_stream_t stream;
 } essence_ctx_t;
 
 /* Forward declaration for the ops structure */
 static void* essence_create(void* parent, void* context_buf);
 static void essence_destroy(void* self);
-static tsa_stream_t* essence_get_stream(void* self);
 static void essence_on_ts(void* self, const uint8_t* pkt);
 
 tsa_plugin_ops_t essence_plugin_ops = {
     .name = "essence",
     .create = essence_create,
     .destroy = essence_destroy,
-    .get_stream = essence_get_stream,
+    .on_ts = essence_on_ts,
 };
 
 /**
  * ISO/IEC 13818-1 T-STD Leakage Logic with EB Backpressure
  */
 static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t now_vstc) {
+    if (! h || ! es) return;
     if (es->tstd.last_leak_vstc == 0) {
         es->tstd.last_leak_vstc = now_vstc;
         return;
@@ -66,7 +65,7 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
         es->tstd.mb_fill_q64 += tb_leaked_q64;
 
         /* MB Leakage: R_bx flows into EB, but ONLY if EB is not full (Backpressure) */
-        if (!eb_full) {
+        if (! eb_full) {
             uint64_t r_bx = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.5);
             if (r_bx == 0) r_bx = 20000000;
 
@@ -92,6 +91,7 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
 
 static void essence_on_ts(void* self, const uint8_t* pkt) {
     essence_ctx_t* ctx = (essence_ctx_t*)self;
+    if (! ctx || ! ctx->h) return;
     tsa_handle_t* h = ctx->h;
     const ts_decode_result_t* res = &h->current_res;
     uint16_t pid = res->pid;
@@ -102,7 +102,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         es->tstd.mb_fill_q64 = 0;
         es->tstd.eb_fill_q64 = 0;
         for (uint32_t i = 0; i < es->pes.ref_count; i++) {
-            tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
+            if (es->pes.refs[i]) tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
         }
         es->pes.ref_count = 0;
         es->pes.total_length = 0;
@@ -122,7 +122,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
             if (es->pes.ref_count > 0) {
                 tsa_handle_es_payload(h, pid, NULL, es->pes.total_length, h->stc_ns);
                 for (uint32_t i = 0; i < es->pes.ref_count; i++) {
-                    tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
+                    if (es->pes.refs[i]) tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
                 }
             }
             es->pes.ref_count = 0;
@@ -148,21 +148,31 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
 }
 
 static void* essence_create(void* parent, void* context_buf) {
-    (void)context_buf;
     tsa_handle_t* h = (tsa_handle_t*)parent;
-    essence_ctx_t* ctx = calloc(1, sizeof(essence_ctx_t));
+    essence_ctx_t* ctx = (essence_ctx_t*)context_buf;
+    memset(ctx, 0, sizeof(essence_ctx_t));
     ctx->h = h;
-    tsa_stream_init(&ctx->stream, ctx, essence_on_ts);
     return ctx;
 }
 
 static void essence_destroy(void* self) {
     essence_ctx_t* ctx = (essence_ctx_t*)self;
-    tsa_stream_destroy(&ctx->stream);
-    free(ctx);
-}
+    if (! ctx || ! ctx->h) return;
+    tsa_handle_t* h = ctx->h;
 
-static tsa_stream_t* essence_get_stream(void* self) {
-    essence_ctx_t* ctx = (essence_ctx_t*)self;
-    return &ctx->stream;
+    /* Robustness check: Ensure handle members are still valid before cleanup */
+    if (! h->pkt_pool || ! h->pid_seen || ! h->es_tracks) return;
+
+    /* Securely cleanup PES references in the packet pool */
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        if (h->pid_seen[i]) {
+            tsa_es_track_t* es = &h->es_tracks[i];
+            for (uint32_t j = 0; j < es->pes.ref_count; j++) {
+                if (es->pes.refs[j]) {
+                    tsa_packet_unref(h->pkt_pool, es->pes.refs[j]);
+                }
+            }
+            es->pes.ref_count = 0;
+        }
+    }
 }

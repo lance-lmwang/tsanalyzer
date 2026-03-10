@@ -353,7 +353,8 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     lc = r.cc;
     ln = n;
     if (!is_dup) h->live->total_ts_packets++;
-    if (h->config.analysis.enable_reactive_pid_filter && !tsa_stream_demux_check_pid(&h->root_stream, r.pid)) return;
+
+    /* Phase 3.5: Unified Dispatch - no more reactive PID filtering at this layer */
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
     if (r.pid < TS_PID_MAX) {
@@ -371,7 +372,14 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
         tsa_section_filter_push(h, r.pid, p, &r);
     h->current_ns = n;
     h->current_res = r;
-    tsa_stream_send(&h->root_stream, p);
+
+    /* Phase 3.4: Flat Dispatch Loop */
+    for (int i = 0; i < MAX_TSA_PLUGINS; i++) {
+        if (h->plugins[i].in_use && h->plugins[i].ops && h->plugins[i].ops->on_ts) {
+            h->plugins[i].ops->on_ts(h->plugins[i].instance, p);
+        }
+    }
+
     if (h->pending_snapshot) {
         tsa_commit_snapshot(h, h->snapshot_stc);
         h->pending_snapshot = false;
