@@ -77,13 +77,6 @@ typedef enum {
 
 typedef enum { TS_CC_OK, TS_CC_DUPLICATE, TS_CC_LOSS, TS_CC_OUT_OF_ORDER } ts_cc_status_t;
 
-typedef struct {
-    uint64_t last_occurrence_ns;
-    uint64_t last_absence_ns;
-    uint64_t fired_time_ns;
-    bool is_fired;
-} tsa_debounce_t;
-
 /* --- Utility Prototypes --- */
 typedef struct {
     char* base;
@@ -309,9 +302,6 @@ struct tsa_handle {
     uint64_t last_forensic_alarm_count;
     tsa_event_ring_t* event_q;
     tsa_webhook_engine_t* webhook;
-    tsa_debounce_t debounce_cc;
-    tsa_debounce_t debounce_transport;
-    tsa_debounce_t debounce_pts;
     tsa_stream_t root_stream;
     uint64_t current_ns;
     uint64_t processed_bytes;

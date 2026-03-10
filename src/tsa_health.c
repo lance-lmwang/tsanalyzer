@@ -8,41 +8,38 @@ float tsa_calculate_health(tsa_handle_t* h) {
     float score = 100.0f;
 
     // P1 Errors - Critical (Deduct 25-50)
-    if (!h->signal_lock) {
+    if (h->alerts[TSA_ALERT_SYNC].status == TSA_ALERT_STATE_FIRING) {
         score -= 50.0f;
     }
-    if (h->live->alarm_pat_error) {
+    if (h->alerts[TSA_ALERT_PAT].status == TSA_ALERT_STATE_FIRING) {
         score -= 40.0f;
     }
-    if (h->debounce_cc.is_fired) {
+    if (h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_FIRING) {
         score -= 25.0f;
     }
-    if (h->live->alarm_pmt_error) {
+    if (h->alerts[TSA_ALERT_PMT].status == TSA_ALERT_STATE_FIRING) {
         score -= 30.0f;
     }
 
     // P2 Errors - Major (Deduct 10-20)
-    if (h->debounce_transport.is_fired) {
+    if (h->alerts[TSA_ALERT_TRANSPORT].status == TSA_ALERT_STATE_FIRING) {
         score -= 20.0f;
     }
-    if (h->live->alarm_pcr_repetition_error) {
+    if (h->alerts[TSA_ALERT_PCR].status == TSA_ALERT_STATE_FIRING) {
         score -= 10.0f;
     }
-    if (h->live->alarm_pcr_accuracy_error) {
-        score -= 10.0f;
-    }
-    if (h->debounce_pts.is_fired) {
+    if (h->alerts[TSA_ALERT_PTS].status == TSA_ALERT_STATE_FIRING) {
         score -= 15.0f;
     }
-    if (h->live->alarm_crc_error) {
+    if (h->alerts[TSA_ALERT_CRC].status == TSA_ALERT_STATE_FIRING) {
         score -= 5.0f;
     }
 
     // P3 Errors - Minor (Deduct 5)
-    if (h->live->sdt_timeout.count > h->prev_snap_base->sdt_timeout.count) {
+    if (h->alerts[TSA_ALERT_SDT].status == TSA_ALERT_STATE_FIRING) {
         score -= 5.0f;
     }
-    if (h->live->nit_timeout.count > h->prev_snap_base->nit_timeout.count) {
+    if (h->alerts[TSA_ALERT_NIT].status == TSA_ALERT_STATE_FIRING) {
         score -= 5.0f;
     }
 

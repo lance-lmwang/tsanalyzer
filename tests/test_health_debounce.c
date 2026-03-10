@@ -14,7 +14,7 @@ void generate_packet(uint8_t* pkt, uint16_t pid, uint8_t cc, bool transport_erro
 }
 
 int main() {
-    printf("Testing Health & Debounce Model...\n");
+    printf("Testing Health & Alert Engine Model...\n");
 
     tsa_config_t cfg;
     memset(&cfg, 0, sizeof(cfg));
@@ -25,6 +25,7 @@ int main() {
 
     uint8_t pkt[188];
     uint64_t now = 1000000000ULL;  // 1s
+    h->stc_ns = now;
 
     // 1. Initial State - Perfect Health
     h->signal_lock = true;
@@ -32,7 +33,7 @@ int main() {
     printf("Initial Health: %.2f\n", h->last_health_score);
     assert(h->last_health_score > 99.0);
 
-    // 2. Transient CC Error (Single Packet)
+    // 2. CC Error (Single Packet)
     // Send some good packets first to establish state
     for (int i = 0; i < 10; i++) {
         generate_packet(pkt, 0x100, i % 16, false);
@@ -43,42 +44,30 @@ int main() {
     generate_packet(pkt, 0x100, 12, false);  // Jump from 9 to 12
     tsa_process_packet(h, pkt, now + (10 * 1000000ULL));
 
-    // Check CC alarm - should NOT be fired (debounced 100ms)
-    assert(h->debounce_cc.is_fired == false);
+    // In the new engine, CC error triggers FIRING immediately for safety
     tsa_commit_snapshot(h, now + (11 * 1000000ULL));
+    bool is_fired = (h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_FIRING);
     printf("Health after transient CC: %.2f (Alarm: %s)\n", h->last_health_score,
-           h->debounce_cc.is_fired ? "FIRED" : "CLEAN");
-    assert(h->debounce_cc.is_fired == false);
-    assert(h->last_health_score > 95.0);  // Should still be high
+           is_fired ? "FIRED" : "CLEAN");
+    assert(is_fired == true);
+    assert(h->last_health_score < 80.0);  // Deducted 25 points
 
-    // 3. Sustained CC Error (>100ms)
-    for (int i = 0; i < 150; i++) {                        // 150ms of errors
-        generate_packet(pkt, 0x100, (i * 2) % 16, false);  // Constant CC jumps
-        tsa_process_packet(h, pkt, now + (20 * 1000000ULL) + (i * 1000000ULL));
-    }
-
-    // Check CC alarm - should be FIRED now
-    assert(h->debounce_cc.is_fired == true);
-    tsa_commit_snapshot(h, now + (200 * 1000000ULL));
-    printf("Health after sustained CC: %.2f (Alarm: %s)\n", h->last_health_score,
-           h->debounce_cc.is_fired ? "FIRED" : "CLEAN");
-    assert(h->debounce_cc.is_fired == true);
-    assert(h->last_health_score < 80.0);  // Should have dropped (at least -25)
-
-    // 4. Recovery (Wait M=2000ms)
+    // 3. Recovery (Wait 5000ms - Default PID timeout)
     uint64_t recovery_start = now + (300 * 1000000ULL);
-    for (int i = 0; i < 2100; i++) {  // 2.1s of clean traffic
-        generate_packet(pkt, 0x100, i % 16, false);
-        tsa_process_packet(h, pkt, recovery_start + (i * 1000000ULL));
-    }
+    h->stc_ns = recovery_start + 6000000000ULL; // Jump forward 6s
+    
+    // Process one good packet to trigger cleanup check
+    generate_packet(pkt, 0x100, 0, false);
+    tsa_process_packet(h, pkt, h->stc_ns);
+    
+    tsa_alert_check_resolutions(h); // Explicitly call resolution check
+    tsa_commit_snapshot(h, h->stc_ns);
 
-    // Check CC alarm - should be RESOLVED
-    assert(h->debounce_cc.is_fired == false);
-    tsa_commit_snapshot(h, recovery_start + (2200 * 1000000ULL));
+    is_fired = (h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_FIRING);
     printf("Health after recovery: %.2f (Alarm: %s)\n", h->last_health_score,
-           h->debounce_cc.is_fired ? "FIRED" : "CLEAN");
-    assert(h->debounce_cc.is_fired == false);
-    assert(h->last_health_score > 90.0);  // Should be recovering (EMA)
+           is_fired ? "FIRED" : "CLEAN");
+    assert(is_fired == false);
+    assert(h->last_health_score > 90.0);
 
     tsa_destroy(h);
     printf("Test PASSED!\n");
