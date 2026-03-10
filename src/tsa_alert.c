@@ -36,7 +36,7 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
             if (h->webhook && (user_mask & mask)) {
                 char msg[256];
                 snprintf(msg, sizeof(msg), "CRITICAL: %s Error detected on PID %d", name, pid);
-                tsa_webhook_push_event(h->webhook, h->config.input_label, name, msg);
+                tsa_webhook_push_event(h->webhook, h->config.input_label, name, msg, "CRITICAL");
             }
         }
     }
@@ -78,7 +78,7 @@ void tsa_alert_check_resolutions(tsa_handle_t* h) {
                 if (s->needs_resolve_msg && h->webhook && (user_mask & mask)) {
                     char msg[256];
                     snprintf(msg, sizeof(msg), "OK: %s Error resolved and stabilized", name);
-                    tsa_webhook_push_event(h->webhook, h->config.input_label, name, msg);
+                    tsa_webhook_push_event(h->webhook, h->config.input_label, name, msg, "OK");
                 }
                 s->needs_resolve_msg = false;
                 s->count_in_window = 0;

@@ -20,6 +20,7 @@ typedef struct {
     char last_stream_id[64];
     char last_event_type[32];
     char last_message[256];
+    char last_level[16];
 } suppression_entry_t;
 
 typedef struct {
@@ -50,16 +51,21 @@ static uint32_t simple_hash(const char* s1, const char* s2) {
 }
 
 static void send_now_locked(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type,
-                            const char* message, uint32_t count) {
+                            const char* message, const char* level, uint32_t count) {
     char buf[2048];
+    uint64_t ts = (uint64_t)time(NULL);
+    const char* sid = stream_id ? stream_id : "unknown";
+    const char* lvl = level ? level : "CRITICAL";
+
     if (count > 1) {
         snprintf(buf, sizeof(buf),
-                 "{\"stream_id\":\"%s\",\"event\":\"%s\",\"message\":\"%s (occurred %u "
-                 "times)\",\"timestamp\":%lu,\"summary\":true}",
-                 stream_id, event_type, message, count, (unsigned long)time(NULL));
+                 "{\"stream_id\":\"%s\",\"alert_id\":\"%s\",\"level\":\"%s\",\"message\":\"%s (occurred %u "
+                 "times)\",\"timestamp\":%llu,\"summary\":true}",
+                 sid, event_type, lvl, message, count, (unsigned long long)ts);
     } else {
-        snprintf(buf, sizeof(buf), "{\"stream_id\":\"%s\",\"event\":\"%s\",\"message\":\"%s\",\"timestamp\":%lu}",
-                 stream_id, event_type, message, (unsigned long)time(NULL));
+        snprintf(buf, sizeof(buf),
+                 "{\"stream_id\":\"%s\",\"alert_id\":\"%s\",\"level\":\"%s\",\"message\":\"%s\",\"timestamp\":%llu}",
+                 sid, event_type, lvl, message, (unsigned long long)ts);
     }
 
     if (eng->count < MAX_WEBHOOK_QUEUE) {
@@ -88,7 +94,7 @@ static void* webhook_worker(void* arg) {
         for (int i = 0; i < SUPPRESSION_CACHE_SIZE; i++) {
             if (eng->cache[i].count > 1 && (now_ns - eng->cache[i].last_sent_ns >= COOLDOWN_NS)) {
                 send_now_locked(eng, eng->cache[i].last_stream_id, eng->cache[i].last_event_type,
-                                eng->cache[i].last_message, eng->cache[i].count);
+                                eng->cache[i].last_message, eng->cache[i].last_level, eng->cache[i].count);
                 eng->cache[i].count = 0;  // Reset
             }
         }
@@ -152,7 +158,7 @@ void tsa_webhook_destroy(tsa_webhook_engine_t* eng) {
 }
 
 void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type,
-                            const char* message) {
+                            const char* message, const char* level) {
     if (!eng) return;
     uint32_t h = simple_hash(stream_id, event_type);
 
@@ -168,8 +174,6 @@ void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, co
                 pthread_mutex_unlock(&eng->lock);
                 return;
             }
-            // Cooldown expired, but we had pending counts from previous window
-            // This is handled by the worker flush, but we can also trigger here
         }
     }
 
@@ -188,13 +192,13 @@ void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, co
     strncpy(eng->cache[idx].last_stream_id, stream_id ? stream_id : "unknown", 63);
     strncpy(eng->cache[idx].last_event_type, event_type, 31);
     strncpy(eng->cache[idx].last_message, message, 255);
+    strncpy(eng->cache[idx].last_level, level ? level : "CRITICAL", 15);
 
-    send_now_locked(eng, stream_id, event_type, message, 1);
+    send_now_locked(eng, stream_id, event_type, message, level, 1);
     pthread_mutex_unlock(&eng->lock);
 }
 
 void tsa_webhook_push(tsa_webhook_engine_t* eng, const char* json_msg) {
-    // Legacy support for direct JSON push - bypassed deduplication for custom manual messages
     pthread_mutex_lock(&eng->lock);
     if (eng->count < MAX_WEBHOOK_QUEUE) {
         eng->queue[eng->head].json = strdup(json_msg);

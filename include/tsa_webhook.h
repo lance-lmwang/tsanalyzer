@@ -27,6 +27,6 @@ void tsa_webhook_push(tsa_webhook_engine_t* eng, const char* json_msg);
  * Helper to push a simple error event.
  */
 void tsa_webhook_push_event(tsa_webhook_engine_t* eng, const char* stream_id, const char* event_type,
-                            const char* message);
+                            const char* message, const char* level);
 
 #endif
