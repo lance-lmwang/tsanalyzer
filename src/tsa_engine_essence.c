@@ -140,6 +140,14 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
             if (es->pes.ref_count > 0) {
                 tsa_handle_es_payload(h, pid, NULL, es->pes.total_length, h->stc_ns);
 
+                if (es->pes.current_frame_type == 'I') {
+                    es->video.i_frame_size_bytes += es->pes.total_length;
+                } else if (es->pes.current_frame_type == 'P') {
+                    es->video.p_frame_size_bytes += es->pes.total_length;
+                } else if (es->pes.current_frame_type == 'B') {
+                    es->video.b_frame_size_bytes += es->pes.total_length;
+                }
+
                 /* Push the completed AU into the drain queue */
                 if (es->pes.pending_dts_ns > 0) {
                     uint8_t next_tail = (es->au_q.tail + 1) % TSA_AU_QUEUE_SIZE;

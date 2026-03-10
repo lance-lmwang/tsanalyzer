@@ -106,7 +106,6 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* legacy_
                     if (is_idr) {
                         if (es->video.last_idr_ns > 0) {
                             uint32_t inst_gop_ms = (uint32_t)((stc_ns - es->video.last_idr_ns) / 1000000ULL);
-                            /* EMA Smoothing for GOP metrics (Phase 2.1) */
                             if (es->video.gop_ms == 0)
                                 es->video.gop_ms = inst_gop_ms;
                             else
@@ -118,17 +117,32 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* legacy_
                         }
                         es->video.last_idr_ns = stc_ns;
                         es->video.gop_n = 0;
+                        es->video.gop_str_idx = 0;
+                        es->video.gop_structure[0] = '\0';
                         if (!frame_counted) {
                             es->video.i_frames++;
+                            es->pes.current_frame_type = 'I';
+                            if (es->video.gop_str_idx < sizeof(es->video.gop_structure) - 1) {
+                                es->video.gop_structure[es->video.gop_str_idx++] = 'I';
+                                es->video.gop_structure[es->video.gop_str_idx] = '\0';
+                            }
                             frame_counted = true;
                         }
                     } else {
                         es->video.gop_n++;
                         if (!frame_counted) {
-                            if (info.slice_type == 1)
+                            char ftype = 'P';
+                            if (info.slice_type == 1) {
                                 es->video.b_frames++;
-                            else
+                                ftype = 'B';
+                            } else {
                                 es->video.p_frames++;
+                            }
+                            es->pes.current_frame_type = ftype;
+                            if (es->video.gop_str_idx < sizeof(es->video.gop_structure) - 1) {
+                                es->video.gop_structure[es->video.gop_str_idx++] = ftype;
+                                es->video.gop_structure[es->video.gop_str_idx] = '\0';
+                            }
                             frame_counted = true;
                         }
                     }

@@ -102,6 +102,13 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].height = es->video.height;
         sn->pids[ai].exact_fps = es->video.exact_fps;
         sn->pids[ai].eb_fill_pct = (float)((double)(es->tstd.eb_fill_q64 >> 64) * 100.0 / 1200000.0);
+
+        sn->pids[ai].i_frame_size_bytes = es->video.i_frame_size_bytes;
+        sn->pids[ai].p_frame_size_bytes = es->video.p_frame_size_bytes;
+        sn->pids[ai].b_frame_size_bytes = es->video.b_frame_size_bytes;
+        strncpy(sn->pids[ai].gop_structure, es->video.gop_structure, sizeof(sn->pids[ai].gop_structure) - 1);
+        sn->pids[ai].gop_structure[sizeof(sn->pids[ai].gop_structure) - 1] = '\0';
+
         ai++;
     }
     sn->active_pid_count = ai;

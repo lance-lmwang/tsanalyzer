@@ -36,9 +36,13 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
     SAFE_JSON("\"pids\":[");
     for (uint32_t i = 0; i < sn->active_pid_count; i++) {
         const tsa_pid_info_t* p = &sn->pids[i];
-        SAFE_JSON("%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,\"width\":%u,\"height\":%u,\"fps\":%.2f}",
-                  (i == 0) ? "" : ",", p->pid, tsa_get_pid_type_name(h, p->pid),
-                  (unsigned long long)sn->stats.pid_bitrate_bps[p->pid], p->width, p->height, p->exact_fps);
+        SAFE_JSON(
+            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,\"width\":%u,\"height\":%u,\"fps\":%.2f,\"gop_"
+            "structure\":\"%s\",\"i_frame_bytes\":%llu,\"p_frame_bytes\":%llu,\"b_frame_bytes\":%llu}",
+            (i == 0) ? "" : ",", p->pid, tsa_get_pid_type_name(h, p->pid),
+            (unsigned long long)sn->stats.pid_bitrate_bps[p->pid], p->width, p->height, p->exact_fps,
+            p->gop_structure[0] ? p->gop_structure : "", (unsigned long long)p->i_frame_size_bytes,
+            (unsigned long long)p->p_frame_size_bytes, (unsigned long long)p->b_frame_size_bytes);
     }
     SAFE_JSON("]}");
 

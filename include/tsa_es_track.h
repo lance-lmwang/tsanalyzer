@@ -38,6 +38,7 @@ typedef struct {
         uint64_t pending_dts_ns;
         bool has_pts;
         bool has_dts;
+        char current_frame_type;
     } pes;
 
     /* AU Queue for T-STD Drain Timing */
@@ -72,6 +73,13 @@ typedef struct {
         uint64_t open_gops;
         bool is_closed_gop;
         bool has_cea708;
+
+        /* Frame Distribution & GOP Structure */
+        char gop_structure[128];
+        uint32_t gop_str_idx;
+        uint64_t i_frame_size_bytes;
+        uint64_t p_frame_size_bytes;
+        uint64_t b_frame_size_bytes;
     } video;
 
     struct {

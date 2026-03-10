@@ -182,6 +182,10 @@ typedef struct {
     float eb_fill_pct;
     float tb_fill_pct;
     float mb_fill_pct;
+    char gop_structure[128];
+    uint64_t i_frame_size_bytes;
+    uint64_t p_frame_size_bytes;
+    uint64_t b_frame_size_bytes;
 } tsa_pid_info_t;
 
 typedef struct {
