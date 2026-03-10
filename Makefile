@@ -123,7 +123,16 @@ format:
 check-format:
 	@echo "$(BLUE)=== Checking Code Format ===$(RESET)"
 	@if command -v clang-format >/dev/null 2>&1; then \
-		find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format --dry-run --Werror; \
+		FILES=$$(find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]"); \
+		if clang-format --help | grep -q "\--dry-run"; then \
+			echo $$FILES | xargs clang-format --dry-run --Werror; \
+		else \
+			echo "Old clang-format detected, using diff-based check..."; \
+			for f in $$FILES; do \
+				clang-format $$f | diff -u $$f - || exit 1; \
+			done; \
+			echo "Format check passed."; \
+		fi; \
 	else \
 		echo "WARNING: clang-format not found, skipping format check."; \
 	fi
