@@ -196,6 +196,8 @@ void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_de
     r->scrambled = (p[3] & 0xC0) != 0;
     r->has_discontinuity = (r->af_len > 1) && (p[5] & 0x80);
     r->has_pes_header = false;
+    r->has_pts = false;
+    r->has_dts = false;
     r->pts = r->dts = 0;
     if (r->pusi && r->has_payload) {
         const uint8_t* pay = p + 4 + r->af_len;
@@ -203,6 +205,8 @@ void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_de
             tsa_pes_header_t ph;
             if (tsa_parse_pes_header(pay, r->payload_len, &ph) == 0) {
                 r->has_pes_header = true;
+                r->has_pts = ph.has_pts;
+                r->has_dts = ph.has_dts;
                 r->pts = ph.pts;
                 r->dts = ph.dts;
             }

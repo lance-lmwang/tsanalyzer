@@ -151,6 +151,8 @@ typedef struct {
     bool scrambled;
     bool has_discontinuity;
     bool has_pes_header;
+    bool has_pts;
+    bool has_dts;
     uint64_t pts;
     uint64_t dts;
 } ts_decode_result_t;

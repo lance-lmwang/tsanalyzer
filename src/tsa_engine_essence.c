@@ -101,6 +101,9 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         es->tstd.tb_fill_q64 = 0;
         es->tstd.mb_fill_q64 = 0;
         es->tstd.eb_fill_q64 = 0;
+        es->pes.last_dts_33 = 0;
+        es->au_q.head = 0;
+        es->au_q.tail = 0;
         for (uint32_t i = 0; i < es->pes.ref_count; i++) {
             if (es->pes.refs[i]) tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
         }
@@ -148,11 +151,25 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
             es->pes.ref_count = 0;
             es->pes.total_length = 0;
             if (res->has_pes_header) {
-                es->pes.pending_dts_ns = (res->dts * 1000000ULL) / 90;
+                uint64_t dts_ticks = 0;
+                if (res->has_dts) {
+                    dts_ticks = res->dts;
+                } else if (res->has_pts) {
+                    dts_ticks = res->pts;
+                } else if (es->pes.last_dts_33 > 0) {
+                    /* Extrapolate: 90000 / FPS. Default to 25fps (3600 ticks) if unknown. */
+                    uint32_t increment = (es->video.exact_fps > 0) ? (uint32_t)(90000.0f / es->video.exact_fps) : 3600;
+                    dts_ticks = es->pes.last_dts_33 + increment;
+                }
+
+                if (dts_ticks > 0) {
+                    es->pes.pending_dts_ns = (dts_ticks * 1000000ULL) / 90;
+                    es->pes.last_dts_33 = dts_ticks;
+                }
+
                 es->pes.last_pts_33 = res->pts;
-                es->pes.last_dts_33 = res->dts;
-                es->pes.has_pts = (res->pts != 0);
-                es->pes.has_dts = (res->dts != 0);
+                es->pes.has_pts = res->has_pts;
+                es->pes.has_dts = res->has_dts;
             }
         }
         if (es->pes.ref_count < TSA_PES_MAX_REFS) {
