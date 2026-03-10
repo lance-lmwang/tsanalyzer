@@ -80,45 +80,62 @@ static bool tsa_pes_check_start_code(tsa_es_track_t* es, uint32_t offset) {
     return buf[0] == 0x00 && buf[1] == 0x00 && buf[2] == 0x01;
 }
 
-static uint32_t get_h264_max_bitrate_kbps(uint8_t level) {
+static uint32_t get_h264_max_bitrate_kbps(uint8_t profile, uint8_t level) {
+    uint32_t base_br = 0;
     switch (level) {
-        case 10: return 64;
-        case 11: return 192;
-        case 12: return 384;
-        case 13: return 768;
-        case 20: return 2000;
-        case 21: return 4000;
-        case 22: return 4000;
-        case 30: return 10000;
-        case 31: return 14000;
-        case 32: return 20000;
-        case 40: return 20000;
-        case 41: return 50000;
-        case 42: return 50000;
-        case 50: return 135000;
-        case 51: return 240000;
-        case 52: return 240000;
-        default: return 20000;
+        case 10: base_br = 64; break;
+        case 11: base_br = 192; break;
+        case 12: base_br = 384; break;
+        case 13: base_br = 768; break;
+        case 20: base_br = 2000; break;
+        case 21: base_br = 4000; break;
+        case 22: base_br = 4000; break;
+        case 30: base_br = 10000; break;
+        case 31: base_br = 14000; break;
+        case 32: base_br = 20000; break;
+        case 40: base_br = 20000; break;
+        case 41: base_br = 50000; break;
+        case 42: base_br = 50000; break;
+        case 50: base_br = 135000; break;
+        case 51: base_br = 240000; break;
+        case 52: base_br = 240000; break;
+        default: base_br = 20000; break;
     }
+
+    /* H.264 Table A-1 Scaling Factors (Fp) */
+    double factor = 1.0;
+    if (profile == 100) factor = 1.25;      /* High Profile */
+    else if (profile == 110) factor = 3.0;  /* High 10 Profile */
+    else if (profile >= 122) factor = 4.0;  /* High 4:2:2 / 4:4:4 */
+
+    return (uint32_t)(base_br * factor);
 }
 
-static uint32_t get_h265_max_bitrate_kbps(uint8_t level) {
+static uint32_t get_h265_max_bitrate_kbps(bool is_high_tier, uint8_t level) {
+    uint32_t base_br = 0;
     switch (level) {
-        case 30: return 128;
-        case 60: return 1500;
-        case 63: return 3000;
-        case 90: return 6000;
-        case 93: return 10000;
-        case 120: return 12000;
-        case 123: return 20000;
-        case 150: return 25000;
-        case 153: return 40000;
-        case 156: return 60000;
-        case 180: return 60000;
-        case 183: return 120000;
-        case 186: return 240000;
-        default: return 20000;
+        case 30: base_br = 128; break;
+        case 60: base_br = 1500; break;
+        case 63: base_br = 3000; break;
+        case 90: base_br = 6000; break;
+        case 93: base_br = 10000; break;
+        case 120: base_br = 12000; break;
+        case 123: base_br = 20000; break;
+        case 150: base_br = 25000; break;
+        case 153: base_br = 40000; break;
+        case 156: base_br = 60000; break;
+        case 180: base_br = 60000; break;
+        case 183: base_br = 120000; break;
+        case 186: base_br = 240000; break;
+        default: base_br = 20000; break;
     }
+
+    /* HEVC Table A.2: High Tier Bitrate Scaling Factor */
+    if (is_high_tier) {
+        if (level >= 150) return base_br * 4;      /* Level 5.0+ : 4x Factor */
+        if (level >= 120) return base_br * 5 / 2;  /* Level 4.0, 4.1 : 2.5x Factor */
+    }
+    return base_br;
 }
 
 void tsa_tstd_sync_params(tsa_es_track_t* es) {
@@ -127,9 +144,9 @@ void tsa_tstd_sync_params(tsa_es_track_t* es) {
     uint32_t max_br_kbps = 0;
 
     if (tsa_is_h264(st)) {
-        max_br_kbps = get_h264_max_bitrate_kbps(es->video.level);
+        max_br_kbps = get_h264_max_bitrate_kbps(es->video.profile, es->video.level);
     } else if (tsa_is_hevc(st)) {
-        max_br_kbps = get_h265_max_bitrate_kbps(es->video.level);
+        max_br_kbps = get_h265_max_bitrate_kbps(es->video.is_high_tier, es->video.level);
     }
 
     if (max_br_kbps > 0) {
@@ -198,6 +215,7 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
                 if (info.nalu_type_abstract == NALU_TYPE_SPS) {
                     es->video.profile = info.profile;
                     es->video.level = info.level;
+                    es->video.is_high_tier = info.is_high_tier;
                     es->video.chroma_format = info.chroma_format;
                     if (info.bit_depth > 0) es->video.bit_depth = info.bit_depth;
                     if (info.width > 0) es->video.width = info.width;

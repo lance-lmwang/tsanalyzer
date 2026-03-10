@@ -67,11 +67,60 @@ To maintain 10Gbps performance, the simulation is driven by discrete events in t
 1.  **On TS Packet**: Update $Buffer_{level}$ and check for **Overflow**.
 2.  **On PCR Update**: Synchronize the $VSTC$ and recalibrate the drain rate.
 3.  **On Access Unit (AU) Complete**: Schedule a future **Removal Event** at the frame's $DTS$.
-4.  **On Metrology Barrier**: Calculate $RST$ and $BSM$ for the current snapshot.
+*   **On Metrology Barrier**: Calculate $RST$ and $BSM$ for the current snapshot.
 
 ---
 
-## 6. Operational Value
+## 6. Standard Compliance Limits (Profile/Level/Tier)
+
+The simulation engine dynamically synchronizes leak rates based on detected codec metadata. These limits are sourced from **ISO/IEC 14496-10 (H.264)** and **ISO/IEC 23008-2 (HEVC)**.
+
+### 6.1 H.264 (AVC) Bitrate Scaling
+The maximum bitrate ($MaxBR$) is calculated by multiplying the base level limit by a profile-specific scaling factor ($cpbBrVclFactor$).
+
+**Base Level Bitrates ($MaxBR$, kbps):**
+| Level | 3.0 | 3.1 | 4.0 | **4.1** | 5.0 | 5.1 | 5.2 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Value** | 10,000 | 14,000 | 20,000 | **50,000** | 135,000 | 240,000 | 240,000 |
+
+**Profile Scaling Factors ($F_{p}$):**
+| Profile | factor | Target Application |
+| :--- | :---: | :--- |
+| **Baseline / Main** | **1.0** | Mobile / Web Streaming |
+| **High** | **1.25** | HD Broadcast / Blu-ray |
+| **High 10** | **3.0** | 10-bit HDR Contribution |
+| **High 4:2:2 / 4:4:4**| **4.0** | Studio / Mastering |
+
+$$MaxBitrate = MaxBR(Level) \times F_{p}$$
+
+### 6.2 HEVC (H.265) Tier Logic
+HEVC defines two tiers: **Main Tier** (Consumer) and **High Tier** (Professional/High-Bitrate). High Tier is only available for Level 4 and above.
+
+**Maximum Bitrates (kbps):**
+| Level | Main Tier | High Tier | Max Resolution |
+| :--- | :---: | :---: | :--- |
+| **3.1** | 10,000 | - | 720p @ 30fps |
+| **4.0** | 12,000 | 30,000 | 1080p @ 30fps |
+| **4.1** | 20,000 | 50,000 | 1080p @ 60fps |
+| **5.0** | 25,000 | 100,000 | 4K @ 30fps |
+| **5.1** | **40,000** | **160,000** | **4K @ 60fps** |
+| **6.1** | 120,000 | 480,000 | 8K @ 60fps |
+
+---
+
+## 7. Leak Rate Calculation (Annex D)
+
+TsAnalyzer uses the following formulas to determine the deterministic drain speed between buffers:
+
+*   **$R_{rx}$ (TB $\to$ MB)**: Ingress rate into the smoothing buffer. 
+    *   Formula: $R_{rx} = 1.2 \times MaxBitrate$ (Standard Recommendation).
+    *   TsAnalyzer default: $2.0 \times MaxBitrate$ (to handle bursty network delivery).
+*   **$R_{bx}$ (MB $\to$ EB)**: Leaky bucket rate into the decoder buffer.
+    *   Formula: $R_{bx} = 1.2 \times MaxBitrate$.
+
+---
+
+## 8. Operational Value
 
 *   **Early Fault Prediction**: Alerting on VBV stress minutes before a buffer underflow occurs.
 *   **Encoder/Mux Audit**: Detecting GOP structures that are too large for the declared VBV buffer size.

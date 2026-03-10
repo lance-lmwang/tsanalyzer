@@ -112,7 +112,7 @@ static void sniff_h265_sps(const uint8_t* buf, int size, tsa_nalu_info_t* out) {
 
     // profile_tier_level
     out->profile = br_read(&r, 2);  // general_profile_space
-    br_read(&r, 1);                 // general_tier_flag
+    out->is_high_tier = br_read(&r, 1); // general_tier_flag
     out->profile = br_read(&r, 5);  // general_profile_idc
     br_read(&r, 32);                // general_profile_compatibility_flag
     br_read(&r, 48);                // general_constraint_indicator_flags

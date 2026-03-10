@@ -27,6 +27,7 @@ typedef struct {
     uint16_t height;
     uint8_t profile;
     uint8_t level;
+    bool is_high_tier;
     uint8_t chroma_format;
     uint8_t bit_depth;
 

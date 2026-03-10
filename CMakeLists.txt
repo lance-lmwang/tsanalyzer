@@ -253,6 +253,7 @@ tsa_test(test_pacer_throughput test_pacer_throughput.c)
 tsa_test(test_health_debounce test_health_debounce.c)
 tsa_test(test_pcr_reselection test_pcr_reselection.c)
 tsa_test(test_pcr_rollover_stress test_pcr_rollover_stress.c)
+tsa_test(test_tstd_leak_sync test_tstd_leak_sync.c)
 
 add_executable(test_pcr_null_inclusion tests/test_pcr_null_inclusion.c)
 target_link_libraries(test_pcr_null_inclusion tsp_core m pthread)
