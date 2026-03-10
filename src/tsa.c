@@ -79,7 +79,6 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     ts_pcr_window_init(&h->pcr_window, 128);
     ts_pcr_window_init(&h->pcr_long_window, 1024);
 
-    /* Professional Packet Pool Initialization */
     h->pkt_pool = tsa_packet_pool_create(16384);
     if (!h->pkt_pool) goto fail;
 
@@ -359,7 +358,6 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     ln = n;
     if (!is_dup) h->live->total_ts_packets++;
 
-    /* Phase 3.5: Unified Dispatch - no more reactive PID filtering at this layer */
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
     if (r.pid < TS_PID_MAX) {
@@ -378,7 +376,6 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     h->current_ns = n;
     h->current_res = r;
 
-    /* Phase 3.4: Flat Dispatch Loop */
     for (int i = 0; i < MAX_TSA_PLUGINS; i++) {
         if (h->plugins[i].in_use && h->plugins[i].ops && h->plugins[i].ops->on_ts) {
             h->plugins[i].ops->on_ts(h->plugins[i].instance, p);

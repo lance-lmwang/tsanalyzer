@@ -41,7 +41,6 @@ static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) 
     h->live->alarm_sync_loss = !h->signal_lock;
     h->live->alarm_cc_error = (h->live->cc_error.count > h->prev_snap_base->cc_error.count);
 
-    /* Aggregate PCR Repetition Errors (P1.1) from all tracks */
     uint64_t total_pcr_rep_err = 0;
     if (h->pcr_tracks) {
         for (int i = 0; i < TS_PID_MAX; i++) {
@@ -82,7 +81,6 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     tsa_calc_stream_bitrate(h, n);
     tsa_eval_tr101290_alarms(h, n, stc);
 
-    /* Professional Alignment: PCR Bitrate follows Physical Bitrate once Bits are flowing */
     h->live->pcr_bitrate_bps = h->live->physical_bitrate_bps;
 
     sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;

@@ -11,7 +11,6 @@
 static tsa_plugin_ops_t* s_registry[MAX_TSA_PLUGINS];
 static int s_registry_count = 0;
 
-/* External ops from individual plugin files - Phase 2.2 */
 extern tsa_plugin_ops_t tsa_scte35_engine;
 extern tsa_plugin_ops_t tr101290_ops;
 extern tsa_plugin_ops_t pcr_ops;
