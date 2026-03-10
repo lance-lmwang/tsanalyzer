@@ -13,6 +13,7 @@
 ## Platform & Optimization
 - **Linux**: Target operating system with specific tuning for NUMA and high-performance packet processing.
 - **Deterministic Engine**: Custom C logic ensuring bit-identical results across PCAP replays.
+- **Zero-Alloc Architecture**: In-place initialization and flat dispatch patterns to ensure mission-critical stability and performance.
 
 ## Testing & Verification
 - **CTest**: Integrated testing framework within CMake.
