@@ -88,6 +88,9 @@ typedef struct {
     uint32_t gop_ms;
     int32_t av_sync_ms;
     uint64_t stream_utc_ms;
+    uint64_t hls_download_errors;
+    double hls_buffer_ms;
+
     uint64_t pid_packet_count[TS_PID_MAX];
     uint64_t pid_bitrate_bps[TS_PID_MAX];
     uint64_t pid_bitrate_peak_bps[TS_PID_MAX];
@@ -272,6 +275,7 @@ void tsa_exporter_prom_core(tsa_handle_t** handles, int count, char* buf, size_t
 void tsa_exporter_prom_pids(tsa_handle_t** handles, int count, char* buf, size_t sz);
 void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t size);
 void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* srt);
+void tsa_update_hls_stats(tsa_handle_t* h, double buffer_ms, uint64_t errors);
 bool tsa_forensic_trigger(tsa_handle_t* h, int reason);
 void tsa_reset_latched_errors(tsa_handle_t* h);
 void tsa_forensic_generate_json(tsa_handle_t* h, char* buffer, size_t size);

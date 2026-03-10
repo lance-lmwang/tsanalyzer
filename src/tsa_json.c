@@ -20,8 +20,11 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
     SAFE_JSON("\"status\":{\"signal_lock\":%s,\"master_health\":%.1f},", sn->summary.signal_lock ? "true" : "false",
               sn->predictive.master_health);
 
-    SAFE_JSON("\"tier1_link\":{\"physical_bitrate_bps\":%llu,\"mdi_df_ms\":%.2f},",
-              (unsigned long long)st->physical_bitrate_bps, (float)st->mdi_df_ms);
+    SAFE_JSON(
+        "\"tier1_link\":{\"physical_bitrate_bps\":%llu,\"mdi_df_ms\":%.2f,\"hls_buffer_ms\":%.2f,\"hls_download_"
+        "errors\":%llu},",
+        (unsigned long long)st->physical_bitrate_bps, (float)st->mdi_df_ms, st->hls_buffer_ms,
+        (unsigned long long)st->hls_download_errors);
 
     SAFE_JSON(
         "\"tier2_compliance\":{\"p1\":{\"cc_error\":{\"count\":%llu,\"last_offset\":%llu}},\"p2\":{\"pcr_jitter_ms\":%."

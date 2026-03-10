@@ -397,6 +397,13 @@ void tsa_update_srt_stats(tsa_handle_t* h, const tsa_srt_stats_t* s) {
     if (h && s) h->srt_live = *s;
 }
 
+void tsa_update_hls_stats(tsa_handle_t* h, double buffer_ms, uint64_t errors) {
+    if (h && h->live) {
+        h->live->hls_buffer_ms = buffer_ms;
+        h->live->hls_download_errors = errors;
+    }
+}
+
 void* tsa_mem_pool_alloc(tsa_handle_t* h, size_t sz) {
     if (!h || !h->pool_base) return NULL;
     size_t al = (h->pool_offset + 63) & ~63;

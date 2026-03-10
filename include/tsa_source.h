@@ -23,6 +23,11 @@ typedef struct {
      * Called on source errors or status changes (e.g., EOF, connection lost).
      */
     void (*on_status)(void* user_data, int status_code, const char* msg);
+
+    /**
+     * Called by HLS ingest to update buffer stability metrics.
+     */
+    void (*on_hls_stats)(void* user_data, double buffer_ms, uint64_t errors);
 } tsa_source_callbacks_t;
 
 /* HLS Ingest Internal API */

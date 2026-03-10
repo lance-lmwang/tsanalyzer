@@ -50,6 +50,13 @@ static void on_source_packets_async(void* user_data, const uint8_t* pkts, int co
         }
     }
 }
+static void on_hls_stats_cb(void* user_data, double buffer_ms, uint64_t errors) {
+    tsa_handle_t* h = (tsa_handle_t*)user_data;
+    if (h) {
+        tsa_update_hls_stats(h, buffer_ms, errors);
+    }
+}
+
 static void on_source_status(void* user_data, int status_code, const char* msg) {
     (void)user_data;
     if (status_code <= 0) {
@@ -284,7 +291,7 @@ int main(int argc, char** argv) {
         pthread_t analysis_tid;
         pthread_create(&analysis_tid, NULL, analysis_thread_func, h);
 
-        tsa_source_callbacks_t cbs = {on_source_packets_async, on_source_status};
+        tsa_source_callbacks_t cbs = {on_source_packets_async, on_source_status, on_hls_stats_cb};
         tsa_source_t* src = NULL;
         if (interface[0])
             src = tsa_source_create(TSA_SOURCE_PCAP, interface, NULL, 0, &cbs, h);

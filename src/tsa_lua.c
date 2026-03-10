@@ -41,7 +41,7 @@ static int l_tsa_udp_input(lua_State* L) {
     lua_setmetatable(L, -2);
 
     // We will hook real callbacks when link (set_upstream) happens in Step 3
-    tsa_source_callbacks_t cbs = {dummy_on_packets, dummy_on_status};
+    tsa_source_callbacks_t cbs = {dummy_on_packets, dummy_on_status, NULL};
     obj->src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, port, &cbs, NULL);
     if (!obj->src) {
         return luaL_error(L, "Failed to create UDP input");

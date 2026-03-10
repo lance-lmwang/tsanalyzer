@@ -117,12 +117,20 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
 
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
                     (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_compliance_tr101290_errors_last_offset{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
+                    (unsigned long long)s->sync_loss.absolute_byte_offset);
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid,
                     (unsigned long long)s->pat_error.count);
+        SAFE_APPEND("tsa_compliance_tr101290_errors_last_offset{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid,
+                    (unsigned long long)s->pat_error.absolute_byte_offset);
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid,
                     (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_compliance_tr101290_errors_last_offset{stream_id=\"%s\",error_type=\"cc_error\"} %llu\n", sid,
+                    (unsigned long long)s->cc_error.absolute_byte_offset);
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"pmt_error\"} %llu\n", sid,
                     (unsigned long long)s->pmt_error.count);
+        SAFE_APPEND("tsa_compliance_tr101290_errors_last_offset{stream_id=\"%s\",error_type=\"pmt_error\"} %llu\n", sid,
+                    (unsigned long long)s->pmt_error.absolute_byte_offset);
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"pid_error\"} %llu\n", sid,
                     (unsigned long long)s->pid_error.count);
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"pts_error\"} %llu\n", sid,
