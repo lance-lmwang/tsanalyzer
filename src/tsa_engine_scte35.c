@@ -38,11 +38,9 @@ static void scte35_reset(void* engine) {
     e->scte35_count = 0;
 }
 
-tsa_plugin_ops_t tsa_scte35_engine = {
-    .name = "SCTE35_PARSER",
-    .create = scte35_create,
-    .destroy = scte35_destroy,
-    .on_ts = scte35_on_ts,
-    .reset = scte35_reset,
-    .commit = NULL
-};
+tsa_plugin_ops_t tsa_scte35_engine = {.name = "SCTE35_PARSER",
+                                      .create = scte35_create,
+                                      .destroy = scte35_destroy,
+                                      .on_ts = scte35_on_ts,
+                                      .reset = scte35_reset,
+                                      .commit = NULL};

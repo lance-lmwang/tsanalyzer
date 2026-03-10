@@ -15,7 +15,7 @@ static bool tsa_debounce_update(tsa_debounce_t* d, bool active, uint64_t now, ui
     if (active) {
         if (d->last_absence_ns == 0) d->last_absence_ns = now;
         d->last_occurrence_ns = now;
-        if (! d->is_fired && (now - d->last_absence_ns >= fire_ns)) {
+        if (!d->is_fired && (now - d->last_absence_ns >= fire_ns)) {
             d->is_fired = true;
             d->fired_time_ns = now;
         }
@@ -24,7 +24,7 @@ static bool tsa_debounce_update(tsa_debounce_t* d, bool active, uint64_t now, ui
         if (d->is_fired && d->last_occurrence_ns > 0 && (now - d->last_occurrence_ns >= resolve_ns)) {
             d->is_fired = false;
         }
-        if (! d->is_fired) {
+        if (!d->is_fired) {
             d->last_absence_ns = now;
         }
     }
@@ -60,9 +60,9 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 
     // 2. Continuity Counter (CC) Check
     bool cc_error_detected = false;
-    if (h->es_tracks[pid].last_cc != 0x10 && ! res->has_discontinuity) {
+    if (h->es_tracks[pid].last_cc != 0x10 && !res->has_discontinuity) {
         ts_cc_status_t s = cc_classify_error(h->es_tracks[pid].last_cc, res->cc, res->has_payload,
-                                             (pkt[3] & 0x20) && ! (pkt[3] & 0x10));
+                                             (pkt[3] & 0x20) && !(pkt[3] & 0x10));
 
         if (s == TS_CC_LOSS || s == TS_CC_OUT_OF_ORDER) {
             cc_error_detected = true;
@@ -77,7 +77,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
     if (cc_error_detected) cc_currently_active = true;
 
     if (tsa_debounce_update(&h->debounce_cc, cc_currently_active, now, 100000000ULL, 2000000000ULL)) {
-        if (! h->es_tracks[pid].ignore_next_cc) {
+        if (!h->es_tracks[pid].ignore_next_cc) {
             if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
             h->live->cc_error.count++;
             h->live->cc_error.last_timestamp_ns = now;

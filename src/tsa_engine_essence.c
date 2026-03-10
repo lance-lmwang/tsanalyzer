@@ -34,7 +34,7 @@ tsa_plugin_ops_t essence_plugin_ops = {
  * ISO/IEC 13818-1 T-STD Leakage Logic with EB Backpressure
  */
 static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t now_vstc) {
-    if (! h || ! es) return;
+    if (!h || !es) return;
     if (es->tstd.last_leak_vstc == 0) {
         es->tstd.last_leak_vstc = now_vstc;
         return;
@@ -65,7 +65,7 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
         es->tstd.mb_fill_q64 += tb_leaked_q64;
 
         /* MB Leakage: R_bx flows into EB, but ONLY if EB is not full (Backpressure) */
-        if (! eb_full) {
+        if (!eb_full) {
             uint64_t r_bx = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.5);
             if (r_bx == 0) r_bx = 20000000;
 
@@ -91,7 +91,7 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
 
 static void essence_on_ts(void* self, const uint8_t* pkt) {
     essence_ctx_t* ctx = (essence_ctx_t*)self;
-    if (! ctx || ! ctx->h) return;
+    if (!ctx || !ctx->h) return;
     tsa_handle_t* h = ctx->h;
     const ts_decode_result_t* res = &h->current_res;
     uint16_t pid = res->pid;
@@ -157,11 +157,11 @@ static void* essence_create(void* parent, void* context_buf) {
 
 static void essence_destroy(void* self) {
     essence_ctx_t* ctx = (essence_ctx_t*)self;
-    if (! ctx || ! ctx->h) return;
+    if (!ctx || !ctx->h) return;
     tsa_handle_t* h = ctx->h;
 
     /* Robustness check: Ensure handle members are still valid before cleanup */
-    if (! h->pkt_pool || ! h->pid_seen || ! h->es_tracks) return;
+    if (!h->pkt_pool || !h->pid_seen || !h->es_tracks) return;
 
     /* Securely cleanup PES references in the packet pool */
     for (int i = 0; i < TS_PID_MAX; i++) {
