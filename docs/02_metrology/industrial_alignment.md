@@ -1,61 +1,30 @@
-# Industrial Metrology Alignment: libltntstools Methodology
+# TsAnalyzer 工业计量标准 (Industrial Metrology Standards)
 
-This document defines how TsAnalyzer aligns its metrology engine with the architectural principles found in industry-standard tools like `libltntstools`.
+为了对齐 `libltntstools` 等工业级标准并遵循 ISO/IEC 13818-1 规范，TsAnalyzer 的所有码率统计和时钟分析必须遵循以下准则：
 
-## 1. Overview
-To achieve carrier-grade accuracy, TsAnalyzer utilizes **Anchor-Based Piecewise Measurement**. This method ensures that bitrate calculation is tied to the hardware-derived PCR timeline rather than unstable software timers.
+### 1. 物理码率定义 (Total TS Bitrate)
+*   **统计口径**：物理码率代表 **L2 传输流层速率**。它必须统计进入引擎的所有有效 188 字节 TS 包（含 Null Packets）。
+*   **计算公式**：`Total_TS_Bitrate = (ΔPackets * 1504) / ΔWall_Clock_ns`。
+*   **排除项**：严禁包含 IP/UDP/Ethernet 等网络层开销。
+*   **强制原则 (ISO/IEC 13818-1)**：分析引擎必须将每个到达的包视为不可抹除的物理事实。**严禁在 TS 层执行基于 PID+CC 的去重**。重复包可能携带更新的 PCR 且真实占用链路带宽，任何人为丢弃都会导致码率失真、PCR 样本丢失及 T-STD 模拟偏差。
 
-## 2. Core Algorithmic Principles
+### 2. 时钟域隔离与上帝时间源 (Clock Domain Isolation)
+*   **禁止混用**：严禁在同一个结算周期内混合使用 PCR Ticks (27MHz) 和系统纳秒 (1GHz)。这会导致分母错位产生 10 倍级误差。
+*   **自采样原则**：`tsa_calc_stream_bitrate` 内部应独立调用 `CLOCK_MONOTONIC` 获取结算瞬时的时间戳，以平抑系统调度抖动。
+*   **最小窗口**：物理码率结算强制执行 **500ms 最小窗口保护**，以提供稳定的“线速感”。
 
-### 2.1 Piecewise Measurement Model
-Instead of using a sliding wall-clock window, TsAnalyzer adopts the **Piecewise Model**:
-*   **Measurement Interval**: Bitrate is calculated strictly for the duration between two consecutive PCR samples of the same PID.
-*   **Anchor Synchronization**: When a PCR arrives, the engine records the current global packet count ($P_{total}$) as a "Metrology Anchor."
-*   **The Delta Formula**:
-    $$Bitrate_{bps} = \frac{(P_{total} - P_{anchor}) \times 1504 \times 27,000,000}{PCR_{now} - PCR_{last}}$$
+### 3. MPTS 多节目支持
+*   **上下文隔离**：每个 PID 必须拥有独立的 `pcr_track` (或 `clock_inspector`) 上下文。严禁使用全局变量存储 PCR 时间基准，防止多节目冲突。
 
-### 2.2 Multiplex-Aware Occupancy
-Aligned with professional methodology, TsAnalyzer measures the **Total Multiplex Rate**:
-*   The bitrate for a program is derived from the *total number of TS packets* delivered in the entire multiplex between that program's PCR markers.
-*   This accurately reflects the program's physical bandwidth occupancy, including all overhead and stuffing associated with its timing.
+### 4. 平滑策略 (Smoothing)
+*   **物理层**：应用强 EMA 平滑（如 20% 瞬时 / 80% 历史），提供稳定的线速展示。
+*   **业务层**：应用轻量平滑或不平滑（瞬时），以真实反映 CBR/VBR 流的编码质量。
 
-### 2.3 Integrity-First Reset Logic (CC Error Awareness)
-Metrology must be verifiable and honest. TsAnalyzer implements a "Discard on Error" policy:
-*   **CC Error Sensitivity**: If a Continuity Counter (CC) error is detected within a measurement window, the current calculation is **aborted**.
-*   **Rationale**: Packet loss compromises the packet count (numerator), leading to incorrect bitrate reports. Resetting ensures that only contiguous, valid data is used for metrology.
+---
 
-### 2.4 Multi-Program (MPTS) Isolation
-To support complex MPTS streams without "Value Overwriting" or "Scaling Spikes":
-*   **Isolated Contexts**: Each PCR PID maintains its own `br_est` structure (containing anchors and sync flags).
-*   **Independent State Machines**: PCRs from different programs are processed in parallel clock domains.
-*   **Master PCR PID Locking**: The first identified PCR PID is locked as the "System Time Clock (STC) Master" to prevent clock collisions across programs while maintaining independent bitrate settlements.
+## English Version (Metrology & MPTS Standards)
 
-## 3. Developer Caveats & Pitfalls (Lessons Learned)
-
-During the implementation of industrial-grade metrology, several critical issues were identified and resolved:
-
-### 3.1 MPTS Clock Collisions
-*   **Issue**: In early versions, every PCR PID attempted to update the global logical STC. Minor differences in PCR sampling led to STC jumps, causing all bitrate calculations to spike or drop to zero.
-*   **Fix**: Implemented `master_pcr_pid` locking. Only the master PID drives the global STC regression, while other PIDs perform isolated anchor-based settlements.
-
-### 3.2 Clock Domain Hijacking in LIVE Mode
-*   **Issue**: Using logical STC for physical bitrate (L2 rate) in `LIVE` mode caused spikes. Processing bursts (e.g., clearing a backlog) appeared as high bitrates (e.g., 600Mbps for a 10Mbps stream) because many packets were processed in a tiny slice of logical time.
-*   **Fix**: Physical bitrate MUST use **CLOCK_MONOTONIC** in `LIVE` mode. Logical STC is only used in `REPLAY` mode for determinism.
-
-### 3.3 Minimum Settlement Window
-*   **Issue**: Windows smaller than 500ms amplified OS scheduling jitter into bitrate "noise" or "jittery spikes".
-*   **Fix**: Enforced a **500ms minimum sampling window**. Bitrate updates are deferred until at least 500ms of real wall-clock time has elapsed.
-
-### 3.4 Aggregate Bitrate Double-Counting
-*   **Issue**: `pcr_bitrate_bps` jumped to 20Mbps for 10Mbps streams because the sum included both PCR-calculated mux rates and snapshot-estimated essence rates.
-*   **Fix**:
-    1.  The PCR engine calculates the high-precision Program Rate.
-    2.  The Snapshot logic provides fallback estimation ONLY for non-PCR PIDs.
-    3.  `pcr_bitrate_bps` is defined as the sum of all individual PID contributions where PCR-based values take precedence.
-
-### 3.5 Pacer Burst Management
-*   **Issue**: TsPacer attempted to "catch up" with line speed (2Gbps+) during file loops or network lag, overwhelming the metrology engine.
-*   **Fix**: Reduced queue sizes and implemented "Lag Throttling" where the pacer shifts its base clock forward instead of bursting to catch up.
-
-## 4. Conclusion
-By aligning with the anchor-based model and strictly isolating clock domains, TsAnalyzer provides a stable, carrier-grade bitrate report that remains accurate under high CPU load and complex MPTS scenarios.
+- **Physical Bitrate Definition:** The Physical Bitrate MUST represent the **Total TS Bitrate** (Level 2). It counts every valid 188-byte TS packet (including Null packets) recognized by the sync state machine. Formula: `(Δpackets * 1504) / Δwall_clock_ns`.
+- **Packet Integrity:** Analysis MUST treat the incoming stream as a physical reality. No TS-layer packet de-duplication should be performed to avoid discarding valid PCR-only packets or breaking the bitrate timing baseline.
+- **Clock Domain Isolation:** For MPTS support, all PCR-related metrics (Bitrate, Jitter, Accuracy) MUST be stored within the PID's independent `pcr_track` context. Never use global variables for PCR timing baseline to avoid program collision.
+- **Atomic Metrology Synchronization:** Always use atomic operations for packet counters used in bitrate calculation. The sampling window for physical bitrate MUST be enforced at a minimum of 500ms to ensure stability against OS scheduling jitter.

@@ -356,30 +356,22 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     }
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
-    static __thread uint16_t lp = 0xFFFF;
-    static __thread uint8_t lc = 0xFF;
-    static __thread uint64_t ln = 0;
-    bool is_dup = false;
-    if (r.pid != 0x1FFF && r.pid == lp && r.cc == lc) {
-        if (n > 0 && ln > 0 && (n - ln) < 1000ULL) is_dup = true;
-    }
-    lp = r.pid;
-    lc = r.cc;
-    ln = n;
-    if (!is_dup) h->live->total_ts_packets++;
-
+    h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
     if (r.pid < TS_PID_MAX) {
         if (!h->pid_histograms[r.pid]) h->pid_histograms[r.pid] = calloc(1, sizeof(tsa_histogram_t));
         if (h->pid_histograms[r.pid]) tsa_hist_add_packet(h->pid_histograms[r.pid], h->stc_ns, TS_PACKET_BITS);
     }
+
     if (r.scrambled) {
         h->live->pid_scrambled_packets[r.pid]++;
         tsa_push_event(h, TSA_EVENT_SCRAMBLED, r.pid, 0);
     }
     h->es_tracks[r.pid].last_seen_vstc = h->stc_ns;
     h->es_tracks[r.pid].last_seen_ns = n;
+
+    /* Process PCR/Clock REGARDLESS of duplicate status to ensure timing stability */
     h->pkts_since_pcr++;
     if (r.pid == 0 || r.pid == 0x10 || r.pid == 0x11 || h->pid_is_pmt[r.pid] || h->pid_is_scte35[r.pid])
         tsa_section_filter_push(h, r.pid, p, &r);
@@ -388,6 +380,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
 
     for (int i = 0; i < MAX_TSA_PLUGINS; i++) {
         if (h->plugins[i].in_use && h->plugins[i].ops && h->plugins[i].ops->on_ts) {
+            /* If it's a metrology plugin (like PCR analyzer), process even if dup */
             h->plugins[i].ops->on_ts(h->plugins[i].instance, p);
         }
     }
