@@ -42,6 +42,18 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
     }
     SAFE_JSON("]}");
 
+    SAFE_JSON(",\"programs\":[");
+    for (uint32_t i = 0; i < h->ts_model.program_count; i++) {
+        const tsa_program_model_t* p = &h->ts_model.programs[i];
+        SAFE_JSON(
+            "%s{\"program_number\":%u,\"pmt_pid\":%u,\"lcn\":%u,\"service_name\":\"%s\",\"provider_name\":\"%s\"}",
+            (i == 0) ? "" : ",", p->program_number, p->pmt_pid, p->lcn,
+            p->service_name[0] ? p->service_name : "unknown", p->provider_name[0] ? p->provider_name : "unknown");
+    }
+    SAFE_JSON("]");
+
+    SAFE_JSON("}");
+
 #undef SAFE_JSON
     return (size_t)off;
 }

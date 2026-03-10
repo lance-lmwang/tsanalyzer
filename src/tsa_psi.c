@@ -210,55 +210,67 @@ int16_t tsa_update_pid_tracker(tsa_handle_t* h, uint16_t p) {
     return idx;
 }
 
+static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_filter_t* f) {
+    if (!f->complete) return;
+    uint8_t tid = f->buffer[0];
+    uint8_t ver = (f->buffer[5] >> 1) & 0x1F;
+    if (!f->seen_before || f->last_ver != ver) {
+        if (tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3) == 0) {
+            if (tid == 0x00)
+                process_pat(h, f->buffer, h->stc_ns);
+            else if (tid == 0x02)
+                process_pmt(h, pid, f->buffer, h->stc_ns);
+            else if (tid == 0x40)
+                process_nit(h, f->buffer, h->stc_ns);
+            else if (tid == 0x42)
+                process_sdt(h, f->buffer, h->stc_ns);
+            f->last_ver = ver;
+            f->seen_before = true;
+        } else {
+            h->live->crc_error.count++;
+            tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
+        }
+    }
+    f->active = false;
+    f->complete = false;
+}
+
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
     if (!res->has_payload) return;
     ts_section_filter_t* f = &h->pid_filters[pid];
     const uint8_t* payload = pkt + 4 + res->af_len;
     int len = res->payload_len;
+
     if (res->pusi) {
         int pointer = payload[0];
-        if (pointer + 1 < len) {
-            if (f->active && f->len > 0) {
-                memcpy(f->buffer + f->len, payload + 1, pointer);
-                f->len += pointer;
+        if (pointer + 1 <= len) {
+            if (f->active && f->len > 0 && pointer > 0) {
+                int to_copy = (f->len + pointer < 4096) ? pointer : (4096 - f->len);
+                memcpy(f->buffer + f->len, payload + 1, to_copy);
+                f->len += to_copy;
                 f->complete = true;
+                parse_completed_section(h, pid, f);
             }
             f->active = true;
             f->len = len - 1 - pointer;
-            memcpy(f->buffer, payload + 1 + pointer, f->len);
+            if (f->len > 0) {
+                memcpy(f->buffer, payload + 1 + pointer, f->len);
+            }
         }
     } else if (f->active) {
         if (f->len + len < 4096) {
             memcpy(f->buffer + f->len, payload, len);
             f->len += len;
-        } else
+        } else {
             f->active = false;
+        }
     }
+
     if (f->active && f->len >= 3) {
         int sl = ((f->buffer[1] & 0x0F) << 8) | f->buffer[2];
-        if (f->len >= (uint32_t)sl + 3) f->complete = true;
-    }
-    if (f->complete) {
-        uint8_t tid = f->buffer[0];
-        uint8_t ver = (f->buffer[5] >> 1) & 0x1F;
-        if (!f->seen_before || f->last_ver != ver) {
-            if (tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3) == 0) {
-                if (tid == 0x00)
-                    process_pat(h, f->buffer, h->stc_ns);
-                else if (tid == 0x02)
-                    process_pmt(h, pid, f->buffer, h->stc_ns);
-                else if (tid == 0x40)
-                    process_nit(h, f->buffer, h->stc_ns);
-                else if (tid == 0x42)
-                    process_sdt(h, f->buffer, h->stc_ns);
-                f->last_ver = ver;
-                f->seen_before = true;
-            } else {
-                h->live->crc_error.count++;
-                tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
-            }
+        if (f->len >= (uint32_t)sl + 3) {
+            f->complete = true;
+            parse_completed_section(h, pid, f);
         }
-        f->active = false;
-        f->complete = false;
     }
 }

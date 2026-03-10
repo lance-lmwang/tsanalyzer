@@ -67,13 +67,20 @@ static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, cons
 
 static void handle_lcn(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
                        uint8_t *stream_type) {
+    (void)pid;
     (void)tag;
     (void)stream_type;
-    tsa_program_model_t *p = find_program(h, pid);
-    if (!p || len < 4) return;
 
-    // Logical Channel Number Descriptor (0x83)
-    p->lcn = ((data[2] & 0x03) << 8) | data[3];
+    // Logical Channel Number Descriptor (0x83) - Typically in NIT
+    // Loop over all services in the descriptor
+    for (int i = 0; i + 4 <= len; i += 4) {
+        uint16_t service_id = (data[i] << 8) | data[i + 1];
+        uint16_t lcn = ((data[i + 2] & 0x03) << 8) | data[i + 3];
+        tsa_program_model_t *p = find_program(h, service_id);
+        if (p) {
+            p->lcn = lcn;
+        }
+    }
 }
 
 static void handle_ac3(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
