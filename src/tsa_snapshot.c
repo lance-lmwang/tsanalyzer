@@ -90,6 +90,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     tsa_calc_stream_bitrate(h, n);
     tsa_eval_tr101290_alarms(h, stc);
 
+    uint64_t total_suppressed = 0;
+    for (int i = 0; i < TSA_ALERT_AGGREGATOR_SIZE; i++) {
+        if (h->aggregator.entries[i].active) {
+            uint32_t count = atomic_load(&h->aggregator.entries[i].hit_count);
+            if (count > 1) total_suppressed += (count - 1);
+        }
+    }
+    h->live->alert_suppression_count = total_suppressed;
+
     h->live->pcr_bitrate_bps = h->live->physical_bitrate_bps;
 
     sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;

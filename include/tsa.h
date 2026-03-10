@@ -107,6 +107,7 @@ typedef struct {
     uint64_t pid_last_seen_ns[TS_PID_MAX];
     uint64_t pid_last_seen_vstc[TS_PID_MAX];
     uint64_t total_ts_packets;
+    uint64_t alert_suppression_count;
     uint64_t engine_processing_latency_ns;
     uint64_t internal_analyzer_drop;
     uint64_t worker_slice_overruns;
@@ -253,6 +254,7 @@ typedef struct {
         char webhook_url[256];
         uint64_t filter_mask;
         uint32_t cooldown_ms;
+        uint32_t suppression_window_ms;
     } alert;
 
     // Legacy fields for backward compatibility during transition

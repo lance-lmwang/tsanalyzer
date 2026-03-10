@@ -74,6 +74,9 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
         h->webhook = tsa_webhook_init(h->config.webhook_url);
     }
 
+    h->aggregator.window_ms = h->config.alert.suppression_window_ms;
+    if (h->aggregator.window_ms == 0) h->aggregator.window_ms = 10000;  // Default 10s
+
     if (h->config.analysis.pcr_ema_alpha <= 0) h->config.analysis.pcr_ema_alpha = 0.05;
     h->pcr_ema_alpha_q32 = TO_Q32_32(h->config.analysis.pcr_ema_alpha);
     ts_pcr_window_init(&h->pcr_window, 128);

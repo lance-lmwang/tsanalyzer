@@ -215,6 +215,7 @@ void tsa_forensic_generate_json(struct tsa_handle* h, char* buf, size_t sz);
 struct tsa_handle {
     tsa_config_t config;
     tsa_alert_state_t alerts[TSA_ALERT_MAX];
+    tsa_alert_aggregator_t aggregator;
     tsa_sync_state_t sync_state;
     uint32_t sync_confirm_count;
     uint8_t sync_buffer[TS_PACKET_SIZE];

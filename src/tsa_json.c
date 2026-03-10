@@ -29,9 +29,10 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
     SAFE_JSON(
         "\"tier2_compliance\":{\"p1\":{\"cc_error\":{\"count\":%llu,\"last_offset\":%llu}},\"p2\":{\"pcr_jitter_ms\":%."
         "3f,\"tsa_compliance_"
-        "pcr_repetition_errors\": %llu}},",
+        "pcr_repetition_errors\": %llu,\"suppression_count\": %llu}},",
         (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.absolute_byte_offset,
-        st->pcr_jitter_avg_ns / 1000000.0, (unsigned long long)st->pcr_repetition_error.count);
+        st->pcr_jitter_avg_ns / 1000000.0, (unsigned long long)st->pcr_repetition_error.count,
+        (unsigned long long)st->alert_suppression_count);
 
     SAFE_JSON("\"pids\":[");
     for (uint32_t i = 0; i < sn->active_pid_count; i++) {
@@ -44,7 +45,7 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
             p->gop_structure[0] ? p->gop_structure : "", (unsigned long long)p->i_frame_size_bytes,
             (unsigned long long)p->p_frame_size_bytes, (unsigned long long)p->b_frame_size_bytes);
     }
-    SAFE_JSON("]}");
+    SAFE_JSON("]");
 
     SAFE_JSON(",\"programs\":[");
     for (uint32_t i = 0; i < h->ts_model.program_count; i++) {

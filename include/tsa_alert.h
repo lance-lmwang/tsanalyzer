@@ -50,6 +50,26 @@ typedef struct {
     bool needs_resolve_msg;
 } tsa_alert_state_t;
 
+#define TSA_ALERT_AGGREGATOR_SIZE 4096
+
+typedef struct {
+    uint32_t hash;
+    tsa_alert_id_t id;
+    uint16_t pid;
+    _Atomic uint32_t hit_count;
+    _Atomic uint64_t last_hit_ns;
+    _Atomic uint64_t window_start_ns;
+    char stream_id[64];
+    char alert_name[32];
+    char message[256];
+    bool active;
+} tsa_alert_aggregator_entry_t;
+
+typedef struct {
+    tsa_alert_aggregator_entry_t entries[TSA_ALERT_AGGREGATOR_SIZE];
+    uint32_t window_ms;
+} tsa_alert_aggregator_t;
+
 struct tsa_handle;  // Forward declaration
 
 /**
