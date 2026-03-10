@@ -12,13 +12,12 @@
 /**
  * @struct tsa_es_track_t
  * @brief Consolidated state for Elementary Stream (ES) analysis and T-STD simulation.
- * Optimized for STRICT ZERO-COPY processing.
  */
 typedef struct {
     uint16_t pid;
     uint8_t stream_type;
     bool active;
-    uint8_t status; /* tsa_measurement_status_t */
+    uint8_t status;
 
     /* Bitrate Statistics */
     double bitrate_ema;
@@ -29,13 +28,10 @@ typedef struct {
     /* PES Accumulator State (ZERO-COPY) */
     struct {
         enum { TSA_PES_HUNTING, TSA_PES_ACCUMULATING, TSA_PES_FINISHING } state;
-
-        /* Pointers to packets in global pool instead of local buffer copy */
         tsa_packet_t* refs[TSA_PES_MAX_REFS];
         uint16_t payload_offsets[TSA_PES_MAX_REFS];
         uint8_t payload_lens[TSA_PES_MAX_REFS];
         uint32_t ref_count;
-
         uint32_t total_length;
         uint64_t last_pts_33;
         uint64_t last_dts_33;
@@ -63,14 +59,12 @@ typedef struct {
         uint8_t chroma_format;
         uint8_t bit_depth;
         float exact_fps;
-
         uint32_t gop_n;
         uint32_t last_gop_n;
         uint32_t gop_min;
         uint32_t gop_max;
         uint32_t gop_ms;
         uint64_t last_idr_ns;
-
         uint64_t i_frames;
         uint64_t p_frames;
         uint64_t b_frames;
@@ -94,21 +88,25 @@ typedef struct {
 
     /* T-STD Buffer Simulation (ISO/IEC 13818-1) */
     struct {
-        __int128 eb_fill_q64;  // Elementary Buffer fill level (bits)
-        __int128 tb_fill_q64;  // Transport Buffer fill level (bits)
-        __int128 mb_fill_q64;  // Multiplexing Buffer fill level (bits)
+        __int128 eb_fill_q64;
+        __int128 tb_fill_q64;
+        __int128 mb_fill_q64;
         uint64_t last_leak_vstc;
         uint32_t buffer_size_eb;
         uint32_t buffer_size_tb;
         uint32_t buffer_size_mb;
-        uint64_t leak_rate_eb;  // R_eb (bits/s)
-        uint64_t leak_rate_rx;  // R_rx (bits/s)
+        uint64_t leak_rate_eb;
+        uint64_t leak_rate_rx;
     } tstd;
 
-    /* Time & Continuity tracking */
+    /* T-STD timing and jitter tracking */
+    uint64_t last_pts_val;
+    uint64_t last_pts_vstc;
+    __int128 pts_jitter_q64;
+
+    /* Continuity tracking */
     uint64_t last_seen_ns;
     uint64_t last_seen_vstc;
-    uint64_t last_pts_recorded;
     uint64_t last_pts_extrapolated;
     uint8_t last_cc;
     bool ignore_next_cc;

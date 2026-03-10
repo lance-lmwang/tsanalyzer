@@ -106,6 +106,33 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     }
     sn->active_pid_count = ai;
 
+    /* Professional A/V Skew Analysis (ISO/IEC 13818-1)
+     * Calculate skew for the first program found with both video and audio. */
+    h->live->av_sync_ms = 0;
+    for (uint32_t i = 0; i < h->program_count; i++) {
+        tsa_program_info_t* pr = &h->programs[i];
+        uint16_t v_pid = 0, a_pid = 0;
+        for (uint32_t j = 0; j < pr->stream_count; j++) {
+            if (tsa_is_video(pr->streams[j].stream_type) && v_pid == 0) v_pid = pr->streams[j].pid;
+            if (tsa_is_audio(pr->streams[j].stream_type) && a_pid == 0) a_pid = pr->streams[j].pid;
+        }
+
+        if (v_pid > 0 && a_pid > 0) {
+            tsa_es_track_t* v_tk = &h->es_tracks[v_pid];
+            tsa_es_track_t* a_tk = &h->es_tracks[a_pid];
+
+            if (v_tk->last_pts_val > 0 && a_tk->last_pts_val > 0) {
+                /* Formula: Skew = (PTS_a - VSTC_a) - (PTS_v - VSTC_v)
+                 * All values normalized to 90kHz ticks for precision. */
+                int64_t v_off = (int64_t)v_tk->last_pts_val - (int64_t)(v_tk->last_pts_vstc * 90 / 1000000);
+                int64_t a_off = (int64_t)a_tk->last_pts_val - (int64_t)(a_tk->last_pts_vstc * 90 / 1000000);
+                h->live->av_sync_ms = (int32_t)((a_off - v_off) / 90);
+                break; /* Report for primary program */
+            }
+        }
+    }
+    sn->stats.av_sync_ms = h->live->av_sync_ms;
+
     atomic_store_explicit(&h->double_buffer.active_idx, inactive_idx, memory_order_release);
     *h->prev_snap_base = *h->live;
     h->last_snap_ns = stc;

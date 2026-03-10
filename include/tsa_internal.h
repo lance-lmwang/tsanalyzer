@@ -137,6 +137,9 @@ static inline bool tsa_is_hevc(uint8_t type) {
 static inline bool tsa_is_video(uint8_t type) {
     return type == TSA_TYPE_VIDEO_H264 || type == TSA_TYPE_VIDEO_HEVC || type == TSA_TYPE_VIDEO_MPEG2;
 }
+static inline bool tsa_is_audio(uint8_t type) {
+    return type == 0x03 || type == 0x04 || type == 0x0f || type == 0x11 || type == 0x81 || type == 0x82;
+}
 
 const char* tsa_stream_type_to_str(uint8_t type);
 const char* tsa_get_pid_type_name(const struct tsa_handle* h, uint16_t p);

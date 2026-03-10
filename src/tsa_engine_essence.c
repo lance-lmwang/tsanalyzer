@@ -171,6 +171,24 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
                     es->pes.last_dts_33 = dts_ticks;
                 }
 
+                /* Professional Jitter Analysis: PTS vs Arrival STC (ISO/IEC 13818-1) */
+                if (res->has_pts && es->last_pts_val > 0) {
+                    uint64_t pts_delta = (res->pts > es->last_pts_val) ? (res->pts - es->last_pts_val) : 0;
+                    uint64_t vstc_delta_ticks =
+                        (h->stc_ns > es->last_pts_vstc) ? ((h->stc_ns - es->last_pts_vstc) * 90 / 1000000) : 0;
+
+                    if (pts_delta > 0 && vstc_delta_ticks > 0) {
+                        int64_t jitter = (int64_t)pts_delta - (int64_t)vstc_delta_ticks;
+                        /* Store as Q64 for EMA smoothing in next step if needed */
+                        es->pts_jitter_q64 = INT_TO_Q64_64(jitter);
+                    }
+                }
+
+                if (res->has_pts) {
+                    es->last_pts_val = res->pts;
+                    es->last_pts_vstc = h->stc_ns;
+                }
+
                 es->pes.last_pts_33 = res->pts;
                 es->pes.has_pts = res->has_pts;
                 es->pes.has_dts = res->has_dts;
