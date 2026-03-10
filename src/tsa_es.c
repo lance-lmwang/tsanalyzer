@@ -19,6 +19,8 @@ static void tsa_handle_sei(tsa_handle_t* h, tsa_es_track_t* es, const uint8_t* p
     const uint8_t* p = memmem(payload, len, ltn_uuid_sei_timestamp, 16);
     if (!p) return;
 
+    if (len - (p - payload) < 64) return;
+
     /* Fields 4/5: Begin time (Encoder Entry), Fields 6/7: End time (Encoder Exit) */
     p += 16;
     uint32_t v[8];
