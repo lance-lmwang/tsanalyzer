@@ -106,6 +106,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].i_frame_size_bytes = es->video.i_frame_size_bytes;
         sn->pids[ai].p_frame_size_bytes = es->video.p_frame_size_bytes;
         sn->pids[ai].b_frame_size_bytes = es->video.b_frame_size_bytes;
+        sn->pids[ai].encoder_latency_ms = es->video.encoder_latency_ms;
+        sn->pids[ai].network_latency_ms = es->video.network_latency_ms;
         memset(sn->pids[ai].gop_structure, 0, sizeof(sn->pids[ai].gop_structure));
         strncpy(sn->pids[ai].gop_structure, es->video.gop_structure, sizeof(sn->pids[ai].gop_structure) - 1);
 

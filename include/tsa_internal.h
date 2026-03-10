@@ -328,9 +328,11 @@ struct tsa_handle {
 };
 
 int128_t ts_now_ns128(void);
+uint64_t ts_now_utc_ms(void);
 int128_t ts_time_to_ns128(struct timespec ts);
 struct timespec ns128_to_timespec(int128_t ns);
 int16_t tsa_update_pid_tracker(struct tsa_handle* h, uint16_t pid);
+void tsa_reset_pid_stats(struct tsa_handle* h, uint16_t pid);
 uint64_t tsa_recover_pts_64(struct tsa_handle* h, uint16_t pid, uint64_t pts_33);
 void tsa_tstd_drain(struct tsa_handle* h, uint16_t pid);
 void tsa_precompile_pid_labels(struct tsa_handle* h, uint16_t pid);

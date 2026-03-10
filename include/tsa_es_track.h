@@ -80,6 +80,9 @@ typedef struct {
         uint64_t i_frame_size_bytes;
         uint64_t p_frame_size_bytes;
         uint64_t b_frame_size_bytes;
+        uint64_t encoder_latency_ms;
+        uint64_t network_latency_ms;
+        uint64_t last_sei_utc_ms;
     } video;
 
     struct {

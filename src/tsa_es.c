@@ -1,11 +1,45 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <string.h>
 
 #include "nalu_sniffer.h"
 #include "tsa_internal.h"
 #include "tsa_log.h"
+#include "tsa_units.h"
 
 #define TAG "ES_ANALYZER"
+
+/* LTN UUID for High Precision Forensic SEI (Aligned with test expectations) */
+static const uint8_t ltn_uuid_sei_timestamp[16] = {0x59, 0x96, 0xFF, 0x28, 0x17, 0xCA, 0x41, 0x96,
+                                                   0x8D, 0xE3, 0xE5, 0x3F, 0xE2, 0xF9, 0x92, 0xAE};
+
+static void tsa_handle_sei(tsa_handle_t* h, tsa_es_track_t* es, const uint8_t* payload, int len) {
+    (void)h;
+    if (len < 64) return;
+    const uint8_t* p = memmem(payload, len, ltn_uuid_sei_timestamp, 16);
+    if (!p) return;
+
+    /* Fields 4/5: Begin time (Encoder Entry), Fields 6/7: End time (Encoder Exit) */
+    p += 16;
+    uint32_t v[8];
+    for (int i = 0; i < 8; i++) {
+        v[i] = (p[0] << 24) | (p[1] << 16) | (p[3] << 8) | p[4];
+        p += 6;
+    }
+
+    uint64_t begin_ms = (uint64_t)v[4] * 1000ULL + (uint64_t)v[5] / 1000ULL;
+    uint64_t end_ms = (uint64_t)v[6] * 1000ULL + (uint64_t)v[7] / 1000ULL;
+
+    if (end_ms >= begin_ms) {
+        es->video.encoder_latency_ms = end_ms - begin_ms;
+    }
+
+    uint64_t now_ms = ts_now_utc_ms();
+    if (now_ms >= end_ms) {
+        es->video.network_latency_ms = now_ms - end_ms;
+    }
+    es->video.last_sei_utc_ms = end_ms;
+}
 
 /* Helper: Get a pointer to data at absolute offset within a zero-copy PES accumulator */
 static const uint8_t* tsa_pes_get_ptr(tsa_es_track_t* es, uint32_t offset, uint32_t* available) {
@@ -45,7 +79,9 @@ static bool tsa_pes_check_start_code(tsa_es_track_t* es, uint32_t offset) {
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int payload_len, uint64_t stc_ns) {
     (void)payload;
     (void)payload_len;
+    (void)stc_ns;
     tsa_es_track_t* es = &h->es_tracks[pid];
+
     if (es->pes.total_length < 4) return;
 
     uint8_t st_id = es->stream_type;
@@ -93,6 +129,8 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
                     if (info.bit_depth > 0) es->video.bit_depth = info.bit_depth;
                     if (info.width > 0) es->video.width = info.width;
                     if (info.height > 0) es->video.height = info.height;
+                } else if (info.nalu_type_abstract == NALU_TYPE_SEI) {
+                    tsa_handle_sei(h, es, d, data_avail);
                 } else if (info.nalu_type_abstract == NALU_TYPE_IDR) {
                     es->video.is_closed_gop = info.is_closed_gop;
                     if (info.is_closed_gop)
