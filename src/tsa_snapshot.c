@@ -103,6 +103,14 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].exact_fps = es->video.exact_fps;
         sn->pids[ai].eb_fill_pct = (float)((double)(es->tstd.eb_fill_q64 >> 64) * 100.0 / 1200000.0);
 
+        sn->pids[ai].i_frames = es->video.i_frames;
+        sn->pids[ai].p_frames = es->video.p_frames;
+        sn->pids[ai].b_frames = es->video.b_frames;
+        sn->pids[ai].gop_n = es->video.gop_n;
+        sn->pids[ai].gop_min = es->video.gop_min;
+        sn->pids[ai].gop_max = es->video.gop_max;
+        sn->pids[ai].gop_ms = es->video.gop_ms;
+
         sn->pids[ai].i_frame_size_bytes = es->video.i_frame_size_bytes;
         sn->pids[ai].p_frame_size_bytes = es->video.p_frame_size_bytes;
         sn->pids[ai].b_frame_size_bytes = es->video.b_frame_size_bytes;

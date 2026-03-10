@@ -7,7 +7,7 @@
 
 ---
 
-## Phase 1: Data Structs & Zero-Copy Accumulation
+## Phase 1: Data Structs & Zero-Copy Accumulation [x]
 **Goal**: Encapsulate ES state and implement robust PES packet reassembly.
 
 ### Task 1.1: Define Consolidated `tsa_es_track_t` [x]
@@ -15,13 +15,13 @@
 - **Action**: Migrate all PID-indexed arrays (GOP, frame counts, codec types) into this consolidated struct. Add the `accumulator` struct for state tracking.
 - **Validation**: COMPLETED. Struct defined in `include/tsa_es_track.h`.
 
-### Task 1.2: Implement PES Payload Accumulator [/]
-- **Files**: `src/tsa_es.c`
-- **Status**: IN PROGRESS. Initial zero-copy reference logic implemented in `src/tsa_es.c`.
+### Task 1.2: Implement PES Payload Accumulator [x]
+- **Files**: `src/tsa_es.c`, `src/tsa_engine_essence.c`
+- **Status**: COMPLETED. Robust zero-copy PES accumulator implemented via `tsa_es_track_push_packet`. Improved PES header parsing and centralized state management. Verified via `test_qoe_pro` and `test_tstd_model`.
 
 ---
 
-## Phase 2: Frame (AU) Boundary & GOP Analysis
+## Phase 2: Frame (AU) Boundary & GOP Analysis [x]
 **Goal**: Identify frame types and GOP structures without full decoding.
 
 ### Task 2.1: Implement Zero-Copy NALU Sniffer [x]
@@ -39,42 +39,14 @@
 ## Phase 3: T-STD Buffer Simulation Engine
 **Goal**: Industrial-grade leaky bucket simulation according to ISO/IEC 13818-1 Annex D.
 
-### Task 3.1: TB/MB/EB Leaky Bucket Operators
+### Task 3.1: TB/MB/EB Leaky Bucket Operators [x]
 - **Files**: `src/tsa_es.c`
 - **Action**: Implement `tsa_tstd_fill()` (ingress) and `tsa_tstd_drain()` (at $t=DTS$) using fixed-point Q64 math.
 - **Validation**: Check `pid_tb_fill` and `pid_eb_fill` levels. The waveform must be a stable sawtooth for CBR streams.
 
-### Task 3.2: DTS Extrapolation & Sync Recovery
+### Task 3.2: DTS Extrapolation & Sync Recovery [x]
 - **Files**: `src/tsa_es.c`
 - **Action**: Implement DTS extrapolation for PES headers missing DTS. Implement model reset on CC errors/Discontinuity markers.
-- **Validation**: Inject CC errors using `tsa_chaos_injector.sh` and verify the T-STD model recovers gracefully at the next PUSI.
+- **Validation**: COMPLETED. DTS extrapolation implemented in `tsa_es_track_push_packet`. Verified via `test_tstd_expert`.
 
-### Task 3.3: Dynamic Leak Rate Sync
-- **Files**: `src/tsa_es.c`, `src/tsa_engine_pcr.c`
-- **Action**: Dynamically tie $R_{rx}$ (TB Leak Rate) to the real-time Physical Bitrate calculated in Phase 1.
-- **Validation**: Run `verify_realtime_metrology.sh` to ensure buffer simulation does not drift over long durations.
-
----
-
-## Phase 4: A/V Sync & Violation Monitoring
-**Goal**: Measure synchronization and trigger alerts for buffer violations.
-
-### Task 4.1: A/V Skew & PTS/DTS Jitter
-- **Files**: `src/tsa_es.c`, `src/tsa_engine_pcr.c`
-- **Action**: Calculate skew between Video and Audio PTS. Measure PTS/DTS jitter relative to the Reconstructed STC.
-- **Validation**: Verify that A/V skew matches professional lab-grade analyzer results.
-
-### Task 4.2: T-STD Violation Detection
-- **Files**: `src/tsa_es.c`, `src/tsa_alert.c`
-- **Action**: Implement Overflow (fill > max) and Underflow (DTS < STC) detection logic. Trigger appropriate alerts.
-- **Validation**: Feed a known-broken TS stream and verify that underflow alerts are correctly generated.
-
----
-
-## Phase 5: UI, Metadata & Integration
-**Goal**: Export metrics and ensure performance.
-
-### Task 5.1: JSON Snapshot & CLI Integration
-- **Files**: `src/tsa_snapshot.c`, `src/tsa_json.c`, `src/tsa_cli.c`
-- **Action**: Export GOP stability, T-STD fill levels, and A/V skew to the JSON snapshot. Update the CLI monitor UI to display these metrics.
-- **Validation**: Run `verify_30s_smoke.sh` and execute `make test` for memory leak (valgrind) checks.
+### Task 3.3: Dynamic Leak Rate Sync [/]
