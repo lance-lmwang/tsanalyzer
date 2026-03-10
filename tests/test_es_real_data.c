@@ -29,18 +29,18 @@ int main() {
     // PES Header (9 bytes) + NALU Start Code (3 bytes) + IDR Header (1 byte)
     idr_pkt[4] = 0x00;
     idr_pkt[5] = 0x00;
-    idr_pkt[6] = 0x00;
-    idr_pkt[7] = 0x01;
-    idr_pkt[8] = 0xE0;
-    idr_pkt[9] = 0x00;
-    idr_pkt[10] = 0x20;
-    idr_pkt[11] = 0x80;
+    idr_pkt[6] = 0x01;
+    idr_pkt[7] = 0xE0;
+    idr_pkt[8] = 0x00;
+    idr_pkt[9] = 0x20;
+    idr_pkt[10] = 0x80;
+    idr_pkt[11] = 0x00;
     idr_pkt[12] = 0x00;
     idr_pkt[13] = 0x00;
     idr_pkt[14] = 0x00;
-    idr_pkt[15] = 0x00;
-    idr_pkt[16] = 0x01;
-    idr_pkt[17] = 0x65;  // IDR
+    idr_pkt[15] = 0x01;
+    idr_pkt[16] = 0x65;  // IDR
+    idr_pkt[17] = 0x00;  // Extra byte to fill up to NALU start if needed
 
     /* Non-IDR (P-frame) Packet */
     uint8_t p_pkt[188];
@@ -50,9 +50,14 @@ int main() {
     p_pkt[2] = 0x00;
     p_pkt[4] = 0x00;
     p_pkt[5] = 0x00;
-    p_pkt[6] = 0x00;
-    p_pkt[7] = 0x01;
-    p_pkt[8] = 0xE0;
+    p_pkt[6] = 0x01;
+    p_pkt[7] = 0xE0;
+    p_pkt[8] = 0x00;
+    p_pkt[9] = 0x00;
+    p_pkt[10] = 0x00;
+    p_pkt[11] = 0x00;
+    p_pkt[12] = 0x00;
+    p_pkt[13] = 0x00;
     p_pkt[14] = 0x00;
     p_pkt[15] = 0x00;
     p_pkt[16] = 0x01;

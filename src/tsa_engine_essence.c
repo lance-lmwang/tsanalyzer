@@ -108,11 +108,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         es->pes.last_dts_33 = 0;
         es->au_q.head = 0;
         es->au_q.tail = 0;
-        for (uint32_t i = 0; i < es->pes.ref_count; i++) {
-            if (es->pes.refs[i]) tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
-        }
-        es->pes.ref_count = 0;
-        es->pes.total_length = 0;
+        tsa_es_track_clear_accumulator(h, pid);
         return;
     }
 
@@ -158,15 +154,6 @@ static void essence_destroy(void* self) {
 
     /* Securely cleanup PES references in the packet pool */
     for (int i = 0; i < TS_PID_MAX; i++) {
-        tsa_es_track_t* es = &h->es_tracks[i];
-        if (es->pes.ref_count > 0 && es->pes.ref_count <= TSA_PES_MAX_REFS) {
-            for (uint32_t j = 0; j < es->pes.ref_count; j++) {
-                if (es->pes.refs[j]) {
-                    tsa_packet_unref(h->pkt_pool, es->pes.refs[j]);
-                    es->pes.refs[j] = NULL;
-                }
-            }
-            es->pes.ref_count = 0;
-        }
+        tsa_es_track_clear_accumulator(h, i);
     }
 }

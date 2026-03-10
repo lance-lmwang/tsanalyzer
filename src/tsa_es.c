@@ -199,6 +199,22 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
     }
 }
 
+void tsa_es_track_clear_accumulator(tsa_handle_t* h, uint16_t pid) {
+    if (!h || !h->es_tracks || !h->pkt_pool) return;
+    tsa_es_track_t* es = &h->es_tracks[pid];
+    if (es->pes.ref_count > 0 && es->pes.ref_count <= TSA_PES_MAX_REFS) {
+        for (uint32_t i = 0; i < es->pes.ref_count; i++) {
+            if (es->pes.refs[i]) {
+                tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
+                es->pes.refs[i] = NULL;
+            }
+        }
+    }
+    es->pes.ref_count = 0;
+    es->pes.total_length = 0;
+    es->pes.current_frame_type = 0;
+}
+
 void tsa_es_track_push_packet(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
     tsa_es_track_t* es = &h->es_tracks[pid];
     if (!res->pusi && (!res->has_payload || res->payload_len == 0)) return;
@@ -228,16 +244,8 @@ void tsa_es_track_push_packet(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt,
                 }
             }
 
-            /* Unref all packets in the finalized PES */
-            for (uint32_t i = 0; i < es->pes.ref_count; i++) {
-                if (es->pes.refs[i]) tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
-            }
+            tsa_es_track_clear_accumulator(h, pid);
         }
-
-        /* 2. Reset PES state for the new packet */
-        es->pes.ref_count = 0;
-        es->pes.total_length = 0;
-        es->pes.current_frame_type = 0;
 
         if (res->has_pes_header) {
             /* Handle DTS/PTS logic (extrapolated or explicit) */

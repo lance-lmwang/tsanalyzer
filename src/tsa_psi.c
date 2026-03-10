@@ -152,6 +152,7 @@ void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid) {
     h->live->pid_cc_errors[pid] = 0;
     h->live->pid_scrambled_packets[pid] = 0;
     h->live->pid_pes_errors[pid] = 0;
+    tsa_es_track_clear_accumulator(h, pid);
 
     tsa_es_track_t* es = &h->es_tracks[pid];
     uint8_t st = es->stream_type;
