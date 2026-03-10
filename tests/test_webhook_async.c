@@ -15,7 +15,7 @@ int main() {
     assert(eng != NULL);
 
     tsa_webhook_push(eng, "{\"test\":\"data1\"}");
-    tsa_webhook_push_event(eng, "test_stream", "UNIT_TEST", "Hello World");
+    tsa_webhook_push_event(eng, "test_stream", "UNIT_TEST", "Hello World", "INFO");
 
     // Let the worker thread pick up messages
     usleep(100000);

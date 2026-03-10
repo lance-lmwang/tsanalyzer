@@ -113,7 +113,7 @@ int tsa_gateway_process_dual(tsa_gateway_t* gw, const uint8_t* pkt_p, const uint
                              "Source Switched to %s (PrimaryHealth:%.2f, BackupHealth:%.2f)",
                              target_index == 0 ? "PRIMARY" : "BACKUP", health_p, health_b);
                     tsa_webhook_push_event(gw->tsa->webhook, gw->cfg.analysis_primary.input_label, "FAILOVER",
-                                           switch_msg);
+                                           switch_msg, "CRITICAL");
                 }
             }
         }

@@ -111,12 +111,12 @@ static void sniff_h265_sps(const uint8_t* buf, int size, tsa_nalu_info_t* out) {
     br_read(&r, 1);  // sps_temporal_id_nesting_flag
 
     // profile_tier_level
-    out->profile = br_read(&r, 2);  // general_profile_space
-    out->is_high_tier = br_read(&r, 1); // general_tier_flag
-    out->profile = br_read(&r, 5);  // general_profile_idc
-    br_read(&r, 32);                // general_profile_compatibility_flag
-    br_read(&r, 48);                // general_constraint_indicator_flags
-    out->level = br_read(&r, 8);    // general_level_idc
+    out->profile = br_read(&r, 2);       // general_profile_space
+    out->is_high_tier = br_read(&r, 1);  // general_tier_flag
+    out->profile = br_read(&r, 5);       // general_profile_idc
+    br_read(&r, 32);                     // general_profile_compatibility_flag
+    br_read(&r, 48);                     // general_constraint_indicator_flags
+    out->level = br_read(&r, 8);         // general_level_idc
 
     uint8_t sub_layer_profile_present_flag[8] = {0};
     uint8_t sub_layer_level_present_flag[8] = {0};

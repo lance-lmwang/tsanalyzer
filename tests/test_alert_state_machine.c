@@ -45,7 +45,7 @@ int main() {
 
     // 2.1 Verify Active Alerts Mask in Snapshot
     printf("  Step 2.1: Verifying active_alerts_mask in snapshot...\n");
-    
+
     /* Ensure inherited alerts from Step 1 are still active before snapshot */
     assert(h->alerts[TSA_ALERT_PAT].status == TSA_ALERT_STATE_FIRING);
     assert(h->alerts[TSA_ALERT_PCR].status == TSA_ALERT_STATE_FIRING);
@@ -54,11 +54,11 @@ int main() {
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
 
-    uint64_t expected_mask = tsa_alert_get_mask(TSA_ALERT_SYNC) | 
-                            tsa_alert_get_mask(TSA_ALERT_PAT) | 
-                            tsa_alert_get_mask(TSA_ALERT_PCR);
-    
-    printf("  Mask check: Got 0x%llx, Expected 0x%llx\n", (unsigned long long)snap.stats.active_alerts_mask, (unsigned long long)expected_mask);
+    uint64_t expected_mask =
+        tsa_alert_get_mask(TSA_ALERT_SYNC) | tsa_alert_get_mask(TSA_ALERT_PAT) | tsa_alert_get_mask(TSA_ALERT_PCR);
+
+    printf("  Mask check: Got 0x%llx, Expected 0x%llx\n", (unsigned long long)snap.stats.active_alerts_mask,
+           (unsigned long long)expected_mask);
     assert(snap.stats.active_alerts_mask == expected_mask);
 
     // 3. Test Recovery of multiple alerts
