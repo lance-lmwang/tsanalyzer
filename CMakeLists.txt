@@ -237,6 +237,7 @@ tsa_test(test_tsp_pcr_pacing test_tsp_pcr_pacing.c)
 tsa_test(test_pcr_arrival_gap test_pcr_arrival_gap.c)
 tsa_test(test_unit_metrology_mpts test_unit_metrology_mpts.c)
 tsa_test(test_unit_metrology_repro test_unit_metrology_repro.c)
+tsa_test(test_metrology_alignment test_metrology_alignment.c)
 
 tsa_test(test_unit_pcr_integrity test_unit_pcr_integrity.c)
 tsa_test(test_unit_pcr_pacing test_unit_pcr_pacing.c)
