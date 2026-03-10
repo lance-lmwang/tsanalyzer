@@ -170,18 +170,23 @@ void tsa_destroy(tsa_handle_t* h) {
     free(h);
 }
 
-static uint64_t tsa_recover_pts_64(tsa_handle_t* h, uint16_t pid, uint64_t pts_33) {
+uint64_t tsa_recover_pts_64(tsa_handle_t* h, uint16_t pid, uint64_t pts_33) {
     tsa_es_track_t* es = &h->es_tracks[pid];
     if (es->pes.last_pts_33 == 0x1FFFFFFFFULL) {
         es->pes.last_pts_33 = pts_33;
-        es->last_pts_extrapolated = pts_33;
+        es->pts_rollover_offset = 0;
         return pts_33;
     }
     uint64_t last_33 = es->pes.last_pts_33;
-    uint64_t offset = 0;
-    if (pts_33 < last_33 && (last_33 - pts_33) > 0x100000000ULL) offset = 0x200000000ULL;
+    if (pts_33 < last_33 && (last_33 - pts_33) > 0x100000000ULL) {
+        /* Roll-over detected: 33-bit clock wrapped around */
+        es->pts_rollover_offset += 0x200000000ULL;
+    } else if (pts_33 > last_33 && (pts_33 - last_33) > 0x100000000ULL) {
+        /* Roll-back detected (discontinuity or seek backwards) */
+        if (es->pts_rollover_offset >= 0x200000000ULL) es->pts_rollover_offset -= 0x200000000ULL;
+    }
     es->pes.last_pts_33 = pts_33;
-    return pts_33 + offset;
+    return pts_33 + es->pts_rollover_offset;
 }
 
 void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_decode_result_t* r) {

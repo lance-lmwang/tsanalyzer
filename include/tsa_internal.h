@@ -330,9 +330,9 @@ struct tsa_handle {
 int128_t ts_now_ns128(void);
 int128_t ts_time_to_ns128(struct timespec ts);
 struct timespec ns128_to_timespec(int128_t ns);
-void tsa_tstd_drain(struct tsa_handle* h, uint16_t pid);
 int16_t tsa_update_pid_tracker(struct tsa_handle* h, uint16_t pid);
-void tsa_reset_pid_stats(struct tsa_handle* h, uint16_t pid);
+uint64_t tsa_recover_pts_64(struct tsa_handle* h, uint16_t pid, uint64_t pts_33);
+void tsa_tstd_drain(struct tsa_handle* h, uint16_t pid);
 void tsa_precompile_pid_labels(struct tsa_handle* h, uint16_t pid);
 void tsa_clock_update(const uint8_t* packet, tsa_clock_inspector_t* inspector, uint64_t now_ns, bool is_live);
 void tsa_section_filter_push(struct tsa_handle* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);

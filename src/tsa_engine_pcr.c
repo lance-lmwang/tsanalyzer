@@ -49,8 +49,14 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
                 h->master_pcr_pid = pid;
             }
             h->last_pcr_ticks = pcr_ticks;
-            h->stc_locked = true;
+            h->stc_locked = h->pcr_tracks[pid].clock.locked;
             h->stc_wall_drift_ppm = h->pcr_tracks[pid].drift_ppm;
+
+            /* Sync LRM model to global handle for drift-compensated VSTC */
+            if (h->stc_locked) {
+                h->stc_slope_q64 = TO_Q64_64(h->pcr_tracks[pid].clock.slope);
+                h->stc_intercept_q64 = TO_Q64_64(h->pcr_tracks[pid].clock.intercept);
+            }
         }
     }
 }

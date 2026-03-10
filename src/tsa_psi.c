@@ -235,6 +235,8 @@ static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_fi
     f->complete = false;
 }
 
+void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
+
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
     if (!res->has_payload) return;
     ts_section_filter_t* f = &h->pid_filters[pid];
@@ -245,27 +247,27 @@ void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, 
         int pointer = payload[0];
         if (pointer + 1 <= len) {
             if (f->active && f->len > 0 && pointer > 0) {
-                int to_copy = (f->len + pointer < 4096) ? pointer : (4096 - f->len);
+                uint32_t u_pointer = (uint32_t)pointer;
+                uint32_t to_copy = (f->len + u_pointer < 4096) ? u_pointer : (4096 - f->len);
                 memcpy(f->buffer + f->len, payload + 1, to_copy);
                 f->len += to_copy;
                 f->complete = true;
                 parse_completed_section(h, pid, f);
             }
             f->active = true;
-            f->len = len - 1 - pointer;
+            f->len = (uint32_t)len - 1 - (uint32_t)pointer;
             if (f->len > 0) {
                 memcpy(f->buffer, payload + 1 + pointer, f->len);
             }
         }
     } else if (f->active) {
-        if (f->len + len < 4096) {
+        if (f->len + (uint32_t)len < 4096) {
             memcpy(f->buffer + f->len, payload, len);
-            f->len += len;
+            f->len += (uint32_t)len;
         } else {
             f->active = false;
         }
     }
-
     if (f->active && f->len >= 3) {
         int sl = ((f->buffer[1] & 0x0F) << 8) | f->buffer[2];
         if (f->len >= (uint32_t)sl + 3) {

@@ -110,6 +110,7 @@ typedef struct {
     /* T-STD timing and jitter tracking */
     uint64_t last_pts_val;
     uint64_t last_pts_vstc;
+    uint64_t pts_rollover_offset;
     __int128 pts_jitter_q64;
 
     /* Continuity tracking */
