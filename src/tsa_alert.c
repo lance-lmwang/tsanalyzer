@@ -44,6 +44,12 @@ void tsa_alert_update(tsa_handle_t* h, tsa_alert_id_t id, bool has_error, const 
     tsa_alert_state_t* s = &h->alerts[id];
     uint64_t now = h->stc_ns;
 
+    /* Hierarchy Suppression:
+     * If SYNC_LOSS is active, suppress all other alerts EXCEPT SYNC itself. */
+    if (id != TSA_ALERT_SYNC && h->alerts[TSA_ALERT_SYNC].status == TSA_ALERT_STATE_FIRING) {
+        return;
+    }
+
     if (has_error) {
         s->last_occurrence_ns = now;
         s->count_in_window++;

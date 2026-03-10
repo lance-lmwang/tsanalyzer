@@ -121,6 +121,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
     es->tstd.tb_fill_q64 += INT_TO_Q64_64(188 * 8);
     if (es->tstd.tb_fill_q64 > INT_TO_Q64_64(TSA_TSTD_TB_SIZE)) {
         tsa_push_event(h, TSA_EVENT_TSTD_OVERFLOW, pid, (uint64_t)(es->tstd.tb_fill_q64 >> 64));
+        tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid);
     }
 
     /* Professional Compliance: Check for EB Underflow before and after drain */
@@ -129,6 +130,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         if (h->stc_ns > next_dts) {
             /* Data arrived too late for its DTS deadline */
             tsa_push_event(h, TSA_EVENT_TSTD_UNDERFLOW, pid, (h->stc_ns - next_dts));
+            tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid);
         }
     }
 
