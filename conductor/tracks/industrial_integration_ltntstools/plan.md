@@ -20,3 +20,8 @@
 ## Phase 5: Zero-Alloc Memory Optimization (Performance)
 - [x] **Step 10**: Introduce Side-band Metadata in `tsa_packet_pool`.
 - [x] **Step 11**: Replace high-frequency `malloc` in engine instance creation with a pre-allocated pool.
+
+## Phase 6: Forensic Analytics & Standard Alignment (Industrial Grade)
+- [x] **Step 12**: Implement low-latency Forensic SEI tracking (LTN UUID SEI).
+- [x] **Step 13**: Align with ISO/IEC 13818-1 by removing flawed TS-layer de-duplication.
+- [x] **Step 14**: Refine bitrate measurement window and anchor points for deterministic regression testing.
