@@ -237,6 +237,7 @@ void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64
     h->event_q->events[idx].pid = pid;
     h->event_q->events[idx].timestamp_ns = h->stc_ns;
     h->event_q->events[idx].value = val;
+    h->event_q->events[idx].absolute_byte_offset = h->current_packet_offset;
     atomic_store_explicit(&h->event_q->head, head + 1, memory_order_release);
     if (type != TSA_EVENT_SYNC_LOSS && !h->signal_lock) return;
     switch (type) {
@@ -433,10 +434,12 @@ void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t no
             processed += to_copy;
             if (h->sync_buffer_len < 188) return;
             if (h->sync_buffer[0] == 0x47) {
-                if (h->sync_state == TS_SYNC_LOCKED)
+                if (h->sync_state == TS_SYNC_LOCKED) {
+                    h->current_packet_offset = h->processed_bytes + processed - 188;
                     tsa_process_packet(h, h->sync_buffer, now_ns);
-                else if (++h->sync_confirm_count >= 5)
+                } else if (++h->sync_confirm_count >= 5) {
                     h->sync_state = TS_SYNC_LOCKED;
+                }
                 h->sync_buffer_len = 0;
             } else {
                 h->sync_state = TS_SYNC_HUNTING;
@@ -450,6 +453,7 @@ void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t no
             const uint8_t* p = data + processed;
             if (p[0] == 0x47) {
                 if (h->sync_state == TS_SYNC_LOCKED) {
+                    h->current_packet_offset = h->processed_bytes + processed;
                     tsa_process_packet(h, p, now_ns);
                     processed += 188;
                 } else {
@@ -475,6 +479,7 @@ void tsa_feed_data(tsa_handle_t* h, const uint8_t* data, size_t len, uint64_t no
             processed += rem;
         }
     }
+    h->processed_bytes += len;
 }
 
 void tsa_tstd_drain(tsa_handle_t* h, uint16_t pid) {

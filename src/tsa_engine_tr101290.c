@@ -82,7 +82,7 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
             h->live->cc_error.count++;
             h->live->cc_error.last_timestamp_ns = now;
             h->live->cc_error.triggering_vstc = h->stc_ns;
-            h->live->cc_error.absolute_byte_offset = h->live->total_ts_packets * 188;
+            h->live->cc_error.absolute_byte_offset = h->current_packet_offset;
             h->live->pid_cc_errors[pid]++;
             h->live->latched_cc_error = 1;
             h->es_tracks[pid].status = TSA_STATUS_DEGRADED;

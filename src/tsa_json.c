@@ -24,10 +24,11 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
               (unsigned long long)st->physical_bitrate_bps, (float)st->mdi_df_ms);
 
     SAFE_JSON(
-        "\"tier2_compliance\":{\"p1\":{\"cc_error\":{\"count\":%llu}},\"p2\":{\"pcr_jitter_ms\":%.3f,\"tsa_compliance_"
+        "\"tier2_compliance\":{\"p1\":{\"cc_error\":{\"count\":%llu,\"last_offset\":%llu}},\"p2\":{\"pcr_jitter_ms\":%."
+        "3f,\"tsa_compliance_"
         "pcr_repetition_errors\": %llu}},",
-        (unsigned long long)st->cc_error.count, st->pcr_jitter_avg_ns / 1000000.0,
-        (unsigned long long)st->pcr_repetition_error.count);
+        (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.absolute_byte_offset,
+        st->pcr_jitter_avg_ns / 1000000.0, (unsigned long long)st->pcr_repetition_error.count);
 
     SAFE_JSON("\"pids\":[");
     for (uint32_t i = 0; i < sn->active_pid_count; i++) {

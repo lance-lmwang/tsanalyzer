@@ -196,6 +196,7 @@ typedef struct {
     uint16_t pid;
     uint64_t timestamp_ns;
     uint64_t value;
+    uint64_t absolute_byte_offset;
 } tsa_event_t;
 typedef struct {
     tsa_event_t events[MAX_EVENT_QUEUE];
@@ -313,6 +314,8 @@ struct tsa_handle {
     tsa_debounce_t debounce_pts;
     tsa_stream_t root_stream;
     uint64_t current_ns;
+    uint64_t processed_bytes;
+    uint64_t current_packet_offset;
     ts_decode_result_t current_res;
     struct {
         void* instance;
