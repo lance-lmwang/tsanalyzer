@@ -40,6 +40,18 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
 static void tsa_eval_tr101290_alarms(tsa_handle_t* h, uint64_t n, uint64_t stc) {
     h->live->alarm_sync_loss = !h->signal_lock;
     h->live->alarm_cc_error = (h->live->cc_error.count > h->prev_snap_base->cc_error.count);
+
+    /* Aggregate PCR Repetition Errors (P1.1) from all tracks */
+    uint64_t total_pcr_rep_err = 0;
+    if (h->pcr_tracks) {
+        for (int i = 0; i < TS_PID_MAX; i++) {
+            if (h->pcr_tracks[i].initialized) {
+                total_pcr_rep_err += h->pcr_tracks[i].priority_1_errors;
+            }
+        }
+    }
+    h->live->pcr_repetition_error.count = total_pcr_rep_err;
+
     if (!h->stc_locked || h->live->total_ts_packets < 1000) return;
     for (int i = 0; i < TS_PID_MAX; i++) {
         if (h->live->pid_is_referenced[i]) {
