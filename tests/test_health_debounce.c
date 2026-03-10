@@ -47,25 +47,23 @@ int main() {
     // In the new engine, CC error triggers FIRING immediately for safety
     tsa_commit_snapshot(h, now + (11 * 1000000ULL));
     bool is_fired = (h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_FIRING);
-    printf("Health after transient CC: %.2f (Alarm: %s)\n", h->last_health_score,
-           is_fired ? "FIRED" : "CLEAN");
+    printf("Health after transient CC: %.2f (Alarm: %s)\n", h->last_health_score, is_fired ? "FIRED" : "CLEAN");
     assert(is_fired == true);
     assert(h->last_health_score < 80.0);  // Deducted 25 points
 
     // 3. Recovery (Wait 5000ms - Default PID timeout)
     uint64_t recovery_start = now + (300 * 1000000ULL);
-    h->stc_ns = recovery_start + 6000000000ULL; // Jump forward 6s
-    
+    h->stc_ns = recovery_start + 6000000000ULL;  // Jump forward 6s
+
     // Process one good packet to trigger cleanup check
     generate_packet(pkt, 0x100, 0, false);
     tsa_process_packet(h, pkt, h->stc_ns);
-    
-    tsa_alert_check_resolutions(h); // Explicitly call resolution check
+
+    tsa_alert_check_resolutions(h);  // Explicitly call resolution check
     tsa_commit_snapshot(h, h->stc_ns);
 
     is_fired = (h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_FIRING);
-    printf("Health after recovery: %.2f (Alarm: %s)\n", h->last_health_score,
-           is_fired ? "FIRED" : "CLEAN");
+    printf("Health after recovery: %.2f (Alarm: %s)\n", h->last_health_score, is_fired ? "FIRED" : "CLEAN");
     assert(is_fired == false);
     assert(h->last_health_score > 90.0);
 
