@@ -116,11 +116,31 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         tsa_push_event(h, TSA_EVENT_TSTD_OVERFLOW, pid, (uint64_t)(es->tstd.tb_fill_q64 >> 64));
     }
 
+    /* Professional Compliance: Check for EB Underflow before and after drain */
+    if (es->au_q.head != es->au_q.tail) {
+        uint64_t next_dts = es->au_q.queue[es->au_q.head].dts_ns;
+        if (h->stc_ns > next_dts) {
+            /* Data arrived too late for its DTS deadline */
+            tsa_push_event(h, TSA_EVENT_TSTD_UNDERFLOW, pid, (h->stc_ns - next_dts));
+        }
+    }
+
     if (res->payload_len > 0) {
         tsa_packet_t* p_obj = (tsa_packet_t*)((uint8_t*)pkt - offsetof(tsa_packet_t, data));
         if (res->pusi) {
             if (es->pes.ref_count > 0) {
                 tsa_handle_es_payload(h, pid, NULL, es->pes.total_length, h->stc_ns);
+
+                /* Push the completed AU into the drain queue */
+                if (es->pes.pending_dts_ns > 0) {
+                    uint8_t next_tail = (es->au_q.tail + 1) % TSA_AU_QUEUE_SIZE;
+                    if (next_tail != es->au_q.head) {
+                        es->au_q.queue[es->au_q.tail].dts_ns = es->pes.pending_dts_ns;
+                        es->au_q.queue[es->au_q.tail].size = es->pes.total_length * 8; /* bits */
+                        es->au_q.tail = next_tail;
+                    }
+                }
+
                 for (uint32_t i = 0; i < es->pes.ref_count; i++) {
                     if (es->pes.refs[i]) tsa_packet_unref(h->pkt_pool, es->pes.refs[i]);
                 }
@@ -131,8 +151,8 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
                 es->pes.pending_dts_ns = (res->dts * 1000000ULL) / 90;
                 es->pes.last_pts_33 = res->pts;
                 es->pes.last_dts_33 = res->dts;
-                es->pes.has_pts = res->pts != 0;
-                es->pes.has_dts = res->dts != 0;
+                es->pes.has_pts = (res->pts != 0);
+                es->pes.has_dts = (res->dts != 0);
             }
         }
         if (es->pes.ref_count < TSA_PES_MAX_REFS) {
