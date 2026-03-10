@@ -46,3 +46,8 @@
 ### Phase 5: 测试与验证 (Validation) [x]
 - [x] **Step 1**: `make clean && make debug` 确保没有结构体成员引用错误（`has_pcr` 等）。
 - [x] **Step 2**: 运行 `make full-test`，确保所有 135 个测试（含 `test_bitrate_consistency` 和 `test_psi`）彻底摆脱 `SEGFAULT`，在扁平架构下 100% 通过。
+
+---
+
+### Phase 6: Review Fixes (Post-Review Implementation) [x]
+- [x] **Task**: Apply review suggestions and re-implement reverted core dispatch logic (`a8da533`).
