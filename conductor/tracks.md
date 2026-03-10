@@ -39,7 +39,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: Metrology Refactor (Algorithm & Data Structure Refactor)**
   *Link: [./tracks/metrology-refactor/](./tracks/metrology-refactor/)*
 
-- [ ] **Track: ES & T-STD Model Refactor (Buffer & GOP Analytics)**
+- [x] **Track: ES & T-STD Model Refactor (Buffer & GOP Analytics)**
   *Link: [./tracks/es-tstd-refactor/](./tracks/es-tstd-refactor/)*
 
 - [ ] **Track: Unified Alert & Debounce Engine (Industrial Reliability)**

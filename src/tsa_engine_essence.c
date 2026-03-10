@@ -49,8 +49,9 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
     bool is_video = tsa_is_video(st);
 
     /* 1. TB Leakage: R_x flows into MB (or EB for non-video)
-     * R_rx is tied to the real-time physical bitrate of the TS. */
-    uint64_t r_x = h->live->physical_bitrate_bps;
+     * R_rx is tied to the real-time physical bitrate of the TS or synced from level. */
+    uint64_t r_x = es->tstd.leak_rate_rx;
+    if (r_x == 0) r_x = h->live->physical_bitrate_bps;
     if (r_x == 0) r_x = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.2);
     if (r_x == 0) r_x = 10000000;
 
@@ -67,9 +68,10 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
         es->tstd.mb_fill_q64 += tb_leaked_q64;
 
         /* MB Leakage: R_bx flows into EB, but ONLY if EB is not full (Backpressure)
-         * R_bx is typically 1.2x to 1.5x of the PID bitrate for stable multiplexing. */
+         * R_bx is sync'd from profile/level or estimated as 1.5x PID bitrate. */
         if (!eb_full) {
-            uint64_t r_bx = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.5);
+            uint64_t r_bx = es->tstd.leak_rate_eb;
+            if (r_bx == 0) r_bx = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.5);
             if (r_bx == 0) r_bx = (uint64_t)(h->live->physical_bitrate_bps * 0.8);
             if (r_bx == 0) r_bx = 20000000;
 

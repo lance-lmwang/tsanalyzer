@@ -36,7 +36,7 @@
 
 ---
 
-## Phase 3: T-STD Buffer Simulation Engine
+## Phase 3: T-STD Buffer Simulation Engine [x]
 **Goal**: Industrial-grade leaky bucket simulation according to ISO/IEC 13818-1 Annex D.
 
 ### Task 3.1: TB/MB/EB Leaky Bucket Operators [x]
@@ -49,4 +49,7 @@
 - **Action**: Implement DTS extrapolation for PES headers missing DTS. Implement model reset on CC errors/Discontinuity markers.
 - **Validation**: COMPLETED. DTS extrapolation implemented in `tsa_es_track_push_packet`. Verified via `test_tstd_expert`.
 
-### Task 3.3: Dynamic Leak Rate Sync [/]
+### Task 3.3: Dynamic Leak Rate Sync [x]
+- **Files**: `src/tsa_es.c`, `src/tsa_engine_essence.c`, `include/tsa_internal.h`
+- **Action**: Implement `tsa_tstd_sync_params()` to calculate ISO/IEC 13818-1 leak rates ($R_{rx}$ and $R_{bx}$) based on detected H.264/H.265 profile and level. Update `tsa_tstd_update_leak` to use these dynamic rates.
+- **Validation**: COMPLETED. Rates are now sync'd upon SPS detection. Fallback logic handles streams with missing metadata. Verified via compilation and unit tests.

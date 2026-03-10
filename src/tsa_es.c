@@ -80,6 +80,66 @@ static bool tsa_pes_check_start_code(tsa_es_track_t* es, uint32_t offset) {
     return buf[0] == 0x00 && buf[1] == 0x00 && buf[2] == 0x01;
 }
 
+static uint32_t get_h264_max_bitrate_kbps(uint8_t level) {
+    switch (level) {
+        case 10: return 64;
+        case 11: return 192;
+        case 12: return 384;
+        case 13: return 768;
+        case 20: return 2000;
+        case 21: return 4000;
+        case 22: return 4000;
+        case 30: return 10000;
+        case 31: return 14000;
+        case 32: return 20000;
+        case 40: return 20000;
+        case 41: return 50000;
+        case 42: return 50000;
+        case 50: return 135000;
+        case 51: return 240000;
+        case 52: return 240000;
+        default: return 20000;
+    }
+}
+
+static uint32_t get_h265_max_bitrate_kbps(uint8_t level) {
+    switch (level) {
+        case 30: return 128;
+        case 60: return 1500;
+        case 63: return 3000;
+        case 90: return 6000;
+        case 93: return 10000;
+        case 120: return 12000;
+        case 123: return 20000;
+        case 150: return 25000;
+        case 153: return 40000;
+        case 156: return 60000;
+        case 180: return 60000;
+        case 183: return 120000;
+        case 186: return 240000;
+        default: return 20000;
+    }
+}
+
+void tsa_tstd_sync_params(tsa_es_track_t* es) {
+    if (!es) return;
+    uint8_t st = es->stream_type;
+    uint32_t max_br_kbps = 0;
+
+    if (tsa_is_h264(st)) {
+        max_br_kbps = get_h264_max_bitrate_kbps(es->video.level);
+    } else if (tsa_is_hevc(st)) {
+        max_br_kbps = get_h265_max_bitrate_kbps(es->video.level);
+    }
+
+    if (max_br_kbps > 0) {
+        /* ISO/IEC 13818-1 Annex D: Rbx = 1.2 * BitRate[level] */
+        es->tstd.leak_rate_eb = (uint64_t)max_br_kbps * 1000 * 12 / 10;
+        /* Rrx is typically higher than Rbx to avoid TB overflow */
+        es->tstd.leak_rate_rx = (uint64_t)max_br_kbps * 1000 * 2;
+    }
+}
+
 void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int payload_len, uint64_t stc_ns) {
     (void)payload;
     (void)payload_len;
@@ -142,6 +202,7 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
                     if (info.bit_depth > 0) es->video.bit_depth = info.bit_depth;
                     if (info.width > 0) es->video.width = info.width;
                     if (info.height > 0) es->video.height = info.height;
+                    tsa_tstd_sync_params(es);
                 } else if (info.nalu_type_abstract == NALU_TYPE_SEI) {
                     tsa_handle_sei(h, es, d, data_avail);
                 } else if (info.nalu_type_abstract == NALU_TYPE_IDR) {

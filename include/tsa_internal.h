@@ -342,6 +342,7 @@ void tsa_push_event(struct tsa_handle* h, tsa_event_type_t type, uint16_t pid, u
 void tsa_handle_es_payload(struct tsa_handle* h, uint16_t pid, const uint8_t* buf, int len, uint64_t now_ns);
 void tsa_es_track_push_packet(struct tsa_handle* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res);
 void tsa_es_track_clear_accumulator(struct tsa_handle* h, uint16_t pid);
+void tsa_tstd_sync_params(tsa_es_track_t* es);
 float tsa_get_pid_tb_fill(struct tsa_handle* h, uint16_t pid);
 float tsa_get_pid_mb_fill(struct tsa_handle* h, uint16_t pid);
 float tsa_get_pid_eb_fill(struct tsa_handle* h, uint16_t pid);
