@@ -45,6 +45,11 @@ int main() {
 
     // 2.1 Verify Active Alerts Mask in Snapshot
     printf("  Step 2.1: Verifying active_alerts_mask in snapshot...\n");
+    
+    /* Ensure inherited alerts from Step 1 are still active before snapshot */
+    assert(h->alerts[TSA_ALERT_PAT].status == TSA_ALERT_STATE_FIRING);
+    assert(h->alerts[TSA_ALERT_PCR].status == TSA_ALERT_STATE_FIRING);
+
     tsa_commit_snapshot(h, h->stc_ns);
     tsa_snapshot_full_t snap;
     tsa_take_snapshot_full(h, &snap);
