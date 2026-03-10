@@ -35,16 +35,26 @@ int main() {
     tsa_push_event(h, TSA_EVENT_SYNC_LOSS, 0, 0);
     assert(h->alerts[TSA_ALERT_SYNC].status == TSA_ALERT_STATE_FIRING);
 
-    // Explicitly clear signal_lock to simulate total loss
-    h->signal_lock = false;
-
     // Trigger CC Error during Sync Loss
-    tsa_push_event(h, TSA_EVENT_CC_ERROR, 100, 0);
+    // Even direct calls to tsa_alert_update should be suppressed when SYNC is FIRING
+    tsa_alert_update(h, TSA_ALERT_CC, true, "CC", 100);
 
-    // CC should NOT be FIRING because tsa_push_event suppresses it when !signal_lock
     printf("  Checking suppression: CC status is %d (expected %d)\n", h->alerts[TSA_ALERT_CC].status,
            TSA_ALERT_STATE_OFF);
     assert(h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_OFF);
+
+    // 2.1 Verify Active Alerts Mask in Snapshot
+    printf("  Step 2.1: Verifying active_alerts_mask in snapshot...\n");
+    tsa_commit_snapshot(h, h->stc_ns);
+    tsa_snapshot_full_t snap;
+    tsa_take_snapshot_full(h, &snap);
+
+    uint64_t expected_mask = tsa_alert_get_mask(TSA_ALERT_SYNC) | 
+                            tsa_alert_get_mask(TSA_ALERT_PAT) | 
+                            tsa_alert_get_mask(TSA_ALERT_PCR);
+    
+    printf("  Mask check: Got 0x%llx, Expected 0x%llx\n", (unsigned long long)snap.stats.active_alerts_mask, (unsigned long long)expected_mask);
+    assert(snap.stats.active_alerts_mask == expected_mask);
 
     // 3. Test Recovery of multiple alerts
     printf("  Step 3: Advancing time (6s) to resolve all...\n");
