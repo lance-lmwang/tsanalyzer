@@ -13,7 +13,7 @@ void tsa_auth_init(const char* secret);
  * @brief Verify if the incoming HTTP request has a valid JWT.
  * @return true if authorized, false otherwise.
  */
-bool tsa_auth_verify_request(struct mg_http_message *hm);
+bool tsa_auth_verify_request(struct mg_http_message* hm);
 
 /**
  * @brief Global rate limiter check for a client ID (usually IP).

@@ -24,10 +24,10 @@ static intptr_t find_sync_scalar(const uint8_t* buf, size_t len) {
 }
 
 void benchmark() {
-    size_t size = 100 * 1024 * 1024; // 100MB
+    size_t size = 100 * 1024 * 1024;  // 100MB
     uint8_t* data = malloc(size);
     memset(data, 0, size);
-    data[size - 1] = 0x47; // Put sync at the very end
+    data[size - 1] = 0x47;  // Put sync at the very end
 
     printf("\n=== Performance Benchmark (100MB Buffer) ===\n");
 
