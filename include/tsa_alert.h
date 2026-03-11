@@ -18,6 +18,7 @@
 #define TSA_ALERT_MASK_ENTROPY (1ULL << 10)
 #define TSA_ALERT_MASK_SDT (1ULL << 11)
 #define TSA_ALERT_MASK_NIT (1ULL << 12)
+#define TSA_ALERT_MASK_CC_MISSING (1ULL << 13)
 
 #define TSA_ALERT_MASK_ALL_P1                                                                                \
     (TSA_ALERT_MASK_P1_1_SYNC | TSA_ALERT_MASK_P1_3_PAT | TSA_ALERT_MASK_P1_4_CC | TSA_ALERT_MASK_P1_5_PMT | \
@@ -38,6 +39,7 @@ typedef enum {
     TSA_ALERT_ENTROPY,
     TSA_ALERT_SDT,
     TSA_ALERT_NIT,
+    TSA_ALERT_CC_MISSING,
     TSA_ALERT_MAX
 } tsa_alert_id_t;
 
@@ -103,6 +105,8 @@ static inline uint64_t tsa_alert_get_mask(tsa_alert_id_t id) {
             return TSA_ALERT_MASK_SDT;
         case TSA_ALERT_NIT:
             return TSA_ALERT_MASK_NIT;
+        case TSA_ALERT_CC_MISSING:
+            return TSA_ALERT_MASK_CC_MISSING;
         default:
             return 0;
     }
@@ -139,6 +143,8 @@ static inline const char* tsa_alert_get_name(tsa_alert_id_t id) {
             return "SDT";
         case TSA_ALERT_NIT:
             return "NIT";
+        case TSA_ALERT_CC_MISSING:
+            return "CC_MISSING";
         default:
             return "UNKNOWN";
     }

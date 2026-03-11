@@ -74,6 +74,7 @@ typedef struct {
         uint64_t open_gops;
         bool is_closed_gop;
         bool has_cea708;
+        uint64_t last_cc_seen_ns;
 
         /* Frame Distribution & GOP Structure */
         char gop_structure[128];

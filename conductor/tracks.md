@@ -59,3 +59,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [x] **Track: Hardware Abstraction Layer (HAL)**
   *Link: [./tracks/011-hardware-abstraction-layer/](./tracks/011-hardware-abstraction-layer/)*
+
+- [ ] **Track: Advanced Essence Metrology (Loudness & Metadata)**
+  *Link: [./tracks/015-advanced-essence-metrology/](./tracks/015-advanced-essence-metrology/)*

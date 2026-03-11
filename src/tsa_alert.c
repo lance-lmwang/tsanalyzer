@@ -133,6 +133,21 @@ void tsa_alert_check_resolutions(tsa_handle_t* h) {
 
         if (h->last_nit_ns > 0 && (now_stc - h->last_nit_ns) > TSA_TR101290_NIT_TIMEOUT_NS)
             tsa_alert_update(h, TSA_ALERT_NIT, true, "NIT", 0);
+
+        /* Advanced Essence: CC Presence Monitoring */
+        for (int i = 0; i < TS_PID_MAX; i++) {
+            if (h->pid_seen[i] && tsa_is_video(h->es_tracks[i].stream_type)) {
+                tsa_es_track_t* es = &h->es_tracks[i];
+                if (es->video.has_cea708) {
+                    if (es->video.last_cc_seen_ns > 0 &&
+                        (now_stc - es->video.last_cc_seen_ns) > TSA_TR101290_CC_TIMEOUT_NS) {
+                        tsa_alert_update(h, TSA_ALERT_CC_MISSING, true, "CC_MISSING", i);
+                    } else if (h->alerts[TSA_ALERT_CC_MISSING].status == TSA_ALERT_STATE_FIRING) {
+                        tsa_alert_update(h, TSA_ALERT_CC_MISSING, false, "CC_MISSING", i);
+                    }
+                }
+            }
+        }
     }
 
     uint64_t agg_window_ns = (uint64_t)h->aggregator.window_ms * 1000000ULL;
