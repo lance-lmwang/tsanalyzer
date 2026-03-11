@@ -69,5 +69,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [ ] **Track: Distributed Configuration Center (Inotify & Remote)**
   *Link: [./tracks/013-distributed-config-center/](./tracks/013-distributed-config-center/)*
 
-- [ ] **Track: Documentation Renaissance (Full Library Refurbish)**
+- [x] **Track: Documentation Renaissance (Full Library Refurbish)**
   *Link: [./tracks/020-documentation-renaissance/](./tracks/020-documentation-renaissance/)*
