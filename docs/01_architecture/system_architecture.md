@@ -6,7 +6,7 @@ TsAnalyzer v3 is designed as a **Three-Plane Architecture**, separating packet p
 
 ## 1. Core Design Philosophy
 
-1.  **Plane Isolation**: The **Data Plane** is strictly decoupled from the **Control Plane**. Slow control operations (e.g., generating a large JSON report) are never allowed to stall the packet ingestion or analysis worker threads.
+1.  **Plane Isolation**: The **Data Plane** is strictly decoupled from the **Control Plane**. Slow control operations (e.g., generating a large JSON report) are never allowed to stall packet ingestion.
 2.  **NUMA Locality First**: Packet data and processing state must never cross physical CPU socket boundaries (zero QPI/UPI latency).
 3.  **Lock-Free Data Plane**: 0 mutex, 0 malloc, 0 blocking in the hot path. All packets move via Single-Producer Single-Consumer (SPSC) ring buffers.
 4.  **Streams are State Machines**: A stream is not a thread; it is a compact state machine multiplexed inside a fixed number of **Reactor Threads**.
@@ -16,44 +16,24 @@ TsAnalyzer v3 is designed as a **Three-Plane Architecture**, separating packet p
 
 ## 2. Dual-Mode Y-Architecture
 
-TsAnalyzer is designed with a unique **Y-Architecture** to satisfy both "plug-and-play" enterprise monitoring needs and "highly customizable" edge gateway requirements. Both modes share the exact same high-performance C-core Data Plane, but they diverge in the Control Plane.
+TsAnalyzer is designed with a unique **Y-Architecture** to satisfy both "plug-and-play" enterprise monitoring needs and "highly customizable" edge gateway requirements.
 
 ### Mode A: Static Pipeline (The Analyzer)
-This is the traditional, hardcoded C-pipeline exposed via tools like `tsa_server_pro`, `tsa_cli`, and `tsa_top`.
-*   **Best For**: 24/7 compliance monitoring, standard SaaS API endpoints, fixed-function hardware appliances.
-*   **Characteristics**: Zero-configuration startup, pre-wired routing (Input -> Analyzer -> Exporter), rigid but extremely stable.
+Traditional, hardcoded C-pipeline exposed via tools like `tsa_server_pro`. Pre-wired routing (Input -> Analyzer -> Exporter). Rigid but extremely stable.
 
 ### Mode B: Dynamic Lua Pipeline (The Gateway)
-This mode (invoked via `tsanalyzer run script.lua`) embeds a Lua JIT/VM into the Control Plane to enable dynamic, scriptable stream processing.
-*   **Best For**: Complex network routing, conditionally filtering PIDs, dynamic business logic (e.g., triggering a failover based on SCTE-35 or PCR loss).
-*   **Characteristics**: The C core provides primitives (Source, Analyzer, Output, Section Extractor) as Lua userdata objects. Users write Lua scripts to dynamically instantiate these objects, wire them together (`analyzer:set_upstream(source)`), and define reactive event callbacks (`on_ts_section`).
-*   **Userdata Bindings**: Core C primitives are exposed as Lua objects with automatic memory management (`__gc`).
-*   **Event Feedback Loop**: Metrology events generated in the C core (e.g., `SYNC_LOSS`, `SCTE35_SPLICE`) are pushed back into Lua via registered callbacks, enabling real-time intelligent routing and self-healing logic.
-
-**Crucially, these two modes can coexist.** A team can use `tsa_server_pro` for their main dashboard telemetry while running a separate `tsanalyzer run failover.lua` instance on the same machine to handle active stream routing.
+Embeds a Lua JIT/VM into the Control Plane. Primitives (Source, Analyzer, Output) are exposed as Lua userdata objects. Users write scripts to dynamically instantiate and wire them (`analyzer:set_upstream(source)`).
 
 ---
 
-## 3. Hardware Abstraction Layer (HAL) & SIMD Dispatching
+## 3. Global System Architecture
 
-To maintain 10Gbps+ throughput across diverse environments, TsAnalyzer employs a runtime-dispatched HAL:
-
-1.  **VTable Dispatching**: Hot-path functions (Sync Search, PID Extraction) are accessed via a global `tsa_simd` vtable.
-2.  **Runtime Detection**: At startup, the engine probes CPU capabilities (`CPUID`) and links the optimal implementation:
-    *   **AVX2**: Optimized for modern Xeon/EPYC servers (~32x faster than scalar).
-    *   **SSE4.2**: Fallback for legacy hardware and standard cloud VMs (~16x faster than scalar).
-    *   **Generic C99**: Portable fallback for non-x86 or restricted environments.
-
----
-
-## 4. Global System Architecture
-
-The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **1000+ streams**:
+The architecture utilizes a tiered fan-out model to scale to **100 Gbps** and **1000+ streams**:
 
 ```text
                  +--------------------------------------+
                  |        Control Plane (REST/gRPC)     |
-                 |  - Stream configuration              |
+                 |  - Stream configuration / Lua VM     |
                  |  - Monitoring API / Telemetry        |
                  +------------------+-------------------+
                                     |
@@ -64,7 +44,7 @@ The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **1
 |   +-------------------+     +--------------------+                |
 |   | Timing Engine     |     | Semantic Analyzer  |                |
 |   | - PCR reconstruction |  | - TR 101 290 checks|                |
-|   | - Jitter modeling   |   | - StatMux detection |               |
+|   | - Jitter modeling   |   | - T-STD simulation |                |
 |   +----------+----------+   +----------+----------+               |
 +--------------+-------------------------+--------------------------+
                |
@@ -74,62 +54,86 @@ The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **1
 |                                                                   |
 | +--------------------+    +----------------------+                |
 | | NIC Capture        | -> | SIMD TS Parser       | -> SPSC Ring   |
-| | (DPDK / AF_XDP)    |    | (AVX2 / AVX-512)     |                |
+| | (DPDK / AF_PACKET) |    | (AVX2 / SSE4.2)      |                |
 | +--------------------+    +----------------------+                |
 +-------------------------------------------------------------------+
 ```
 
 ---
 
-## 5. Layered Implementation Stack
-
-While the Planes define logical isolation, the engine code is implemented as a 4-layer deterministic pipeline.
+## 4. Layered Implementation Stack
 
 | Layer | Responsibility | Implementation Primitives |
 | :--- | :--- | :--- |
-| **4. Interface** | External Comms | JSON (Bit-exact), Prometheus, `tsa_top` TUI. |
-| **3. Metrology** | Simulation | ETSI TR 101 290, 3D PCR Math, T-STD VBV. |
+| **4. Interface** | External Comms | JSON, Prometheus, `tsa_top` TUI, **JWT Gateway**. |
+| **3. Metrology** | Simulation | ETSI TR 101 290, 3D PCR Math, **Predictive T-STD**. |
 | **2. Structural** | Protocol | Multi-standard SI/PSI, 27MHz STC, NALU Sniff. |
 | **1. Ingestion** | Physical | **HAT (Hardware Timing)**, recvmmsg, SPSC Rings. |
 
 ---
 
-## 6. Detailed Metrology Logic
+## 5. Reactor Threading & Worker Affinity
 
-### 6.1 T-STD Predictive Buffer Model
-TsAnalyzer implements a real-time mathematical simulation of the **ISO/IEC 13818-1 System Target Decoder (T-STD)**.
-*   **Predictive Underflow**: By calculating the ingress byte rate vs. the next frame's DTS, the engine predicts buffer starvation up to 500ms before it occurs.
-*   **Alert Suppression**: Implements a dependency tree where a `SYNC_LOSS` event automatically suppresses downstream errors (CC, PCR, Timeout) to eliminate alert storms.
+v3 treats **Streams as State Machines** multiplexed inside **Reactor Threads**.
 
-### 6.2 Advanced Essence (L4) Analysis
-*   **Closed Caption Monitoring**: Continuously audits EIA-608/708 presence within SEI NAL units.
-*   **SCTE-35 Alignment**: Cross-references Splice Info Sections with video IDR frames to ensure splicing occurs precisely at GOP boundaries.
-*   **Visual QoE (Shannon Entropy)**: Uses information density analysis to distinguish between valid frozen content and encrypted noise or black screens.
+### 5.1 Deterministic Scheduling
+To maximize **L1/L2 Cache Locality**, TsAnalyzer employs a strict affinity model:
+*   **Affinity Mapping**: `Worker_ID = Hash(Stream_ID) % Total_Workers`.
+*   **Significance**: Ensures a specific stream's state (PCR PLL, VBV buffers) always resides in the same CPU core's cache, eliminating cross-core cache invalidation.
 
----
-
-## 7. The NUMA Pipeline
-
-NUMA awareness is critical for maintaining the **8M pps** data plane throughput.
-
-### 7.1 Data Residency Rule
-**Packet data must never cross NUMA nodes.** Crossing the interconnect (QPI/UPI) introduces non-deterministic latency spikes. Each physical CPU socket manages an independent hardware-to-software pipeline.
-
-### 7.2 CPU Layout Example (32-Core Appliance)
-*   **NUMA Node 0 (Cores 0-15)**:
-    *   Core 0: Ingest RX Worker (NIC0).
-    *   Cores 1-15: Analysis Workers (Stream Group A).
-*   **NUMA Node 1 (Cores 16-31)**:
-    *   Core 16: Ingest RX Worker (NIC1).
-    *   Cores 17-31: Analysis Workers (Stream Group B).
+### 5.2 Failure Containment: The Watchdog
+*   **Stall Detection**: Monitors heartbeats of Reactor threads.
+*   **Lua Recovery**: If a script hangs, the **Metrology Watchdog** resets the Lua VM while keeping the C Data Plane operational.
 
 ---
 
-## 8. Asynchronous Signaling Pipeline
+## 6. TS Processing Pipeline (8-Stage O(1))
 
-TsAnalyzer v3 offloads all non-deterministic external communication to a dedicated thread pool to ensure core timing integrity.
+The per-packet analytical pipeline is strictly **O(1)** to maintain deterministic latency.
 
-### 8.1 Dispatch Mechanism
-1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the **Signal Queue**.
-2.  **Signaling Thread**: Consumes the queue and executes the Webhook POST (non-blocking).
-3.  **Hot-Reload**: Uses Linux `inotify` to detect configuration file changes, allowing instant telemetry updates without packet loss.
+1.  **NIC Ingress**: Hardware RX Timestamping.
+2.  **Packet Classification**: Stream Hash & Flow identification.
+3.  **TS Header Parser**: SIMD-accelerated PUSI/PID/CC extraction.
+4.  **Continuity Audit**: Sequence verification per PID.
+5.  **PCR Processor**: Software PLL & 3D jitter metrology.
+6.  **Bitrate Model**: Piecewise constant bitrate estimation.
+7.  **TR 101 290 Engine**: State machine updates (P1/P2/P3).
+8.  **Metrics Bus**: Atomic push to the Reactor Core.
+
+---
+
+## 7. Backpressure & Congestion Policy
+
+The engine handles egress saturation or analysis lag via a tiered policy:
+*   **Drop Strategy**: Supports `drop_head` (lowest latency) and `drop_tail`.
+*   **Broadcast Awareness**: In extreme congestion, the gateway automatically performs **NULL PID Stripping** (PID 0x1FFF) to reclaim bandwidth without impacting content.
+*   **Stream Priority**: Critical streams can be marked to preempt resources from lower-tier variants.
+
+---
+
+## 8. High-Performance Execution Primitives
+
+### 8.1 Hardware Abstraction Layer (HAL) & SIMD
+*   **AVX2**: Scans 32 bytes in a single cycle (~32x faster than scalar).
+*   **SSE4.2**: Optimized fallback for legacy cloud environments (~16x faster than scalar).
+
+### 8.2 Metrics Cardinality Management
+To prevent **Label Explosion** in TSDBs:
+*   **Strict Labeling**: High-cardinality metadata is restricted to the REST API.
+*   **Summarization**: Prometheus uses stable labels (`service_id`, `node_id`) while avoiding session-specific entropy.
+
+---
+
+## 9. Future Roadmap: GPU-Accelerated QoE
+
+TsAnalyzer will leverage **NVDEC/NVENC** for ultra-high-density video auditing:
+*   **Visual QC**: Offloading black/freeze detection and thumbnail generation to GPU Tensor cores.
+*   **AI Metadata**: Utilizing deep learning for logo verification and BITC OCR correlation.
+
+---
+
+## 10. Asynchronous Signaling Pipeline
+
+1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the Signal Queue.
+2.  **Signaling Thread**: Consumes the queue and executes the Webhook/Lua callback (non-blocking).
+3.  **Hot-Reload**: Uses Linux `inotify` for hitless configuration updates without packet loss.

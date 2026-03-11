@@ -12,6 +12,9 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 ## 📚 Technical Library (v3 Architecture)
 
+### 💎 The Soul of TsAnalyzer
+*   **[Engineering Soul: Core Manifesto](./docs/ENGINEERING_SOUL.md)**: **MUST READ.** Architectural philosophy and the 5 computational pillars.
+
 ### 🏗 Pillar 1: Strategy & Architecture
 *   **[Product Vision](./docs/00_product/product_overview.md)**: Positioning, core mission, and technical pillars.
 *   **[Internal System Architecture](./docs/01_architecture/system_architecture.md)**: Dual-Mode Y-Architecture (Static/Lua) and **HAL (SIMD Dispatching)**.
