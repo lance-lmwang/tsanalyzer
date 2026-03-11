@@ -10,10 +10,10 @@ Instead of sending an alert for every error event, TsAnalyzer utilizes an intern
 
 ### 1.1 Alert Lifecycles
 *   **OFF (Normal)**: The default state.
-*   **FIRING (Alert Active)**: 
+*   **FIRING (Alert Active)**:
     *   Triggered on the **first occurrence** of a critical error (e.g., P1.1 Sync Loss).
     *   An immediate `CRITICAL` notification is dispatched.
-*   **RESOLVED (Cleared)**: 
+*   **RESOLVED (Cleared)**:
     *   Triggered only after the error has completely disappeared and the stream has remained stable for a **5-second observation window**.
     *   An `OK` notification is dispatched, and the state returns to `OFF`.
 
@@ -29,9 +29,15 @@ The system features a dedicated, non-blocking signaling thread to ensure that al
 *   **CURL-based Engine**: Supports HTTPS, custom headers, and sub-second timeouts.
 
 ### 2.2 Noise Control (Suppression & Aggregation)
-To manage high-frequency errors (e.g., CC bursts), the engine employs two layers of protection:
-*   **Hierarchical Suppression**: If a stream enters `SYNC_LOSS` (Root Cause), all sub-alerts (CC, PAT, CRC) are automatically silenced.
-*   **Sliding Window Aggregation**: Within a **10-second** window, identical alerts are suppressed and counted. At the end of the window, a summary message is sent (e.g., `CC_ERROR occurred 150 times`).
+To manage high-frequency errors (e.g., CC bursts), the engine employs three layers of protection:
+
+1.  **Alert Dependency Tree (Root-Cause Inhibition)**:
+    -   **Level 1 (Sync Loss)**: If `TS_SYNC_LOSS` is firing, the engine automatically mutes `CC_ERROR`, `PCR_ERROR`, `TRANSPORT_ERROR`, `CRC_ERROR`, and all `TIMEOUT` (PAT/PMT/SDT) alerts.
+    -   **Level 2 (Continuity Burst)**: If `CC_ERROR` is firing at high intensity, `PCR_JITTER` and `TSTD` alerts are suppressed, as packet loss inherently induces timing noise.
+2.  **Wall-clock Timeout Evaluation**:
+    -   Uses a background **Time-Wheel** to detect timeouts (e.g., PAT missing) even when the source stream has completely stopped (0 bps), ensuring alerts fire even without incoming packet triggers.
+3.  **Sliding Window Aggregation**:
+    -   Within a **10-second** window, identical alerts are suppressed and counted. At the end of the window, a summary message is sent (e.g., `CC_ERROR occurred 150 times`).
 
 ---
 

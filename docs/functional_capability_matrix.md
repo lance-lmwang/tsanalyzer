@@ -16,7 +16,8 @@ This document provides a comprehensive overview of the current capabilities of T
 | **IAT Histograms** | [PASS] Implemented | Real-time Inter-Arrival Time statistical profiling for micro-burst detection. |
 | **Bitrate Smoother** | [PASS] Implemented | High-precision CBR reshaping using `clock_nanosleep` absolute timing. |
 | **Smart Failover** | [PASS] Implemented | Automatic switching between Primary/Backup inputs based on TR 101 290 health. |
-| **I/O-Computing Decoupling** | 🔶 Partial | Hybrid Reactor model for high-density concurrent stream support. |
+| **I/O-Computing Decoupling**| [PASS] Implemented | Hybrid Reactor model for high-density concurrent stream support. |
+| **Hardware Abstraction Layer**| [PASS] Implemented | Runtime SIMD dispatching (AVX2, SSE4.2) for cross-platform performance. |
 
 ---
 
@@ -28,7 +29,7 @@ This document provides a comprehensive overview of the current capabilities of T
 | **Priority 2 (P2)** | [PASS] Implemented | Transport Error, CRC, PCR Repetition, PCR Accuracy, PTS Error. |
 | **Priority 3 (P3)** | [PASS] Implemented | SDT and NIT version tracking/parsing. |
 | **SCTE-35 Audit** | [PASS] Implemented | Nanosecond-level alignment error between ad-triggers and Video I-Frames. |
-| **CAS Audit** | 📅 Planned | Monitoring of Scrambling flags and CAID descriptor compliance. |
+| **CAS Audit** | [PASS] Implemented | Real-time monitoring of Scrambling flags and encryption consistency. |
 
 ---
 
@@ -51,8 +52,9 @@ This document provides a comprehensive overview of the current capabilities of T
 | **GOP Structure Tracking** | [PASS] Implemented | Detection of I/P/B frame sequences, GOP length (N), and GOP duration (ms). |
 | **Entropy Analysis** | [PASS] Implemented | Shannon entropy variance used to detect frozen or black screens. |
 | **T-STD Buffer Model** | [PASS] Implemented | Annex D simulation of TB, MB, and EB (Video) occupancy. |
-| **RST (Remaining Safe Time)**| [PASS] Implemented | Predictive metric indicating time-to-underflow for decoder buffers. |
-| **Thumbnail Generation** | 📅 Planned | Asynchronous sparse decoding of IDR frames. |
+| **Predictive Buffer Math** | [PASS] Implemented | Proactive alarm for underflow/overflow up to 500ms before incident. |
+| **Closed Caption Audit** | [PASS] Implemented | Real-time EIA-608/708 presence and continuity monitoring. |
+| **Thumbnail Generation** | 📅 Planned | Asynchronous sparse decoding of IDR frames using sidecar libavcodec. |
 
 ---
 
@@ -64,24 +66,10 @@ This document provides a comprehensive overview of the current capabilities of T
 | **JSON REST API** | [PASS] Implemented | Programmatic access to full engine snapshots. |
 | **High-Performance TUI**| [PASS] Implemented | `tsa_top` utility for real-time console-based local monitoring. |
 | **Triggered Micro-Capture**| [PASS] Implemented | Rolling 500ms ring buffer automatically saved to `.ts` on P1 triggers. |
-| **Lua Extension Engine**   | [PASS] Implemented | Hot-pluggable Lua scripts for Deep Content Inspection (e.g., SCTE-35 Splice Info parsing). |
-| **Alert Suppression Tree** | [PASS] Implemented | Root-cause dependency matrix (e.g., Sync Loss suppresses CC/PCR alarms) and Timer Wheel timeouts. |
-| **HTML Forensic Reports** | 📅 Planned | Self-contained interactive incident replay files. |
-| **Webhook Signaling** | [PASS] Implemented | Asynchronous JSON notification with retry and aggregation logic. |
-
----
-
-## 6. Advanced Automation & Intelligence (Roadmap)
-
-Inspired by enterprise-grade video management systems, these features target full-cycle automated monitoring.
-
-| Feature | Status | Description |
-| :--- | :--- | :--- |
-| **Scheduled Workflows** | 📅 Planned | Calendar-based monitoring profiles (e.g., High-fidelity mode during live events). |
-| **ABR Group Audit** | 📅 Planned | Measuring temporal alignment (Skew) across multiple bitrate renditions. |
-| **Logo & Branding QC** | 📅 Planned | Vision-based detection of burned-in logos to ensure correct channel playout. |
-| **BITC OCR Correlation** | 📅 Planned | Extracting burned-in timecodes and correlating them with PCR/PTS timelines. |
-| **Enterprise Audit Trail** | [PASS] Implemented | Full lifecycle logging of stream events, config changes, and operator acknowledgments. |
+| **Lua Extension Engine**   | [PASS] Implemented | Hot-pluggable Lua scripts for Topologies, Routing, and Deep Content parsing. |
+| **Alert Suppression Tree** | [PASS] Implemented | Root-cause dependency matrix (e.g., Sync Loss suppresses CC/PCR alarms). |
+| **Hot-Reload Watcher**     | [PASS] Implemented | Inotify-based automatic configuration reconciliation without service restart. |
+| **API Security Gateway**   | [PASS] Implemented | JWT authentication and Token Bucket rate limiting for control plane protection. |
 
 ---
 
@@ -89,4 +77,4 @@ Inspired by enterprise-grade video management systems, these features target ful
 *   [PASS] **Implemented**: Fully functional and verified via automated tests.
 *   🔶 **Partial**: Basic logic exists, but full spec coverage is pending.
 *   📅 **Planned**: Designed and accepted into the roadmap, implementation pending.
-*   ⏸️ **Paused**: Development suspended to focus on core metrology maturity.
+*   ⏸️ **Paused**: Development suspended.

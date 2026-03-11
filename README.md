@@ -14,8 +14,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 ### Pillar 1: Strategy & Architecture
 *   **[Product Vision](./docs/00_product/product_overview.md)**: Positioning, core mission, and the four technical pillars.
-*   **[Overall System Architecture](./docs/03_deployment/system_architecture.md)**: Layered topology (Gateway, Engine, Appliance).
-*   **[Internal System Architecture](./docs/01_architecture/system_architecture.md)**: High-performance data flow and NUMA-local threading.
+*   **[Internal System Architecture](./docs/01_architecture/system_architecture.md)**: Dual-Mode Y-Architecture (Static/Lua), NUMA-local threading, and **HAL (SIMD Dispatching)**.
 *   **[Functional Matrix](./docs/functional_capability_matrix.md)**: Current status vs. long-term roadmap.
 
 ### Pillar 2: Metrology & Math (The Bible)
@@ -60,7 +59,26 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 ./build/tsa_cli --mode live --srt-url srt://:9000
 ```
 
-### 2. Full-Stack NOC (Docker Compose)
+### 2. Dynamic Gateway (Lua Scripting)
+Create a `topology.lua`:
+```lua
+local input = tsa.udp_input(5000)
+local analyzer = tsa.analyzer()
+local output = tsa.udp_output('10.0.0.1', 6000)
+
+analyzer:set_upstream(input)
+output:set_upstream(analyzer)
+
+analyzer:on('SYNC', function(evt)
+    tsa.log("Incident on PID " .. evt.pid .. ": " .. evt.message)
+end)
+```
+Run it:
+```bash
+./build/tsa_cli run topology.lua
+```
+
+### 3. Full-Stack NOC (Docker Compose)
 ```bash
 docker-compose up -d
 ```

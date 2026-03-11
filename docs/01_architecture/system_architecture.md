@@ -24,15 +24,29 @@ This is the traditional, hardcoded C-pipeline exposed via tools like `tsa_server
 *   **Characteristics**: Zero-configuration startup, pre-wired routing (Input -> Analyzer -> Exporter), rigid but extremely stable.
 
 ### Mode B: Dynamic Lua Pipeline (The Gateway)
-This mode (`tsa_cli run script.lua`) embeds a Lua JIT/VM into the Control Plane to enable dynamic pipeline routing.
+This mode (invoked via `tsanalyzer run script.lua`) embeds a Lua JIT/VM into the Control Plane to enable dynamic, scriptable stream processing.
 *   **Best For**: Complex network routing, conditionally filtering PIDs, dynamic business logic (e.g., triggering a failover based on SCTE-35 or PCR loss).
 *   **Characteristics**: The C core provides primitives (Source, Analyzer, Output, Section Extractor) as Lua userdata objects. Users write Lua scripts to dynamically instantiate these objects, wire them together (`analyzer:set_upstream(source)`), and define reactive event callbacks (`on_ts_section`).
+*   **Userdata Bindings**: Core C primitives are exposed as Lua objects with automatic memory management (`__gc`).
+*   **Event Feedback Loop**: Metrology events generated in the C core (e.g., `SYNC_LOSS`, `SCTE35_SPLICE`) are pushed back into Lua via registered callbacks, enabling real-time intelligent routing and self-healing logic.
 
 **Crucially, these two modes can coexist.** A team can use `tsa_server_pro` for their main dashboard telemetry while running a separate `tsanalyzer run failover.lua` instance on the same machine to handle active stream routing.
 
 ---
 
-## 3. Global System Architecture
+## 3. Hardware Abstraction Layer (HAL) & SIMD Dispatching
+
+To maintain 10Gbps+ throughput across diverse environments, TsAnalyzer employs a runtime-dispatched HAL:
+
+1.  **VTable Dispatching**: Hot-path functions (Sync Search, PID Extraction) are accessed via a global `tsa_simd` vtable.
+2.  **Runtime Detection**: At startup, the engine probes CPU capabilities (`CPUID`) and links the optimal implementation:
+    *   **AVX2**: Optimized for modern Xeon/EPYC servers (~32x faster than scalar).
+    *   **SSE4.2**: Fallback for legacy hardware and standard cloud VMs (~16x faster than scalar).
+    *   **Generic C99**: Portable fallback for non-x86 or restricted environments.
+
+---
+
+## 4. Global System Architecture
 
 The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **1000+ streams**:
 
@@ -67,7 +81,7 @@ The architecture utilizes a tiered fan-out model to scale to **10 Gbps** and **1
 
 ---
 
-## 3. Layered Implementation Stack
+## 5. Layered Implementation Stack
 
 While the Planes define logical isolation, the engine code is implemented as a 4-layer deterministic pipeline.
 
@@ -80,14 +94,28 @@ While the Planes define logical isolation, the engine code is implemented as a 4
 
 ---
 
-## 4. The NUMA Pipeline
+## 6. Detailed Metrology Logic
+
+### 6.1 T-STD Predictive Buffer Model
+TsAnalyzer implements a real-time mathematical simulation of the **ISO/IEC 13818-1 System Target Decoder (T-STD)**.
+*   **Predictive Underflow**: By calculating the ingress byte rate vs. the next frame's DTS, the engine predicts buffer starvation up to 500ms before it occurs.
+*   **Alert Suppression**: Implements a dependency tree where a `SYNC_LOSS` event automatically suppresses downstream errors (CC, PCR, Timeout) to eliminate alert storms.
+
+### 6.2 Advanced Essence (L4) Analysis
+*   **Closed Caption Monitoring**: Continuously audits EIA-608/708 presence within SEI NAL units.
+*   **SCTE-35 Alignment**: Cross-references Splice Info Sections with video IDR frames to ensure splicing occurs precisely at GOP boundaries.
+*   **Visual QoE (Shannon Entropy)**: Uses information density analysis to distinguish between valid frozen content and encrypted noise or black screens.
+
+---
+
+## 7. The NUMA Pipeline
 
 NUMA awareness is critical for maintaining the **8M pps** data plane throughput.
 
-### 4.1 Data Residency Rule
+### 7.1 Data Residency Rule
 **Packet data must never cross NUMA nodes.** Crossing the interconnect (QPI/UPI) introduces non-deterministic latency spikes. Each physical CPU socket manages an independent hardware-to-software pipeline.
 
-### 4.2 CPU Layout Example (32-Core Appliance)
+### 7.2 CPU Layout Example (32-Core Appliance)
 *   **NUMA Node 0 (Cores 0-15)**:
     *   Core 0: Ingest RX Worker (NIC0).
     *   Cores 1-15: Analysis Workers (Stream Group A).
@@ -95,78 +123,13 @@ NUMA awareness is critical for maintaining the **8M pps** data plane throughput.
     *   Core 16: Ingest RX Worker (NIC1).
     *   Cores 17-31: Analysis Workers (Stream Group B).
 
-### 4.3 RSS Queue & Core Affinity
-The Ingestion layer utilizes **Receive Side Scaling (RSS)** based on `UDP Destination IP + Port` to ensure **Same Stream → Same Core** affinity.
-
 ---
 
-## 4. TS Processing Pipeline
-
-The per-packet analytical pipeline is strictly **O(1)** to maintain deterministic latency (< 1ms processing delay).
-
-### 4.1 Pipeline Stages
-1.  **NIC Ingress**: Hardware RX Timestamping.
-2.  **Packet Classification**: Stream Hash & Flow identification.
-3.  **TS Header Parser**: Branchless PUSI/PID/CC extraction.
-4.  **Continuity Counter Audit**: Sequence verification per PID.
-5.  **PCR Processor**: Software PLL & jitter metrology.
-6.  **Bitrate Model**: Piecewise constant bitrate estimation.
-7.  **TR 101 290 Engine**: State machine updates (P1/P2/P3).
-8.  **Metrics Bus**: Atomic push to the Reactor Core.
-
----
-
-## 5. Reactor Stream Model
-
-v3 treats **Streams as State Machines** multiplexed inside **Reactor Threads**. Each Reactor manages ~100 streams.
-
-### 5.1 Event Loop Logic
-The loop performs wait-free polling:
-```c
-while(running) {
-    batch = ring_pop_batch();
-    for(pkt in batch) {
-        stream = flow_table[pkt.flow];
-        process_ts_packet(stream, pkt); // Updates state machines
-    }
-}
-```
-
-### 5.2 Cache Residency
-The `ts_stream_t` context is carefully packed to reside within a single cache line (64-128 bytes) where possible, ensuring that all metrology math (PCR PLL, VBV) happens in L1/L2 cache.
-
----
-
-## 6. High-Performance Execution Primitives
-
-### 6.1 TS SIMD Parser (AVX-512 / AVX2)
-Instead of byte-by-byte state machines, v3 uses SIMD vectors to perform "dimensional reduction" on the 188-byte TS packets.
-*   **Vectorized Sync Detection**: Uses `_mm512_cmpeq_epi8_mask` (or `_mm256_cmpeq_epi8`) to scan entire cache lines for the `0x47` sync byte in a single instruction.
-*   **Header Gathering**: Uses Gather/Shuffle instructions to extract 13-bit PIDs from multiple packets simultaneously.
-*   **Register-level Drop**: Non-analyzed PIDs are masked at the register level to prevent unnecessary memory writes.
-
-### 6.2 Throughput Characteristics
-The expected analytical throughput varies based on the SIMD width and hardware generation:
-
-| CPU Architecture | SIMD ISA | Expected Throughput |
-| :--- | :--- | :--- |
-| **Intel/AMD Core** | **AVX2** | **6 – 8 Gbps** |
-| **Intel/AMD Xeon** | **AVX-512** | **10 – 16 Gbps** |
-
-Performance targets assume NUMA locality and kernel-bypass (AF_XDP) are correctly enforced.
-
-### 6.3 1000+ Stream Scheduler (Run-to-Completion)
-To eliminate OS context-switch overhead:
-*   **Worker-per-Core**: A fixed pool of worker threads equals the physical core count.
-*   **Time-Wheel QoS**: Employs an **O(1) Time-Wheel algorithm** for deferred analysis tasks (e.g., TR 101 290 P1 timeouts).
-
----
-
-## 7. Asynchronous Signaling Pipeline
+## 8. Asynchronous Signaling Pipeline
 
 TsAnalyzer v3 offloads all non-deterministic external communication to a dedicated thread pool to ensure core timing integrity.
 
-### 7.1 Dispatch Mechanism
+### 8.1 Dispatch Mechanism
 1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the **Signal Queue**.
 2.  **Signaling Thread**: Consumes the queue and executes the Webhook POST (non-blocking).
-3.  **Isolation**: Prevents network latency spikes during HTTP POSTs from contaminating the 27MHz clock reconstruction.
+3.  **Hot-Reload**: Uses Linux `inotify` to detect configuration file changes, allowing instant telemetry updates without packet loss.
