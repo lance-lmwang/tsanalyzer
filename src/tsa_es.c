@@ -6,6 +6,7 @@
 #include "nalu_sniffer.h"
 #include "tsa_internal.h"
 #include "tsa_log.h"
+#include "tsa_lua.h"
 #include "tsa_units.h"
 
 #define TAG "ES_ANALYZER"
@@ -15,7 +16,11 @@ static const uint8_t ltn_uuid_sei_timestamp[16] = {0x59, 0x96, 0xFF, 0x28, 0x17,
                                                    0x8D, 0xE3, 0xE5, 0x3F, 0xE2, 0xF9, 0x92, 0xAE};
 
 static void tsa_handle_sei(tsa_handle_t* h, tsa_es_track_t* es, const uint8_t* payload, int len) {
-    (void)h;
+    /* Pass raw SEI to Lua for specialized parsing (Captions, user-data, etc) */
+    if (h->lua) {
+        tsa_lua_process_section(h->lua, es->pid, 0x06, payload, len); // 0x06 is SEI NALU type placeholder for Lua
+    }
+
     if (len < 64) return;
     const uint8_t* p = memmem(payload, len, ltn_uuid_sei_timestamp, 16);
     if (!p) return;

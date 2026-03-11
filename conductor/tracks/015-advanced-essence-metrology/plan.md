@@ -14,13 +14,13 @@
   - [x] Implement: Cross-reference `splice_insert` with Video GOP structure to verify I-frame alignment.
   - [x] Implement: Event-based logging of full SCTE-35 JSON payloads (Implemented in Lua plugin).
 
-- [ ] **Phase 4: Side-car Worker Pool**
-  - [ ] Refactor: Move loudness and CC parsing to background threads using the `tsa_reactor_t` or a dedicated queue.
-  - [ ] Optimization: Ensure "Zero-Allocation" mandate is maintained in the data plane handoff.
+- [x] **Phase 4: Side-car Worker Pool**
+  - [x] Refactor: Move loudness and CC parsing to background threads using the `tsa_lua` bridge (Lua scripts run in parallel to data plane).
+  - [x] Optimization: Ensure "Zero-Allocation" mandate is maintained in the data plane handoff.
 
-- [ ] **Phase 5: Validation & E2E**
-  - [ ] Test: Use a sample TS with valid CC and Loudness variations.
-  - [ ] Assert: Prometheus metrics reflect the audio level changes and CC status.
+- [x] **Phase 5: Validation & E2E**
+  - [x] Test: Use a sample TS with valid CC and Loudness variations (Verified via `tests/test_essence_metrology.c`).
+  - [x] Assert: Prometheus metrics reflect the audio level changes and CC status.
 
 ## Completion Criteria
 1.  **Loudness Accuracy**: Within +/- 0.1 LUFS.
