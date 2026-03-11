@@ -271,6 +271,7 @@ struct tsa_handle {
     uint64_t last_v_pts;
     uint64_t last_a_pts;
     uint64_t last_packet_rx_ns;
+    struct tsa_lua_s* lua;
     struct {
         uint64_t last_snap_bytes;
         uint64_t last_bps;

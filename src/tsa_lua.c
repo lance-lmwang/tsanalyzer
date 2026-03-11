@@ -179,3 +179,28 @@ int tsa_lua_run_file(tsa_lua_t* lua, const char* filename) {
     }
     return 0;
 }
+
+int tsa_lua_process_section(tsa_lua_t* lua, uint16_t pid, uint8_t table_id, const uint8_t* payload, size_t len) {
+    if (!lua || !lua->L) return -1;
+    lua_State* L = lua->L;
+
+    // Check if the global function 'on_ts_section' exists
+    lua_getglobal(L, "on_ts_section");
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;  // No handler installed, simply return
+    }
+
+    lua_pushinteger(L, pid);
+    lua_pushinteger(L, table_id);
+    lua_pushlstring(L, (const char*)payload, len);
+
+    // Call function with 3 arguments and 0 returns
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+        fprintf(stderr, "Lua Runtime Error in on_ts_section: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
+        return -1;
+    }
+
+    return 0;
+}

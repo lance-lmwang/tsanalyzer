@@ -13,6 +13,7 @@
 
 #include "tsa_descriptors.h"
 #include "tsa_internal.h"
+#include "tsa_lua.h"
 #include "tsa_plugin.h"
 #include "tsa_simd.h"
 
@@ -122,6 +123,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     tsa_plugins_attach_builtin(h);
 
     tsa_stream_model_init(&h->ts_model);
+    h->lua = tsa_lua_create(h);
     return h;
 
 fail:
@@ -142,6 +144,7 @@ void tsa_destroy_engines(tsa_handle_t* h) {
 
 void tsa_destroy(tsa_handle_t* h) {
     if (!h) return;
+    if (h->lua) tsa_lua_destroy(h->lua);
     tsa_plugins_destroy_all(h);
     ts_pcr_window_destroy(&h->pcr_window);
     ts_pcr_window_destroy(&h->pcr_long_window);

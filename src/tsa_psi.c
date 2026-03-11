@@ -225,6 +225,10 @@ static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_fi
                 process_nit(h, f->buffer, h->stc_ns);
             else if (tid == 0x42)
                 process_sdt(h, f->buffer, h->stc_ns);
+            else if (tid == 0xFC) {
+                /* SCTE-35 Splice Info Section */
+                tsa_scte35_process(h, pid, f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
+            }
             f->last_ver = ver;
             f->seen_before = true;
         } else {
