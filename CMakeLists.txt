@@ -4,45 +4,74 @@ project(TsAnalyzer C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
+# Optimization
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -Wall -Wextra -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -Wall -Wextra -pthread")
 
-# Resolve mandatory system dependencies (Modern Ubuntu/Debian style)
+# Resolve mandatory system dependencies
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(CURL REQUIRED)
 
-# Standard shared libraries from the OS (compatible with PIE)
-find_library(PCAP_LIB pcap REQUIRED)
-find_library(SRT_LIB NAMES srt srt-openssl REQUIRED)
-find_library(LUA_LIB NAMES lua5.4 lua5.3 lua REQUIRED)
 find_library(NCURSES_LIB ncurses REQUIRED)
 find_library(RT_LIB rt REQUIRED)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 include_directories(${OPENSSL_INCLUDE_DIR})
-include_directories(${ZLIB_INCLUDE_DIRS})
-include_directories(${CURL_INCLUDE_DIRS})
 
-# Include path for SRT and Lua
-include_directories("/usr/include/srt")
-include_directories("/usr/include/lua5.4")
+set(TSA_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps")
 
-add_definitions(-DHAVE_PCAP -DHAVE_SRT -DHAVE_CURL -DHAVE_LUA)
+# --- Intelligent Dependency Detection (Prioritize internal static from build_deps.sh) ---
+macro(tsa_use_dep name lib_filename inc_subpath def)
+    set(INTERNAL_LIB_PATH "${TSA_DEPS_DIR}/${name}/lib/${lib_filename}")
+    set(INTERNAL_LIB64_PATH "${TSA_DEPS_DIR}/${name}/lib64/${lib_filename}")
 
+    if(EXISTS "${INTERNAL_LIB_PATH}")
+        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB_PATH}")
+        include_directories("${TSA_DEPS_DIR}/${name}/${inc_subpath}")
+        set(${name}_LIB "${INTERNAL_LIB_PATH}")
+        add_definitions(-D${def})
+    elseif(EXISTS "${INTERNAL_LIB64_PATH}")
+        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB64_PATH}")
+        include_directories("${TSA_DEPS_DIR}/${name}/${inc_subpath}")
+        set(${name}_LIB "${INTERNAL_LIB64_PATH}")
+        add_definitions(-D${def})
+    else()
+        # Fallback to system package
+        find_package(${name} QUIET)
+        if(${name}_FOUND)
+            message(STATUS "Using system package ${name}")
+            set(${name}_LIB ${${name}_LIBRARIES})
+            include_directories(${${name}_INCLUDE_DIRS})
+            add_definitions(-D${def})
+        else()
+            find_library(${name}_LIB ${name})
+            if(${name}_LIB)
+                message(STATUS "Using system library ${name}: ${${name}_LIB}")
+                add_definitions(-D${def})
+            else()
+                message(FATAL_ERROR "${name} not found! Please run ./build_deps.sh")
+            endif()
+        endif()
+    endif()
+endmacro()
+
+tsa_use_dep(srt "libsrt.a" "include" HAVE_SRT)
+# Special case for SRT header hierarchy
+if(EXISTS "${TSA_DEPS_DIR}/srt/include/srt")
+    include_directories("${TSA_DEPS_DIR}/srt/include/srt")
+endif()
+
+tsa_use_dep(libpcap "libpcap.a" "include" HAVE_PCAP)
+tsa_use_dep(lua "liblua.a" "include" HAVE_LUA)
+tsa_use_dep(curl "libcurl.a" "include" HAVE_CURL)
+tsa_use_dep(zlib "libz.a" "include" HAVE_ZLIB)
+
+# Link order matters for static libs
 set(TSA_EXTERNAL_LIBS
-    ${SRT_LIB}
-    ${CURL_LIBRARIES}
-    ${LUA_LIB}
-    ${PCAP_LIB}
-    ${OPENSSL_LIBRARIES}
-    ${ZLIB_LIBRARIES}
-    ${RT_LIB}
-    ${NCURSES_LIB}
-    pthread m dl stdc++
-)
+    ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB}
+    ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB}
+    pthread m dl stdc++)
 
 set(TSA_CORE_SRCS
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c
