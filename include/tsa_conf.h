@@ -22,6 +22,7 @@ typedef struct {
     int worker_slice_us;
     bool shm_enabled;
     char log_format[16];
+    char api_secret[128];
 
     // VHost templates (we use __default__ as index 0)
     tsa_config_t vhost_default;

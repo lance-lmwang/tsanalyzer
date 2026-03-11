@@ -56,6 +56,7 @@ set(TSA_CORE_SRCS
     src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c src/tsa_lua.c
     src/tsa_hls_parser.c src/tsa_hls_ingest.c src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
+    src/tsa_auth.c
     src/tsa_pcr_clock.c src/tsa_stream_model.c src/tsa_pipeline.c
     src/tsa_packet_pool.c src/tsa_clock_domain.c src/tsa_simd.c src/tsa_simd_avx2.c
     src/tsa_simd_sse42.c)
