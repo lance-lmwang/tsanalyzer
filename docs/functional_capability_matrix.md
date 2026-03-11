@@ -64,6 +64,8 @@ This document provides a comprehensive overview of the current capabilities of T
 | **JSON REST API** | [PASS] Implemented | Programmatic access to full engine snapshots. |
 | **High-Performance TUI**| [PASS] Implemented | `tsa_top` utility for real-time console-based local monitoring. |
 | **Triggered Micro-Capture**| [PASS] Implemented | Rolling 500ms ring buffer automatically saved to `.ts` on P1 triggers. |
+| **Lua Extension Engine**   | [PASS] Implemented | Hot-pluggable Lua scripts for Deep Content Inspection (e.g., SCTE-35 Splice Info parsing). |
+| **Alert Suppression Tree** | [PASS] Implemented | Root-cause dependency matrix (e.g., Sync Loss suppresses CC/PCR alarms) and Timer Wheel timeouts. |
 | **HTML Forensic Reports** | 📅 Planned | Self-contained interactive incident replay files. |
 | **Webhook Signaling** | [PASS] Implemented | Asynchronous JSON notification with retry and aggregation logic. |
 

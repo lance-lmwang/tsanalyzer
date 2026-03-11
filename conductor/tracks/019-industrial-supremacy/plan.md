@@ -19,6 +19,6 @@
   - [x] Integration: Bind the `0x86` PID detection in PMT to automatically route payloads to the Lua SCTE-35 plugin.
   - [x] Validate: Feed a known SCTE-35 stream (or synthetic PCAP) and verify that the splice insert markers are accurately logged in JSON format.
 
-- [ ] **Phase 4: Optimization & Release**
-  - [ ] Profiling: Run `perf` / `valgrind` to ensure the new Lua bridging and T-STD math do not break the "Zero-Allocation" mandate in the main packet loop.
-  - [ ] Documentation: Update `docs/functional_capability_matrix.md` highlighting the new SCTE-35 and T-STD capabilities against competitors.
+- [x] **Phase 4: Optimization & Release**
+  - [x] Profiling: Run `perf` / `valgrind` to ensure the new Lua bridging and T-STD math do not break the "Zero-Allocation" mandate in the main packet loop.
+  - [x] Documentation: Update `docs/functional_capability_matrix.md` highlighting the new SCTE-35 and T-STD capabilities against competitors.
