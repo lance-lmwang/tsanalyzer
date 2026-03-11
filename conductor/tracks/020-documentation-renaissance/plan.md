@@ -27,6 +27,11 @@
   - [x] Implement: Standardize navigation headers across folders.
   - [x] Implement: Link validation and math formatting check.
 
-- [ ] **Phase 7: Final Release**
-  - [ ] Review: Joint walkthrough with Vimeo, Cloudinary, and Mum directors.
+- [ ] **Phase 7: Ecosystem & Authority (The Bitmovin Pillar)**
+  - [ ] Implement: Create `docs/02_metrology/manifest_metadata_correlation.md` (L2 vs L7 Sync).
+  - [ ] Implement: Create `docs/07_validation/standard_comparison_baseline.md` (Benchmarking vs. Tektronix).
+  - [ ] Implement: Create `docs/06_interfaces/forensic_player_integration.md` (Playback workflows).
+
+- [ ] **Phase 8: Final Release**
+  - [ ] Review: Joint walkthrough with all directors.
   - [ ] Commit: Final documentation push.
