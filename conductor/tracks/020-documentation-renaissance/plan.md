@@ -23,9 +23,9 @@
   - [x] Implement: Create `SECURITY.md` (Vulnerability disclosure policy).
   - [x] Implement: Create `docs/08_compliance/versioning_policy.md` (SemVer 2.0).
 
-- [ ] **Phase 6: Standardization, Math & Polish**
-  - [ ] Implement: Standardize navigation headers across folders.
-  - [ ] Implement: Link validation and math formatting check.
+- [x] **Phase 6: Standardization, Math & Polish**
+  - [x] Implement: Standardize navigation headers across folders.
+  - [x] Implement: Link validation and math formatting check.
 
 - [ ] **Phase 7: Final Release**
   - [ ] Review: Joint walkthrough with Vimeo, Cloudinary, and Mum directors.
