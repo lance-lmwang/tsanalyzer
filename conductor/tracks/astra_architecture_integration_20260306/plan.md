@@ -15,7 +15,7 @@ This plan details the step-by-step approach to building the highly programmable 
   - Create Lua userdata bindings for `tsa_source_t` (UDP/SRT input) and `tsp_handle_t` (UDP/SRT output).
   - Define metatables with `__gc` for safe destruction.
 
-## Step 3: The Analyzer Binding & Upstream Topological Linking (Current Focus)
+## Step 3: The Analyzer Binding & Upstream Topological Linking (DONE)
 - **Goal**: Expose the core `tsa_handle_t` (Analyzer) to Lua and implement the graph linking mechanism so data can flow seamlessly from Input -> Analyzer -> Output.
 - **Implementation Steps**:
   1.  **C-Side Stream API**: Ensure `tsa_stream.c` has robust `tsa_stream_add_child()` and `tsa_stream_remove_child()` functions.
@@ -26,8 +26,7 @@ This plan details the step-by-step approach to building the highly programmable 
 - **Test Method**:
   - Write `tests/test_lua_pipeline.c` which invokes a script creating a UDP input, an analyzer, and a UDP output, links them, feeds a few mock TS packets into the input, and verifies the analyzer's packet counters increase.
 
-## Step 4: Reactive PID Filtering & Routing
-- **Goal**: Allow Lua scripts to dynamically subscribe to specific PIDs, dropping unwanted traffic at the earliest possible stage to save CPU.
+## Step 4: Reactive PID Filtering & Routing (Current Focus)- **Goal**: Allow Lua scripts to dynamically subscribe to specific PIDs, dropping unwanted traffic at the earliest possible stage to save CPU.
 - **Implementation Steps**:
   1.  **Lua Method**: Implement `analyzer:join_pid(pid)` and `analyzer:drop_pid(pid)`.
   2.  **C-Side Engine**: Hook these into the `h->pid_filters` or `h->pid_seen` logic within `tsa_handle_t`. If a Lua script joins a PID, the analyzer begins processing it; otherwise, it bypasses full metrology.

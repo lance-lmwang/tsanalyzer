@@ -10,39 +10,74 @@
 
 #define TSA_LUA_SOURCE_MT "tsa.source"
 #define TSA_LUA_OUTPUT_MT "tsa.output"
+#define TSA_LUA_ANALYZER_MT "tsa.analyzer"
 
 struct tsa_lua_s {
     lua_State* L;
     tsa_handle_t* tsa;
 };
 
-// --- Input Source Binding ---
-typedef struct {
-    tsa_source_t* src;
-} lua_tsa_source_t;
+// --- Definitions ---
+typedef struct lua_tsa_source lua_tsa_source_t;
+typedef struct lua_tsa_output lua_tsa_output_t;
+typedef struct lua_tsa_analyzer lua_tsa_analyzer_t;
 
-static void dummy_on_packets(void* user_data, const uint8_t* pkts, int count, uint64_t now_ns) {
-    (void)user_data;
-    (void)pkts;
-    (void)count;
-    (void)now_ns;
+struct lua_tsa_analyzer {
+    tsa_handle_t* h;
+    bool is_owned;  // true if created by Lua, false if passed from global
+};
+
+struct lua_tsa_output {
+    tsp_handle_t* tsp;
+};
+
+#define MAX_CONSUMERS 8
+typedef enum { CONSUMER_ANALYZER, CONSUMER_OUTPUT } consumer_type_t;
+
+typedef struct {
+    consumer_type_t type;
+    void* ptr;
+} source_consumer_t;
+
+struct lua_tsa_source {
+    tsa_source_t* src;
+    source_consumer_t consumers[MAX_CONSUMERS];
+    int consumer_count;
+};
+
+// --- Router Callbacks ---
+static void router_on_packets(void* user_data, const uint8_t* pkts, int count, uint64_t now_ns) {
+    lua_tsa_source_t* obj = (lua_tsa_source_t*)user_data;
+    for (int i = 0; i < obj->consumer_count; i++) {
+        if (obj->consumers[i].type == CONSUMER_ANALYZER) {
+            tsa_handle_t* h = (tsa_handle_t*)obj->consumers[i].ptr;
+            for (int p = 0; p < count; p++) {
+                tsa_process_packet(h, pkts + (p * 188), now_ns);
+            }
+        } else if (obj->consumers[i].type == CONSUMER_OUTPUT) {
+            tsp_handle_t* tsp = (tsp_handle_t*)obj->consumers[i].ptr;
+            tsp_enqueue(tsp, pkts, count);
+        }
+    }
 }
-static void dummy_on_status(void* user_data, int status_code, const char* msg) {
+
+static void router_on_status(void* user_data, int status_code, const char* msg) {
     (void)user_data;
     (void)status_code;
     (void)msg;
 }
 
+// --- Source Methods ---
 static int l_tsa_udp_input(lua_State* L) {
     int port = luaL_checkinteger(L, 1);
 
     lua_tsa_source_t* obj = (lua_tsa_source_t*)lua_newuserdata(L, sizeof(lua_tsa_source_t));
+    memset(obj, 0, sizeof(lua_tsa_source_t));
     luaL_getmetatable(L, TSA_LUA_SOURCE_MT);
     lua_setmetatable(L, -2);
 
-    // We will hook real callbacks when link (set_upstream) happens in Step 3
-    tsa_source_callbacks_t cbs = {dummy_on_packets, dummy_on_status, NULL};
-    obj->src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, port, &cbs, NULL);
+    tsa_source_callbacks_t cbs = {router_on_packets, router_on_status, NULL};
+    obj->src = tsa_source_create(TSA_SOURCE_UDP, NULL, NULL, port, &cbs, obj);
     if (!obj->src) {
         return luaL_error(L, "Failed to create UDP input");
     }
@@ -61,11 +96,7 @@ static int l_tsa_source_gc(lua_State* L) {
     return 0;
 }
 
-// --- Output Destination Binding ---
-typedef struct {
-    tsp_handle_t* tsp;
-} lua_tsa_output_t;
-
+// --- Output Methods ---
 static int l_tsa_udp_output(lua_State* L) {
     const char* ip = luaL_checkstring(L, 1);
     int port = luaL_checkinteger(L, 2);
@@ -79,7 +110,7 @@ static int l_tsa_udp_output(lua_State* L) {
     cfg.dest_ip = ip;
     cfg.port = port;
     cfg.mode = TSPACER_MODE_BASIC;
-    cfg.bitrate = 10000000;  // 10Mbps default
+    cfg.bitrate = 10000000;
 
     obj->tsp = tsp_create(&cfg);
     if (!obj->tsp) {
@@ -90,12 +121,64 @@ static int l_tsa_udp_output(lua_State* L) {
     return 1;
 }
 
+static int l_tsa_output_set_upstream(lua_State* L) {
+    lua_tsa_output_t* out = (lua_tsa_output_t*)luaL_checkudata(L, 1, TSA_LUA_OUTPUT_MT);
+    lua_tsa_source_t* src = (lua_tsa_source_t*)luaL_checkudata(L, 2, TSA_LUA_SOURCE_MT);
+
+    if (src->consumer_count < MAX_CONSUMERS) {
+        src->consumers[src->consumer_count].type = CONSUMER_OUTPUT;
+        src->consumers[src->consumer_count].ptr = out->tsp;
+        src->consumer_count++;
+    }
+    return 0;
+}
+
 static int l_tsa_output_gc(lua_State* L) {
     lua_tsa_output_t* obj = (lua_tsa_output_t*)luaL_checkudata(L, 1, TSA_LUA_OUTPUT_MT);
     if (obj->tsp) {
         tsp_stop(obj->tsp);
         tsp_destroy(obj->tsp);
         obj->tsp = NULL;
+    }
+    return 0;
+}
+
+// --- Analyzer Methods ---
+static int l_tsa_analyzer(lua_State* L) {
+    lua_tsa_analyzer_t* obj = (lua_tsa_analyzer_t*)lua_newuserdata(L, sizeof(lua_tsa_analyzer_t));
+    luaL_getmetatable(L, TSA_LUA_ANALYZER_MT);
+    lua_setmetatable(L, -2);
+
+    tsa_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.op_mode = TSA_MODE_LIVE;
+
+    obj->h = tsa_create(&cfg);
+    obj->is_owned = true;
+
+    if (!obj->h) {
+        return luaL_error(L, "Failed to create analyzer");
+    }
+    return 1;
+}
+
+static int l_tsa_analyzer_set_upstream(lua_State* L) {
+    lua_tsa_analyzer_t* ana = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
+    lua_tsa_source_t* src = (lua_tsa_source_t*)luaL_checkudata(L, 2, TSA_LUA_SOURCE_MT);
+
+    if (src->consumer_count < MAX_CONSUMERS) {
+        src->consumers[src->consumer_count].type = CONSUMER_ANALYZER;
+        src->consumers[src->consumer_count].ptr = ana->h;
+        src->consumer_count++;
+    }
+    return 0;
+}
+
+static int l_tsa_analyzer_gc(lua_State* L) {
+    lua_tsa_analyzer_t* obj = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
+    if (obj->h && obj->is_owned) {
+        tsa_destroy(obj->h);
+        obj->h = NULL;
     }
     return 0;
 }
@@ -127,7 +210,12 @@ static const struct luaL_Reg tsa_lib[] = {{"log", l_tsa_log},
                                           {"add_plugin", l_tsa_add_plugin},
                                           {"udp_input", l_tsa_udp_input},
                                           {"udp_output", l_tsa_udp_output},
+                                          {"analyzer", l_tsa_analyzer},
                                           {NULL, NULL}};
+
+static const struct luaL_Reg output_methods[] = {{"set_upstream", l_tsa_output_set_upstream}, {NULL, NULL}};
+
+static const struct luaL_Reg analyzer_methods[] = {{"set_upstream", l_tsa_analyzer_set_upstream}, {NULL, NULL}};
 
 static void register_metatables(lua_State* L) {
     luaL_newmetatable(L, TSA_LUA_SOURCE_MT);
@@ -138,6 +226,17 @@ static void register_metatables(lua_State* L) {
     luaL_newmetatable(L, TSA_LUA_OUTPUT_MT);
     lua_pushcfunction(L, l_tsa_output_gc);
     lua_setfield(L, -2, "__gc");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+    luaL_setfuncs(L, output_methods, 0);
+    lua_pop(L, 1);
+
+    luaL_newmetatable(L, TSA_LUA_ANALYZER_MT);
+    lua_pushcfunction(L, l_tsa_analyzer_gc);
+    lua_setfield(L, -2, "__gc");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+    luaL_setfuncs(L, analyzer_methods, 0);
     lua_pop(L, 1);
 }
 
