@@ -44,4 +44,9 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename);
  */
 tsa_config_t* tsa_conf_get_stream(tsa_full_conf_t* conf, const char* id);
 
+/**
+ * Start a background thread to watch for configuration file changes.
+ */
+void tsa_conf_watcher_start(tsa_full_conf_t* conf, const char* filename);
+
 #endif

@@ -65,3 +65,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: Visual Quality & Cloud Archive (QoE & S3)**
   *Link: [./tracks/017-visual-qoe-cloud-archive/](./tracks/017-visual-qoe-cloud-archive/)*
+
+- [ ] **Track: Distributed Configuration Center (Inotify & Remote)**
+  *Link: [./tracks/013-distributed-config-center/](./tracks/013-distributed-config-center/)*
