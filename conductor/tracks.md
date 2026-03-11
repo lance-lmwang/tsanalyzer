@@ -56,3 +56,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [x] **Track: Industrial Supremacy (ltntstools Beyond)**
   *Link: [./tracks/019-industrial-supremacy/](./tracks/019-industrial-supremacy/)*
+
+- [x] **Track: Hardware Abstraction Layer (HAL)**
+  *Link: [./tracks/011-hardware-abstraction-layer/](./tracks/011-hardware-abstraction-layer/)*
