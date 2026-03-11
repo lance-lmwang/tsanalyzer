@@ -14,7 +14,7 @@ TsAnalyzer v3 is designed as a **Three-Plane Architecture**, separating packet p
 
 ---
 
-## 2. Dual-Mode Y-Architecture (Astra Integration)
+## 2. Dual-Mode Y-Architecture
 
 TsAnalyzer is designed with a unique **Y-Architecture** to satisfy both "plug-and-play" enterprise monitoring needs and "highly customizable" edge gateway requirements. Both modes share the exact same high-performance C-core Data Plane, but they diverge in the Control Plane.
 
@@ -24,7 +24,7 @@ This is the traditional, hardcoded C-pipeline exposed via tools like `tsa_server
 *   **Characteristics**: Zero-configuration startup, pre-wired routing (Input -> Analyzer -> Exporter), rigid but extremely stable.
 
 ### Mode B: Dynamic Lua Pipeline (The Gateway)
-Inspired by the Astra project, this mode (`tsa_cli run script.lua`) embeds a Lua JIT/VM into the Control Plane.
+This mode (`tsa_cli run script.lua`) embeds a Lua JIT/VM into the Control Plane to enable dynamic pipeline routing.
 *   **Best For**: Complex network routing, conditionally filtering PIDs, dynamic business logic (e.g., triggering a failover based on SCTE-35 or PCR loss).
 *   **Characteristics**: The C core provides primitives (Source, Analyzer, Output, Section Extractor) as Lua userdata objects. Users write Lua scripts to dynamically instantiate these objects, wire them together (`analyzer:set_upstream(source)`), and define reactive event callbacks (`on_ts_section`).
 
