@@ -1,31 +1,32 @@
-# Makefile.docker - Production Build & Verification (CentOS 7 Based)
+# Makefile.docker - Dedicated for Production Release & Containerized Testing
 
-DOCKER_BASE_IMAGE := build-env:centos7
+DOCKER_BASE_IMAGE := tsa-build-env:u24
 DOCKER_APP_IMAGE  := tsanalyzer:pro
 
 .PHONY: all base build test run clean
 
-all: test
+all: build
 
-# 1. Build the production build environment (GCC 9 + CentOS 7)
+# 1. Build the golden toolchain environment (Ubuntu 24.04 + GCC)
 base:
-	@echo "=== Building CentOS 7 Production Build Environment ==="
+	@echo "=== Building Production Build Environment ($(DOCKER_BASE_IMAGE)) ==="
 	docker build -f Dockerfile.base -t $(DOCKER_BASE_IMAGE) .
 
-# 2. Application build (Guaranteed clean isolation)
+# 2. Build the application image (Multi-stage build)
 build: base
-	@echo "=== Building Application (Source-based static linking on CentOS 7) ==="
+	@echo "=== Building Application Image ($(DOCKER_APP_IMAGE)) ==="
 	docker build -t $(DOCKER_APP_IMAGE) .
 
-# 3. VERIFICATION: Determine normalcy by running the suite inside the container
+# 3. Verification: Run tests inside the production container
 test: build
-	@echo "=== VERIFYING BUILD: Running full-test inside production environment ==="
-	@# Note: We use the builder stage output or run directly if permissions allow
-	docker run --rm -it --entrypoint /bin/sh $(DOCKER_APP_IMAGE) -c "cd /build/build && make full-test" || \
-	echo "WARNING: Docker run failed (environment limitation), but build succeeded."
+	@echo "=== Running Containerized Full-Test Suite ==="
+	docker run --rm -it --entrypoint /bin/bash $(DOCKER_APP_IMAGE) -c "make full-test"
 
+# 4. Standard run for local dev check
 run:
 	docker run --rm -it -p 8088:8088 -p 12345:12345 $(DOCKER_APP_IMAGE)
 
+# 5. Clean up docker artifacts
 clean:
 	docker rmi $(DOCKER_APP_IMAGE) || true
+	@echo "Docker images cleaned."

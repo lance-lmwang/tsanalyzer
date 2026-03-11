@@ -4,46 +4,65 @@ project(TsAnalyzer C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
-# Optimization
+# --- FORCE NON-PIE FOR STATIC LINKING COMPATIBILITY ---
+if(NOT MSVC)
+    add_link_options("-no-pie")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie")
+endif()
+set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -Wall -Wextra -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -Wall -Wextra -pthread")
 
-# Dependencies check
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(CURL REQUIRED)
 
-# Shared libraries from OS
-find_library(PCAP_LIB pcap REQUIRED)
-find_library(SRT_LIB NAMES srt srt-openssl REQUIRED)
-find_library(LUA_LIB NAMES lua5.4 lua5.3 lua REQUIRED)
 find_library(NCURSES_LIB ncurses REQUIRED)
 find_library(RT_LIB rt REQUIRED)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 include_directories(${OPENSSL_INCLUDE_DIR})
-include_directories(${ZLIB_INCLUDE_DIRS})
-include_directories(${CURL_INCLUDE_DIRS})
 
-# Include paths for Ubuntu/Debian
-include_directories("/usr/include/srt")
-include_directories("/usr/include/lua5.4")
+set(TSA_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps")
 
-add_definitions(-DHAVE_PCAP -DHAVE_SRT -DHAVE_CURL -DHAVE_LUA)
+# --- Explicit Search Paths for Internal Headers ---
+include_directories("${TSA_DEPS_DIR}/srt/include")
+include_directories("${TSA_DEPS_DIR}/srt/include/srt")
+include_directories("${TSA_DEPS_DIR}/libpcap/include")
+include_directories("${TSA_DEPS_DIR}/lua/include")
+include_directories("${TSA_DEPS_DIR}/curl/include")
+include_directories("${TSA_DEPS_DIR}/zlib/include")
+
+# --- Optimized Dependency Detection ---
+macro(tsa_use_dep name lib_filename def)
+    set(INTERNAL_LIB_PATH "${TSA_DEPS_DIR}/${name}/lib/${lib_filename}")
+    set(INTERNAL_LIB64_PATH "${TSA_DEPS_DIR}/${name}/lib64/${lib_filename}")
+
+    if(EXISTS "${INTERNAL_LIB_PATH}")
+        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB_PATH}")
+        set(${name}_LIB "${INTERNAL_LIB_PATH}")
+        add_definitions(-D${def})
+    elseif(EXISTS "${INTERNAL_LIB64_PATH}")
+        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB64_PATH}")
+        set(${name}_LIB "${INTERNAL_LIB64_PATH}")
+        add_definitions(-D${def})
+    else()
+        message(WARNING "Internal static ${name} not found. Fallback to -l${name}")
+        set(${name}_LIB "-l${name}")
+    endif()
+endmacro()
+
+tsa_use_dep(srt "libsrt.a" HAVE_SRT)
+tsa_use_dep(libpcap "libpcap.a" HAVE_PCAP)
+tsa_use_dep(lua "liblua.a" HAVE_LUA)
+tsa_use_dep(curl "libcurl.a" HAVE_CURL)
+tsa_use_dep(zlib "libz.a" HAVE_ZLIB)
 
 set(TSA_EXTERNAL_LIBS
-    ${SRT_LIB}
-    ${CURL_LIBRARIES}
-    ${LUA_LIB}
-    ${PCAP_LIB}
-    ${OPENSSL_LIBRARIES}
-    ${ZLIB_LIBRARIES}
-    ${RT_LIB}
-    ${NCURSES_LIB}
-    pthread m dl stdc++
-)
+    ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB}
+    ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB}
+    pthread m dl stdc++)
 
 set(TSA_CORE_SRCS
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c
@@ -58,11 +77,13 @@ set(TSA_CORE_SRCS
     src/tsa_hls_parser.c src/tsa_hls_ingest.c src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
     src/tsa_pcr_clock.c src/tsa_stream_model.c src/tsa_pipeline.c
-    src/tsa_packet_pool.c src/tsa_clock_domain.c src/tsa_simd.c src/tsa_simd_avx2.c)
+    src/tsa_packet_pool.c src/tsa_clock_domain.c src/tsa_simd.c src/tsa_simd_avx2.c
+    src/tsa_simd_sse42.c)
 
 add_library(tsp_core STATIC ${TSA_CORE_SRCS})
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set_source_files_properties(src/tsa_simd_avx2.c PROPERTIES COMPILE_FLAGS "-mavx2")
+    set_source_files_properties(src/tsa_simd_sse42.c PROPERTIES COMPILE_FLAGS "-msse4.2")
 endif()
 target_link_libraries(tsp_core ${TSA_EXTERNAL_LIBS})
 
@@ -90,3 +111,4 @@ endmacro()
 tsa_test(test_analyzer_zero_alloc test_analyzer_zero_alloc.c)
 tsa_test(test_psi test_psi.c)
 tsa_test(test_alert_state_machine test_alert_state_machine.c)
+tsa_test(test_simd test_simd.c)
