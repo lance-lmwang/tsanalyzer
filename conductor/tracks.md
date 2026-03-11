@@ -70,4 +70,7 @@ This file tracks all major tracks for the project. Each track has its own detail
   *Link: [./tracks/013-distributed-config-center/](./tracks/013-distributed-config-center/)*
 
 - [x] **Track: Documentation Renaissance (Full Library Refurbish)**
+
+- [ ] **Track: Scalability & Load Modeling (The 100Gbps Challenge)**
+  *Link: [./tracks/021-scalability-stress-assessment/](./tracks/021-scalability-stress-assessment/)*
   *Link: [./tracks/020-documentation-renaissance/](./tracks/020-documentation-renaissance/)*

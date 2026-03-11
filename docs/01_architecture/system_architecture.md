@@ -10,7 +10,7 @@ TsAnalyzer v3 is designed as a **Three-Plane Architecture**, separating packet p
 2.  **NUMA Locality First**: Packet data and processing state must never cross physical CPU socket boundaries (zero QPI/UPI latency).
 3.  **Lock-Free Data Plane**: 0 mutex, 0 malloc, 0 blocking in the hot path. All packets move via Single-Producer Single-Consumer (SPSC) ring buffers.
 4.  **Streams are State Machines**: A stream is not a thread; it is a compact state machine multiplexed inside a fixed number of **Reactor Threads**.
-5.  **Branchless Logic**: Eliminate conditional branches in the TS parser to maximize pipeline efficiency.
+5.  **Branchless Logic**: Eliminate conditional branches in the TS parser to maximize CPU pipeline efficiency.
 
 ---
 
@@ -22,7 +22,7 @@ TsAnalyzer is designed with a unique **Y-Architecture** to satisfy both "plug-an
 Traditional, hardcoded C-pipeline exposed via tools like `tsa_server_pro`. Pre-wired routing (Input -> Analyzer -> Exporter). Rigid but extremely stable.
 
 ### Mode B: Dynamic Lua Pipeline (The Gateway)
-Embeds a Lua JIT/VM into the Control Plane. Primitives (Source, Analyzer, Output) are exposed as Lua userdata objects. Users write scripts to dynamically instantiate and wire them (`analyzer:set_upstream(source)`).
+Embeds a Lua JIT/VM into the Control Plane. Primitives (Source, Analyzer, Output) are exposed as Lua userdata objects for flexible topological linking.
 
 ---
 
@@ -72,18 +72,16 @@ The architecture utilizes a tiered fan-out model to scale to **100 Gbps** and **
 
 ---
 
-## 5. Reactor Threading & Worker Affinity
+## 5. High-Scale Scheduling: The 1000-Stream Model
 
-v3 treats **Streams as State Machines** multiplexed inside **Reactor Threads**.
+To scale to industrial limits, TsAnalyzer uses a **Hybrid Partitioning Model**:
 
-### 5.1 Deterministic Scheduling
-To maximize **L1/L2 Cache Locality**, TsAnalyzer employs a strict affinity model:
-*   **Affinity Mapping**: `Worker_ID = Hash(Stream_ID) % Total_Workers`.
-*   **Significance**: Ensures a specific stream's state (PCR PLL, VBV buffers) always resides in the same CPU core's cache, eliminating cross-core cache invalidation.
+### 5.1 Stage 1: Hardware-Driven NUMA Distribution
+Using **NIC RSS (Receive Side Scaling)** or **Flow Steering**, incoming traffic is bifurcated at the hardware level. Each physical CPU socket (NUMA node) receives its own dedicated slice of traffic, ensuring packets never cross the Inter-Connect (QPI/UPI).
 
-### 5.2 Failure Containment: The Watchdog
-*   **Stall Detection**: Monitors heartbeats of Reactor threads.
-*   **Lua Recovery**: If a script hangs, the **Metrology Watchdog** resets the Lua VM while keeping the C Data Plane operational.
+### 5.2 Stage 2: Software-Driven Worker Affinity
+*   **Balancing**: `Worker_ID = Consistent_Hash(Stream_ID) % Local_Workers`.
+*   **Cache Locality**: Ensures a specific stream's state (PCR PLL, VBV buffers) always resides in the same core's **L1/L2 cache**, eliminating cross-core cache invalidation cycles.
 
 ---
 
@@ -104,10 +102,9 @@ The per-packet analytical pipeline is strictly **O(1)** to maintain deterministi
 
 ## 7. Backpressure & Congestion Policy
 
-The engine handles egress saturation or analysis lag via a tiered policy:
 *   **Drop Strategy**: Supports `drop_head` (lowest latency) and `drop_tail`.
-*   **Broadcast Awareness**: In extreme congestion, the gateway automatically performs **NULL PID Stripping** (PID 0x1FFF) to reclaim bandwidth without impacting content.
-*   **Stream Priority**: Critical streams can be marked to preempt resources from lower-tier variants.
+*   **Broadcast Awareness**: In extreme congestion, the gateway performs **NULL PID Stripping** (PID 0x1FFF) to recover bandwidth without impacting content.
+*   **Stream Priority**: "Platinum" streams can preempt resources from lower-tier variants.
 
 ---
 
@@ -115,12 +112,11 @@ The engine handles egress saturation or analysis lag via a tiered policy:
 
 ### 8.1 Hardware Abstraction Layer (HAL) & SIMD
 *   **AVX2**: Scans 32 bytes in a single cycle (~32x faster than scalar).
-*   **SSE4.2**: Optimized fallback for legacy cloud environments (~16x faster than scalar).
+*   **SSE4.2**: Optimized fallback for legacy cloud environments.
 
 ### 8.2 Metrics Cardinality Management
-To prevent **Label Explosion** in TSDBs:
 *   **Strict Labeling**: High-cardinality metadata is restricted to the REST API.
-*   **Summarization**: Prometheus uses stable labels (`service_id`, `node_id`) while avoiding session-specific entropy.
+*   **Summarization**: Prometheus uses stable labels (`service_id`, `node_id`) to prevent TSDB index explosion.
 
 ---
 
@@ -132,8 +128,16 @@ TsAnalyzer will leverage **NVDEC/NVENC** for ultra-high-density video auditing:
 
 ---
 
-## 10. Asynchronous Signaling Pipeline
+## 10. Asynchronous Signaling & Failure Containment
 
-1.  **Metrology Core**: Detects an incident and pushes an `event_t` to the Signal Queue.
-2.  **Signaling Thread**: Consumes the queue and executes the Webhook/Lua callback (non-blocking).
-3.  **Hot-Reload**: Uses Linux `inotify` for hitless configuration updates without packet loss.
+1.  **Signaling Thread**: Offloads Webhook/Lua callbacks from the Data Plane.
+2.  **Hot-Reload**: Uses Linux `inotify` for hitless configuration updates.
+3.  **Metrology Watchdog**: Monitors thread heartbeats and can forcefully reset the Lua VM while keeping the C Data Plane operational.
+
+---
+
+## 11. Implementation Roadmap: The 100Gbps Challenge (Track 021)
+
+TsAnalyzer is undergoing a rigorous **Scalability Stress Assessment**:
+*   **Load-vs-Latency Curve**: Modeling the impact of cache pressure on 3D PCR jitter accuracy.
+*   **Ring Buffer Optimization**: Dynamic depth adjustment based on NIC burst characteristics.
