@@ -1,24 +1,20 @@
-# Stage 1: Build Environment
+# Stage 1: Build
 FROM tsa-build-env:u24 AS builder
 
 WORKDIR /build
 
-# 1. Copy the entire source first
+# Simply copy the entire project
 COPY . .
 
-# 2. Build dependencies fresh inside the container
-# This ensures deps/srt, deps/libpcap etc. are populated locally within the container
-RUN ./build_deps.sh
-
-# 3. Build the main project
-# We use -no-pie to ensure compatibility with our internal static libs
+# Build project and run verification tests
+# We don't need build_deps.sh here because we use system libs
 RUN rm -rf build && mkdir -p build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc) && \
-    make test && \
+    ./test_simd && \
     strip tsp tsa_cli tsa_server_pro tsa_top
 
-# Stage 2: Minimal Runtime Image
+# Stage 2: Runtime
 FROM ubuntu:24.04
 
 RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/ubuntu.sources && \
@@ -26,16 +22,13 @@ RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/source
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install bare minimum runtime dependencies
+# Install only the runtime libraries
 RUN apt-get update && apt-get install -y \
-    libssl3 \
-    libpcap0.8t64 \
-    libncurses6 \
+    libssl3 libpcap0.8t64 libncurses6 libcurl4 libsrt1.5-openssl liblua5.4-0 zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy binaries and config from builder
 COPY --from=builder /build/build/tsp /app/
 COPY --from=builder /build/build/tsa_cli /app/tsa
 COPY --from=builder /build/build/tsa_server_pro /app/tsa_server

@@ -4,65 +4,45 @@ project(TsAnalyzer C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
-# --- FORCE NON-PIE FOR STATIC LINKING COMPATIBILITY ---
-if(NOT MSVC)
-    add_link_options("-no-pie")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie")
-endif()
-set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -Wall -Wextra -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -Wall -Wextra -pthread")
 
+# Resolve mandatory system dependencies (Modern Ubuntu/Debian style)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(CURL REQUIRED)
 
+# Standard shared libraries from the OS (compatible with PIE)
+find_library(PCAP_LIB pcap REQUIRED)
+find_library(SRT_LIB NAMES srt srt-openssl REQUIRED)
+find_library(LUA_LIB NAMES lua5.4 lua5.3 lua REQUIRED)
 find_library(NCURSES_LIB ncurses REQUIRED)
 find_library(RT_LIB rt REQUIRED)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 include_directories(${OPENSSL_INCLUDE_DIR})
+include_directories(${ZLIB_INCLUDE_DIRS})
+include_directories(${CURL_INCLUDE_DIRS})
 
-set(TSA_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+# Include path for SRT and Lua
+include_directories("/usr/include/srt")
+include_directories("/usr/include/lua5.4")
 
-# --- Explicit Search Paths for Internal Headers ---
-include_directories("${TSA_DEPS_DIR}/srt/include")
-include_directories("${TSA_DEPS_DIR}/srt/include/srt")
-include_directories("${TSA_DEPS_DIR}/libpcap/include")
-include_directories("${TSA_DEPS_DIR}/lua/include")
-include_directories("${TSA_DEPS_DIR}/curl/include")
-include_directories("${TSA_DEPS_DIR}/zlib/include")
-
-# --- Optimized Dependency Detection ---
-macro(tsa_use_dep name lib_filename def)
-    set(INTERNAL_LIB_PATH "${TSA_DEPS_DIR}/${name}/lib/${lib_filename}")
-    set(INTERNAL_LIB64_PATH "${TSA_DEPS_DIR}/${name}/lib64/${lib_filename}")
-
-    if(EXISTS "${INTERNAL_LIB_PATH}")
-        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB_PATH}")
-        set(${name}_LIB "${INTERNAL_LIB_PATH}")
-        add_definitions(-D${def})
-    elseif(EXISTS "${INTERNAL_LIB64_PATH}")
-        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB64_PATH}")
-        set(${name}_LIB "${INTERNAL_LIB64_PATH}")
-        add_definitions(-D${def})
-    else()
-        message(WARNING "Internal static ${name} not found. Fallback to -l${name}")
-        set(${name}_LIB "-l${name}")
-    endif()
-endmacro()
-
-tsa_use_dep(srt "libsrt.a" HAVE_SRT)
-tsa_use_dep(libpcap "libpcap.a" HAVE_PCAP)
-tsa_use_dep(lua "liblua.a" HAVE_LUA)
-tsa_use_dep(curl "libcurl.a" HAVE_CURL)
-tsa_use_dep(zlib "libz.a" HAVE_ZLIB)
+add_definitions(-DHAVE_PCAP -DHAVE_SRT -DHAVE_CURL -DHAVE_LUA)
 
 set(TSA_EXTERNAL_LIBS
-    ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB}
-    ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB}
-    pthread m dl stdc++)
+    ${SRT_LIB}
+    ${CURL_LIBRARIES}
+    ${LUA_LIB}
+    ${PCAP_LIB}
+    ${OPENSSL_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ${RT_LIB}
+    ${NCURSES_LIB}
+    pthread m dl stdc++
+)
 
 set(TSA_CORE_SRCS
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c

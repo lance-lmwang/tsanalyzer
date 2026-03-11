@@ -2,8 +2,51 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "tsa_simd.h"
+
+/* Manually declare internal versions for benchmarking */
+extern intptr_t tsa_simd_find_sync_avx2(const uint8_t* buf, size_t len);
+extern intptr_t tsa_simd_find_sync_sse42(const uint8_t* buf, size_t len);
+
+static double get_time() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
+static intptr_t find_sync_scalar(const uint8_t* buf, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        if (buf[i] == 0x47) return (intptr_t)i;
+    }
+    return -1;
+}
+
+void benchmark() {
+    size_t size = 100 * 1024 * 1024; // 100MB
+    uint8_t* data = malloc(size);
+    memset(data, 0, size);
+    data[size - 1] = 0x47; // Put sync at the very end
+
+    printf("\n=== Performance Benchmark (100MB Buffer) ===\n");
+
+    double start = get_time();
+    find_sync_scalar(data, size);
+    printf("Scalar Implementation: %.4f seconds\n", get_time() - start);
+
+    start = get_time();
+    tsa_simd_find_sync_sse42(data, size);
+    printf("SSE4.2 Implementation: %.4f seconds\n", get_time() - start);
+
+    if (tsa_simd_capable()) {
+        start = get_time();
+        tsa_simd_find_sync_avx2(data, size);
+        printf("AVX2 Implementation:   %.4f seconds\n", get_time() - start);
+    }
+
+    free(data);
+}
 
 int main() {
     printf("Testing SIMD capabilities...\n");
@@ -69,5 +112,6 @@ int main() {
 
     free(buf);
     printf("SIMD tests passed!\n");
+    benchmark();
     return 0;
 }
