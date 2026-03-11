@@ -1,129 +1,79 @@
 #!/bin/bash
 set -e
 
-# Get the absolute path of the directory where the script is located
+# Force absolute paths for toolchain on CentOS 7
+export PATH="/opt/rh/devtoolset-9/root/usr/bin:/usr/bin:/usr/local/bin:$PATH"
+
+# TSA Build System v3.3 (Guaranteed paths)
+export CFLAGS="-fPIC $CFLAGS"
+export CXXFLAGS="-fPIC $CXXFLAGS"
+
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPS_DIR="$PROJECT_ROOT/deps"
 
-echo "=== TSA: Building Third-party Dependencies (Static) ==="
+# Explicitly use cmake3 on CentOS 7
+if [ -f "/usr/bin/cmake3" ]; then
+    CMAKE_CMD="/usr/bin/cmake3"
+else
+    CMAKE_CMD="cmake"
+fi
+
+echo "=== TSA: Building Dependencies with $CMAKE_CMD ==="
 mkdir -p "$DEPS_DIR"
 
+clean_dep() { rm -rf "$DEPS_DIR/$1"; }
+
 # 1. Build SRT
-SRT_VERSION="v1.5.3"
-SRT_SRC_DIR="$DEPS_DIR/srt_src"
-SRT_INSTALL_DIR="$DEPS_DIR/srt"
-if [ ! -d "$SRT_SRC_DIR" ]; then
-    echo "--- Downloading SRT $SRT_VERSION ---"
-    git clone --depth 1 --branch "$SRT_VERSION" https://github.com/Haivision/srt.git "$SRT_SRC_DIR"
+if [ -f "$DEPS_DIR/srt_src/CMakeLists.txt" ]; then
+    echo "--- Building SRT ---"
+    clean_dep "srt"; mkdir -p "$DEPS_DIR/srt"
+    cd "$DEPS_DIR/srt_src"; rm -rf build; mkdir build; cd build
+    $CMAKE_CMD .. -DCMAKE_INSTALL_PREFIX="$DEPS_DIR/srt" -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+             -DCMAKE_INSTALL_LIBDIR=lib -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
+             -DENABLE_APPS=OFF -DENABLE_TESTING=OFF
+    make -j$(nproc) && make install
 fi
-echo "--- Building SRT (Static) ---"
-cd "$SRT_SRC_DIR"
-mkdir -p build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX="$SRT_INSTALL_DIR" \
-         -DCMAKE_INSTALL_LIBDIR=lib \
-         -DENABLE_SHARED=OFF \
-         -DENABLE_STATIC=ON \
-         -DENABLE_APPS=OFF \
-         -DENABLE_TESTING=OFF \
-         -DUSE_STATIC_LIBSTDCXX=ON
-make -j$(nproc)
-make install
 
 # 2. Build libpcap
-PCAP_VERSION="1.10.4"
-PCAP_SRC_DIR="$DEPS_DIR/libpcap_src"
-PCAP_INSTALL_DIR="$DEPS_DIR/libpcap"
-
-# Check for build dependencies (flex/bison)
-if ! command -v flex >/dev/null 2>&1 || ! command -v bison >/dev/null 2>&1; then
-    echo "WARNING: flex or bison not found. Skipping libpcap build."
-    echo "Install them using 'sudo yum install flex bison' or 'sudo apt install flex bison' to enable PCAP support."
-else
-    if [ ! -d "$PCAP_SRC_DIR" ]; then
-        echo "--- Downloading libpcap $PCAP_VERSION ---"
-        cd "$DEPS_DIR"
-        curl -L "https://www.tcpdump.org/release/libpcap-$PCAP_VERSION.tar.gz" -o libpcap.tar.gz
-        tar -xvf libpcap.tar.gz
-        DIR_NAME=$(tar -tf libpcap.tar.gz | head -1 | cut -f1 -d"/")
-        mv "$DIR_NAME" libpcap_src
-        rm libpcap.tar.gz
-    fi
-    echo "--- Building libpcap (Static) ---"
-    cd "$PCAP_SRC_DIR"
-    if [ -f "CMakeLists.txt" ]; then
-        mkdir -p build && cd build
-        cmake .. -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DBUILD_WITH_LIBNL=OFF
-        make -j$(nproc)
-        make install
-    else
-        ./configure --prefix="$PCAP_INSTALL_DIR" --disable-shared
-        make -j$(nproc)
-        make install
-    fi
+if [ -f "$DEPS_DIR/libpcap_src/CMakeLists.txt" ]; then
+    echo "--- Building libpcap ---"
+    clean_dep "libpcap"; mkdir -p "$DEPS_DIR/libpcap"
+    cd "$DEPS_DIR/libpcap_src"; rm -rf build; mkdir build; cd build
+    $CMAKE_CMD .. -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DENABLE_SHARED=OFF \
+             -DCMAKE_INSTALL_PREFIX="$DEPS_DIR/libpcap" -DBUILD_WITH_LIBNL=OFF \
+             -DENABLE_DBUS=OFF -DENABLE_RDMA=OFF
+    make -j$(nproc) && make install
 fi
 
 # 3. Build Lua
-LUA_VERSION="5.4.6"
-LUA_SRC_DIR="$DEPS_DIR/lua_src"
-LUA_INSTALL_DIR="$DEPS_DIR/lua"
-if [ ! -d "$LUA_SRC_DIR" ]; then
-    echo "--- Downloading Lua $LUA_VERSION ---"
-    cd "$DEPS_DIR"
-    curl -L -R -O "https://www.lua.org/ftp/lua-$LUA_VERSION.tar.gz"
-    tar -zxf "lua-$LUA_VERSION.tar.gz"
-    DIR_NAME=$(tar -tf "lua-$LUA_VERSION.tar.gz" | head -1 | cut -f1 -d"/")
-    mv "$DIR_NAME" lua_src
-    rm "lua-$LUA_VERSION.tar.gz"
+if [ -f "$DEPS_DIR/lua_src/Makefile" ]; then
+    echo "--- Building Lua ---"
+    clean_dep "lua"
+    cd "$DEPS_DIR/lua_src"
+    make linux MYCFLAGS="-fPIC" -j$(nproc) || make generic MYCFLAGS="-fPIC" -j$(nproc)
+    mkdir -p "$DEPS_DIR/lua/include" "$DEPS_DIR/lua/lib"
+    cp src/lua.h src/luaconf.h src/lualib.h src/lauxlib.h src/lua.hpp "$DEPS_DIR/lua/include/"
+    cp src/liblua.a "$DEPS_DIR/lua/lib/"
 fi
-echo "--- Building Lua (Static) ---"
-cd "$LUA_SRC_DIR"
-# Some systems lack readline, build a generic version for the library
-make posix -j$(nproc) || make generic -j$(nproc)
-# Manual Install for Lua
-mkdir -p "$LUA_INSTALL_DIR/include" "$LUA_INSTALL_DIR/lib"
-cp src/lua.h src/luaconf.h src/lualib.h src/lauxlib.h src/lua.hpp "$LUA_INSTALL_DIR/include/"
-cp src/liblua.a "$LUA_INSTALL_DIR/lib/"
 
 # 4. Build Zlib
-ZLIB_VERSION="1.3.1"
-ZLIB_SRC_DIR="$DEPS_DIR/zlib_src"
-ZLIB_INSTALL_DIR="$DEPS_DIR/zlib"
-if [ ! -d "$ZLIB_SRC_DIR" ]; then
-    echo "--- Downloading Zlib $ZLIB_VERSION ---"
-    cd "$DEPS_DIR"
-    curl -L "https://github.com/madler/zlib/releases/download/v$ZLIB_VERSION/zlib-$ZLIB_VERSION.tar.gz" -o zlib.tar.gz
-    tar -xvf zlib.tar.gz
-    mv "zlib-$ZLIB_VERSION" zlib_src
-    rm zlib.tar.gz
+if [ -f "$DEPS_DIR/zlib_src/configure" ]; then
+    echo "--- Building Zlib ---"
+    clean_dep "zlib"; mkdir -p "$DEPS_DIR/zlib"
+    cd "$DEPS_DIR/zlib_src"; [ -f Makefile ] && make distclean || true
+    CFLAGS="-fPIC" ./configure --prefix="$DEPS_DIR/zlib" --static
+    make -j$(nproc) && make install
 fi
-echo "--- Building Zlib (Static) ---"
-cd "$ZLIB_SRC_DIR"
-./configure --prefix="$ZLIB_INSTALL_DIR" --static
-make -j$(nproc)
-make install
 
-# 5. Build Libcurl (Static)
-CURL_VERSION="8.6.0"
-CURL_SRC_DIR="$DEPS_DIR/curl_src"
-CURL_INSTALL_DIR="$DEPS_DIR/curl"
-if [ ! -d "$CURL_SRC_DIR" ]; then
-    echo "--- Downloading Curl $CURL_VERSION ---"
-    cd "$DEPS_DIR"
-    curl -L "https://curl.se/download/curl-$CURL_VERSION.tar.gz" -o curl.tar.gz
-    tar -xvf curl.tar.gz
-    mv "curl-$CURL_VERSION" curl_src
-    rm curl.tar.gz
+# 5. Build Libcurl
+if [ -f "$DEPS_DIR/curl_src/configure" ]; then
+    echo "--- Building Curl ---"
+    clean_dep "curl"; mkdir -p "$DEPS_DIR/curl"
+    cd "$DEPS_DIR/curl_src"; [ -f Makefile ] && make distclean || true
+    CFLAGS="-fPIC" ./configure --prefix="$DEPS_DIR/curl" --enable-static --disable-shared \
+                --with-zlib="$DEPS_DIR/zlib" --with-openssl --disable-ftp --disable-ldap \
+                --without-libpsl --without-libidn2 --without-brotli
+    make -j$(nproc) && make install
 fi
-echo "--- Building Curl (Static) ---"
-cd "$CURL_SRC_DIR"
-[ -f Makefile ] && make distclean || true
-./configure --prefix="$CURL_INSTALL_DIR" \
-            --enable-static --disable-shared --disable-ftp --disable-ldap --disable-ldaps \
-            --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp \
-            --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher \
-            --disable-mqtt --with-zlib="$ZLIB_INSTALL_DIR" --with-openssl \
-            --without-libpsl --without-libidn2 --without-brotli --without-zstd --without-librtmp
-make -j$(nproc)
-make install
 
-echo "=== TSA: All Dependencies Built and Installed Cleanly ==="
+echo "=== TSA: Dependencies Built Successfully ==="

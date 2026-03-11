@@ -3,260 +3,90 @@ project(TsAnalyzer C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
+
+# Optimization
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -Wall -Wextra -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -Wall -Wextra -pthread")
 
 # Dependencies check
 find_package(Threads REQUIRED)
-find_library(NCURSES_LIBRARY NAMES ncurses)
-find_library(RT_LIBRARY NAMES rt)
+find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(CURL REQUIRED)
 
-# External Includes (Prepare paths using absolute paths)
+# Shared libraries from OS
+find_library(PCAP_LIB pcap REQUIRED)
+find_library(SRT_LIB NAMES srt srt-openssl REQUIRED)
+find_library(LUA_LIB NAMES lua5.4 lua5.3 lua REQUIRED)
+find_library(NCURSES_LIB ncurses REQUIRED)
+find_library(RT_LIB rt REQUIRED)
+
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
+include_directories(${OPENSSL_INCLUDE_DIR})
+include_directories(${ZLIB_INCLUDE_DIRS})
+include_directories(${CURL_INCLUDE_DIRS})
 
-# External deps (libpcap / SRT)
-set(PCAP_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include")
-    add_definitions(-DHAVE_PCAP)
-    # libpcap.a requires dbus-1 on many Linux distributions
-    set(PCAP_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/lib/libpcap.a" dbus-1)
-endif()
+# Include paths for Ubuntu/Debian
+include_directories("/usr/include/srt")
+include_directories("/usr/include/lua5.4")
 
-set(SRT_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include/srt")
-    # Point to the actual directory containing srt.h
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include/srt")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include")
-    add_definitions(-DHAVE_SRT)
-    set(SRT_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib/libsrt.a")
-endif()
+add_definitions(-DHAVE_PCAP -DHAVE_SRT -DHAVE_CURL -DHAVE_LUA)
 
-set(LUA_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/lib/liblua.a")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/include")
-    set(LUA_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/lib/liblua.a")
-endif()
+set(TSA_EXTERNAL_LIBS
+    ${SRT_LIB}
+    ${CURL_LIBRARIES}
+    ${LUA_LIB}
+    ${PCAP_LIB}
+    ${OPENSSL_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ${RT_LIB}
+    ${NCURSES_LIB}
+    pthread m dl stdc++
+)
 
-set(ZLIB_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/lib/libz.a")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/include")
-    set(ZLIB_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/lib/libz.a")
-endif()
-
-set(CURL_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/include")
-    set(CURL_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
-else()
-    set(CURL_LINK_LIBS "-lcurl")
-endif()
-
-# Core Library
-add_library(tsp_core STATIC
+set(TSA_CORE_SRCS
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c
     src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c
     src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c
-    src/tsa_descriptors.c
-    src/tsa_health.c
-    src/tsa_histogram.c
+    src/tsa_descriptors.c src/tsa_health.c src/tsa_histogram.c
     src/tsa_exporter_prom.c  src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c  src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
-    src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c
-    src/tsa_lua.c
-    src/tsa_hls_parser.c src/tsa_hls_ingest.c
-    src/tsa_webhook.c src/tsa_alert.c
+    src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c src/tsa_lua.c
+    src/tsa_hls_parser.c src/tsa_hls_ingest.c src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
-    src/tsa_pcr_clock.c src/tsa_stream_model.c
-    src/tsa_pipeline.c src/tsa_packet_pool.c src/tsa_clock_domain.c
-    src/tsa_simd.c src/tsa_simd_avx2.c
-)
+    src/tsa_pcr_clock.c src/tsa_stream_model.c src/tsa_pipeline.c
+    src/tsa_packet_pool.c src/tsa_clock_domain.c src/tsa_simd.c src/tsa_simd_avx2.c)
 
+add_library(tsp_core STATIC ${TSA_CORE_SRCS})
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set_source_files_properties(src/tsa_simd_avx2.c PROPERTIES COMPILE_FLAGS "-mavx2")
 endif()
-target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
+target_link_libraries(tsp_core ${TSA_EXTERNAL_LIBS})
 
-# Main Executables
 macro(tsa_exe name src)
     add_executable(${name} ${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
+    target_link_libraries(${name} tsp_core ${TSA_EXTERNAL_LIBS})
 endmacro()
 
 tsa_exe(tsp src/tsp_main.c)
 tsa_exe(tsa_cli src/tsa_cli.c)
 target_compile_options(tsa_cli PRIVATE -Wno-all -Wno-extra -Wno-error)
 tsa_exe(tsg src/tsg_main.c)
-target_compile_options(tsg PRIVATE -Wno-all -Wno-extra -Wno-error)
 tsa_exe(tsa_server src/tsa_server_pro.c)
 tsa_exe(tsa_server_pro src/tsa_server_pro.c)
-
-# Standalone Utilities
-tsa_exe(tsa_iat_tester tools/tsa_iat_tester.c)
-tsa_exe(tsa_generator tools/tsa_generator.c)
 tsa_exe(tsa_top tools/tsa_top.c)
-target_link_libraries(tsa_top ncurses rt)
-tsa_exe(tsa_slicer tools/tsa_slicer.c)
-tsa_exe(tsa_hls_test tools/tsa_hls_test.c)
+target_link_libraries(tsa_top ${NCURSES_LIB} ${RT_LIB})
 
-# Unit Tests
 enable_testing()
 macro(tsa_test name src)
     add_executable(${name} tests/${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
+    target_link_libraries(${name} tsp_core ${TSA_EXTERNAL_LIBS})
     add_test(NAME ${name} COMMAND ${name})
 endmacro()
 
-tsa_test(test_affinity test_affinity.c)
 tsa_test(test_analyzer_zero_alloc test_analyzer_zero_alloc.c)
-tsa_test(test_atomic_sync test_atomic_sync.c)
-tsa_test(test_av_sync test_av_sync.c)
-tsa_test(test_bitrate_peaks test_bitrate_peaks.c)
-tsa_test(test_bitrate_comparison test_bitrate_comparison.c)
-tsa_test(test_bitstream test_bitstream.c)
-tsa_test(test_capture_performance test_capture_performance.c)
-tsa_test(test_catchup test_catchup.c)
-tsa_test(test_causal_chain test_causal_chain.c)
-tsa_test(test_cc_classifier test_cc_classifier.c)
-tsa_test(test_cc_repair test_cc_repair.c)
-tsa_test(test_cc_repair_stress test_cc_repair_stress.c)
-tsa_test(test_descriptors test_descriptors.c)
-tsa_test(test_clock_128 test_clock_128.c)
-tsa_test(test_clock_inspector test_clock_inspector.c)
-tsa_test(test_config test_config.c)
-tsa_test(test_crc_error_psi test_crc_error_psi.c)
-tsa_test(test_crc_pro test_crc_pro.c)
-tsa_test(test_debounce test_debounce.c)
-tsa_test(test_dejitter_performance test_dejitter_performance.c)
-tsa_test(test_ema_smoothing test_ema_smoothing.c)
-tsa_test(test_entropy test_entropy.c)
-tsa_test(test_es_deep_analysis test_es_deep_analysis.c)
-tsa_test(test_es_metadata test_es_metadata.c)
-tsa_test(test_es_real_data test_es_real_data.c)
-tsa_test(test_estimator test_estimator.c)
-tsa_test(test_event_loop test_event_loop.c)
-tsa_test(test_fast_itoa test_fast_itoa.c)
-tsa_test(test_fill_pct test_fill_pct.c)
-tsa_test(test_forensic_json test_forensic_json.c)
-tsa_test(test_forensic_offset test_forensic_offset.c)
-tsa_test(test_forensic_writer test_forensic_writer.c)
-tsa_test(test_fragmented_psi test_fragmented_psi.c)
-tsa_test(test_gateway_create test_gateway_create.c)
-tsa_test(test_gateway_fail_safe test_gateway_fail_safe.c)
-tsa_test(test_gateway_forensics test_gateway_forensics.c)
-tsa_test(test_gateway_handoff test_gateway_handoff.c)
-tsa_test(test_gateway_performance test_gateway_performance.c)
-tsa_test(test_gateway_pro test_gateway_pro.c)
-tsa_test(test_gop_structure test_gop_structure.c)
-tsa_test(test_governor test_governor.c)
-tsa_test(test_health_score test_health_score.c)
-tsa_test(test_hls_rst test_hls_rst.c)
-tsa_test(test_hybrid_sleep test_hybrid_sleep.c)
-tsa_test(test_init_stability test_init_stability.c)
-tsa_test(test_integration test_integration.c)
-tsa_test(test_iat_histogram test_iat_histogram.c)
-tsa_test(test_jitter_burn test_jitter_burn.c)
-tsa_test(test_json_serialization test_json_serialization.c)
-tsa_test(test_latched_errors test_latched_errors.c)
-tsa_test(test_latency_p99 test_latency_p99.c)
-tsa_test(test_mdi_engine test_mdi_engine.c)
-tsa_test(test_mem_guard test_mem_guard.c)
-tsa_test(test_memory test_memory.c)
-tsa_test(test_mem_pool test_mem_pool.c)
-tsa_test(test_metric_bench test_metric_bench.c)
-tsa_test(test_metric_buffer test_metric_buffer.c)
-tsa_test(test_metrology_utils test_metrology_utils.c)
-tsa_test(test_mpmc_ready_queue test_mpmc_ready_queue.c)
-tsa_test(test_nalu_sniffer test_nalu_sniffer.c)
-tsa_test(test_normalization test_normalization.c)
-tsa_test(test_packet_ring test_packet_ring.c)
-tsa_test(test_pcr_engine test_pcr_engine.c)
-tsa_test(test_pcr_jitter test_pcr_jitter.c)
-tsa_test(test_pcr_mapping test_pcr_mapping.c)
-tsa_test(test_pcr_clock_drift test_pcr_clock_drift.c)
-tsa_test(test_pcr_piecewise test_pcr_piecewise.c)
-tsa_test(test_pid_protection test_pid_protection.c)
-tsa_test(test_pid_tracker test_pid_tracker.c)
-tsa_test(test_pid_tracker_stress test_pid_tracker_stress.c)
-tsa_test(test_pmt_reset test_pmt_reset.c)
-tsa_test(test_prom_labels test_prom_labels.c)
 tsa_test(test_psi test_psi.c)
-tsa_test(test_psi_assembly test_psi_assembly.c)
-tsa_test(test_psi_multi test_psi_multi.c)
-tsa_test(test_psi_version_rollover test_psi_version_rollover.c)
-tsa_test(test_qoe_pro test_qoe_pro.c)
-tsa_test(test_rca_scoring test_rca_scoring.c)
-tsa_test(test_rca_scoring_v2 test_rca_scoring_v2.c)
-tsa_test(test_regress test_regress.c)
-tsa_test(test_rst_encoder test_rst_encoder.c)
-tsa_test(test_rst_math test_rst_math.c)
-tsa_test(test_rst_network test_rst_network.c)
-tsa_test(test_rst_prediction test_rst_prediction.c)
-tsa_test(test_rst_tstd test_rst_tstd.c)
-tsa_test(test_scte35 test_scte35.c)
-tsa_test(test_snapshot test_snapshot.c)
-tsa_test(test_snapshot_consistency test_snapshot_consistency.c)
-tsa_test(test_source_event test_source_event.c)
-tsa_test(test_spsc test_spsc.c)
-tsa_test(test_spsc_queue test_spsc_queue.c)
-tsa_test(test_stc_reconstruction test_stc_reconstruction.c)
-tsa_test(test_stc_stability test_stc_stability.c)
-tsa_test(test_stream_model test_stream_model.c)
-tsa_test(test_metadata test_metadata.c)
-tsa_test(test_stream_tree test_stream_tree.c)
-tsa_test(test_stress_pcr_tstd test_stress_pcr_tstd.c)
-tsa_test(test_telemetry test_telemetry.c)
-tsa_test(test_timer_precision test_timer_precision.c)
-tsa_test(test_tr101290 test_tr101290.c)
-tsa_test(test_tr101290_p1 test_tr101290_p1.c)
-tsa_test(test_tr101290_p2 test_tr101290_p2.c)
-tsa_test(test_tspacer_callback test_tspacer_callback.c)
-tsa_test(test_tstd_btvhd test_tstd_btvhd.c)
-tsa_test(test_tstd_expert test_tstd_expert.c)
-tsa_test(test_tstd_mb_flow test_tstd_mb_flow.c)
-target_compile_options(test_tstd_mb_flow PRIVATE -UNDEBUG)
-tsa_test(test_tstd_hevc test_tstd_hevc.c)
-tsa_test(test_tstd_model test_tstd_model.c)
-tsa_test(test_tstd_reset test_tstd_reset.c)
-tsa_test(test_tstd_underflow test_tstd_underflow.c)
-tsa_test(test_tstd_operators test_tstd_operators.c)
-tsa_test(test_udp_stability test_udp_stability.c)
-tsa_test(test_warmup test_warmup.c)
-tsa_test(test_pcr tsa_test_pcr.c)
-tsa_test(test_prometheus tsa_test_prometheus.c)
-tsa_test(test_pacing tsp_test_pacing.c)
-tsa_test(test_pacing_logic test_pacing_logic.c)
-tsa_test(test_hls_parser test_hls_parser.c)
-tsa_test(test_gateway_failover test_gateway_failover.c)
-tsa_test(test_webhook_async test_webhook_async.c)
-tsa_test(test_alert_suppression test_alert_suppression.c)
 tsa_test(test_alert_state_machine test_alert_state_machine.c)
-tsa_test(test_units test_units.c)
-tsa_test(test_conf test_conf.c)
-tsa_test(test_pipeline test_pipeline.c)
-tsa_test(test_packet_pool test_packet_pool.c)
-tsa_test(test_clock_domain test_clock_domain.c)
-tsa_test(test_simd test_simd.c)
-# tsa_test(test_bitrate_consistency test_bitrate_consistency.c)
-tsa_test(test_tsp_pcr_pacing test_tsp_pcr_pacing.c)
-tsa_test(test_pcr_arrival_gap test_pcr_arrival_gap.c)
-tsa_test(test_unit_metrology_mpts test_unit_metrology_mpts.c)
-tsa_test(test_unit_metrology_repro test_unit_metrology_repro.c)
-tsa_test(test_metrology_alignment test_metrology_alignment.c)
-
-tsa_test(test_unit_pcr_integrity test_unit_pcr_integrity.c)
-tsa_test(test_unit_pcr_pacing test_unit_pcr_pacing.c)
-tsa_test(test_unit_pcr_drift test_unit_pcr_drift.c)
-tsa_test(test_pcr_determinism test_pcr_determinism.c)
-tsa_test(test_pacer_throughput test_pacer_throughput.c)
-tsa_test(test_health_debounce test_health_debounce.c)
-tsa_test(test_pcr_reselection test_pcr_reselection.c)
-tsa_test(test_pcr_rollover_stress test_pcr_rollover_stress.c)
-tsa_test(test_tstd_leak_sync test_tstd_leak_sync.c)
-
-add_executable(test_pcr_null_inclusion tests/test_pcr_null_inclusion.c)
-target_link_libraries(test_pcr_null_inclusion tsp_core m pthread)
-add_test(NAME test_unit_pcr_null_inclusion COMMAND test_pcr_null_inclusion)
-

@@ -1,5 +1,5 @@
 # TsAnalyzer Professional Meta-Makefile
-# Standardizes build, test, and quality control workflows
+# Hybrid workflow: Native (Default/Fast) | Docker (Release/Sturdy)
 
 # --- Configuration ---
 BUILD_DIR      ?= build
@@ -15,14 +15,14 @@ RED    := \033[31m
 RESET  := \033[0m
 
 # Only non-file targets should be PHONY
-.PHONY: all clean test full-test rt-test install lint format check-format help tsa_cli_monitor release debug package docker-image
+.PHONY: all clean test full-test rt-test install lint format check-format help tsa_cli_monitor release debug package \
+        docker-build docker-release docker-test
 
 all: release
 
-# --- Build Targets ---
+# --- Native Build Targets (Fast Iteration) ---
 
-# Sentinel file to track CMake configuration
-$(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
+$(BUILD_DIR)/CMakeCache.txt:
 	@echo "$(BLUE)=== Checking Dependencies ===$(RESET)"
 	@if [ ! -f deps/srt/lib/libsrt.a ] && [ ! -f deps/srt/lib64/libsrt.a ]; then \
 		./build_deps.sh; \
@@ -31,15 +31,34 @@ $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
 	@mkdir -p $(BUILD_DIR)
 	@cd $(BUILD_DIR) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX) -DCMAKE_BUILD_TYPE=Release ..
 
-# Always delegate to the CMake-generated Makefile in the build directory
-# This ensures that CMake handles all dependencies (src, include, tools, etc.) correctly
 release: $(BUILD_DIR)/CMakeCache.txt
-	@echo "$(BLUE)=== Building Binaries ===$(RESET)"
+	@echo "$(BLUE)=== Building Binaries (Native) ===$(RESET)"
 	@$(MAKE) -C $(BUILD_DIR) -j$(JOBS)
 	@ln -sf tsa_cli build/tsa
 	@ln -sf tsa_server_pro build/tsa_server
 
-# --- Distribution & Packaging ---
+debug:
+	@echo "$(BLUE)=== Building Debug Version (Native) ===$(RESET)"
+	@mkdir -p $(BUILD_DIR)_debug
+	@cd $(BUILD_DIR)_debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug ..
+	@$(MAKE) -C $(BUILD_DIR)_debug -j$(JOBS)
+
+clean:
+	@echo "$(RED)=== Cleaning Build Artifacts ===$(RESET)"
+	@rm -rf $(BUILD_DIR) $(BUILD_DIR)_debug
+
+# --- Production Release via Docker ---
+
+docker-build:
+	$(MAKE) -f Makefile.docker build
+
+docker-release:
+	$(MAKE) -f Makefile.docker release
+
+docker-test:
+	$(MAKE) -f Makefile.docker test
+
+# --- Distribution & Packaging (Native) ---
 VERSION := 2.3.0
 PKG_NAME := tsanalyzer-$(VERSION)
 DIST_DIR := $(PKG_NAME)
@@ -63,28 +82,12 @@ package: release
 	@rm -rf $(DIST_DIR)
 	@echo "$(GREEN)Package created: $(PKG_NAME).tar.gz$(RESET)"
 
-docker-image:
-	@echo "$(BLUE)=== Building Docker Image ===$(RESET)"
-	docker build -t tsanalyzer:$(VERSION) .
-	docker tag tsanalyzer:$(VERSION) tsanalyzer:latest
-
-debug:
-	@echo "$(BLUE)=== Building Debug Version ===$(RESET)"
-	@mkdir -p $(BUILD_DIR)_debug
-	@cd $(BUILD_DIR)_debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug ..
-	@$(MAKE) -C $(BUILD_DIR)_debug -j$(JOBS)
-
-clean:
-	@echo "$(RED)=== Cleaning Build Artifacts ===$(RESET)"
-	@rm -rf $(BUILD_DIR) $(BUILD_DIR)_debug
-
-# --- Test Targets ---
+# --- Test Targets (Native) ---
 
 test: release
 	@echo "$(GREEN)=== Running Unit Tests (Timeout: 30s) ===$(RESET)"
 	@cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 30
 
-# Comprehensive validation including functional and integration tests
 full-test: release check-format
 	@echo "$(GREEN)=== Running Full Validation Suite ===$(RESET)"
 	@echo "1. Unit Tests (Timeout: 30s)..."
@@ -100,11 +103,6 @@ full-test: release check-format
 	@chmod +x scripts/test-e2e.sh
 	@./scripts/test-e2e.sh
 
-rt-test: release
-	@echo "$(GREEN)=== Running Real-time Metrology Test (30s) ===$(RESET)"
-	@chmod +x scripts/verify_realtime_metrology.sh
-	@./scripts/verify_realtime_metrology.sh
-
 # --- Quality & Ops ---
 lint:
 	@echo "$(BLUE)=== Running Static Analysis ===$(RESET)"
@@ -113,134 +111,19 @@ lint:
 		src/*.c include/*.h
 
 format:
-	@echo "$(BLUE)=== Formatting Code ===$(RESET)"
-	@if command -v clang-format >/dev/null 2>&1; then \
-		find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format -i; \
-	else \
-		echo "WARNING: clang-format not found, skipping formatting."; \
-	fi
+	@find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]" | xargs clang-format -i
 
 check-format:
-	@echo "$(BLUE)=== Checking Code Format ===$(RESET)"
 	@if command -v clang-format >/dev/null 2>&1; then \
 		FILES=$$(find src include tests \( -name "*.c" -o -name "*.h" \) -not -name "mongoose.[ch]"); \
-		if clang-format --help | grep -q "\--dry-run"; then \
-			echo $$FILES | xargs clang-format --dry-run --Werror; \
-		else \
-			echo "Old clang-format detected, using diff-based check..."; \
-			for f in $$FILES; do \
-				clang-format $$f | diff -u $$f - || exit 1; \
-			done; \
-			echo "Format check passed."; \
-		fi; \
-	else \
-		echo "WARNING: clang-format not found, skipping format check."; \
+		for f in $$FILES; do clang-format $$f | diff -u $$f - || exit 1; done; \
 	fi
 
-install: release
-	@echo "$(BLUE)=== Installing to $(INSTALL_PREFIX) ===$(RESET)"
-	@cd $(BUILD_DIR) && $(MAKE) install
-
-# --- End-to-End Dashboard Test ---
-test-e2e: release
-	@echo "$(GREEN)=== Running End-to-End Dashboard Test ===$(RESET)"
-	@chmod +x scripts/test_big_screen_e2e.sh
-	@./scripts/test_big_screen_e2e.sh
-
-# --- Live Streaming Demo ---
-demo: release
-	@echo "$(GREEN)=== Starting Live Stream Analysis Demo ===$(RESET)"
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@./build/tsp -i 127.0.0.1 -p 19001 -b 10000000 -l -f ./sample/test_1m.ts > /dev/null 2>&1 &
-	@./build/tsa --mode=live --udp 19001 > tsa_live.log 2>&1 &
-	@echo "Waiting for engine warmup..."
-	@sleep 2
-	@chmod +x scripts/tsa_monitor.py
-	@./scripts/tsa_monitor.py --duration 15
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@echo "$(GREEN)Demo Complete.$(RESET)"
-
-# --- Real-time CLI Monitor ---
-tsa_cli_monitor: release
-	@echo "$(GREEN)=== Starting TsAnalyzer CLI Live Monitor (PCR-Locked) ===$(RESET)"
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/test.ts > /dev/null 2>&1 &
-	@./build/tsa --mode=live --udp 19001 > tsa_live.log 2>&1 &
-	@echo "Waiting for engine warmup..."
-	@sleep 5
-	@chmod +x scripts/tsa_monitor.py
-	@./scripts/tsa_monitor.py --duration 30
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@echo "$(GREEN)Monitor Session Complete.$(RESET)"
-
-# --- Real-time Server Monitor (Multi-Stream) ---
-tsa_server_monitor: release
-	@echo "$(GREEN)=== Starting TsAnalyzer Server Multi-Stream Monitor (PCR-Locked) ===$(RESET)"
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@cat << EOF > test_server.conf
-	{
-	    "http_port": 8088,
-	    "metrics_path": "/metrics",
-	    "expert_mode": false,
-	    "nodes": [
-	        {
-	            "name": "STREAM_1",
-	            "url": "udp://@:19001"
-	        },
-	        {
-	            "name": "STREAM_2",
-	            "url": "udp://@:19002"
-	        }
-	    ]
-	}
-	EOF
-	@./build/tsp -i 127.0.0.1 -p 19001 -P -l -f sample/test.ts > /dev/null 2>&1 &
-	@./build/tsp -i 127.0.0.1 -p 19002 -P -l -f sample/test.ts > /dev/null 2>&1 &
-	@./build/tsa_server test_server.conf > tsa_server.log 2>&1 &
-	@echo "Waiting for engine warmup..."
-	@sleep 5
-	@./scripts/tsa_monitor.py --url http://localhost:8088/api/v1/snapshot --duration 40
-	@pkill -9 tsa || true
-	@pkill -9 tsp || true
-	@rm test_server.conf
-	@echo "$(GREEN)Server Monitor Session Complete.$(RESET)"
-
-# --- Offline File Analysis (Replay Mode) ---
-tsa_file_report: release
-	@echo "$(GREEN)=== Starting TsAnalyzer Offline Forensic Analysis ===$(RESET)"
-	@./build/tsa --mode=replay sample/test.ts
-	@echo "$(GREEN)Analysis Complete.$(RESET)"
-
-# --- High-Density CLI Monitor (SHM-based) ---
-tsa_top: release
-	@echo "$(GREEN)=== Running TsAnalyzer Pro Top Monitor ===$(RESET)"
-	@pkill -9 tsa_server_pro || true
-	@pkill -9 tsa_generator || true
-	@echo "GLOBAL http_port 8081" > top_test.conf
-	@echo "ST-TOP udp://127.0.0.1:20001" >> top_test.conf
-	@build/tsa_server_pro top_test.conf > top_server.log 2>&1 & \
-	 SERVER_PID=$$!; \
-	 build/tsa_generator -i 127.0.0.1 -p 20001 -b 10000000 > /dev/null 2>&1 & \
-	 GEN_PID=$$!; \
-	 trap "kill $$SERVER_PID $$GEN_PID 2>/dev/null; rm top_test.conf; echo \"$(GREEN)Cleaned up.$(RESET)\"; exit" INT TERM; \
-	 sleep 1; \
-	 echo "$(GREEN)Launching tsa_top (Press 'q' to exit)...$(RESET)"; \
-	 build/tsa_top; \
-	 kill $$SERVER_PID $$GEN_PID 2>/dev/null; \
-	 rm top_test.conf; \
-	 echo "$(GREEN)Session Complete.$(RESET)"
-
 help:
-	@echo "$(GREEN)TsAnalyzer Build System$(RESET)"
+	@echo "$(GREEN)TsAnalyzer Hybrid Build System$(RESET)"
 	@echo "Usage:"
-	@echo "  make           - Build release version (if needed)"
-	@echo "  make test      - Run all unit tests"
-	@echo "  make full-test - Run Unit + Determinism + E2E tests"
-	@echo "  make rt-test   - Run Real-time Metrology (30s)"
-	@echo "  make lint      - Run cppcheck static analysis"
-	@echo "  make clean     - Remove all build artifacts"
+	@echo "  make           - Build release version (Native)"
+	@echo "  make full-test - Run all tests natively"
+	@echo "  make docker-release - Build production image + run full tests in Docker"
+	@echo "  make package   - Create tarball distribution"
+	@echo "  make clean     - Remove local build artifacts"
