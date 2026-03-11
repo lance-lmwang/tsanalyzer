@@ -18,10 +18,10 @@
   - [x] Implement: Create `docs/04_operations/troubleshooting_runbook.md`.
   - [ ] Implement: Create `docs/04_operations/best_practice_blueprints.md`.
 
-- [ ] **Phase 5: Corporate Compliance (The Mum Pillar)**
-  - [ ] Implement: Create `docs/08_compliance/SBOM.md` (License audit of SRT, Lua, etc.).
-  - [ ] Implement: Create `SECURITY.md` (Vulnerability disclosure policy).
-  - [ ] Implement: Create `CHANGELOG.md` and `versioning_policy.md` (SemVer 2.0).
+- [x] **Phase 5: Corporate Compliance (The Mum Pillar)**
+  - [x] Implement: Create `docs/08_compliance/SBOM.md` (License audit of SRT, Lua, etc.).
+  - [x] Implement: Create `SECURITY.md` (Vulnerability disclosure policy).
+  - [x] Implement: Create `docs/08_compliance/versioning_policy.md` (SemVer 2.0).
 
 - [ ] **Phase 6: Standardization, Math & Polish**
   - [ ] Implement: Standardize navigation headers across folders.
