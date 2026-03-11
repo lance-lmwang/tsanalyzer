@@ -9,9 +9,10 @@
   - [x] Implement: Create `docs/05_pipeline/lua_scripting_guide.md`.
   - [x] Content: 5-minute Failover guide and full Userdata reference.
 
-- [ ] **Phase 3: Cloud & Infra (K8s & HCL)**
-  - [ ] Implement: Create `docs/03_deployment/kubernetes_best_practices.md`.
-  - [ ] Implement: Create `docs/03_deployment/hardware_compatibility.md`.
+- [x] **Phase 3: Cloud & Infra (K8s & HCL)**
+  - [x] Implement: Create `docs/03_deployment/kubernetes_best_practices.md`.
+  - [x] Implement: Create `docs/03_deployment/hardware_compatibility.md`.
+  - [x] Implement: Create `docs/03_deployment/performance_tuning.md`.
 
 - [ ] **Phase 4: Operations (Runbook & Blueprints)**
   - [ ] Implement: Create `docs/04_operations/troubleshooting_runbook.md`.
