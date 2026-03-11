@@ -96,6 +96,26 @@ int main() {
     assert(found_underflow);
     printf("Underflow event correctly triggered.\n");
 
+    /* 5. Test Predictive Underflow Detection */
+    h->event_q->tail = h->event_q->head;               // Clear queue
+    es->pes.pending_dts_ns = h->stc_ns + 10000000ULL;  // 10ms in the future
+    es->pes.total_length = 500000;                     // Need 500KB immediately
+    es->pes.ref_count = 1;
+    tsa_feed_data(h, pkt, 188, now);
+
+    bool found_predictive = false;
+    head = atomic_load(&h->event_q->head);
+    tail = atomic_load(&h->event_q->tail);
+    while (head != tail) {
+        if (h->event_q->events[head].type == TSA_EVENT_TSTD_PREDICTIVE) {
+            found_predictive = true;
+            break;
+        }
+        head = (head + 1) % MAX_EVENT_QUEUE;
+    }
+    assert(found_predictive);
+    printf("Predictive Underflow event correctly triggered.\n");
+
     tsa_destroy(h);
     printf(">>> T-STD OPERATORS UNIT TEST PASSED <<<\n");
     return 0;

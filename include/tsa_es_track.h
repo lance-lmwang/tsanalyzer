@@ -109,6 +109,10 @@ typedef struct {
         uint32_t buffer_size_mb;
         uint64_t leak_rate_eb;
         uint64_t leak_rate_rx;
+
+        /* Predictive Buffer Modeling */
+        int64_t time_to_underflow_ms;
+        int64_t time_to_overflow_ms;
     } tstd;
 
     /* T-STD timing and jitter tracking */
