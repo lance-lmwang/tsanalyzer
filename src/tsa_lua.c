@@ -174,6 +174,26 @@ static int l_tsa_analyzer_set_upstream(lua_State* L) {
     return 0;
 }
 
+static int l_tsa_analyzer_join_pid(lua_State* L) {
+    lua_tsa_analyzer_t* ana = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
+    int pid = luaL_checkinteger(L, 2);
+    if (pid >= 0 && pid < 8192) {
+        ana->h->pid_filtering_enabled = true;
+        ana->h->pid_allowed[pid] = true;
+    }
+    return 0;
+}
+
+static int l_tsa_analyzer_drop_pid(lua_State* L) {
+    lua_tsa_analyzer_t* ana = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
+    int pid = luaL_checkinteger(L, 2);
+    if (pid >= 0 && pid < 8192) {
+        ana->h->pid_filtering_enabled = true;
+        ana->h->pid_allowed[pid] = false;
+    }
+    return 0;
+}
+
 static int l_tsa_analyzer_gc(lua_State* L) {
     lua_tsa_analyzer_t* obj = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
     if (obj->h && obj->is_owned) {
@@ -215,7 +235,12 @@ static const struct luaL_Reg tsa_lib[] = {{"log", l_tsa_log},
 
 static const struct luaL_Reg output_methods[] = {{"set_upstream", l_tsa_output_set_upstream}, {NULL, NULL}};
 
-static const struct luaL_Reg analyzer_methods[] = {{"set_upstream", l_tsa_analyzer_set_upstream}, {NULL, NULL}};
+static const struct luaL_Reg analyzer_methods[] = {
+    {"set_upstream", l_tsa_analyzer_set_upstream},
+    {"join_pid", l_tsa_analyzer_join_pid},
+    {"drop_pid", l_tsa_analyzer_drop_pid},
+    {NULL, NULL}
+};
 
 static void register_metatables(lua_State* L) {
     luaL_newmetatable(L, TSA_LUA_SOURCE_MT);

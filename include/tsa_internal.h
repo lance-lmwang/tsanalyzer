@@ -264,6 +264,8 @@ struct tsa_handle {
     bool* pid_is_pmt;
     bool* pid_is_scte35;
     uint32_t* pid_cc_error_suppression;
+    bool pid_filtering_enabled;
+    bool pid_allowed[8192];
     tsa_pcr_track_t* pcr_tracks;
     tsa_es_track_t* es_tracks;
     uint64_t* prev_snap_base_frames;

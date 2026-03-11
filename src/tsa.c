@@ -362,6 +362,12 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     }
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
+
+    if (h->pid_filtering_enabled && !h->pid_allowed[r.pid]) {
+        h->live->total_ts_packets++;
+        return; // Drop packet early
+    }
+
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
