@@ -459,5 +459,29 @@ void tsa_es_track_push_packet(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt,
         es->pes.ref_count++;
         es->pes.total_length += res->payload_len;
         tsa_packet_ref(p_obj);
+
+        /* 4. Optional: Information Entropy Tracking (Freeze/Black Detection) */
+        if (tsa_is_video(es->stream_type) && res->payload_len > 0) {
+            const uint8_t* payload = pkt + 4 + res->af_len;
+            for (int i = 0; i < res->payload_len; i++) {
+                es->video.entropy_counts[payload[i]]++;
+            }
+            es->video.entropy_pkts_seen++;
+
+            uint32_t window = h->config.entropy_window_packets;
+            if (window == 0) window = 1000;
+
+            if (es->video.entropy_pkts_seen >= window) {
+                es->video.last_entropy = calculate_shannon_entropy(es->video.entropy_counts, 256);
+
+                if (es->video.last_entropy < 1.0) { /* Threshold for "Low Information Density" */
+                    tsa_push_event(h, TSA_EVENT_ENTROPY_FREEZE, pid, (uint64_t)(es->video.last_entropy * 100));
+                }
+
+                /* Reset window */
+                es->video.entropy_pkts_seen = 0;
+                memset(es->video.entropy_counts, 0, sizeof(es->video.entropy_counts));
+            }
+        }
     }
 }

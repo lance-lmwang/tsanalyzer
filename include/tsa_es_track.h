@@ -76,6 +76,11 @@ typedef struct {
         bool has_cea708;
         uint64_t last_cc_seen_ns;
 
+        /* Entropy Analysis (Freeze/Black Detection) */
+        uint32_t entropy_pkts_seen;
+        uint32_t entropy_counts[256];
+        double last_entropy;
+
         /* Frame Distribution & GOP Structure */
         char gop_structure[128];
         uint32_t gop_str_idx;

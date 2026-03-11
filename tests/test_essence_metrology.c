@@ -104,10 +104,45 @@ void test_lua_cc_parsing() {
     printf("  Lua CC parsing verified.\n");
 }
 
+void test_entropy_freeze_detection() {
+    printf("Testing Entropy Freeze Detection...\n");
+
+    tsa_handle_t* h = tsa_create(NULL);
+    h->config.entropy_window_packets = 10; // Small window for test
+
+    uint16_t pid = 0x100;
+    h->pid_seen[pid] = true;
+    h->es_tracks[pid].stream_type = 0x1B; // H.264 video
+
+    // Feed 10 packets with identical (zero) payload to trigger low entropy
+    uint8_t pkt[188];
+    memset(pkt, 0, 188);
+    pkt[0] = 0x47;
+    pkt[1] = (pid >> 8) & 0x1F;
+    pkt[2] = pid & 0xFF;
+    pkt[3] = 0x10; // Payload only
+
+    ts_decode_result_t res;
+    memset(&res, 0, sizeof(res));
+    res.pid = pid;
+    res.has_payload = true;
+    res.payload_len = 184;
+
+    for (int i = 0; i < 10; i++) {
+        tsa_es_track_push_packet(h, pid, pkt, &res);
+    }
+
+    assert(h->alerts[TSA_ALERT_ENTROPY].status == TSA_ALERT_STATE_FIRING);
+    printf("  Entropy Freeze Alert fired correctly (H=%.2f).\n", h->es_tracks[pid].video.last_entropy);
+
+    tsa_destroy(h);
+}
+
 int main() {
     test_cc_presence_and_timeout();
     test_scte35_alignment();
     test_lua_cc_parsing();
+    test_entropy_freeze_detection();
     printf("ESSENCE METROLOGY TEST PASSED!\n");
     return 0;
 }

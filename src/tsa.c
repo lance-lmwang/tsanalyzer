@@ -365,12 +365,18 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
 
     if (h->pid_filtering_enabled && !h->pid_allowed[r.pid]) {
         h->live->total_ts_packets++;
-        return; // Drop packet early
+        return;  // Drop packet early
     }
 
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
+
+    if (r.scrambled) {
+        h->live->scrambled_count.count++;
+        tsa_push_event(h, TSA_EVENT_SCRAMBLED, r.pid, 0);
+    }
+
     if (r.pid < TS_PID_MAX) {
         if (!h->pid_histograms[r.pid]) h->pid_histograms[r.pid] = calloc(1, sizeof(tsa_histogram_t));
         if (h->pid_histograms[r.pid]) tsa_hist_add_packet(h->pid_histograms[r.pid], h->stc_ns, TS_PACKET_BITS);
