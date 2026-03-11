@@ -5,9 +5,9 @@
   - [x] Implement: Re-organize `README.md` pillars.
   - [x] Implement: Create `docs/glossary.md` (VSTC, SCTE-35, etc.).
 
-- [ ] **Phase 2: Developer Experience (Lua Guide)**
-  - [ ] Implement: Create `docs/05_pipeline/lua_scripting_guide.md`.
-  - [ ] Content: 5-minute Failover guide and full Userdata reference.
+- [x] **Phase 2: Developer Experience (Lua Guide)**
+  - [x] Implement: Create `docs/05_pipeline/lua_scripting_guide.md`.
+  - [x] Content: 5-minute Failover guide and full Userdata reference.
 
 - [ ] **Phase 3: Cloud & Infra (K8s & HCL)**
   - [ ] Implement: Create `docs/03_deployment/kubernetes_best_practices.md`.
