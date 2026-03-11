@@ -194,6 +194,21 @@ static int l_tsa_analyzer_drop_pid(lua_State* L) {
     return 0;
 }
 
+static int l_tsa_analyzer_on(lua_State* L) {
+    lua_tsa_analyzer_t* ana = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
+    const char* event_name = luaL_checkstring(L, 2);
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+
+    // Save callback in registry: registry["tsa_cb_" .. event_name] = function
+    char key[64];
+    snprintf(key, sizeof(key), "tsa_cb_%s", event_name);
+
+    lua_pushvalue(L, 3);                      // Copy function to top of stack
+    lua_setfield(L, LUA_REGISTRYINDEX, key);  // registry[key] = function
+
+    return 0;
+}
+
 static int l_tsa_analyzer_gc(lua_State* L) {
     lua_tsa_analyzer_t* obj = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
     if (obj->h && obj->is_owned) {
@@ -235,12 +250,11 @@ static const struct luaL_Reg tsa_lib[] = {{"log", l_tsa_log},
 
 static const struct luaL_Reg output_methods[] = {{"set_upstream", l_tsa_output_set_upstream}, {NULL, NULL}};
 
-static const struct luaL_Reg analyzer_methods[] = {
-    {"set_upstream", l_tsa_analyzer_set_upstream},
-    {"join_pid", l_tsa_analyzer_join_pid},
-    {"drop_pid", l_tsa_analyzer_drop_pid},
-    {NULL, NULL}
-};
+static const struct luaL_Reg analyzer_methods[] = {{"set_upstream", l_tsa_analyzer_set_upstream},
+                                                   {"join_pid", l_tsa_analyzer_join_pid},
+                                                   {"drop_pid", l_tsa_analyzer_drop_pid},
+                                                   {"on", l_tsa_analyzer_on},
+                                                   {NULL, NULL}};
 
 static void register_metatables(lua_State* L) {
     luaL_newmetatable(L, TSA_LUA_SOURCE_MT);
@@ -327,4 +341,42 @@ int tsa_lua_process_section(tsa_lua_t* lua, uint16_t pid, uint8_t table_id, cons
     }
 
     return 0;
+}
+
+int tsa_lua_push_event(tsa_lua_t* lua, const char* event_name, uint16_t pid, const char* message) {
+    if (!lua || !lua->L) return -1;
+    lua_State* L = lua->L;
+
+    char key[64];
+    snprintf(key, sizeof(key), "tsa_cb_%s", event_name);
+
+    lua_getfield(L, LUA_REGISTRYINDEX, key);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;  // No callback registered
+    }
+
+    lua_newtable(L);
+    lua_pushstring(L, event_name);
+    lua_setfield(L, -2, "event");
+    lua_pushinteger(L, pid);
+    lua_setfield(L, -2, "pid");
+    lua_pushstring(L, message);
+    lua_setfield(L, -2, "message");
+
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+        fprintf(stderr, "Lua Error in event callback '%s': %s\n", event_name, lua_tostring(L, -1));
+        lua_pop(L, 1);
+        return -1;
+    }
+
+    return 0;
+}
+
+bool tsa_lua_get_global_bool(tsa_lua_t* lua, const char* name) {
+    if (!lua || !lua->L) return false;
+    lua_getglobal(lua->L, name);
+    bool val = lua_toboolean(lua->L, -1);
+    lua_pop(lua->L, 1);
+    return val;
 }
