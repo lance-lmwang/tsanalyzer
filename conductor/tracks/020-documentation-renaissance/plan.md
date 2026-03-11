@@ -14,8 +14,8 @@
   - [x] Implement: Create `docs/03_deployment/hardware_compatibility.md`.
   - [x] Implement: Create `docs/03_deployment/performance_tuning.md`.
 
-- [ ] **Phase 4: Operations (Runbook & Blueprints)**
-  - [ ] Implement: Create `docs/04_operations/troubleshooting_runbook.md`.
+- [x] **Phase 4: Operations (Runbook & Blueprints)**
+  - [x] Implement: Create `docs/04_operations/troubleshooting_runbook.md`.
   - [ ] Implement: Create `docs/04_operations/best_practice_blueprints.md`.
 
 - [ ] **Phase 5: Corporate Compliance (The Mum Pillar)**
