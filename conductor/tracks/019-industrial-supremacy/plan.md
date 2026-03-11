@@ -7,11 +7,11 @@
   - [x] Implement: Add predictive logic to calculate `time_to_underflow_ms` and `time_to_overflow_ms`.
   - [x] Validate: Inject an artificial DTS delay in `test_1m.ts` and assert the predictive alarm fires.
 
-- [ ] **Phase 2: TR 101 290 Alert Suppression & Timeout Engine**
-  - [ ] Implement: Integrate a system-clock-driven "Timer Wheel" or "Tick Thread" for zero-packet timeout evaluation (e.g., PAT > 500ms).
-  - [ ] Implement: Define `tsa_alert_dependency_t` matrix in `tsa_alert.c` (Sync Loss -> Mute CC/PCR).
-  - [ ] Refactor: Modify the alert emitter to query the suppression matrix before dispatching an event to the Webhook/UI.
-  - [ ] Validate: Simulate a hard network drop and verify that only `Loss of Sync` and `PID Drop` are emitted, suppressing secondary table timeouts.
+- [x] **Phase 2: TR 101 290 Alert Suppression & Timeout Engine**
+  - [x] Implement: Integrate a system-clock-driven "Timer Wheel" or "Tick Thread" for zero-packet timeout evaluation (e.g., PAT > 500ms).
+  - [x] Implement: Define `tsa_alert_dependency_t` matrix in `tsa_alert.c` (Sync Loss -> Mute CC/PCR).
+  - [x] Refactor: Modify the alert emitter to query the suppression matrix before dispatching an event to the Webhook/UI.
+  - [x] Validate: Simulate a hard network drop and verify that only `Loss of Sync` and `PID Drop` are emitted, suppressing secondary table timeouts.
 
 - [ ] **Phase 3: Lua-Powered Deep Content Inspection (SCTE-35)**
   - [ ] Implement: Build a generic `SectionExtractor` in C that passes `(uint8_t* payload, size_t len)` to `tsa_lua.c`.

@@ -75,6 +75,28 @@ int main() {
     assert(h->aggregator.entries[hash_idx].active == true);
     assert(atomic_load(&h->aggregator.entries[hash_idx].hit_count) == 1);
 
+    // 5. Test Dependency Tree Suppression
+    printf("  Step 5: Testing Dependency Tree Suppression...\n");
+    h->alerts[TSA_ALERT_SYNC].status = TSA_ALERT_STATE_FIRING;
+    h->alerts[TSA_ALERT_CC].status = TSA_ALERT_STATE_OFF;
+    tsa_alert_update(h, TSA_ALERT_CC, true, "CC", 100);
+    assert(h->alerts[TSA_ALERT_CC].status == TSA_ALERT_STATE_OFF);
+
+    h->alerts[TSA_ALERT_SYNC].status = TSA_ALERT_STATE_OFF;
+    h->alerts[TSA_ALERT_CC].status = TSA_ALERT_STATE_FIRING;
+    h->alerts[TSA_ALERT_PCR].status = TSA_ALERT_STATE_OFF;
+    tsa_alert_update(h, TSA_ALERT_PCR, true, "PCR", 100);
+    assert(h->alerts[TSA_ALERT_PCR].status == TSA_ALERT_STATE_OFF);
+
+    // 6. Test Zero-packet timeout via Wall clock
+    printf("  Step 6: Testing Zero-Packet Timeout...\n");
+    h->alerts[TSA_ALERT_SYNC].status = TSA_ALERT_STATE_OFF;
+    h->signal_lock = true;
+    h->last_packet_rx_ns = now;
+    h->last_snap_wall_ns = now + 600000000ULL;  // 600ms later, should trigger SYNC_LOSS
+    tsa_alert_check_resolutions(h);
+    assert(h->alerts[TSA_ALERT_SYNC].status == TSA_ALERT_STATE_FIRING);
+
     printf("Alert Suppression Test: PASSED\n");
 
     tsa_destroy(h);
