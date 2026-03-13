@@ -283,7 +283,19 @@ tsa_lua_t* tsa_lua_create(tsa_handle_t* tsa) {
     tsa_lua_t* lua = calloc(1, sizeof(tsa_lua_t));
     lua->tsa = tsa;
     lua->L = luaL_newstate();
-    luaL_openlibs(lua->L);
+
+    /* ARB REMEDIATION: Do not use luaL_openlibs(lua->L) to prevent RCE.
+     * We explicitly sandbox the environment by allowing only safe libraries.
+     * Denied: os, io, package, debug, coroutine.
+     */
+    luaL_requiref(lua->L, "_G", luaopen_base, 1);
+    lua_pop(lua->L, 1);
+    luaL_requiref(lua->L, "table", luaopen_table, 1);
+    lua_pop(lua->L, 1);
+    luaL_requiref(lua->L, "string", luaopen_string, 1);
+    lua_pop(lua->L, 1);
+    luaL_requiref(lua->L, "math", luaopen_math, 1);
+    lua_pop(lua->L, 1);
 
     register_metatables(lua->L);
 

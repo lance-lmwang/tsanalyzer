@@ -11,9 +11,11 @@ void tsa_descriptors_register_handler(uint8_t tag, tsa_descriptor_handler_t hand
     handlers[tag] = handler;
 }
 
-void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *data, uint8_t *stream_type) {
+void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *data, size_t max_len,
+                             uint8_t *stream_type) {
     uint8_t tag = data[0];
     uint8_t len = data[1];
+    if ((size_t)2 + len > max_len) return;
     if (handlers[tag]) {
         handlers[tag](h, pid, tag, &data[2], len, stream_type);
     }

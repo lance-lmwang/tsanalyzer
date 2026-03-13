@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <srt.h>
 #include <stdio.h>
@@ -191,19 +192,28 @@ static void* file_thread(void* arg) {
 static void* udp_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
     uint8_t buf[1504];
+    struct pollfd pfd;
+    pfd.fd = src->handle.udp_fd;
+    pfd.events = POLLIN;
+
     while (src->running) {
-        ssize_t n = recv(src->handle.udp_fd, buf, sizeof(buf), 0);
-        if (n > 0) {
-            uint64_t now = 0;
-            int count = n / 188;
-            if (count > 0) {
-                src->cbs.on_packets(src->user_data, buf, count, now);
+        int pr = poll(&pfd, 1, 100);
+        if (pr > 0) {
+            ssize_t n = recv(src->handle.udp_fd, buf, sizeof(buf), 0);
+            if (n > 0) {
+                uint64_t now = 0;
+                int count = n / 188;
+                if (count > 0) {
+                    src->cbs.on_packets(src->user_data, buf, count, now);
+                }
+            } else if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+                src->cbs.on_status(src->user_data, -1, "UDP receive error");
+                break;
             }
-        } else if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
-            src->cbs.on_status(src->user_data, -1, "UDP receive error");
+        } else if (pr < 0 && errno != EINTR) {
+            src->cbs.on_status(src->user_data, -1, "UDP poll error");
             break;
         }
-        if (n <= 0) usleep(1000);
     }
     src->cbs.on_packets(src->user_data, NULL, 0, 0);
     return NULL;
@@ -212,20 +222,34 @@ static void* udp_thread(void* arg) {
 static void* srt_thread(void* arg) {
     tsa_source_t* src = (tsa_source_t*)arg;
     uint8_t buf[1316 * 7];
+
+    int eid = srt_epoll_create();
+    srt_epoll_add_usock(eid, src->handle.srt_sock, NULL);
+
     while (src->running) {
-        int n = srt_recv(src->handle.srt_sock, (char*)buf, sizeof(buf));
-        if (n > 0) {
-            uint64_t now = 0;
-            int count = n / 188;
-            if (count > 0) {
-                src->cbs.on_packets(src->user_data, buf, count, now);
+        SRTSOCKET read_socks[1];
+        int rnum = 1;
+        int ret = srt_epoll_wait(eid, read_socks, &rnum, 0, 0, 100, NULL, 0, NULL, 0);
+
+        if (ret > 0 && rnum > 0) {
+            int n = srt_recv(src->handle.srt_sock, (char*)buf, sizeof(buf));
+            if (n > 0) {
+                uint64_t now = 0;
+                int count = n / 188;
+                if (count > 0) {
+                    src->cbs.on_packets(src->user_data, buf, count, now);
+                }
+            } else if (n == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCRCV) {
+                src->cbs.on_status(src->user_data, -1, "SRT receive error");
+                break;
             }
-        } else if (n == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCRCV) {
-            src->cbs.on_status(src->user_data, -1, "SRT receive error");
+        } else if (ret == SRT_ERROR && srt_getlasterror(NULL) != SRT_ETIMEOUT) {
+            // Error in epoll
+            src->cbs.on_status(src->user_data, -1, "SRT epoll error");
             break;
         }
-        if (n <= 0) usleep(1000);
     }
+    srt_epoll_release(eid);
     src->cbs.on_packets(src->user_data, NULL, 0, 0);
     return NULL;
 }

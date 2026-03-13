@@ -76,3 +76,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: Essence Engine Audit & Refactor**
   *Link: [./tracks/022-essence-engine-audit/](./tracks/022-essence-engine-audit/)*
+
+- [ ] **Track: ARB Architecture Remediation**
+  *Link: [./tracks/023-arb-architecture-remediation/](./tracks/023-arb-architecture-remediation/)*

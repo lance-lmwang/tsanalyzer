@@ -1,17 +1,14 @@
 #ifndef TSA_PACKET_POOL_H
 #define TSA_PACKET_POOL_H
 
-#include <pthread.h>
 #include <stddef.h>
-
+#include "mpmc_queue.h"
 #include "tsa_pipeline.h"
 
 typedef struct {
     tsa_packet_t* packets;
     size_t capacity;
-    size_t head;
-    size_t tail;
-    pthread_mutex_t lock;
+    mpmc_queue_t* free_queue;
 } tsa_packet_pool_t;
 
 tsa_packet_pool_t* tsa_packet_pool_create(size_t capacity);

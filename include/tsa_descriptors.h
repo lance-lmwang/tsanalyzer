@@ -1,6 +1,7 @@
 #ifndef TSA_DESCRIPTORS_H
 #define TSA_DESCRIPTORS_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 struct tsa_handle;
@@ -34,7 +35,8 @@ void tsa_descriptors_register_handler(uint8_t tag, tsa_descriptor_handler_t hand
  * @param data Pointer to the descriptor (starts with tag and length)
  * @param stream_type Pointer to the current stream type, can be modified by the handlers
  */
-void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *data, uint8_t *stream_type);
+void tsa_descriptors_process(struct tsa_handle *h, uint16_t pid, const uint8_t *data, size_t max_len,
+                             uint8_t *stream_type);
 
 /**
  * @brief Initialize the descriptor factory with default handlers

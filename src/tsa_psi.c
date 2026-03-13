@@ -5,7 +5,7 @@
 #include "tsa_descriptors.h"
 #include "tsa_internal.h"
 
-static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
+static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t max_len) {
     if (h->last_pat_ns > 0) {
         uint64_t diff = now - h->last_pat_ns;
         if (diff > TSA_TR101290_PAT_TIMEOUT_NS) {
@@ -14,8 +14,9 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     }
     h->last_pat_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
+    if ((size_t)sl + 3 > max_len) return;
     h->seen_pat = true;
-    for (int i = 8; i < sl + 3 - 4; i += 4) {
+    for (int i = 8; (size_t)i + 3 < (size_t)sl + 3 - 4 && (size_t)i + 3 < max_len; i += 4) {
         uint16_t pn = (p[i] << 8) | p[i + 1];
         uint16_t ppid = ((p[i + 2] & 0x1F) << 8) | p[i + 3];
         if (pn != 0) {
@@ -37,13 +38,14 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     }
 }
 
-static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now) {
+static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now, size_t max_len) {
     if (h->last_pmt_ns > 0) {
         uint64_t diff = now - h->last_pmt_ns;
         if (diff > TSA_TR101290_PMT_TIMEOUT_NS) tsa_push_event(h, TSA_EVENT_PMT_TIMEOUT, pid, diff / 1000000);
     }
     h->last_pmt_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
+    if ((size_t)sl + 3 > max_len || max_len < 12) return;
     uint16_t pn = (p[3] << 8) | p[4];
     uint16_t pcr = ((p[8] & 0x1F) << 8) | p[9];
     tsa_program_info_t* pr = NULL;
@@ -67,16 +69,17 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
         pr->stream_count = 0;
     }
     int pi = ((p[10] & 0x0F) << 8) | p[11];
-    for (int d = 12; d < 12 + pi && d < sl + 3 - 4;) {
-        tsa_descriptors_process(h, pid, &p[d], NULL);
+    for (int d = 12;
+         (size_t)d + 1 < (size_t)12 + pi && (size_t)d + 1 < (size_t)sl + 3 - 4 && (size_t)d + 1 < max_len;) {
+        tsa_descriptors_process(h, pid, &p[d], max_len - d, NULL);
         d += 2 + p[d + 1];
     }
-    for (int i = 12 + pi; i < sl + 3 - 4;) {
+    for (int i = 12 + pi; (size_t)i + 4 < (size_t)sl + 3 - 4 && (size_t)i + 4 < max_len;) {
         uint8_t ty = p[i];
         uint16_t spid = ((p[i + 1] & 0x1F) << 8) | p[i + 2];
         int esl = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        for (int d = i + 5; d < i + 5 + esl;) {
-            tsa_descriptors_process(h, spid, &p[d], &ty);
+        for (int d = i + 5; (size_t)d + 1 < (size_t)i + 5 + esl && (size_t)d + 1 < max_len;) {
+            tsa_descriptors_process(h, spid, &p[d], max_len - d, &ty);
             d += 2 + p[d + 1];
         }
         if (h->es_tracks[spid].stream_type != ty) {
@@ -96,15 +99,17 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
     }
 }
 
-static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
+static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t max_len) {
     if (h->last_nit_ns > 0) {
         uint64_t diff = now - h->last_nit_ns;
         if (diff > TSA_TR101290_NIT_TIMEOUT_NS) tsa_push_event(h, TSA_EVENT_NIT_TIMEOUT, 0, diff / 1000000);
     }
     h->last_nit_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
+    if ((size_t)sl + 3 > max_len || max_len < 10) return;
     int ndl = ((p[8] & 0x0F) << 8) | p[9];
-    for (int j = 10; j < 10 + ndl && j < sl + 3 - 4;) {
+    for (int j = 10;
+         (size_t)j + 1 < (size_t)10 + ndl && (size_t)j + 1 < (size_t)sl + 3 - 4 && (size_t)j + 1 < max_len;) {
         uint8_t dt = p[j], dl = p[j + 1];
         if (dt == 0x40 && dl > 0) {
             int nl = dl;
@@ -115,18 +120,19 @@ static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
     }
 }
 
-static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now) {
+static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t max_len) {
     if (h->last_sdt_ns > 0) {
         uint64_t diff = now - h->last_sdt_ns;
         if (diff > TSA_TR101290_SDT_TIMEOUT_NS) tsa_push_event(h, TSA_EVENT_SDT_TIMEOUT, 0, diff / 1000000);
     }
     h->last_sdt_ns = now;
     int sl = ((p[1] & 0x0F) << 8) | p[2];
-    for (int i = 11; i < sl + 3 - 4;) {
+    if ((size_t)sl + 3 > max_len || max_len < 11) return;
+    for (int i = 11; (size_t)i + 4 < (size_t)sl + 3 - 4 && (size_t)i + 4 < max_len;) {
         uint16_t sid = (p[i] << 8) | p[i + 1];
         int esl = ((p[i + 3] & 0x0F) << 8) | p[i + 4];
-        for (int j = i + 5; j < i + 5 + esl;) {
-            tsa_descriptors_process(h, sid, &p[j], NULL);
+        for (int j = i + 5; (size_t)j + 1 < (size_t)i + 5 + esl && (size_t)j + 1 < max_len;) {
+            tsa_descriptors_process(h, sid, &p[j], max_len - j, NULL);
             j += 2 + p[j + 1];
         }
         i += 5 + esl;
@@ -216,15 +222,16 @@ static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_fi
     uint8_t tid = f->buffer[0];
     uint8_t ver = (f->buffer[5] >> 1) & 0x1F;
     if (!f->seen_before || f->last_ver != ver) {
-        if (tsa_crc32_check(f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3) == 0) {
+        size_t section_len = (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3;
+        if (tsa_crc32_check(f->buffer, section_len) == 0) {
             if (tid == 0x00)
-                process_pat(h, f->buffer, h->stc_ns);
+                process_pat(h, f->buffer, h->stc_ns, section_len);
             else if (tid == 0x02)
-                process_pmt(h, pid, f->buffer, h->stc_ns);
+                process_pmt(h, pid, f->buffer, h->stc_ns, section_len);
             else if (tid == 0x40)
-                process_nit(h, f->buffer, h->stc_ns);
+                process_nit(h, f->buffer, h->stc_ns, section_len);
             else if (tid == 0x42)
-                process_sdt(h, f->buffer, h->stc_ns);
+                process_sdt(h, f->buffer, h->stc_ns, section_len);
             else if (tid == 0xFC) {
                 /* SCTE-35 Splice Info Section */
                 tsa_scte35_process(h, pid, f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
