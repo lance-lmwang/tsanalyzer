@@ -92,6 +92,47 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
         es->tstd.eb_fill_q64 += tb_leaked_q64;
     }
 
+    /* Predictive Buffer Modeling (VBV/CPB) */
+    uint64_t eb_fill_bytes = (uint64_t)(es->tstd.eb_fill_q64 >> 64);
+    uint64_t r_bx_bytes_sec = (is_video ? es->tstd.leak_rate_eb : es->tstd.leak_rate_rx) / 8;
+    if (r_bx_bytes_sec == 0) r_bx_bytes_sec = 1; /* prevent div by zero */
+
+    es->tstd.time_to_overflow_ms = -1;
+    es->tstd.time_to_underflow_ms = -1;
+
+    if (eb_size > eb_fill_bytes) {
+        uint64_t free_bytes = eb_size - eb_fill_bytes;
+        es->tstd.time_to_overflow_ms = (int64_t)((free_bytes * 1000) / r_bx_bytes_sec);
+
+        /* Check if overflow will happen before the next drain (DTS) */
+        if (es->au_q.head != es->au_q.tail) {
+            uint64_t next_dts = es->au_q.queue[es->au_q.head].dts_ns;
+            int64_t time_to_dts_ms = (next_dts > h->stc_ns) ? (int64_t)((next_dts - h->stc_ns) / 1000000) : 0;
+            if (es->tstd.time_to_overflow_ms < time_to_dts_ms && es->tstd.time_to_overflow_ms < 500) {
+                tsa_push_event(h, TSA_EVENT_TSTD_PREDICTIVE, es->pid, (uint64_t)es->tstd.time_to_overflow_ms);
+            }
+        }
+    } else {
+        es->tstd.time_to_overflow_ms = 0;
+    }
+
+    if (es->au_q.head != es->au_q.tail) {
+        uint64_t next_dts = es->au_q.queue[es->au_q.head].dts_ns;
+        uint32_t next_size = es->au_q.queue[es->au_q.head].size;
+        int64_t time_to_dts_ms = (next_dts > h->stc_ns) ? (int64_t)((next_dts - h->stc_ns) / 1000000) : 0;
+
+        if (eb_fill_bytes < next_size) {
+            uint64_t missing_bytes = next_size - eb_fill_bytes;
+            int64_t time_to_fill_ms = (int64_t)((missing_bytes * 1000) / r_bx_bytes_sec);
+            if (time_to_fill_ms > time_to_dts_ms) {
+                es->tstd.time_to_underflow_ms = time_to_dts_ms;
+                if (es->tstd.time_to_underflow_ms < 500) {
+                    tsa_push_event(h, TSA_EVENT_TSTD_PREDICTIVE, es->pid, (uint64_t)es->tstd.time_to_underflow_ms);
+                }
+            }
+        }
+    }
+
     es->tstd.last_leak_vstc = now_vstc;
 }
 

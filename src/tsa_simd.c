@@ -43,28 +43,47 @@ tsa_simd_ops_t tsa_simd = {.find_sync = find_sync_scalar,
 extern intptr_t tsa_simd_find_sync_avx2(const uint8_t* buf, size_t len);
 extern void tsa_simd_extract_pids_8_avx2(const uint8_t* buf, uint16_t* pids);
 
-bool tsa_simd_capable(void) {
-    static int cached_result = -1;
-    if (cached_result != -1) return (bool)cached_result;
+extern intptr_t tsa_simd_find_sync_sse42(const uint8_t* buf, size_t len);
+extern void tsa_simd_extract_pids_8_sse42(const uint8_t* buf, uint16_t* pids);
 
+typedef struct {
+    bool has_avx2;
+    bool has_sse42;
+} tsa_cpu_caps_t;
+
+static tsa_cpu_caps_t tsa_get_cpu_caps(void) {
+    tsa_cpu_caps_t caps = {0};
     unsigned int eax, ebx, ecx, edx;
+
+    /* Check for SSE4.2 */
     if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
-        if (ecx & (1 << 28)) { /* OSXSAVE */
+        caps.has_sse42 = (ecx & (1 << 20)) != 0;
+
+        /* Check for AVX2 (requires OSXSAVE and Leaf 7) */
+        if (ecx & (1 << 28)) {
             unsigned int eax7, ebx7, ecx7, edx7;
             if (__get_cpuid_count(7, 0, &eax7, &ebx7, &ecx7, &edx7)) {
-                cached_result = (ebx7 & (1 << 5)) != 0; /* AVX2 bit */
-                return (bool)cached_result;
+                caps.has_avx2 = (ebx7 & (1 << 5)) != 0;
             }
         }
     }
-    cached_result = 0;
-    return false;
+    return caps;
+}
+
+bool tsa_simd_capable(void) {
+    tsa_cpu_caps_t caps = tsa_get_cpu_caps();
+    return caps.has_avx2 || caps.has_sse42;
 }
 
 static void tsa_simd_init_impl(void) {
-    if (tsa_simd_capable()) {
+    tsa_cpu_caps_t caps = tsa_get_cpu_caps();
+    if (caps.has_avx2) {
         tsa_simd.find_sync = tsa_simd_find_sync_avx2;
         tsa_simd.extract_pids_8 = tsa_simd_extract_pids_8_avx2;
+        tsa_simd.is_accelerated = true;
+    } else if (caps.has_sse42) {
+        tsa_simd.find_sync = tsa_simd_find_sync_sse42;
+        tsa_simd.extract_pids_8 = tsa_simd_extract_pids_8_sse42;
         tsa_simd.is_accelerated = true;
     }
 }

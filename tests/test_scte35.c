@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "tsa_internal.h"
+#include "tsa_lua.h"
 
 void test_scte35_parsing() {
     printf("Testing SCTE-35 parsing...\n");
@@ -37,6 +38,7 @@ void test_scte35_parsing() {
     scte35_data[12] = 0x05;
 
     printf("  Processing mock SCTE-35 packet...\n");
+    tsa_lua_run_file(h->lua, "plugins/scte35_parser.lua");
     tsa_scte35_process(h, 0x100, scte35_data, sizeof(scte35_data));
 
     tsa_destroy(h);

@@ -142,6 +142,10 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 conf->worker_slice_us = atoi(p.lookahead.text);
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
+            } else if (strcmp(word, "api_secret") == 0) {
+                snprintf(conf->api_secret, sizeof(conf->api_secret), "%s", p.lookahead.text);
+                next_token(&p);
+                match(&p, TSA_TOKEN_SEMICOLON);
             } else if (strcmp(word, "vhost") == 0) {
                 char id[TSA_ID_MAX];
                 snprintf(id, sizeof(id), "%s", p.lookahead.text);

@@ -14,5 +14,8 @@ void tsa_lua_destroy(tsa_lua_t* lua);
 
 int tsa_lua_run_script(tsa_lua_t* lua, const char* script);
 int tsa_lua_run_file(tsa_lua_t* lua, const char* filename);
+int tsa_lua_process_section(tsa_lua_t* lua, uint16_t pid, uint8_t table_id, const uint8_t* payload, size_t len);
+int tsa_lua_push_event(tsa_lua_t* lua, const char* event_name, uint16_t pid, const char* message);
+bool tsa_lua_get_global_bool(tsa_lua_t* lua, const char* name);
 
 #endif  // TSA_LUA_H

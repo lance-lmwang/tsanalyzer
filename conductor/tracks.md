@@ -51,5 +51,26 @@ This file tracks all major tracks for the project. Each track has its own detail
 - [x] **Track: Industrial Alignment (Inspired by libeasyice)**
   *Link: [./tracks/industrial_alignment_libeasyice/](./tracks/industrial_alignment_libeasyice/)*
 
-- [ ] **Track: Astra Architecture Integration (PAUSED - Postponed until Analyzer is fully mature)**
+- [x] **Track: Astra Architecture Integration (Dynamic Lua Pipeline)**
   *Link: [./tracks/astra_architecture_integration_20260306/](./tracks/astra_architecture_integration_20260306/)*
+
+- [x] **Track: Industrial Supremacy (ltntstools Beyond)**
+  *Link: [./tracks/019-industrial-supremacy/](./tracks/019-industrial-supremacy/)*
+
+- [x] **Track: Hardware Abstraction Layer (HAL)**
+  *Link: [./tracks/011-hardware-abstraction-layer/](./tracks/011-hardware-abstraction-layer/)*
+
+- [ ] **Track: Advanced Essence Metrology (Loudness & Metadata)**
+  *Link: [./tracks/015-advanced-essence-metrology/](./tracks/015-advanced-essence-metrology/)*
+
+- [ ] **Track: Visual Quality & Cloud Archive (QoE & S3)**
+  *Link: [./tracks/017-visual-qoe-cloud-archive/](./tracks/017-visual-qoe-cloud-archive/)*
+
+- [ ] **Track: Distributed Configuration Center (Inotify & Remote)**
+  *Link: [./tracks/013-distributed-config-center/](./tracks/013-distributed-config-center/)*
+
+- [x] **Track: Documentation Renaissance (Full Library Refurbish)**
+
+- [ ] **Track: Scalability & Load Modeling (The 100Gbps Challenge)**
+  *Link: [./tracks/021-scalability-stress-assessment/](./tracks/021-scalability-stress-assessment/)*
+  *Link: [./tracks/020-documentation-renaissance/](./tracks/020-documentation-renaissance/)*

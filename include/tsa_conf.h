@@ -22,6 +22,7 @@ typedef struct {
     int worker_slice_us;
     bool shm_enabled;
     char log_format[16];
+    char api_secret[128];
 
     // VHost templates (we use __default__ as index 0)
     tsa_config_t vhost_default;
@@ -42,5 +43,10 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename);
  * Merges stream-specific settings with vhost defaults.
  */
 tsa_config_t* tsa_conf_get_stream(tsa_full_conf_t* conf, const char* id);
+
+/**
+ * Start a background thread to watch for configuration file changes.
+ */
+void tsa_conf_watcher_start(tsa_full_conf_t* conf, const char* filename);
 
 #endif

@@ -6,6 +6,7 @@
 #include "nalu_sniffer.h"
 #include "tsa_internal.h"
 #include "tsa_log.h"
+#include "tsa_lua.h"
 #include "tsa_units.h"
 
 #define TAG "ES_ANALYZER"
@@ -15,7 +16,11 @@ static const uint8_t ltn_uuid_sei_timestamp[16] = {0x59, 0x96, 0xFF, 0x28, 0x17,
                                                    0x8D, 0xE3, 0xE5, 0x3F, 0xE2, 0xF9, 0x92, 0xAE};
 
 static void tsa_handle_sei(tsa_handle_t* h, tsa_es_track_t* es, const uint8_t* payload, int len) {
-    (void)h;
+    /* Pass raw SEI to Lua for specialized parsing (Captions, user-data, etc) */
+    if (h->lua) {
+        tsa_lua_process_section(h->lua, es->pid, 0x06, payload, len); // 0x06 is SEI NALU type placeholder for Lua
+    }
+
     if (len < 64) return;
     const uint8_t* p = memmem(payload, len, ltn_uuid_sei_timestamp, 16);
     if (!p) return;
@@ -288,12 +293,30 @@ void tsa_handle_es_payload(tsa_handle_t* h, uint16_t pid, const uint8_t* payload
                     tsa_tstd_sync_params(es);
                 } else if (info.nalu_type_abstract == NALU_TYPE_SEI) {
                     tsa_handle_sei(h, es, d, data_avail);
+                    if (info.has_cea708) {
+                        es->video.has_cea708 = true;
+                        es->video.last_cc_seen_ns = h->stc_ns;
+                    }
                 } else if (info.nalu_type_abstract == NALU_TYPE_IDR) {
                     es->video.is_closed_gop = info.is_closed_gop;
                     if (info.is_closed_gop)
                         es->video.closed_gops++;
                     else
                         es->video.open_gops++;
+
+                    /* SCTE-35 Alignment Audit */
+                    if (es->scte35.pending_splice) {
+                        uint64_t cur_pts = es->pes.last_pts_33;
+                        int64_t diff_ticks = (int64_t)cur_pts - (int64_t)es->scte35.target_pts;
+                        es->scte35.alignment_error_ns = (diff_ticks * 1000000ULL) / 90;
+
+                        tsa_info(TAG, "SCTE-35 Alignment: PID 0x%04x | IDR PTS: %lu | Target: %lu | Error: %ld ns", pid,
+                                 cur_pts, es->scte35.target_pts, es->scte35.alignment_error_ns);
+
+                        /* Fire event with error info (clamped to uint64) */
+                        tsa_push_event(h, TSA_EVENT_SCTE35, pid, (uint64_t)abs((int)es->scte35.alignment_error_ns));
+                        es->scte35.pending_splice = false;
+                    }
 
                     /* IDR takes absolute priority for marking GOP start */
                     if (es->pes.current_frame_type != 'I') {
@@ -436,5 +459,29 @@ void tsa_es_track_push_packet(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt,
         es->pes.ref_count++;
         es->pes.total_length += res->payload_len;
         tsa_packet_ref(p_obj);
+
+        /* 4. Optional: Information Entropy Tracking (Freeze/Black Detection) */
+        if (tsa_is_video(es->stream_type) && res->payload_len > 0) {
+            const uint8_t* payload = pkt + 4 + res->af_len;
+            for (int i = 0; i < res->payload_len; i++) {
+                es->video.entropy_counts[payload[i]]++;
+            }
+            es->video.entropy_pkts_seen++;
+
+            uint32_t window = h->config.entropy_window_packets;
+            if (window == 0) window = 1000;
+
+            if (es->video.entropy_pkts_seen >= window) {
+                es->video.last_entropy = calculate_shannon_entropy(es->video.entropy_counts, 256);
+
+                if (es->video.last_entropy < 1.0) { /* Threshold for "Low Information Density" */
+                    tsa_push_event(h, TSA_EVENT_ENTROPY_FREEZE, pid, (uint64_t)(es->video.last_entropy * 100));
+                }
+
+                /* Reset window */
+                es->video.entropy_pkts_seen = 0;
+                memset(es->video.entropy_counts, 0, sizeof(es->video.entropy_counts));
+            }
+        }
     }
 }

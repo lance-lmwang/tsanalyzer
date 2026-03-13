@@ -30,7 +30,7 @@ To ensure deterministic timing and zero-drop performance, the threading model is
                         |----------------------|
                         | REST API / Prometheus|
                         | Config Hot Reload    |
-                        | Stream Lifecycle     |
+                        | Lua Scriptable Ctrl  |
                         +----------+-----------+
                                    |
                                    v
@@ -150,18 +150,24 @@ Each stream is executed as a dynamically assembled graph of specialized **Stages
     - **Physical Tier**: Total TS Bitrate derived from engine-synchronized unique packet counts. Includes PID+CC de-duplication to handle PCAP loopback duplicates.
     - **Business Tier**: Multi-program (MPTS) aware bitrate calculation. Per-program rates are summed to report global throughput without program collision.
 - **Clock Analysis**: Software PLL sync (< 10ns precision), Jitter Decomposition (AC/DR/OJ), HLS fetch latency vs. media segment duration, manifest drift tracking, Network MDI (DF/MLR), and IAT Histograms.
+- **T-STD Simulation**: Real-time Annex D compliant mathematical model for TB, MB, and EB buffers. Includes **Predictive Underflow** logic that anticipates buffer starvation up to 500ms before it impacts the decoder.
+
 ### 7.2 Layer 2: Compliance (ISO/Standard)
 - TR 101 290 (P1, P2, P3), MPTS structure verification, and cross-table (PAT/PMT/SDT) consistency check.
 - **Alert State Machine**: Stateful tracking: `OFF` -> `FIRING` -> `RESOLVED` (with a configurable 5s stability window).
+- **Alert Suppression Tree**: Root-cause inhibition where a `SYNC_LOSS` event automatically silences downstream errors (CC, PCR, Timeout) to eliminate alert storms.
+
 ### 7.3 Layer 3: QoE (Sensory & Artifacts)
 - Visual (Black screen, Freeze, Macroblocking) and Audio (Silence, Loss) detection.
-- **AV Sync**: Differential audit between Video PTS and Audio PTS (Lip-sync error).
-- **ABR Group Audit**: Cross-stream temporal alignment (Skew) tracking between renditions.
-- **Entropy Analysis**: Real-time Shannon entropy to distinguish frozen content from encrypted noise.
+- **Entropy Analysis**: Real-time Shannon entropy implementation to distinguish valid frozen content from encrypted noise or black screens.
+
 ### 7.4 Layer 4: Essence (Payload & Metadata)
 - Zero-copy NALU sniffing (SPS/PPS/GOP), SCTE-35/104 extraction, and Closed Caption presence auditing.
-### 7.5 Layer 5: Scripting (Custom Logic)
-- **Lua Hooks**: Pre-defined slots for customer-specific analysis and PID-level business rules.
+- **SCTE-35 Alignment Audit**: Nanosecond-level verification of `splice_insert` command placement relative to the nearest IDR frame.
+
+### 7.5 Layer 5: Scripting (Dynamic Pipeline)
+- **Programmable Topology**: Lua-based scripting engine allowing users to dynamically define the processing graph (`input -> analyzer -> output`).
+- **Reactive Routing**: Real-time event hooks in Lua enable custom failover logic, PID-level filtering, and conditional routing based on stream health or metadata events.
 
 ## 8. Action Engine & Egress (Gateway)
 ### 8.1 Transformation (Conditioning)

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "tsa_internal.h"
+#include "tsa_lua.h"
 
 static const char* scte35_command_name(uint8_t type) {
     switch (type) {
@@ -34,6 +35,11 @@ void tsa_scte35_process(tsa_handle_t* h, uint16_t pid, const uint8_t* p, int len
 
     int section_len = ((p[1] & 0x0F) << 8) | p[2];
     if (section_len + 3 > len) return;
+
+    // Pass the raw section to Lua first
+    if (h->lua) {
+        tsa_lua_process_section(h->lua, pid, 0xFC, p, section_len + 3);
+    }
 
     bit_reader_t r;
     br_init(&r, p, len);

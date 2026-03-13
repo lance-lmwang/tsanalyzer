@@ -1,0 +1,32 @@
+# Makefile.docker - Dedicated for Production Release & Containerized Testing
+
+DOCKER_BASE_IMAGE := tsa-build-env:u24
+DOCKER_APP_IMAGE  := tsanalyzer:pro
+
+.PHONY: all base build test run clean
+
+all: build
+
+# 1. Build the golden toolchain environment (Ubuntu 24.04 + GCC)
+base:
+	@echo "=== Building Production Build Environment ($(DOCKER_BASE_IMAGE)) ==="
+	docker build -f Dockerfile.base -t $(DOCKER_BASE_IMAGE) .
+
+# 2. Build the application image (Multi-stage build)
+build: base
+	@echo "=== Building Application Image ($(DOCKER_APP_IMAGE)) ==="
+	docker build -t $(DOCKER_APP_IMAGE) .
+
+# 3. Verification: Run tests inside the production container
+test: build
+	@echo "=== Running Containerized Full-Test Suite ==="
+	docker run --rm -it --entrypoint /bin/bash $(DOCKER_APP_IMAGE) -c "make full-test"
+
+# 4. Standard run for local dev check
+run:
+	docker run --rm -it -p 8088:8088 -p 12345:12345 $(DOCKER_APP_IMAGE)
+
+# 5. Clean up docker artifacts
+clean:
+	docker rmi $(DOCKER_APP_IMAGE) || true
+	@echo "Docker images cleaned."

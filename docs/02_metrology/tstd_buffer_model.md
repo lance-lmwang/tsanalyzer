@@ -35,9 +35,14 @@ $$Drain(t) = R \times \Delta VSTC$$
 
 ## 3. Predictive Metrology: RST & BSM
 
-### 3.1 Remaining Safe Time (RST)
-The "survival horizon" of the stream. It predicts the seconds remaining before the buffer is empty if input were to stop immediately.
-$$RST = \frac{Buffer_{level}}{Drain\_Rate}$$
+### 3.1 Remaining Safe Time (RST+) & Predictive Underflow
+While standard RST predicts survival if input stops, **RST+** predicts survival based on the *actual relationship* between the ingress rate and the next frame's scheduled removal.
+
+**Predictive Horizon (500ms)**:
+The engine calculates the time required to ingest the next complete Access Unit ($AU_{i}$) into the EB buffer at the current $R_{bx}$ rate.
+If the time-to-ingest exceeds the remaining time-to-DTS ($DTS_{i} - STC$), a **Predictive Underflow** alarm is raised.
+- **Horizon**: 500ms (The engine warns you 0.5s before the decoder would actually starve).
+- **Benefit**: Allows the **Smart Gateway** to engage emergency NULL packet padding or switch to a backup source *before* the first frame is dropped.
 
 ### 3.2 Buffer Safety Margin (BSM %)
 BSM represents the instantaneous health of the decoder's memory relative to its normative capacity ($C$).
@@ -112,7 +117,7 @@ HEVC defines two tiers: **Main Tier** (Consumer) and **High Tier** (Professional
 
 TsAnalyzer uses the following formulas to determine the deterministic drain speed between buffers:
 
-*   **$R_{rx}$ (TB $\to$ MB)**: Ingress rate into the smoothing buffer. 
+*   **$R_{rx}$ (TB $\to$ MB)**: Ingress rate into the smoothing buffer.
     *   Formula: $R_{rx} = 1.2 \times MaxBitrate$ (Standard Recommendation).
     *   TsAnalyzer default: $2.0 \times MaxBitrate$ (to handle bursty network delivery).
 *   **$R_{bx}$ (MB $\to$ EB)**: Leaky bucket rate into the decoder buffer.

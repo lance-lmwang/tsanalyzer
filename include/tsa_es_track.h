@@ -74,6 +74,12 @@ typedef struct {
         uint64_t open_gops;
         bool is_closed_gop;
         bool has_cea708;
+        uint64_t last_cc_seen_ns;
+
+        /* Entropy Analysis (Freeze/Black Detection) */
+        uint32_t entropy_pkts_seen;
+        uint32_t entropy_counts[256];
+        double last_entropy;
 
         /* Frame Distribution & GOP Structure */
         char gop_structure[128];
@@ -109,6 +115,10 @@ typedef struct {
         uint32_t buffer_size_mb;
         uint64_t leak_rate_eb;
         uint64_t leak_rate_rx;
+
+        /* Predictive Buffer Modeling */
+        int64_t time_to_underflow_ms;
+        int64_t time_to_overflow_ms;
     } tstd;
 
     /* T-STD timing and jitter tracking */

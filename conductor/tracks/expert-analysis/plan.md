@@ -18,4 +18,3 @@
 ## Phase 4: Full API & Verification (The Delivery)
 - [x] Update `/api/v1/metrology/full`: Include nested `buffer_status` and `video_metadata` objects in the JSON output. (Completed)
 - [x] Create automated tests: `tests/test_tstd_btvhd.c` created, needs logic refinement for large JSON blobs. (Tests are robust)
-- [ ] Verify T-STD accuracy: Compare results against existing MTS4000 logs.

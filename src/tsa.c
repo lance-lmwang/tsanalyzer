@@ -13,6 +13,7 @@
 
 #include "tsa_descriptors.h"
 #include "tsa_internal.h"
+#include "tsa_lua.h"
 #include "tsa_plugin.h"
 #include "tsa_simd.h"
 
@@ -122,6 +123,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     tsa_plugins_attach_builtin(h);
 
     tsa_stream_model_init(&h->ts_model);
+    h->lua = tsa_lua_create(h);
     return h;
 
 fail:
@@ -142,6 +144,7 @@ void tsa_destroy_engines(tsa_handle_t* h) {
 
 void tsa_destroy(tsa_handle_t* h) {
     if (!h) return;
+    if (h->lua) tsa_lua_destroy(h->lua);
     tsa_plugins_destroy_all(h);
     ts_pcr_window_destroy(&h->pcr_window);
     ts_pcr_window_destroy(&h->pcr_long_window);
@@ -359,9 +362,21 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     }
     ts_decode_result_t r;
     tsa_decode_packet(h, p, n, &r);
+
+    if (h->pid_filtering_enabled && !h->pid_allowed[r.pid]) {
+        h->live->total_ts_packets++;
+        return;  // Drop packet early
+    }
+
     h->live->total_ts_packets++;
     tsa_update_pid_tracker(h, r.pid);
     h->live->pid_packet_count[r.pid]++;
+
+    if (r.scrambled) {
+        h->live->scrambled_count.count++;
+        tsa_push_event(h, TSA_EVENT_SCRAMBLED, r.pid, 0);
+    }
+
     if (r.pid < TS_PID_MAX) {
         if (!h->pid_histograms[r.pid]) h->pid_histograms[r.pid] = calloc(1, sizeof(tsa_histogram_t));
         if (h->pid_histograms[r.pid]) tsa_hist_add_packet(h->pid_histograms[r.pid], h->stc_ns, TS_PACKET_BITS);

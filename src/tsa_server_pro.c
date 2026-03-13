@@ -23,6 +23,7 @@
 #include "mpmc_queue.h"
 #include "spsc_queue.h"
 #include "tsa.h"
+#include "tsa_auth.h"
 #include "tsa_conf.h"
 #include "tsa_internal.h"
 #include "tsa_log.h"
@@ -78,6 +79,8 @@ static void load_config(const char* file) {
 
     g_http_port = g_sys_conf.http_listen_port;
     g_srt_port = g_sys_conf.srt_listen_port;
+
+    tsa_auth_init(g_sys_conf.api_secret[0] ? g_sys_conf.api_secret : NULL);
 
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;
@@ -356,6 +359,22 @@ static void* io_thread(void* arg) {
 static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message* hm = (struct mg_http_message*)ev_data;
+
+        /* 1. Global Rate Limiting */
+        char addr[64];
+        snprintf(addr, sizeof(addr), "fd-%d", (int)c->fd);
+        if (!tsa_auth_check_ratelimit(addr)) {
+            mg_http_reply(c, 429, "Content-Type: application/json\r\n", "{\"error\":\"Too Many Requests\"}");
+            return;
+        }
+
+        /* 2. Authentication for Sensitive APIs */
+        if (mg_match(hm->uri, mg_str("/api/v1/*"), NULL)) {
+            if (!tsa_auth_verify_request(hm)) {
+                mg_http_reply(c, 401, "Content-Type: application/json\r\n", "{\"error\":\"Unauthorized\"}");
+                return;
+            }
+        }
 
         if (mg_strcasecmp(hm->method, mg_str("OPTIONS")) == 0) {
             mg_http_reply(c, 200,

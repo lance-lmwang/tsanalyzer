@@ -3,109 +3,119 @@ project(TsAnalyzer C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
+
+# Optimization
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -Wall -Wextra -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -Wall -Wextra -pthread")
 
-# Dependencies check
+# Resolve mandatory system dependencies
 find_package(Threads REQUIRED)
-find_library(NCURSES_LIBRARY NAMES ncurses)
-find_library(RT_LIBRARY NAMES rt)
+find_package(OpenSSL REQUIRED)
 
-# External Includes (Prepare paths using absolute paths)
+find_library(NCURSES_LIB ncurses REQUIRED)
+find_library(RT_LIB rt REQUIRED)
+
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
+include_directories(${OPENSSL_INCLUDE_DIR})
 
-# External deps (libpcap / SRT)
-set(PCAP_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include")
-    add_definitions(-DHAVE_PCAP)
-    # libpcap.a requires dbus-1 on some distributions, but our static build is self-contained
-    set(PCAP_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/lib/libpcap.a")
+set(TSA_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+
+# --- Intelligent Dependency Detection (Prioritize internal static from build_deps.sh) ---
+macro(tsa_use_dep name lib_filename inc_subpath def)
+    set(INTERNAL_LIB_PATH "${TSA_DEPS_DIR}/${name}/lib/${lib_filename}")
+    set(INTERNAL_LIB64_PATH "${TSA_DEPS_DIR}/${name}/lib64/${lib_filename}")
+
+    if(EXISTS "${INTERNAL_LIB_PATH}")
+        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB_PATH}")
+        include_directories("${TSA_DEPS_DIR}/${name}/${inc_subpath}")
+        set(${name}_LIB "${INTERNAL_LIB_PATH}")
+        add_definitions(-D${def})
+    elseif(EXISTS "${INTERNAL_LIB64_PATH}")
+        message(STATUS "Using internal static ${name}: ${INTERNAL_LIB64_PATH}")
+        include_directories("${TSA_DEPS_DIR}/${name}/${inc_subpath}")
+        set(${name}_LIB "${INTERNAL_LIB64_PATH}")
+        add_definitions(-D${def})
+    else()
+        # Fallback to system package
+        find_package(${name} QUIET)
+        if(${name}_FOUND)
+            message(STATUS "Using system package ${name}")
+            set(${name}_LIB ${${name}_LIBRARIES})
+            include_directories(${${name}_INCLUDE_DIRS})
+            add_definitions(-D${def})
+        else()
+            find_library(${name}_LIB ${name})
+            if(${name}_LIB)
+                message(STATUS "Using system library ${name}: ${${name}_LIB}")
+                add_definitions(-D${def})
+            else()
+                message(FATAL_ERROR "${name} not found! Please run ./build_deps.sh")
+            endif()
+        endif()
+    endif()
+endmacro()
+
+tsa_use_dep(srt "libsrt.a" "include" HAVE_SRT)
+# Special case for SRT header hierarchy
+if(EXISTS "${TSA_DEPS_DIR}/srt/include/srt")
+    include_directories("${TSA_DEPS_DIR}/srt/include/srt")
 endif()
 
-set(SRT_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include/srt")
-    # Point to the actual directory containing srt.h
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include/srt")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/include")
-    add_definitions(-DHAVE_SRT)
-    set(SRT_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/srt/lib/libsrt.a")
-endif()
+tsa_use_dep(libpcap "libpcap.a" "include" HAVE_PCAP)
+tsa_use_dep(lua "liblua.a" "include" HAVE_LUA)
+tsa_use_dep(curl "libcurl.a" "include" HAVE_CURL)
+tsa_use_dep(zlib "libz.a" "include" HAVE_ZLIB)
 
-set(LUA_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/lib/liblua.a")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/include")
-    set(LUA_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua/lib/liblua.a")
-endif()
+# Link order matters for static libs
+set(TSA_EXTERNAL_LIBS
+    ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB}
+    ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB}
+    pthread m dl stdc++)
 
-set(ZLIB_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/lib/libz.a")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/include")
-    set(ZLIB_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlib/lib/libz.a")
-endif()
-
-set(CURL_LINK_LIBS "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
-    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/include")
-    set(CURL_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/curl/lib/libcurl.a")
-else()
-    set(CURL_LINK_LIBS "-lcurl")
-endif()
-
-# Core Library
-add_library(tsp_core STATIC
+set(TSA_CORE_SRCS
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c
     src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c
     src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c
-    src/tsa_descriptors.c
-    src/tsa_health.c
-    src/tsa_histogram.c
+    src/tsa_descriptors.c src/tsa_health.c src/tsa_histogram.c
     src/tsa_exporter_prom.c  src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c  src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
-    src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c
-    src/tsa_lua.c
-    src/tsa_hls_parser.c src/tsa_hls_ingest.c
-    src/tsa_webhook.c src/tsa_alert.c
+    src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c src/tsa_lua.c
+    src/tsa_hls_parser.c src/tsa_hls_ingest.c src/tsa_webhook.c src/tsa_alert.c
     src/tsa_log.c src/tsa_units.c src/tsa_conf_lexer.c src/tsa_conf.c
-    src/tsa_pcr_clock.c src/tsa_stream_model.c
-    src/tsa_pipeline.c src/tsa_packet_pool.c src/tsa_clock_domain.c
-    src/tsa_simd.c src/tsa_simd_avx2.c
-)
+    src/tsa_conf_watcher.c
+    src/tsa_auth.c
+    src/tsa_pcr_clock.c src/tsa_stream_model.c src/tsa_pipeline.c
+    src/tsa_packet_pool.c src/tsa_clock_domain.c src/tsa_simd.c src/tsa_simd_avx2.c
+    src/tsa_simd_sse42.c)
 
+add_library(tsp_core STATIC ${TSA_CORE_SRCS})
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set_source_files_properties(src/tsa_simd_avx2.c PROPERTIES COMPILE_FLAGS "-mavx2")
+    set_source_files_properties(src/tsa_simd_sse42.c PROPERTIES COMPILE_FLAGS "-msse4.2")
 endif()
-target_link_libraries(tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
+target_link_libraries(tsp_core ${TSA_EXTERNAL_LIBS})
 
-# Main Executables
 macro(tsa_exe name src)
     add_executable(${name} ${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
+    target_link_libraries(${name} tsp_core ${TSA_EXTERNAL_LIBS})
 endmacro()
 
 tsa_exe(tsp src/tsp_main.c)
 tsa_exe(tsa_cli src/tsa_cli.c)
 target_compile_options(tsa_cli PRIVATE -Wno-all -Wno-extra -Wno-error)
 tsa_exe(tsg src/tsg_main.c)
-target_compile_options(tsg PRIVATE -Wno-all -Wno-extra -Wno-error)
 tsa_exe(tsa_server src/tsa_server_pro.c)
 tsa_exe(tsa_server_pro src/tsa_server_pro.c)
-
-# Standalone Utilities
-tsa_exe(tsa_iat_tester tools/tsa_iat_tester.c)
-tsa_exe(tsa_generator tools/tsa_generator.c)
 tsa_exe(tsa_top tools/tsa_top.c)
-target_link_libraries(tsa_top ncurses rt)
-tsa_exe(tsa_slicer tools/tsa_slicer.c)
-tsa_exe(tsa_hls_test tools/tsa_hls_test.c)
+target_link_libraries(tsa_top ${NCURSES_LIB} ${RT_LIB})
 
-# Unit Tests
 enable_testing()
 macro(tsa_test name src)
     add_executable(${name} tests/${src})
-    target_link_libraries(${name} tsp_core ${SRT_LINK_LIBS} ${PCAP_LINK_LIBS} ${LUA_LINK_LIBS} ${CURL_LINK_LIBS} ${ZLIB_LINK_LIBS} ${RT_LIBRARY} pthread m dl ssl crypto stdc++)
+    target_link_libraries(${name} tsp_core ${TSA_EXTERNAL_LIBS})
     add_test(NAME ${name} COMMAND ${name})
 endmacro()
 
@@ -239,13 +249,11 @@ tsa_test(test_pipeline test_pipeline.c)
 tsa_test(test_packet_pool test_packet_pool.c)
 tsa_test(test_clock_domain test_clock_domain.c)
 tsa_test(test_simd test_simd.c)
-# tsa_test(test_bitrate_consistency test_bitrate_consistency.c)
 tsa_test(test_tsp_pcr_pacing test_tsp_pcr_pacing.c)
 tsa_test(test_pcr_arrival_gap test_pcr_arrival_gap.c)
 tsa_test(test_unit_metrology_mpts test_unit_metrology_mpts.c)
 tsa_test(test_unit_metrology_repro test_unit_metrology_repro.c)
 tsa_test(test_metrology_alignment test_metrology_alignment.c)
-
 tsa_test(test_unit_pcr_integrity test_unit_pcr_integrity.c)
 tsa_test(test_unit_pcr_pacing test_unit_pcr_pacing.c)
 tsa_test(test_unit_pcr_drift test_unit_pcr_drift.c)
@@ -255,8 +263,9 @@ tsa_test(test_health_debounce test_health_debounce.c)
 tsa_test(test_pcr_reselection test_pcr_reselection.c)
 tsa_test(test_pcr_rollover_stress test_pcr_rollover_stress.c)
 tsa_test(test_tstd_leak_sync test_tstd_leak_sync.c)
+tsa_test(test_lua_pipeline test_lua_pipeline.c)
+tsa_test(test_essence_metrology test_essence_metrology.c)
 
 add_executable(test_pcr_null_inclusion tests/test_pcr_null_inclusion.c)
 target_link_libraries(test_pcr_null_inclusion tsp_core m pthread)
 add_test(NAME test_unit_pcr_null_inclusion COMMAND test_pcr_null_inclusion)
-

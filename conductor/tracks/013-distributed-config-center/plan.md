@@ -1,18 +1,18 @@
-# Implementation Plan: Distributed Configuration Center (Etcd/Consul)
+# Implementation Plan: Distributed Configuration Center (Inotify & Remote)
 
 ## Status
-- [ ] **Phase 1: Research & Library Integration**
-  - [ ] Evaluate Etcd C/C++ clients (e.g., `etcd-cpp-apiv3` or a Mongoose-based REST/gRPC client).
-  - [ ] Prototype a basic `PUT`/`GET` and `WATCH` on a local Etcd instance.
+- [x] **Phase 1: Local Configuration Watcher**
+  - [x] Implement: `src/tsa_conf_watcher.c` using `inotify` to detect file changes.
+  - [x] Implement: Auto-reload of `tsa_full_conf_t` on modification.
+  - [x] Validate: Background thread correctly re-parses config without engine restart.
 
-- [ ] **Phase 2: Configuration Watcher implementation**
-  - [ ] Implement `src/tsa_config_watcher.c` as a background thread.
-  - [ ] Implement a gRPC/HTTP/JSON-based event parser for incoming configuration updates.
-  - [ ] Create a "State Reconciliation" logic to align local streams with the remote Etcd state.
+- [ ] **Phase 2: Configuration Reconciliation Engine**
+  - [ ] Implement: Logic to compare old vs new conf and dynamically start/stop streams.
+  - [ ] Implement: Update global settings (thread counts, ports) on the fly where possible.
 
-- [ ] **Phase 3: Refactor Hot-Reload Engine**
-  - [ ] Modify `src/tsa_conf.c` to accept configuration from memory buffers (currently file-based).
-  - [ ] Implement the `Revision` check to avoid race conditions during rapid config updates.
+- [ ] **Phase 3: Remote Config Center (Etcd/Consul)**
+  - [ ] Evaluate Etcd C/C++ clients.
+  - [ ] Implement remote configuration provider.
 
 - [ ] **Phase 4: Multi-Node HA Scenarios**
   - [ ] Implement a **Leader Election** mechanism (optional, for management tasks) using Etcd TTL leases.

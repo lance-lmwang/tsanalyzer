@@ -48,6 +48,7 @@ typedef uint64_t q32_32;
 #define TSA_TR101290_SDT_TIMEOUT_NS (2000000000ULL)  /* 2s    (P3.2) */
 #define TSA_TR101290_NIT_TIMEOUT_NS (10000000000ULL) /* 10s   (P3.1) */
 #define TSA_TR101290_PID_TIMEOUT_NS (5000000000ULL)  /* 5s    (P3.x) */
+#define TSA_TR101290_CC_TIMEOUT_NS (10000000000ULL)  /* 10s   (Custom) */
 
 /* --- Enums --- */
 typedef enum { TS_SYNC_HUNTING, TS_SYNC_CONFIRMING, TS_SYNC_LOCKED } tsa_sync_state_t;
@@ -68,9 +69,12 @@ typedef enum {
     TSA_EVENT_SYNC_RECOVERED,
     TSA_EVENT_TSTD_UNDERFLOW,
     TSA_EVENT_TSTD_OVERFLOW,
+    TSA_EVENT_TSTD_PREDICTIVE,
     TSA_EVENT_ENTROPY_FREEZE,
     TSA_EVENT_SDT_TIMEOUT,
     TSA_EVENT_NIT_TIMEOUT,
+    TSA_EVENT_CC_MISSING,
+    TSA_EVENT_CC_PRESENT,
     TSA_EVENT_SCRAMBLED,
     TSA_EVENT_PES_ERROR
 } tsa_event_type_t;
@@ -263,6 +267,8 @@ struct tsa_handle {
     bool* pid_is_pmt;
     bool* pid_is_scte35;
     uint32_t* pid_cc_error_suppression;
+    bool pid_filtering_enabled;
+    bool pid_allowed[8192];
     tsa_pcr_track_t* pcr_tracks;
     tsa_es_track_t* es_tracks;
     uint64_t* prev_snap_base_frames;
@@ -270,6 +276,7 @@ struct tsa_handle {
     uint64_t last_v_pts;
     uint64_t last_a_pts;
     uint64_t last_packet_rx_ns;
+    struct tsa_lua_s* lua;
     struct {
         uint64_t last_snap_bytes;
         uint64_t last_bps;
