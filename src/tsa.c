@@ -373,7 +373,6 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     h->live->pid_packet_count[r.pid]++;
 
     if (r.scrambled) {
-        h->live->scrambled_count.count++;
         tsa_push_event(h, TSA_EVENT_SCRAMBLED, r.pid, 0);
     }
 

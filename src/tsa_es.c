@@ -18,7 +18,7 @@ static const uint8_t ltn_uuid_sei_timestamp[16] = {0x59, 0x96, 0xFF, 0x28, 0x17,
 static void tsa_handle_sei(tsa_handle_t* h, tsa_es_track_t* es, const uint8_t* payload, int len) {
     /* Pass raw SEI to Lua for specialized parsing (Captions, user-data, etc) */
     if (h->lua) {
-        tsa_lua_process_section(h->lua, es->pid, 0x06, payload, len); // 0x06 is SEI NALU type placeholder for Lua
+        tsa_lua_process_section(h->lua, es->pid, 0x06, payload, len);  // 0x06 is SEI NALU type placeholder for Lua
     }
 
     if (len < 64) return;

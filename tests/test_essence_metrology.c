@@ -88,11 +88,11 @@ void test_lua_cc_parsing() {
 
     // Simulate an ATSC CC SEI payload
     uint8_t sei_payload[] = {
-        0x04, 0x08, 0x00, 0x00, // itu_t_t35 header
-        'G', 'A', '9', '4',     // ATSC marker
-        0x03,                   // cc_data() type
-        0x41,                   // cc_count = 1
-        0xFF, 0x80, 0x80        // dummy cc data
+        0x04, 0x08, 0x00, 0x00,  // itu_t_t35 header
+        'G',  'A',  '9',  '4',   // ATSC marker
+        0x03,                    // cc_data() type
+        0x41,                    // cc_count = 1
+        0xFF, 0x80, 0x80         // dummy cc data
     };
 
     // Manual call to internal handler (simulate SEI discovery)
@@ -108,11 +108,11 @@ void test_entropy_freeze_detection() {
     printf("Testing Entropy Freeze Detection...\n");
 
     tsa_handle_t* h = tsa_create(NULL);
-    h->config.entropy_window_packets = 10; // Small window for test
+    h->config.entropy_window_packets = 10;  // Small window for test
 
     uint16_t pid = 0x100;
     h->pid_seen[pid] = true;
-    h->es_tracks[pid].stream_type = 0x1B; // H.264 video
+    h->es_tracks[pid].stream_type = 0x1B;  // H.264 video
 
     // Feed 10 packets with identical (zero) payload to trigger low entropy
     uint8_t pkt[188];
@@ -120,7 +120,7 @@ void test_entropy_freeze_detection() {
     pkt[0] = 0x47;
     pkt[1] = (pid >> 8) & 0x1F;
     pkt[2] = pid & 0xFF;
-    pkt[3] = 0x10; // Payload only
+    pkt[3] = 0x10;  // Payload only
 
     ts_decode_result_t res;
     memset(&res, 0, sizeof(res));

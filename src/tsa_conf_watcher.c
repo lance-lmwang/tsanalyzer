@@ -1,10 +1,10 @@
+#include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/inotify.h>
-#include <pthread.h>
-#include <errno.h>
+#include <unistd.h>
 
 #include "tsa_conf.h"
 #include "tsa_log.h"
@@ -51,7 +51,7 @@ static void* watcher_thread(void* arg) {
                 tsa_error(TAG, "Failed to reload configuration");
             }
         }
-        usleep(500000); // 500ms poll
+        usleep(500000);  // 500ms poll
     }
 
     inotify_rm_watch(fd, wd);
