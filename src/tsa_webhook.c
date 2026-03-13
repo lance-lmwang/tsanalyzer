@@ -115,16 +115,14 @@ static void* webhook_worker(void* arg) {
         pthread_mutex_unlock(&eng->lock);
 
         if (msg_to_send) {
-            int retries = 0;
-            while (retries <= MAX_RETRIES && eng->running) {
-                curl_easy_setopt(curl, CURLOPT_URL, eng->url);
-                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, msg_to_send);
-                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-                curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-                curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-                if (curl_easy_perform(curl) == CURLE_OK) break;
-                retries++;
-                if (retries <= MAX_RETRIES) usleep((1 << (retries - 1)) * 1000000);
+            curl_easy_setopt(curl, CURLOPT_URL, eng->url);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, msg_to_send);
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+            curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+            if (curl_easy_perform(curl) != CURLE_OK) {
+                // Log failure, but do not block worker with sleep. Fail fast so queue doesn't overflow.
+                fprintf(stderr, "Webhook send failed, dropping message to prevent queue head-of-line blocking.\\n");
             }
             free(msg_to_send);
         }
@@ -205,6 +203,8 @@ void tsa_webhook_push(tsa_webhook_engine_t* eng, const char* json_msg) {
         eng->head = (eng->head + 1) % MAX_WEBHOOK_QUEUE;
         eng->count++;
         pthread_cond_signal(&eng->cond);
+    } else {
+        fprintf(stderr, "[CRITICAL] Webhook queue overflow! Dropping alert: %s\\n", json_msg);
     }
     pthread_mutex_unlock(&eng->lock);
 }

@@ -79,3 +79,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: ARB Architecture Remediation**
   *Link: [./tracks/023-arb-architecture-remediation/](./tracks/023-arb-architecture-remediation/)*
+
+- [ ] **Track: Production Readiness & Control Plane Hardening**
+  *Link: [./tracks/024-production-readiness/](./tracks/024-production-readiness/)*

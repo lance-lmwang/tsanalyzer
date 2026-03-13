@@ -369,7 +369,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
         }
 
         /* 2. Authentication for Sensitive APIs */
-        if (mg_match(hm->uri, mg_str("/api/v1/*"), NULL)) {
+        if (mg_match(hm->uri, mg_str("/api/v1/*"), NULL) || mg_match(hm->uri, mg_str("/metrics*"), NULL)) {
             if (!tsa_auth_verify_request(hm)) {
                 mg_http_reply(c, 401, "Content-Type: application/json\r\n", "{\"error\":\"Unauthorized\"}");
                 return;
@@ -439,15 +439,21 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 static char resp[64 * 1024];
                 int off = 0;
                 off += snprintf(resp + off, sizeof(resp) - off, "{\"streams\":[");
+                char id_cache[MAX_CONNS][64];
+                int valid_count = 0;
                 pthread_mutex_lock(&g_conn_lock);
                 int total = atomic_load(&g_conn_count);
                 for (int i = 0; i < total; i++) {
                     if (g_conns[i]) {
-                        off += snprintf(resp + off, sizeof(resp) - off, "%s{\"id\":\"%s\"}", (i == 0 ? "" : ","),
-                                        g_conns[i]->id);
+                        strncpy(id_cache[valid_count++], g_conns[i]->id, 64);
                     }
                 }
                 pthread_mutex_unlock(&g_conn_lock);
+
+                for (int i = 0; i < valid_count; i++) {
+                    off +=
+                        snprintf(resp + off, sizeof(resp) - off, "%s{\"id\":\"%s\"}", (i == 0 ? "" : ","), id_cache[i]);
+                }
                 snprintf(resp + off, sizeof(resp) - off, "]}");
                 mg_http_reply(c, 200, "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n", "%s",
                               resp);

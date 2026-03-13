@@ -39,6 +39,12 @@ COPY --from=builder /build/build/tsa_server_pro /app/tsa_server
 COPY --from=builder /build/build/tsa_top /app/tsa_top
 COPY tsa.conf /app/tsa.conf
 
+# Security Hardening: Run as non-root user
+RUN groupadd -r tsanalyzer && useradd -r -g tsanalyzer tsanalyzer \
+    && chown -R tsanalyzer:tsanalyzer /app
+
+USER tsanalyzer
+
 EXPOSE 8088 12345 9000/udp
 
 ENTRYPOINT ["/app/tsa_server", "/app/tsa.conf"]

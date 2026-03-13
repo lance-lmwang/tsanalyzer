@@ -156,7 +156,8 @@
                 const div = document.createElement('div');
                 div.className = 'fleet-tile' + (selectedID === s.id ? ' selected' : '');
                 div.onclick = () => { selectedID = s.id; refreshFleet(); };
-                div.innerHTML = `<div class="led-small" style="background:${COLORS.OK}"></div>${s.id}`;
+                div.innerHTML = `<div class="led-small" style="background:${COLORS.OK}"></div><span class="safe-id"></span>`;
+                div.querySelector('.safe-id').textContent = s.id;
                 grid.appendChild(div);
             });
             if (!selectedID && streams.length > 0) selectedID = streams[0].id;
@@ -232,7 +233,16 @@
         document.getElementById('v-rst-e').innerText = json.tier4_predictive.rst_encoder_s.toFixed(1) + "s";
 
         const invList = document.getElementById('inv-list');
-        invList.innerHTML = json.tier5_inventory.map(p => `<tr><td>${p.pid}</td><td style="color:var(--link-cyan)">${p.type}</td><td>${(p.bps/1000).toFixed(0)}</td><td>${p.bw_pct.toFixed(1)}%</td></tr>`).join('');
+        invList.innerHTML = '';
+        json.tier5_inventory.forEach(p => {
+            let tr = document.createElement('tr');
+            let td1 = document.createElement('td'); td1.textContent = p.pid;
+            let td2 = document.createElement('td'); td2.style.color = 'var(--link-cyan)'; td2.textContent = p.type;
+            let td3 = document.createElement('td'); td3.textContent = (p.bps/1000).toFixed(0);
+            let td4 = document.createElement('td'); td4.textContent = p.bw_pct.toFixed(1) + '%';
+            tr.append(td1, td2, td3, td4);
+            invList.appendChild(tr);
+        });
     }
 
     setInterval(pullSnapshot, 1000);

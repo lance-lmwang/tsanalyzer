@@ -167,7 +167,9 @@
             // Subtle indicator
             const debugEl = document.getElementById('debug-info');
             const dot = (new Date().getSeconds() % 2 === 0) ? '●' : '·';
-            debugEl.innerHTML = `<span style="color:var(--ok-green)">${dot}</span> ${host}:${dataPort}`;
+            debugEl.innerHTML = `<span style="color:var(--ok-green)"></span> <span class="safe-text"></span>`;
+            debugEl.querySelector('span').textContent = dot;
+            debugEl.querySelector('.safe-text').textContent = `${host}:${dataPort}`;
 
             // 1. TIERED FETCH: Core metrics for the Fleet Wall (Low bandwidth)
             const resCore = await fetch(`http://${host}:${dataPort}/metrics/core`);
@@ -186,7 +188,7 @@
             document.getElementById('lock-status').style.color = '#FFF';
         } catch(e) {
             console.error("NOC Sync Error:", e);
-            document.getElementById('debug-info').innerHTML = `<span style="color:var(--alarm-red)">ERR</span> ${e.message}`;
+            let dbg = document.getElementById('debug-info'); dbg.innerHTML = `<span style="color:var(--alarm-red)">ERR</span> <span class="safe-err"></span>`; dbg.querySelector('.safe-err').textContent = e.message;
         }
     }
 
@@ -234,7 +236,10 @@
         const line = document.createElement('div');
         line.className = 'log-line';
         const ts = new Date().toLocaleTimeString();
-        line.innerHTML = `<span class="ts">[${ts}]</span> <b style="color:var(--alarm-red)">[${id}]</b> ${msg}`;
+        line.innerHTML = `<span class="ts"></span> <b style="color:var(--alarm-red)"></b> <span class="safe-msg"></span>`;
+        line.querySelector('.ts').textContent = `[${ts}]`;
+        line.querySelector('b').textContent = `[${id}]`;
+        line.querySelector('.safe-msg').textContent = msg;
         trail.prepend(line);
         if (trail.childNodes.length > 50) trail.removeChild(trail.lastChild);
     }
@@ -255,7 +260,8 @@
             const s = streams[id];
             tile.className = 'fleet-tile' + (selectedID === id ? ' selected' : '');
             const color = s.lock ? (s.health > 80 ? COLORS.OK : COLORS.WARN) : COLORS.ALARM;
-            tile.innerHTML = `<div class="led-small" style="background:${color}"></div>${id}`;
+            tile.innerHTML = `<div class="led-small" style="background:${color}"></div><span class="safe-id"></span>`;
+            tile.querySelector('.safe-id').textContent = id;
         });
     }
 
