@@ -52,7 +52,7 @@ else
     cd "$PCAP_SRC_DIR"
     if [ -f "CMakeLists.txt" ]; then
         mkdir -p build && cd build
-        cmake .. -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DBUILD_WITH_LIBNL=OFF
+        cmake .. -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_WITH_LIBNL=OFF
         make -j$(nproc)
         make install
     else

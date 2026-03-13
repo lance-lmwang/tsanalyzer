@@ -19,8 +19,8 @@ set(PCAP_LINK_LIBS "")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include")
     include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/include")
     add_definitions(-DHAVE_PCAP)
-    # libpcap.a requires dbus-1 on many Linux distributions
-    set(PCAP_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/lib/libpcap.a" dbus-1)
+    # libpcap.a requires dbus-1 on some distributions, but our static build is self-contained
+    set(PCAP_LINK_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libpcap/lib/libpcap.a")
 endif()
 
 set(SRT_LINK_LIBS "")
