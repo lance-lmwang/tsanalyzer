@@ -14,6 +14,10 @@
 #define TSA_TSTD_EB_VIDEO_SIZE (512 * 1024 * 8) /* 512 KB for EB_x (Standard VBV) */
 #define TSA_TSTD_EB_AUDIO_SIZE (3584 * 8)       /* 3584 bytes for B_n (Audio) */
 
+#define TSA_NANOS_PER_SEC 1000000000ULL
+#define TSA_DEFAULT_RX_BPS 10000000ULL  /* 10 Mbps */
+#define TSA_DEFAULT_RBX_BPS 20000000ULL /* 20 Mbps */
+
 typedef struct {
     tsa_handle_t* h;
 } essence_ctx_t;
@@ -43,19 +47,18 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
     uint64_t dt = (now_vstc > es->tstd.last_leak_vstc) ? (now_vstc - es->tstd.last_leak_vstc) : 0;
     if (dt == 0) return;
 
-    /* Q64.64 Precision factor for (bits/s * ns) -> bits */
-    double factor = (18446744073709551616.0 / 1000000000.0);
     uint8_t st = es->stream_type;
     bool is_video = tsa_is_video(st);
+    bool is_live = (h->live != NULL);
 
     /* 1. TB Leakage: R_x flows into MB (or EB for non-video)
      * R_rx is tied to the real-time physical bitrate of the TS or synced from level. */
     uint64_t r_x = es->tstd.leak_rate_rx;
-    if (r_x == 0) r_x = h->live->physical_bitrate_bps;
-    if (r_x == 0) r_x = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.2);
-    if (r_x == 0) r_x = 10000000;
+    if (r_x == 0 && is_live) r_x = h->live->physical_bitrate_bps;
+    if (r_x == 0 && is_live) r_x = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 6 / 5);
+    if (r_x == 0) r_x = TSA_DEFAULT_RX_BPS;
 
-    int128_t tb_leaked_q64 = (int128_t)r_x * dt * factor;
+    int128_t tb_leaked_q64 = (((int128_t)r_x * dt) << 64) / TSA_NANOS_PER_SEC;
     if (tb_leaked_q64 > es->tstd.tb_fill_q64) tb_leaked_q64 = es->tstd.tb_fill_q64;
     es->tstd.tb_fill_q64 -= tb_leaked_q64;
 
@@ -71,11 +74,11 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
          * R_bx is sync'd from profile/level or estimated as 1.5x PID bitrate. */
         if (!eb_full) {
             uint64_t r_bx = es->tstd.leak_rate_eb;
-            if (r_bx == 0) r_bx = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 1.5);
-            if (r_bx == 0) r_bx = (uint64_t)(h->live->physical_bitrate_bps * 0.8);
-            if (r_bx == 0) r_bx = 20000000;
+            if (r_bx == 0 && is_live) r_bx = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 3 / 2);
+            if (r_bx == 0 && is_live) r_bx = (uint64_t)(h->live->physical_bitrate_bps * 4 / 5);
+            if (r_bx == 0) r_bx = TSA_DEFAULT_RBX_BPS;
 
-            int128_t mb_leaked_q64 = (int128_t)r_bx * dt * factor;
+            int128_t mb_leaked_q64 = (((int128_t)r_bx * dt) << 64) / TSA_NANOS_PER_SEC;
             if (mb_leaked_q64 > es->tstd.mb_fill_q64) mb_leaked_q64 = es->tstd.mb_fill_q64;
 
             /* Check if EB has room for this leak */
@@ -142,12 +145,17 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
     tsa_handle_t* h = ctx->h;
     const ts_decode_result_t* res = &h->current_res;
     uint16_t pid = res->pid;
+
+    if (pid >= TS_PID_MAX) return;
+
     tsa_es_track_t* es = &h->es_tracks[pid];
 
-    if (res->has_discontinuity || h->live->latched_cc_error) {
+    bool cc_error = h->live ? h->live->latched_cc_error : false;
+    if (res->has_discontinuity || cc_error) {
         es->tstd.tb_fill_q64 = 0;
         es->tstd.mb_fill_q64 = 0;
         es->tstd.eb_fill_q64 = 0;
+        es->tstd.last_underflow_dts = 0;
         es->pes.last_dts_33 = 0;
         es->au_q.head = 0;
         es->au_q.tail = 0;
@@ -168,8 +176,11 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         uint64_t next_dts = es->au_q.queue[es->au_q.head].dts_ns;
         if (h->stc_ns > next_dts) {
             /* Data arrived too late for its DTS deadline */
-            tsa_push_event(h, TSA_EVENT_TSTD_UNDERFLOW, pid, (h->stc_ns - next_dts));
-            tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid);
+            if (es->tstd.last_underflow_dts != next_dts) {
+                tsa_push_event(h, TSA_EVENT_TSTD_UNDERFLOW, pid, (h->stc_ns - next_dts));
+                tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid);
+                es->tstd.last_underflow_dts = next_dts;
+            }
         }
     }
 

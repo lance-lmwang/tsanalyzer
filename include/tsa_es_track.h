@@ -110,6 +110,7 @@ typedef struct {
         __int128 tb_fill_q64;
         __int128 mb_fill_q64;
         uint64_t last_leak_vstc;
+        uint64_t last_underflow_dts;
         uint32_t buffer_size_eb;
         uint32_t buffer_size_tb;
         uint32_t buffer_size_mb;

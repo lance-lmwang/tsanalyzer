@@ -73,4 +73,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [ ] **Track: Scalability & Load Modeling (The 100Gbps Challenge)**
   *Link: [./tracks/021-scalability-stress-assessment/](./tracks/021-scalability-stress-assessment/)*
-  *Link: [./tracks/020-documentation-renaissance/](./tracks/020-documentation-renaissance/)*
+
+- [ ] **Track: Essence Engine Audit & Refactor**
+  *Link: [./tracks/022-essence-engine-audit/](./tracks/022-essence-engine-audit/)*
