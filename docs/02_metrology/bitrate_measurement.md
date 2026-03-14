@@ -1,78 +1,64 @@
-# Bitrate Measurement & Metrology Standards
+# Bitrate Measurement & Metrology Standards (v2.0)
 
-This document defines the high-precision bitrate measurement architecture of TsAnalyzer, designed to align with carrier-grade industrial standards.
+This document defines the high-precision bitrate measurement architecture of TsAnalyzer, designed to align with Tektronix MTS and industrial carrier-grade standards.
 
-## 1. Physical Bitrate (Total TS Bitrate)
+## 1. The Bitrate Matrix (Multi-Dimensional Statistics)
+
+Unlike basic tools that report a single "bitrate", professional metrology requires a multi-dimensional view to assess both bandwidth usage and signal stability. TsAnalyzer implements a 4-tier matrix for both the overall Transport Stream and individual PIDs.
+
+| Metric | Time Window | Engineering Purpose |
+| :--- | :--- | :--- |
+| **Current** | 500ms (Settled) | Real-time link occupancy. Refined by EMA smoothing. |
+| **Average (Avg)** | Session Lifetime | Total Payload Weight. Calculated as `TotalBits / TotalTime`. |
+| **Peak (Maximum)** | Session Lifetime | Buffer Stress Analysis. Detects instantaneous bursts that may cause overflow. |
+| **Minimum (Min)** | Session Lifetime | Link Starvation Analysis. Detects gaps in delivery. |
+
+---
+
+## 2. Physical Bitrate (Total TS Bitrate)
 
 The Physical Bitrate represents the raw throughput of the Transport Stream (Layer 2).
 
-### Definition
-Unlike network-layer throughput, **Total TS Bitrate** counts only the valid 188-byte TS packets. It includes:
-*   Video/Audio/Data PIDs.
-*   SI/PSI Tables (PAT, PMT, SDT, etc.).
-*   Null Packets (PID 0x1FFF).
-*   **Excludes**: IP, UDP, and Ethernet headers.
+### 2.1 Definition & Formula
+The engine counts every valid 188-byte TS packet (including Video, Audio, PSI, and Null packets).
+*   **Formula**: `Bitrate_bps = (ΔPackets * 1504) / ΔWallClock_ns`
+*   **Constraint**: Minimum settlement window is **500ms** to平滑 OS 调度抖动。
 
-### Mathematical Formula
-$$Bitrate_{bps} = \frac{\Delta UniquePackets \times 1504}{\Delta WallClock_{ns} \times 10^{-9}}$$
-*(Where 1504 is 188 bytes $\times$ 8 bits)*.
-
-### Implementation & De-duplication
-To handle complex network environments like PCAP loopback captures or multi-path UDP ingress, the engine implements a **PID + Continuity Counter (CC)** de-duplication mechanism at the entry point (`tsa_process_packet`).
-*   **Mirrored Packets**: Packets with the same PID and CC arriving in rapid succession are ignored.
-*   **Counting**: Only unique packets increment the monotonic `total_ts_packets` counter used for physical metrology.
+### 2.2 Packet Integrity (Anti-Deduplication)
+In accordance with ISO/IEC 13818-1, TsAnalyzer treats the stream as a physical reality.
+*   **No Deduplication**: Even if packets have duplicate PID+CC, they are counted. Duplicates occupy real bandwidth and may carry critical timing info.
+*   **Null Packets**: PID 0x1FFF is fully counted in the physical rate but excluded from business (payload) rates.
 
 ---
 
-## 2. Business Bitrate (PCR Content Bitrate)
+## 3. Business Bitrate (PCR Payload Bitrate)
 
-The Business Bitrate represents the constant bitrate (CBR) of a specific program within the multiplex.
+The Business Bitrate represents the constant bitrate (CBR) of a specific program derived from its own clock reference.
 
-### Multi-Program Isolation (MPTS)
-In an MPTS stream, each program has its own PCR (Program Clock Reference). TsAnalyzer isolates these into independent **Clock Domains**:
-*   **Per-PID Context**: Each PID tracks its own `pkts_since_last_pcr` and `last_pcr_ticks`.
-*   **Atomic Sampling**: Packet counts and PCR values are sampled atomically to ensure that the numerator (bits) and denominator (time) are perfectly synchronized.
+### 3.1 Mathematical Derivation
+Instead of wall-clock time, it uses the 27MHz PCR clock:
+`Bitrate_bps = (ΔPackets * 1504 * 27,000,000) / ΔPCR_ticks`
 
-### Calculation Logic
-Instead of wall-clock time, the Business Bitrate uses the 27MHz PCR clock:
-$$Bitrate_{bps} = \frac{\Delta Packets \times 1504 \times 27,000,000}{\Delta PCR_{ticks}}$$
-
-### Aggregation
-The global `pcr_bitrate_bps` reported in the stream summary is the **sum of all unique program bitrates**. This prevents program collision and correctly reflects the total occupancy of the payload.
+### 3.2 MPTS Multi-Program Isolation
+TsAnalyzer isolates each program into an independent **Clock Domain**. PCR values from Program A never interfere with Program B. The global `pcr_bitrate_bps` is the **algebraic sum** of all unique program bitrates.
 
 ---
 
-## 3. Multi-Program (MPTS) Handling Logic
+## 4. Operational Logic: Replay vs Live
 
-TsAnalyzer treats an MPTS stream as a collection of independent, concurrent clock domains. To ensure accurate metrology for complex multiplexes, the following strategies are enforced:
+### 4.1 Replay Mode (Deterministic Speed)
+When analyzing files, the engine processes data as fast as possible.
+*   **Virtual Clock**: Bitrate is calculated based on simulated arrival timestamps (Nominal 10Mbps interval or provided by Pacer).
+*   **Final Settlement**: A forced "Flush" is executed at the end of the file to ensure the final report includes the last window of data.
 
-### 3.1 PCR Context Isolation
-Every program in the multiplex is analyzed within its own isolated context:
-*   **Decoupled Tracking**: PCR values from Program A do not interfere with the timing baseline of Program B.
-*   **Program-Specific Bitrate**: The bitrate for each program is calculated using the specific PCR PID associated with its PMT. This results in high-precision per-program metrics.
-
-### 3.2 Aggregated Business Throughput
-While each program is monitored individually, the global `Business Bitrate` (reported as `pcr_bitrate_bps` in snapshots) is the **algebraic sum of all recognized program bitrates**.
-*   This aggregate value represents the total effective payload occupancy of the transport stream.
-*   By summing independent PCR-derived rates, the system naturally filters out null packets and jitter artifacts that affect global wall-clock measurements.
-
-### 3.3 Integrity Correlation
-In an MPTS environment, the `Physical Bitrate` (Layer 2) and the `Aggregated Business Bitrate` (Layer 3) are correlated. Any significant delta (e.g., > 5%) is flagged as a potential **Multiplex Inconsistency**, indicating ghost traffic or excessive null stuffing.
+### 4.2 Active Bitrate Decay
+To mimic the "Persistence" effect of professional hardware analyzers:
+*   If a PID disappears, its reported bitrate is **decayed by 50% per window** rather than instantly dropping to zero. This allows operators to catch "flickering" streams.
 
 ---
 
-## 4. Implementation Guardrails
+## 5. Implementation Guardrails
 
-### Clock Domain Isolation
-**Critical Rule**: Never mix PCR Ticks (27MHz) and System Nanoseconds (1GHz) in the same calculation.
-TsAnalyzer enforces strict separation:
-*   **Physical Bitrate**: Uses `CLOCK_MONOTONIC` for $\Delta t$.
-*   **PCR Bitrate**: Uses PCR Ticks for $\Delta t$.
-
-### Stability & Smoothing
-To provide a professional "broadcast equipment" feel, TsAnalyzer applies different smoothing strategies:
-*   **Physical Tier**: Heavy EMA smoothing (e.g., 20% instant / 80% historical) with a mandatory 500ms minimum sampling window to filter out OS scheduling jitter.
-*   **Business Tier**: Light or no smoothing to accurately reflect the instantaneous CBR quality and encoder performance.
-
-### PCAP & Loopback Special Handling
-When capturing on `lo` or promisc interfaces, `pcap_setdirection(PCAP_D_IN)` is used to ignore local outbound traffic, preventing the "bitrate doubling" effect common in development environments.
+1.  **No Type Mixing**: Never use PCR Ticks and System Nanoseconds in the same formula.
+2.  **Atomic Counting**: All packet counters used for metrology are updated via atomic operations.
+3.  **Hysteresis**: Peak and Min values are only updated after a window has fully settled to avoid reporting single-packet noise.
