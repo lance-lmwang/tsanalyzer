@@ -158,12 +158,13 @@ typedef struct {
 } ts_decode_result_t;
 
 typedef struct {
-    uint8_t buffer[4096];
     uint32_t len;
     bool active;
     bool complete;
     bool seen_before;
     uint8_t last_ver;
+    uint8_t reserved[3];  // Padding for 4-byte alignment
+    uint8_t buffer[4096];
 } ts_section_filter_t;
 typedef struct {
     uint16_t pid;
@@ -281,9 +282,9 @@ struct tsa_handle {
         uint64_t last_snap_bytes;
         uint64_t last_bps;
         uint64_t window_start_ns;
-        uint64_t pid_last_snap_pkts[8192];
+        uint64_t* pid_last_snap_pkts;  // Changed from inline array to pointer
     } phys_stats;
-    ts_section_filter_t* pid_filters;
+    ts_section_filter_t* pid_filters[TS_PID_MAX];  // Changed from pointer to array of pointers
     uint32_t program_count;
     tsa_program_info_t programs[MAX_PROGRAMS];
     tsa_ts_model_t ts_model;

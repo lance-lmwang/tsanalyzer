@@ -37,17 +37,27 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (!h) return NULL;
 
     tsa_stream_init(&h->root_stream, h, NULL);
-    ALLOC_OR_GOTO(h->pid_filters, ts_section_filter_t, TS_PID_MAX);
-    ALLOC_OR_GOTO(h->pid_cc_error_suppression, uint32_t, TS_PID_MAX);
+
+    // Initialize pointers to NULL - we will allocate on demand
+    memset(h->pid_filters, 0, sizeof(h->pid_filters));
+
+    h->pid_cc_error_suppression = calloc(TS_PID_MAX, sizeof(uint32_t));
+    if (!h->pid_cc_error_suppression) goto fail;
 
     h->pcr_tracks = calloc(TS_PID_MAX, sizeof(tsa_pcr_track_t));
     if (!h->pcr_tracks) goto fail;
+
     h->es_tracks = calloc(TS_PID_MAX, sizeof(tsa_es_track_t));
     if (!h->es_tracks) goto fail;
 
-    ALLOC_OR_GOTO(h->pid_seen, bool, TS_PID_MAX);
-    memset(h->pid_seen, 0, TS_PID_MAX * sizeof(bool));
-    ALLOC_OR_GOTO(h->pid_is_pmt, bool, TS_PID_MAX);
+    h->phys_stats.pid_last_snap_pkts = calloc(TS_PID_MAX, sizeof(uint64_t));
+    if (!h->phys_stats.pid_last_snap_pkts) goto fail;
+
+    h->pid_seen = calloc(TS_PID_MAX, sizeof(bool));
+    if (!h->pid_seen) goto fail;
+
+    h->pid_is_pmt = calloc(TS_PID_MAX, sizeof(bool));
+    if (!h->pid_is_pmt) goto fail;
     memset(h->pid_is_pmt, 0, TS_PID_MAX * sizeof(bool));
     ALLOC_OR_GOTO(h->pid_is_scte35, bool, TS_PID_MAX);
     memset(h->pid_is_scte35, 0, TS_PID_MAX * sizeof(bool));
@@ -152,7 +162,9 @@ void tsa_destroy(tsa_handle_t* h) {
     if (h->pkt_pool) tsa_packet_pool_destroy(h->pkt_pool);
     if (h->pool_base) free(h->pool_base);
 
-    FREE_IF(h->pid_filters);
+    for (int i = 0; i < TS_PID_MAX; i++) {
+        FREE_IF(h->pid_filters[i]);
+    }
     FREE_IF(h->pid_cc_error_suppression);
     if (h->pcr_tracks) {
         for (int i = 0; i < TS_PID_MAX; i++) tsa_pcr_track_destroy(&h->pcr_tracks[i]);
@@ -161,6 +173,7 @@ void tsa_destroy(tsa_handle_t* h) {
     if (h->es_tracks) {
         free(h->es_tracks);
     }
+    FREE_IF(h->phys_stats.pid_last_snap_pkts);
     for (int i = 0; i < TS_PID_MAX; i++)
         if (h->pid_histograms[i]) free(h->pid_histograms[i]);
     FREE_IF(h->pid_seen);
@@ -201,9 +214,22 @@ void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_de
     (void)h;
     r->pid = ((p[1] & 0x1F) << 8) | p[2];
     r->pusi = (p[1] & 0x40);
-    r->af_len = (p[3] & 0x20) ? p[4] + 1 : 0;
-    r->payload_len = 188 - 4 - r->af_len;
-    r->has_payload = (p[3] & 0x10) && r->payload_len > 0;
+
+    // Adaptation Field Control:
+    // 01: No AF, payload only
+    // 10: AF only, no payload
+    // 11: AF followed by payload
+    uint8_t afc = (p[3] >> 4) & 0x03;
+    r->af_len = 0;
+    if (afc & 0x02) {
+        r->af_len = p[4] + 1;
+        if (r->af_len > 184) r->af_len = 184;  // Defense against corrupt headers
+    }
+
+    r->payload_len = (afc & 0x01) ? (184 - r->af_len) : 0;
+    if (r->payload_len < 0) r->payload_len = 0;
+
+    r->has_payload = (r->payload_len > 0);
     r->cc = p[3] & 0x0F;
     r->scrambled = (p[3] & 0xC0) != 0;
     r->has_discontinuity = (r->af_len > 1) && (p[5] & 0x80);

@@ -267,6 +267,7 @@ tsa_test(test_lua_pipeline test_lua_pipeline.c)
 tsa_test(test_essence_metrology test_essence_metrology.c)
 tsa_test(test_auth_jwt test_auth_jwt.c)
 tsa_test(test_auth_toggle test_auth_toggle.c)
+tsa_test(test_crc_fix test_crc_fix.c)
 
 add_executable(test_pcr_null_inclusion tests/test_pcr_null_inclusion.c)
 target_link_libraries(test_pcr_null_inclusion tsp_core m pthread)

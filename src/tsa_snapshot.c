@@ -153,12 +153,15 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
     h->live->alert_suppression_count = total_suppressed;
 
     h->live->pcr_bitrate_bps = h->live->physical_bitrate_bps;
+    h->last_health_score = tsa_calculate_health(h);
 
     sn->summary.physical_bitrate_bps = h->live->physical_bitrate_bps;
     sn->summary.pcr_bitrate_bps = h->live->pcr_bitrate_bps;
     sn->summary.total_packets = h->live->total_ts_packets;
     sn->summary.signal_lock = h->signal_lock;
     sn->summary.active_pid_count = h->pid_tracker_count;
+    sn->summary.master_health = h->last_health_score;
+    sn->predictive.master_health = h->last_health_score;
     sn->stats = *h->live;
 
     uint32_t ai = 0;

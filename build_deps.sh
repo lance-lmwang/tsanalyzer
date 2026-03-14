@@ -12,14 +12,17 @@ mkdir -p "$DEPS_DIR"
 SRT_VERSION="v1.5.3"
 SRT_SRC_DIR="$DEPS_DIR/srt_src"
 SRT_INSTALL_DIR="$DEPS_DIR/srt"
+SRT_BUILD_DIR="$DEPS_DIR/srt_build_tmp"
+
 if [ ! -d "$SRT_SRC_DIR" ]; then
     echo "--- Downloading SRT $SRT_VERSION ---"
     git clone --depth 1 --branch "$SRT_VERSION" https://github.com/Haivision/srt.git "$SRT_SRC_DIR"
 fi
+
 echo "--- Building SRT (Static) ---"
-cd "$SRT_SRC_DIR"
-mkdir -p build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX="$SRT_INSTALL_DIR" \
+mkdir -p "$SRT_BUILD_DIR"
+cd "$SRT_BUILD_DIR"
+cmake "$SRT_SRC_DIR" -DCMAKE_INSTALL_PREFIX="$SRT_INSTALL_DIR" \
          -DCMAKE_INSTALL_LIBDIR=lib \
          -DENABLE_SHARED=OFF \
          -DENABLE_STATIC=ON \
@@ -28,11 +31,13 @@ cmake .. -DCMAKE_INSTALL_PREFIX="$SRT_INSTALL_DIR" \
          -DUSE_STATIC_LIBSTDCXX=ON
 make -j$(nproc)
 make install
+rm -rf "$SRT_BUILD_DIR"
 
 # 2. Build libpcap
 PCAP_VERSION="1.10.4"
 PCAP_SRC_DIR="$DEPS_DIR/libpcap_src"
 PCAP_INSTALL_DIR="$DEPS_DIR/libpcap"
+PCAP_BUILD_DIR="$DEPS_DIR/pcap_build_tmp"
 
 # Check for build dependencies (flex/bison)
 if ! command -v flex >/dev/null 2>&1 || ! command -v bison >/dev/null 2>&1; then
@@ -49,13 +54,15 @@ else
         rm libpcap.tar.gz
     fi
     echo "--- Building libpcap (Static) ---"
-    cd "$PCAP_SRC_DIR"
-    if [ -f "CMakeLists.txt" ]; then
-        mkdir -p build && cd build
-        cmake .. -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_WITH_LIBNL=OFF
+    if [ -f "$PCAP_SRC_DIR/CMakeLists.txt" ]; then
+        mkdir -p "$PCAP_BUILD_DIR"
+        cd "$PCAP_BUILD_DIR"
+        cmake "$PCAP_SRC_DIR" -DENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX="$PCAP_INSTALL_DIR" -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_WITH_LIBNL=OFF
         make -j$(nproc)
         make install
+        rm -rf "$PCAP_BUILD_DIR"
     else
+        cd "$PCAP_SRC_DIR"
         ./configure --prefix="$PCAP_INSTALL_DIR" --disable-shared
         make -j$(nproc)
         make install
@@ -125,5 +132,14 @@ cd "$CURL_SRC_DIR"
             --without-libpsl --without-libidn2 --without-brotli --without-zstd --without-librtmp
 make -j$(nproc)
 make install
+
+# 6. TSDuck (Containerized for cross-test)
+echo "--- Preparing TSDuck (via Docker) ---"
+if command -v docker >/dev/null 2>&1; then
+    docker pull tsduck/tsduck:latest || true
+    echo "TSDuck docker image ready. Use 'docker run -v \$(pwd):/data tsduck/tsduck' to run."
+else
+    echo "WARNING: Docker not found. TSDuck cross-validation will be unavailable."
+fi
 
 echo "=== TSA: All Dependencies Built and Installed Cleanly ==="

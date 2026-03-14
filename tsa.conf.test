@@ -1,0 +1,22 @@
+# TsAnalyzer Pro Configuration
+http_listen 8088;
+srt_listen 9000;
+worker_threads 16;
+worker_slice_us 2000;
+
+# Disable auth for automated stability testing
+api_auth off;
+
+logging {
+    level INFO;
+    dir ./logs;
+}
+
+vhost __default__ {
+    metrology {
+        pcr_jitter on;
+        drift_analysis on;
+    }
+    # Explicitly enable TR101 290 analysis for health score
+    tr101290 on;
+}
