@@ -94,29 +94,27 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                                          s->iat_hist.bucket_10_100ms + s->iat_hist.bucket_over_100ms));
 
         // Tier 3: Compliance (TR 101 290 & PCR)
-        SAFE_APPEND("tsa_compliance_tr101290_p1_sync_loss_total%s %llu\n", labels,
-                    (unsigned long long)s->sync_loss.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p1_pat_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->pat_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p1_pmt_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->pmt_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p1_cc_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->cc_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p1_pid_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->pid_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p2_pts_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->pts_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p2_crc_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->crc_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p2_transport_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->transport_error.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p3_sdt_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->sdt_timeout.count);
-        SAFE_APPEND("tsa_compliance_tr101290_p3_nit_errors_total%s %llu\n", labels,
-                    (unsigned long long)s->nit_timeout.count);
+        SAFE_APPEND("tsa_tr101290_p1_sync_loss_total%s %llu\n", labels, (unsigned long long)s->sync_loss_count);
+        SAFE_APPEND("tsa_tr101290_p1_sync_byte_errors_total%s %llu\n", labels,
+                    (unsigned long long)s->sync_byte_error_count);
+        SAFE_APPEND("tsa_tr101290_p1_pat_errors_total%s %llu\n", labels, (unsigned long long)s->pat_error_count);
+        SAFE_APPEND("tsa_tr101290_p1_pmt_errors_total%s %llu\n", labels, (unsigned long long)s->pmt_error_count);
+        SAFE_APPEND("tsa_tr101290_p1_cc_errors_total%s %llu\n", labels, (unsigned long long)s->cc_error.count);
+        SAFE_APPEND("tsa_tr101290_p1_pid_errors_total%s %llu\n", labels, (unsigned long long)s->pid_error_count);
 
-        SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
-                    (unsigned long long)s->sync_loss.count);
+        SAFE_APPEND("tsa_tr101290_p2_tei_errors_total%s %llu\n", labels, (unsigned long long)s->tei_error_count);
+        SAFE_APPEND("tsa_tr101290_p2_pts_errors_total%s %llu\n", labels, (unsigned long long)s->pts_error.count);
+        SAFE_APPEND("tsa_tr101290_p2_crc_errors_total%s %llu\n", labels, (unsigned long long)s->crc_error.count);
+        SAFE_APPEND("tsa_tr101290_p2_transport_errors_total%s %llu\n", labels,
+                    (unsigned long long)s->transport_error.count);
+
+        SAFE_APPEND("tsa_tr101290_p3_sdt_errors_total%s %llu\n", labels, (unsigned long long)s->sdt_error_count);
+        SAFE_APPEND("tsa_tr101290_p3_nit_errors_total%s %llu\n", labels, (unsigned long long)s->nit_error_count);
+        SAFE_APPEND("tsa_tr101290_p3_eit_errors_total%s %llu\n", labels, (unsigned long long)s->eit_error_count);
+        SAFE_APPEND("tsa_tr101290_p3_tdt_errors_total%s %llu\n", labels, (unsigned long long)s->tdt_error_count);
+
+        SAFE_APPEND("tsa_tr101290_errors{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
+                    (unsigned long long)s->sync_loss_count);
         SAFE_APPEND("tsa_compliance_tr101290_errors_last_offset{stream_id=\"%s\",error_type=\"sync_loss\"} %llu\n", sid,
                     (unsigned long long)s->sync_loss.absolute_byte_offset);
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"pat_error\"} %llu\n", sid,
@@ -140,9 +138,10 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_compliance_tr101290_errors{stream_id=\"%s\",error_type=\"transport_error\"} %llu\n", sid,
                     (unsigned long long)s->transport_error.count);
 
-        SAFE_APPEND("tsa_compliance_pcr_repetition_errors%s %llu\n", labels,
+        SAFE_APPEND("tsa_tr101290_pcr_repetition_errors%s %llu\n", labels,
                     (unsigned long long)s->pcr_repetition_error.count);
-        SAFE_APPEND("tsa_compliance_pcr_accuracy_errors%s %llu\n", labels,
+
+        SAFE_APPEND("tsa_tr101290_pcr_accuracy_errors%s %llu\n", labels,
                     (unsigned long long)s->pcr_accuracy_error.count);
 
         // Tier 3.1: Active Alerts Status

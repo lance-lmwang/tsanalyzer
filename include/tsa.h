@@ -77,6 +77,17 @@ typedef struct {
     uint64_t active_alerts_mask;
     double pcr_jitter_avg_ns;
     uint64_t pcr_jitter_rms_ns;
+    uint64_t sync_loss_count;
+    uint64_t sync_byte_error_count;
+    uint64_t pat_error_count;
+    uint64_t pmt_error_count;
+    uint64_t pid_error_count;
+    uint64_t tei_error_count;
+    uint64_t nit_error_count;
+    uint64_t sdt_error_count;
+    uint64_t eit_error_count;
+    uint64_t tdt_error_count;
+
     uint64_t pcr_jitter_max_ns;
     uint64_t pcr_repetition_max_ms;
     double pcr_accuracy_ns;

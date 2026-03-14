@@ -253,15 +253,19 @@ void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64
     if (type != TSA_EVENT_SYNC_LOSS && !h->signal_lock) return;
     switch (type) {
         case TSA_EVENT_SYNC_LOSS:
+            h->live->sync_loss_count++;
             tsa_alert_update(h, TSA_ALERT_SYNC, true, "SYNC", pid);
             break;
         case TSA_EVENT_PAT_TIMEOUT:
+            h->live->pat_error_count++;
             tsa_alert_update(h, TSA_ALERT_PAT, true, "PAT", pid);
             break;
         case TSA_EVENT_PMT_TIMEOUT:
+            h->live->pmt_error_count++;
             tsa_alert_update(h, TSA_ALERT_PMT, true, "PMT", pid);
             break;
         case TSA_EVENT_PID_ERROR:
+            h->live->pid_error_count++;
             tsa_alert_update(h, TSA_ALERT_PID, true, "PID", pid);
             break;
         case TSA_EVENT_CC_ERROR:
@@ -271,6 +275,7 @@ void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64
             tsa_alert_update(h, TSA_ALERT_CRC, true, "CRC", pid);
             break;
         case TSA_EVENT_TRANSPORT_ERROR:
+            h->live->tei_error_count++;
             tsa_alert_update(h, TSA_ALERT_TRANSPORT, true, "TRANSPORT", pid);
             break;
         case TSA_EVENT_PTS_ERROR:
@@ -293,11 +298,11 @@ void tsa_push_event(tsa_handle_t* h, tsa_event_type_t type, uint16_t pid, uint64
             tsa_alert_update(h, TSA_ALERT_ENTROPY, true, "ENTROPY", pid);
             break;
         case TSA_EVENT_SDT_TIMEOUT:
-            h->live->sdt_timeout.count++;
+            h->live->sdt_error_count++;
             tsa_alert_update(h, TSA_ALERT_SDT, true, "SDT", pid);
             break;
         case TSA_EVENT_NIT_TIMEOUT:
-            h->live->nit_timeout.count++;
+            h->live->nit_error_count++;
             tsa_alert_update(h, TSA_ALERT_NIT, true, "NIT", pid);
             break;
         default:
@@ -334,6 +339,7 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
     h->last_packet_rx_ns = n;
     if (p[0] != 0x47) {
         h->consecutive_sync_errors++;
+        h->live->sync_byte_error_count++;
         h->consecutive_good_syncs = 0;
         if (h->consecutive_sync_errors >= 5 && h->signal_lock) {
             h->live->sync_loss.count++;

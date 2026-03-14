@@ -33,7 +33,7 @@ sleep 5
 
 # 3. Phase 1: check baseline
 FINAL_METRICS=$(curl -s http://127.0.0.1:$PORT_API/json)
-BASE_ERR=$(echo "$FINAL_METRICS" | grep -oP '"tsa_compliance_pcr_repetition_errors":\s*\K\d+' | head -n 1 || echo "0")
+BASE_ERR=$(echo "$FINAL_METRICS" | grep -oP '"pcr_repetition_error":\s*\K\d+' | head -n 1 || echo "0")
 
 echo "------------------------------------------------------------"
 echo "Baseline Errors: $BASE_ERR"
@@ -48,7 +48,7 @@ sleep 3
 
 # 5. Check if error count increased
 FINAL_METRICS=$(curl -s http://127.0.0.1:$PORT_API/json)
-ERR_COUNT=$(echo "$FINAL_METRICS" | grep -oP '"tsa_compliance_pcr_repetition_errors":\s*\K\d+' | head -n 1 || echo "0")
+ERR_COUNT=$(echo "$FINAL_METRICS" | grep -oP '"pcr_repetition_error":\s*\K\d+' | head -n 1 || echo "0")
 
 echo "------------------------------------------------------------"
 echo "Final PCR Repetition Errors: $ERR_COUNT"

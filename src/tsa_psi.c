@@ -128,15 +128,6 @@ static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t 
     }
 }
 
-static void trim_trailing_spaces(char* s) {
-    if (!s) return;
-    int len = strlen(s);
-    while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r' || s[len - 1] == '\n')) {
-        s[len - 1] = '\0';
-        len--;
-    }
-}
-
 static void process_sdt(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t max_len) {
     if (h->last_sdt_ns > 0) {
         uint64_t diff = now - h->last_sdt_ns;
@@ -250,7 +241,6 @@ static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_fi
             else if (tid == 0x42)
                 process_sdt(h, f->buffer, h->stc_ns, section_len);
             else if (tid == 0xFC) {
-                /* SCTE-35 Splice Info Section */
                 tsa_scte35_process(h, pid, f->buffer, (((f->buffer[1] & 0x0F) << 8) | f->buffer[2]) + 3);
             }
             f->last_ver = ver;
@@ -264,8 +254,6 @@ static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_fi
     f->active = false;
     f->complete = false;
 }
-
-void tsa_reset_pid_stats(tsa_handle_t* h, uint16_t pid);
 
 void tsa_section_filter_push(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt, const ts_decode_result_t* res) {
     if (!res->has_payload) return;

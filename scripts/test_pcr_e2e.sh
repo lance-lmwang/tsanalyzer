@@ -70,7 +70,7 @@ sleep 5
 # 6. Verify Error Count
 FINAL_METRICS=$(curl -s http://localhost:$PORT_API/metrics)
 # Match either the specific label one or the generic one if available
-ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_compliance_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
+ERR_COUNT=$(echo "$FINAL_METRICS" | grep "tsa_tr101290_pcr_repetition_errors" | head -n 1 | awk '{print $2}' || echo "0")
 
 echo "------------------------------------------------------------"
 echo "Final PCR Repetition Error Count: $ERR_COUNT"
