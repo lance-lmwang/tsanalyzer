@@ -22,6 +22,7 @@ static rate_bucket_t g_buckets[MAX_ID_TRACK];
 static int g_bucket_count = 0;
 static pthread_mutex_t g_auth_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_api_secret[64] = "tsanalyzer-default-secret";
+static bool g_auth_enabled = true;
 
 static uint64_t get_ns() {
     struct timespec ts;
@@ -55,6 +56,12 @@ static int b64url_decode(const char* in, int in_len, unsigned char* out) {
     return decoded_len;
 }
 
+void tsa_auth_set_enabled(bool enabled) {
+    pthread_mutex_lock(&g_auth_lock);
+    g_auth_enabled = enabled;
+    pthread_mutex_unlock(&g_auth_lock);
+}
+
 void tsa_auth_init(const char* secret) {
     pthread_mutex_lock(&g_auth_lock);
     const char* env_secret = getenv("TSA_API_SECRET");
@@ -69,6 +76,7 @@ void tsa_auth_init(const char* secret) {
 }
 
 bool tsa_auth_verify_request(struct mg_http_message* hm) {
+    if (!g_auth_enabled) return true;
     struct mg_str* auth = mg_http_get_header(hm, "Authorization");
     struct mg_str token_str = mg_str("");
 

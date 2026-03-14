@@ -30,6 +30,7 @@ typedef struct {
     int worker_threads;
     int worker_slice_us;
     bool shm_enabled;
+    bool api_auth_enabled;
     char api_secret[128];
 
     tsa_log_conf_t logging;

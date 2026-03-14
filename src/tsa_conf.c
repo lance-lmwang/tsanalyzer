@@ -181,6 +181,10 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 conf->api_secret[l] = '\0';
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
+            } else if (strcmp(word, "api_auth") == 0) {
+                conf->api_auth_enabled = tsa_units_to_bool(p.lookahead.text);
+                next_token(&p);
+                match(&p, TSA_TOKEN_SEMICOLON);
             } else if (strcmp(word, "logging") == 0) {
                 parse_logging(&p);
             } else if (strcmp(word, "vhost") == 0) {

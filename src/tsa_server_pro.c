@@ -72,6 +72,7 @@ static void load_config(const char* file) {
     g_sys_conf.srt_listen_port = 9000;
     g_sys_conf.worker_threads = 16;
     g_sys_conf.worker_slice_us = 2000;  // Default 2ms
+    g_sys_conf.api_auth_enabled = true;
 
     if (tsa_conf_load(&g_sys_conf, file) == 0) {
         if (g_sys_conf.logging.level[0]) {
@@ -101,6 +102,7 @@ static void load_config(const char* file) {
     g_srt_port = g_sys_conf.srt_listen_port;
 
     tsa_auth_init(g_sys_conf.api_secret[0] ? g_sys_conf.api_secret : NULL);
+    tsa_auth_set_enabled(g_sys_conf.api_auth_enabled);
 
     struct sockaddr_in sa = {0};
     sa.sin_family = AF_INET;

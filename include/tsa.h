@@ -246,8 +246,9 @@ typedef enum {
 } tsa_failover_mode_t;
 
 typedef struct {
-    char input_label[TSA_ID_MAX];
+    char input_label[TSA_LABEL_MAX];
     tsa_op_mode_t op_mode;
+    bool api_auth_enabled;
 
     struct {
         bool enabled;

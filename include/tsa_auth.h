@@ -5,6 +5,11 @@
 #include "mongoose.h"
 
 /**
+ * @brief Enable or disable authentication globally.
+ */
+void tsa_auth_set_enabled(bool enabled);
+
+/**
  * @brief Initialize the auth engine with a secret/public key.
  */
 void tsa_auth_init(const char* secret);
