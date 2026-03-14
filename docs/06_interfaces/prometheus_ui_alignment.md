@@ -16,14 +16,14 @@ This document provides the definitive mapping between the labels displayed in th
 
 | UI Grid Label | Prometheus Metric Name | Label / Sub-metric |
 | :--- | :--- | :--- |
-| **P1.1 SYNC** | `tsa_compliance_tr101290_errors` | `error_type="sync_loss"` |
-| **P1.2 PAT** | `tsa_compliance_tr101290_errors` | `error_type="pat_error"` |
-| **P1.3 PMT** | `tsa_compliance_tr101290_errors` | `error_type="pmt_error"` |
-| **P1.4 CC** | `tsa_compliance_tr101290_errors` | `error_type="cc_error"` |
-| **P2.1 TEI** | `tsa_compliance_tr101290_errors` | `error_type="transport_error"` |
-| **P2.2 CRC** | `tsa_compliance_tr101290_errors` | `error_type="crc_error"` |
-| **P2.3 PCR JIT** | `tsa_metrology_pcr_jitter_ms` | Value > 50ms = Alarm |
-| **P2.4 PCR REP** | `tsa_compliance_pcr_repetition_errors` | Continuous counter |
+| **P1.1 SYNC** | `tsa_tr101290_p1_sync_loss_total` | Total sync loss count |
+| **P1.2 PAT** | `tsa_tr101290_p1_pat_errors_total` | PAT timeout errors |
+| **P1.3 PMT** | `tsa_tr101290_p1_pmt_errors_total` | PMT timeout errors |
+| **P1.4 CC** | `tsa_tr101290_p1_cc_errors_total` | Continuity counter errors |
+| **P2.1 TEI** | `tsa_tr101290_p2_tei_errors_total` | Transport Error Indicator |
+| **P2.2 CRC** | `tsa_tr101290_p2_crc_errors_total` | PSI/SI CRC32 mismatches |
+| **P2.3 PCR JIT** | `tsa_metrology_pcr_jitter_ms` | Current jitter (Settled) |
+| **P2.4 PCR REP** | `tsa_tr101290_p2_pcr_repetition_errors_total` | Interval > 40ms |
 
 ## 3. Essence Vitals (Charts & Timelines)
 
@@ -49,7 +49,9 @@ This document provides the definitive mapping between the labels displayed in th
 | :--- | :--- | :--- |
 | **PID** | `tsa_metrology_pid_bitrate_bps` | Labeled with `{pid="0x..."}` |
 | **TYPE/CODEC**| `tsa_metrology_pid_bitrate_bps` | Labeled with `{type="..."}` |
-| **BITRATE** | `tsa_metrology_pid_bitrate_bps` | Per-PID bandwidth |
+| **BITRATE** | `tsa_metrology_pid_bitrate_bps` | Current instantaneous rate |
+| **PEAK BR** | `tsa_metrology_pid_bitrate_peak_bps`| Session maximum |
+| **AVG BR** | `tsa_metrology_pid_bitrate_avg_bps` | Session average |
 
 ---
-*Note: The NOC Dashboard fetches core metrics from `/metrics/core` and detailed focus data from `/api/v1/snapshot`. Both are derived from the same deterministic metrology engine.*
+*Note: The NOC Dashboard fetches core metrics from `/metrics` and detailed focus data from `/api/v1/snapshot`. Both are derived from the same deterministic metrology engine.*

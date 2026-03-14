@@ -16,11 +16,20 @@ cd "$PROJECT_ROOT"
 
 # --- Test Parameters ---
 API_URL="http://localhost:8088/api/v1/streams"
-TOKEN="header.eyJ0ZW5hbnQiOiAiZDJlMi10ZXN0In0.signature"
 SAMPLE_FILE="./sample/test.ts"
 [ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="../sample/test.ts"
 [ ! -f "$SAMPLE_FILE" ] && SAMPLE_FILE="/home/lmwang/dev/sample/test.ts"
 LOG_DIR="build/e2e_logs"
+
+# --- Security: Dynamic JWT Generation ---
+# The server uses "tsanalyzer-default-secret" if TSA_API_SECRET env is not set.
+SECRET="tsanalyzer-default-secret"
+HEADER_B64="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+PAYLOAD_B64="eyJ0ZW5hbnQiOiAiZDJlMi10ZXN0In0"
+
+# Compute HMAC signature using OpenSSL
+SIGNATURE=$(echo -n "${HEADER_B64}.${PAYLOAD_B64}" | openssl dgst -sha256 -hmac "$SECRET" -binary | base64 | tr '+/' '-_' | tr -d '=')
+TOKEN="${HEADER_B64}.${PAYLOAD_B64}.${SIGNATURE}"
 
 # --- Helper Functions ---
 function print_header {
@@ -96,8 +105,14 @@ TSP_PID=$!
 sleep 5
 
 echo "-> Verifying stream is active..."
-curl -s -X GET "$API_URL" -H "Authorization: Bearer $TOKEN" | jq '.streams[]' | grep "e2e_stream_1"
-assert_success
+RESPONSE=$(curl -s -X GET "$API_URL" -H "Authorization: Bearer $TOKEN")
+if echo "$RESPONSE" | jq -e '.streams' > /dev/null 2>&1; then
+    echo "$RESPONSE" | jq '.streams[]' | grep -q "e2e_stream_1"
+    assert_success
+else
+    echo "  [FAIL] Invalid API response: $RESPONSE"
+    exit 1
+fi
 
 pkill -P $TSP_PID || true
 
@@ -113,7 +128,7 @@ TSP_GW_PID=$!
 sleep 5
 
 echo "-> Verifying metrics endpoint..."
-curl -s http://127.0.0.1:8001/metrics | grep "tsa_compliance_tr101290_p1_cc_errors_total"
+curl -s http://127.0.0.1:8001/metrics | grep "tsa_tr101290_p1_cc_errors_total"
 assert_success
 
 pkill -P $TSG_PID || true

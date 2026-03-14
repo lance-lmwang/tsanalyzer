@@ -28,14 +28,29 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
     if (dp > 0) {
         uint64_t inst_bps = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
         float alpha = (h->config.op_mode == TSA_MODE_REPLAY) ? 0.8f : 0.2f;
-        if (h->phys_stats.last_bps == 0)
+        if (h->phys_stats.last_bps == 0) {
             h->phys_stats.last_bps = inst_bps;
-        else
+            h->live->physical_bitrate_min_bps = inst_bps;
+        } else {
             h->phys_stats.last_bps = (uint64_t)(alpha * inst_bps + (1.0f - alpha) * h->phys_stats.last_bps);
+        }
+
+        /* Update global peaks */
+        if (h->phys_stats.last_bps > h->live->physical_bitrate_peak_bps)
+            h->live->physical_bitrate_peak_bps = h->phys_stats.last_bps;
+        if (h->phys_stats.last_bps < h->live->physical_bitrate_min_bps || h->live->physical_bitrate_min_bps == 0)
+            h->live->physical_bitrate_min_bps = h->phys_stats.last_bps;
     }
     h->phys_stats.last_snap_bytes = curr_pkts;
 
-    /* 2. Per-PID Bitrate */
+    /* 2. Average Bitrate (Total) */
+    uint64_t total_dt = now_metrology - h->start_ns;
+    if (total_dt > 100000000ULL) {
+        h->live->physical_bitrate_avg_bps =
+            (uint64_t)(((unsigned __int128)h->live->total_ts_packets * TS_PACKET_BITS * NS_PER_SEC) / total_dt);
+    }
+
+    /* 3. Per-PID Bitrate Matrix */
     for (uint32_t i = 0; i < h->pid_tracker_count; i++) {
         uint16_t pid = h->pid_active_list[i];
         if (pid >= TS_PID_MAX) continue;
@@ -46,13 +61,27 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
 
         if (p_dp > 0) {
             uint64_t p_bps = (uint64_t)(((unsigned __int128)p_dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
-            if (h->live->pid_bitrate_bps[pid] == 0)
+            if (h->live->pid_bitrate_bps[pid] == 0) {
                 h->live->pid_bitrate_bps[pid] = p_bps;
-            else
+                h->live->pid_bitrate_min_bps[pid] = p_bps;
+            } else {
                 h->live->pid_bitrate_bps[pid] = (uint64_t)(0.5 * p_bps + 0.5 * h->live->pid_bitrate_bps[pid]);
+            }
+
+            /* Update PID peaks */
+            if (h->live->pid_bitrate_bps[pid] > h->live->pid_bitrate_peak_bps[pid])
+                h->live->pid_bitrate_peak_bps[pid] = h->live->pid_bitrate_bps[pid];
+            if (h->live->pid_bitrate_bps[pid] < h->live->pid_bitrate_min_bps[pid] ||
+                h->live->pid_bitrate_min_bps[pid] == 0)
+                h->live->pid_bitrate_min_bps[pid] = h->live->pid_bitrate_bps[pid];
         } else {
-            /* If no packets seen in window, decay bitrate slowly */
             h->live->pid_bitrate_bps[pid] = (uint64_t)(h->live->pid_bitrate_bps[pid] * 0.5);
+        }
+
+        /* Update PID average */
+        if (total_dt > 100000000ULL) {
+            h->live->pid_bitrate_avg_bps[pid] =
+                (uint64_t)(((unsigned __int128)p_pkts * TS_PACKET_BITS * NS_PER_SEC) / total_dt);
         }
         h->phys_stats.pid_last_snap_pkts[pid] = p_pkts;
     }

@@ -44,7 +44,7 @@ while true; do
     METRICS=$(curl -s http://localhost:8088/metrics || echo "")
     if [ -n "$METRICS" ]; then
         HEALTH=$(echo "$METRICS" | grep "tsa_system_health_score" | awk '{print $2}')
-        CC=$(echo "$METRICS" | grep "tsa_compliance_tr101290_p1_cc_errors_total" | awk '{print $2}')
+        CC=$(echo "$METRICS" | grep "tsa_tr101290_p1_cc_errors_total" | awk '{print $2}')
         BPS=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | awk '{print $2}')
         MBPS=$(echo "scale=2; $BPS / 1000000" | bc)
 

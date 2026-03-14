@@ -75,7 +75,7 @@ def run():
                     lines = r.text.splitlines()
                     cc, bps, fps = 0, 0, 0
                     for line in lines:
-                        if f'tsa_compliance_tr101290_p1_cc_errors_total{{stream_id="{STREAM_ID}"}}' in line: cc = int(float(line.split()[-1]))
+                        if f'tsa_tr101290_p1_cc_errors_total{{stream_id="{STREAM_ID}"}}' in line: cc = int(float(line.split()[-1]))
                         if f'tsa_metrology_physical_bitrate_bps{{stream_id="{STREAM_ID}"}}' in line: bps = float(line.split()[-1])
                         if f'tsa_essence_video_fps{{stream_id="{STREAM_ID}"}}' in line: fps = float(line.split()[-1])
 

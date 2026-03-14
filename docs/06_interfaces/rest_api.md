@@ -9,9 +9,10 @@ The TsAnalyzer Pro Control Plane provides a high-performance REST API for stream
 TsAnalyzer utilizes a **Two-Tier Security Gateway** to protect the control plane.
 
 ### 1.1 JWT Authentication
-All requests to `/api/v1/*` must include a valid JSON Web Token (JWT) in the header.
-*   **Header**: `Authorization: Bearer <TOKEN>` or `X-TSA-Token: <SECRET>`
-*   **Default Behavior**: In production, anonymous access returns `401 Unauthorized`.
+All requests to `/api/v1/*` must include a valid **HS256 JSON Web Token (JWT)**.
+*   **Header**: `Authorization: Bearer <TOKEN>`
+*   **HMAC Secret**: Loaded from `TSA_API_SECRET` environment variable (defaults to `tsanalyzer-default-secret`).
+*   **Behavior**: Invalid or missing tokens return `401 Unauthorized`.
 
 ### 1.2 Rate Limiting (Token Bucket)
 To prevent API denial-of-service, a global token bucket is applied per remote IP.

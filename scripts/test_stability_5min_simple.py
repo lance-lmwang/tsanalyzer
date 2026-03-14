@@ -58,7 +58,7 @@ def run():
                     cc = 0
                     health = 0
                     for line in metrics.splitlines():
-                        if f'tsa_compliance_tr101290_p1_cc_errors_total{{stream_id="{STREAM_ID}"}}' in line: cc = int(float(line.split()[-1]))
+                        if f'tsa_tr101290_p1_cc_errors_total{{stream_id="{STREAM_ID}"}}' in line: cc = int(float(line.split()[-1]))
                         if f'tsa_system_health_score{{stream_id="{STREAM_ID}"}}' in line: health = float(line.split()[-1])
 
                     print(f"[{elapsed:3d}s] Health:{health:.1f} CC:{cc}")
