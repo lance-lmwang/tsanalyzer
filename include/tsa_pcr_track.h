@@ -59,6 +59,7 @@ typedef struct {
         bool sync_done;
     } anchors;
 
+    void* live; /* Pointer to tsa_tr101290_stats_t */
     bool initialized;
 } tsa_pcr_track_t;
 

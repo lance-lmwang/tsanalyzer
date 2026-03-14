@@ -162,6 +162,34 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
         SAFE_APPEND("tsa_metrology_pcr_accuracy_ns%s %.2f\n", labels, (float)safe_val(s->pcr_accuracy_ns));
         SAFE_APPEND("tsa_metrology_pcr_accuracy_piecewise_ms%s %.3f\n", labels,
                     safe_val(s->pcr_accuracy_ns_piecewise) / 1000000.0);
+
+        /* PCR Jitter Histogram (Cumulative for Heatmap) */
+        uint64_t c = 0;
+        c += s->pcr_jitter_hist.bucket_under_500ns;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"0.0005\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_500ns_1us;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"0.001\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_1us_5us;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"0.005\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_5us_10us;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"0.01\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_10us_100us;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"0.1\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_100us_1ms;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"1.0\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_1ms_10ms;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"10.0\"} %llu\n", sid,
+                    (unsigned long long)c);
+        c += s->pcr_jitter_hist.bucket_over_10ms;
+        SAFE_APPEND("tsa_metrology_pcr_jitter_histogram_bucket{stream_id=\"%s\",le=\"+Inf\"} %llu\n", sid,
+                    (unsigned long long)c);
+
         SAFE_APPEND("tsa_metrology_stc_wall_drift_ppm%s %.3f\n", labels, safe_val(snap->predictive.stc_wall_drift_ppm));
         SAFE_APPEND("tsa_metrology_long_term_drift_ppm%s %.3f\n", labels,
                     safe_val(snap->predictive.long_term_drift_ppm));

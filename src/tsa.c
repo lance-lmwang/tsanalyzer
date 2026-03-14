@@ -95,6 +95,7 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
 
     for (int i = 0; i < TS_PID_MAX; i++) {
         tsa_pcr_track_init(&h->pcr_tracks[i], i, 0);
+        h->pcr_tracks[i].live = h->live;
 
         tsa_es_track_t* es = &h->es_tracks[i];
         es->pid = i;

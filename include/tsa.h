@@ -42,6 +42,17 @@ typedef struct {
 } tsa_iat_histogram_t;
 
 typedef struct {
+    uint64_t bucket_under_500ns;
+    uint64_t bucket_500ns_1us;
+    uint64_t bucket_1us_5us;
+    uint64_t bucket_5us_10us;
+    uint64_t bucket_10us_100us;
+    uint64_t bucket_100us_1ms;
+    uint64_t bucket_1ms_10ms;
+    uint64_t bucket_over_10ms;
+} tsa_pcr_jitter_histogram_t;
+
+typedef struct {
     tsa_alarm_t sync_loss;
     tsa_alarm_t sync_byte_error;
     tsa_alarm_t pat_error;
@@ -73,10 +84,14 @@ typedef struct {
     uint64_t cc_loss_count;
     uint64_t cc_duplicate_count;
     uint64_t physical_bitrate_bps;
+    uint64_t physical_bitrate_peak_bps;
+    uint64_t physical_bitrate_min_bps;
+    uint64_t physical_bitrate_avg_bps;
     uint64_t pcr_bitrate_bps;
     uint64_t active_alerts_mask;
     double pcr_jitter_avg_ns;
     uint64_t pcr_jitter_rms_ns;
+    tsa_pcr_jitter_histogram_t pcr_jitter_hist;
     uint64_t sync_loss_count;
     uint64_t sync_byte_error_count;
     uint64_t pat_error_count;
@@ -107,6 +122,7 @@ typedef struct {
     uint64_t pid_bitrate_bps[TS_PID_MAX];
     uint64_t pid_bitrate_peak_bps[TS_PID_MAX];
     uint64_t pid_bitrate_min_bps[TS_PID_MAX];
+    uint64_t pid_bitrate_avg_bps[TS_PID_MAX];
     uint64_t pid_cc_errors[TS_PID_MAX];
     uint64_t pid_scrambled_packets[TS_PID_MAX];
     uint64_t pid_pes_errors[TS_PID_MAX];

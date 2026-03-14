@@ -47,8 +47,20 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
     SAFE_JSON("      \"crc_error\": %llu,\n", (unsigned long long)st->crc_error.count);
     SAFE_JSON("      \"pcr_repetition_error\": %llu,\n", (unsigned long long)st->pcr_repetition_error.count);
     SAFE_JSON("      \"pcr_repetition_max_ms\": %.2f,\n", (float)st->pcr_repetition_max_ms);
-    SAFE_JSON("      \"pcr_accuracy_error_ms\": %.3f,\n", st->pcr_jitter_avg_ns / 1000000.0);
-    SAFE_JSON("      \"pcr_drift_ppm\": %.2f\n", st->pcr_drift_ppm);
+    SAFE_JSON("      \"pcr_accuracy_peak_ms\": %.3f,\n", st->pcr_jitter_max_ns / 1000000.0);
+    SAFE_JSON("      \"pcr_drift_ppm\": %.2f,\n", st->pcr_drift_ppm);
+    SAFE_JSON("      \"jitter_histogram_ms\": {\n");
+    SAFE_JSON(
+        "        \"<0.0005\": %llu, \"0.001\": %llu, \"0.005\": %llu, \"0.01\": %llu, \"0.1\": %llu, \"1.0\": %llu, "
+        "\"10.0\": %llu, \">10.0\": %llu\n",
+        (unsigned long long)st->pcr_jitter_hist.bucket_under_500ns,
+        (unsigned long long)st->pcr_jitter_hist.bucket_500ns_1us,
+        (unsigned long long)st->pcr_jitter_hist.bucket_1us_5us, (unsigned long long)st->pcr_jitter_hist.bucket_5us_10us,
+        (unsigned long long)st->pcr_jitter_hist.bucket_10us_100us,
+        (unsigned long long)st->pcr_jitter_hist.bucket_100us_1ms,
+        (unsigned long long)st->pcr_jitter_hist.bucket_1ms_10ms,
+        (unsigned long long)st->pcr_jitter_hist.bucket_over_10ms);
+    SAFE_JSON("      }\n");
     SAFE_JSON("    },\n");
 
     /* Priority 3: SI/PSI Tables */

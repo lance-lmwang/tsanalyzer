@@ -167,6 +167,28 @@ bool tsa_pcr_track_update(tsa_pcr_track_t* track, uint64_t pcr_ticks, uint64_t a
                     tsa_warn_ctx(TAG, 0, track->pid, "PCR Clock UNLOCKED (Jitter: %.2f ms exceeds 1ms threshold)",
                                  inst_jitter_ms);
                 }
+
+                /* Update Jitter Histogram */
+                uint64_t abs_err_ns = (max_err_ns < 0) ? (uint64_t)(-max_err_ns) : (uint64_t)max_err_ns;
+                tsa_tr101290_stats_t* s = (tsa_tr101290_stats_t*)track->live;
+                if (s) {
+                    if (abs_err_ns < 500)
+                        s->pcr_jitter_hist.bucket_under_500ns++;
+                    else if (abs_err_ns < 1000)
+                        s->pcr_jitter_hist.bucket_500ns_1us++;
+                    else if (abs_err_ns < 5000)
+                        s->pcr_jitter_hist.bucket_1us_5us++;
+                    else if (abs_err_ns < 10000)
+                        s->pcr_jitter_hist.bucket_5us_10us++;
+                    else if (abs_err_ns < 100000)
+                        s->pcr_jitter_hist.bucket_10us_100us++;
+                    else if (abs_err_ns < 1000000)
+                        s->pcr_jitter_hist.bucket_100us_1ms++;
+                    else if (abs_err_ns < 10000000)
+                        s->pcr_jitter_hist.bucket_1ms_10ms++;
+                    else
+                        s->pcr_jitter_hist.bucket_over_10ms++;
+                }
             }
         }
     }
