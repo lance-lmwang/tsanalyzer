@@ -24,7 +24,11 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t 
             bool found = false;
             for (uint32_t j = 0; j < h->program_count; j++)
                 if (h->programs[j].program_number == pn) {
-                    h->programs[j].pmt_pid = ppid;
+                    if (h->programs[j].pmt_pid != ppid) {
+                        tsa_info_ctx("PAT", 0, 0, "Program %u PMT PID changed: 0x%04x -> 0x%04x", pn,
+                                     h->programs[j].pmt_pid, ppid);
+                        h->programs[j].pmt_pid = ppid;
+                    }
                     found = true;
                     break;
                 }
@@ -32,6 +36,7 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t 
                 h->programs[h->program_count].program_number = pn;
                 h->programs[h->program_count].pmt_pid = ppid;
                 h->program_count++;
+                tsa_info_ctx("PAT", 0, 0, "New program discovered: %u (PMT PID 0x%04x)", pn, ppid);
             }
             if (ppid < TS_PID_MAX) h->pid_is_pmt[ppid] = true;
         }
@@ -61,7 +66,10 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
     if (pr) {
         tsa_stream_model_update_program(&h->ts_model, pn, pid);
         pr->pmt_pid = pid;
-        pr->pcr_pid = pcr;
+        if (pr->pcr_pid != pcr) {
+            tsa_info_ctx("PMT", 0, pid, "Program %u PCR PID: 0x%04x", pn, pcr);
+            pr->pcr_pid = pcr;
+        }
         if (pcr < TS_PID_MAX) {
             if (!h->live->pid_is_referenced[pcr]) tsa_reset_pid_stats(h, pcr);
             h->live->pid_is_referenced[pcr] = true;
@@ -117,6 +125,15 @@ static void process_nit(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t 
             h->network_name[(nl < 255) ? nl : 255] = '\0';
         }
         j += 2 + dl;
+    }
+}
+
+static void trim_trailing_spaces(char* s) {
+    if (!s) return;
+    int len = strlen(s);
+    while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r' || s[len - 1] == '\n')) {
+        s[len - 1] = '\0';
+        len--;
     }
 }
 
@@ -241,6 +258,7 @@ static void parse_completed_section(tsa_handle_t* h, uint16_t pid, ts_section_fi
         } else {
             h->live->crc_error.count++;
             tsa_push_event(h, TSA_EVENT_CRC_ERROR, pid, 0);
+            tsa_error_ctx("PSI", 0, pid, "Section CRC error! TID: 0x%02x, Len: %lu", tid, section_len);
         }
     }
     f->active = false;

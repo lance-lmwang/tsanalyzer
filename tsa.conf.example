@@ -1,0 +1,33 @@
+# TsAnalyzer Production Configuration Example
+
+# Control Plane Settings
+http_listen 8088;
+srt_listen 9000;
+worker_threads 16;
+api_secret "change-me-to-a-secure-key";
+
+# High-Performance Logging System
+logging {
+    level "DEBUG";
+    json false;
+    dir "/tmp"; # In production, use /var/log/tsanalyzer
+    rotate_size_mb 64;
+    rotate_files 20;
+}
+
+# Default Template for all vhosts
+vhost __default__ {
+    metrology {
+        pcr_jitter true;
+        drift_analysis true;
+    }
+}
+
+# Specific Stream Instances
+vhost ch1 {
+    label "Discovery-HD";
+    input "udp://0.0.0.0:19001";
+    metrology {
+        pcr_jitter true;
+    }
+}

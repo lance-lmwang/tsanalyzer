@@ -39,6 +39,7 @@ void test_writer_basic() {
     assert(f != NULL);
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
+    (void)size;
     fclose(f);
 
     assert(size >= 100 * 188);

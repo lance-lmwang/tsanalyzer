@@ -73,7 +73,27 @@ static void load_config(const char* file) {
     g_sys_conf.worker_threads = 16;
     g_sys_conf.worker_slice_us = 2000;  // Default 2ms
 
-    if (tsa_conf_load(&g_sys_conf, file) != 0) {
+    if (tsa_conf_load(&g_sys_conf, file) == 0) {
+        if (g_sys_conf.logging.level[0]) {
+            tsa_log_level_t level = TSA_LOG_INFO;
+            if (strcmp(g_sys_conf.logging.level, "TRACE") == 0)
+                level = TSA_LOG_TRACE;
+            else if (strcmp(g_sys_conf.logging.level, "DEBUG") == 0)
+                level = TSA_LOG_DEBUG;
+            else if (strcmp(g_sys_conf.logging.level, "WARN") == 0)
+                level = TSA_LOG_WARN;
+            else if (strcmp(g_sys_conf.logging.level, "ERROR") == 0)
+                level = TSA_LOG_ERROR;
+            tsa_log_set_level(level);
+        }
+        tsa_log_set_json(g_sys_conf.logging.json);
+        if (g_sys_conf.logging.dir[0]) {
+            char log_path[512];
+            snprintf(log_path, sizeof(log_path), "%s/tsanalyzer.log", g_sys_conf.logging.dir);
+            tsa_log_destroy();
+            tsa_log_init(log_path);
+        }
+    } else {
         tsa_error(TAG, "Failed to load configuration: %s. Using internal defaults.", file);
     }
 
@@ -362,7 +382,7 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
 
         /* 1. Global Rate Limiting */
         char addr[64];
-        snprintf(addr, sizeof(addr), "fd-%d", (int)c->fd);
+        snprintf(addr, sizeof(addr), "fd-%d", (int)(intptr_t)c->fd);
         if (!tsa_auth_check_ratelimit(addr)) {
             mg_http_reply(c, 429, "Content-Type: application/json\r\n", "{\"error\":\"Too Many Requests\"}");
             return;
@@ -445,7 +465,11 @@ static void http_fn(struct mg_connection* c, int ev, void* ev_data) {
                 int total = atomic_load(&g_conn_count);
                 for (int i = 0; i < total; i++) {
                     if (g_conns[i]) {
-                        strncpy(id_cache[valid_count++], g_conns[i]->id, 64);
+                        size_t l = strlen(g_conns[i]->id);
+                        if (l >= 64) l = 63;
+                        memcpy(id_cache[valid_count], g_conns[i]->id, l);
+                        id_cache[valid_count][l] = '\0';
+                        valid_count++;
                     }
                 }
                 pthread_mutex_unlock(&g_conn_lock);
@@ -712,6 +736,7 @@ static void run_main_loop(struct mg_mgr* mgr) {
 }
 
 int main(int argc, char** argv) {
+    tsa_log_init(NULL);
     const char* conf_file = (argc > 1) ? argv[1] : "tsa.conf";
     calibrate_tsc();
     g_ready_queue = mpmc_queue_create(16384);
@@ -747,5 +772,6 @@ int main(int argc, char** argv) {
     atomic_store(&g_run, false);
     pthread_join(t_shm, NULL);
     cleanup_and_exit(shm_fd, shm_block, &mgr, t_io, t_workers, srt_eid);
+    tsa_log_destroy();
     return 0;
 }

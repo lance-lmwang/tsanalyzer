@@ -8,6 +8,7 @@ void test_zero_allocation_itoa() {
     printf("Running test_zero_allocation_itoa...\n");
     char buffer[64];
     int len;
+    (void)len;
 
     // Test positive integer
     len = tsa_fast_itoa(buffer, 12345);

@@ -17,6 +17,7 @@
 #include "spsc_queue.h"
 #include "tsa.h"
 #include "tsa_internal.h"
+#include "tsa_log.h"
 #include "tsa_lua.h"
 #include "tsa_source.h"
 
@@ -60,7 +61,7 @@ static void on_hls_stats_cb(void* user_data, double buffer_ms, uint64_t errors) 
 static void on_source_status(void* user_data, int status_code, const char* msg) {
     (void)user_data;
     if (status_code <= 0) {
-        if (msg) fprintf(stderr, "Source status: %s\n", msg);
+        if (msg) tsa_error("SOURCE", "Status: %s", msg);
         g_keep_running = 0;
     }
 }
@@ -142,35 +143,40 @@ static void* analysis_thread_func(void* arg) {
 
 /* --- CLI Utils --- */
 
-static void print_usage(const char* prog) {
-    printf("TsAnalyzer CLI - Professional Metrology Tool\n");
-    printf("Usage: %s [options] <file.ts>\n", prog);
-    printf("Options:\n");
-    printf("  -m, --mode <live|replay>  Set operation mode (default: replay for file, live for others)\n");
-    printf("  -u, --udp <port>          Listen for UDP input on port\n");
-    printf("  -s, --srt <url>           Connect to/Listen for SRT input\n");
-    printf("  -i, --interface <iface>   Capture from network interface (PCAP)\n");
-    printf("  -p, --pacing              Enable source-level pacing (for replay/file)\n");
-    printf("  -l, --label <id>          Set stream label (default: unknown)\n");
-    printf("  -H, --http <port>         Set HTTP server port (default: 8088)\n");
-    printf("  -a, --alpha <val>         Set PCR EMA alpha (default: 0.1)\n");
-    printf("\nAdvanced Mode:\n");
-    printf("  %s run <script.lua>       Execute a dynamic Lua pipeline script\n", prog);
+static void usage(const char* prog) {
+    tsa_log_result("TsAnalyzer CLI - Professional Metrology Tool");
+    tsa_log_result("Usage: %s [options] <file.ts>", prog);
+    tsa_log_result("Options:");
+    tsa_log_result("  -m, --mode <live|replay>  Set operation mode (default: replay for file, live for others)");
+    tsa_log_result("  -u, --udp <port>          Listen for UDP input on port");
+    tsa_log_result("  -s, --srt <url>           Connect to/Listen for SRT input");
+    tsa_log_result("  -i, --interface <iface>   Capture from network interface (PCAP)");
+    tsa_log_result("  -p, --pacing              Enable source-level pacing (for replay/file)");
+    tsa_log_result("  -l, --label <id>          Set stream label (default: unknown)");
+    tsa_log_result("  -H, --http <port>         Set HTTP server port (default: 8088)");
+    tsa_log_result("  -a, --alpha <val>         Set PCR EMA alpha (default: 0.1)");
+    tsa_log_result("  -v, --log-level <level>   Set log level (TRACE, DEBUG, INFO, WARN, ERROR, QUIET)");
+    tsa_log_result("Advanced Mode:");
+    tsa_log_result("  %s run <script.lua>       Execute a dynamic Lua pipeline script", prog);
 }
 
 int main(int argc, char** argv) {
+    tsa_log_init(NULL);
     if (argc >= 3 && strcmp(argv[1], "run") == 0) {
         signal(SIGINT, sig_handler);
         signal(SIGTERM, sig_handler);
 
         const char* script_file = argv[2];
         tsa_handle_t* h = tsa_create(NULL);
+        if (!h) {
+            tsa_error("CLI", "Failed to create TSA handle");
+            tsa_log_destroy();
+            return 1;
+        }
         tsa_lua_t* lua = tsa_lua_create(h);
 
-        printf("Starting Lua runtime for script: %s\n", script_file);
+        tsa_info("CLI", "Starting Lua runtime for script: %s", script_file);
         if (tsa_lua_run_file(lua, script_file) == 0) {
-            // Keep the main thread alive while Lua pipeline runs in background (if async)
-            // or simply wait if Lua script is blocking
             while (g_keep_running) {
                 usleep(100000);
             }
@@ -178,6 +184,7 @@ int main(int argc, char** argv) {
 
         tsa_lua_destroy(lua);
         tsa_destroy(h);
+        tsa_log_destroy();
         return 0;
     }
 
@@ -194,15 +201,20 @@ int main(int argc, char** argv) {
     char stream_label[32] = "";
     bool pacing = false;
 
-    static struct option long_options[] = {
-        {"mode", required_argument, 0, 'm'}, {"udp", required_argument, 0, 'u'},
-        {"srt", required_argument, 0, 's'},  {"interface", required_argument, 0, 'i'},
-        {"pacing", no_argument, 0, 'p'},     {"label", required_argument, 0, 'l'},
-        {"http", required_argument, 0, 'H'}, {"alpha", required_argument, 0, 'a'},
-        {"help", no_argument, 0, 'h'},       {0, 0, 0, 0}};
+    static struct option long_options[] = {{"mode", required_argument, 0, 'm'},
+                                           {"udp", required_argument, 0, 'u'},
+                                           {"srt", required_argument, 0, 's'},
+                                           {"interface", required_argument, 0, 'i'},
+                                           {"pacing", no_argument, 0, 'p'},
+                                           {"label", required_argument, 0, 'l'},
+                                           {"http", required_argument, 0, 'H'},
+                                           {"alpha", required_argument, 0, 'a'},
+                                           {"log-level", required_argument, 0, 'v'},
+                                           {"help", no_argument, 0, 'h'},
+                                           {0, 0, 0, 0}};
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "m:u:s:i:pl:H:a:h", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "m:u:s:i:pl:H:a:v:h", long_options, NULL)) != -1) {
         switch (opt) {
             case 'm':
                 if (strcasecmp(optarg, "live") == 0) {
@@ -235,10 +247,29 @@ int main(int argc, char** argv) {
             case 'a':
                 cfg.analysis.pcr_ema_alpha = atof(optarg);
                 break;
+            case 'v': {
+                tsa_log_level_t l = TSA_LOG_INFO;
+                if (strcasecmp(optarg, "TRACE") == 0)
+                    l = TSA_LOG_TRACE;
+                else if (strcasecmp(optarg, "DEBUG") == 0)
+                    l = TSA_LOG_DEBUG;
+                else if (strcasecmp(optarg, "WARN") == 0)
+                    l = TSA_LOG_WARN;
+                else if (strcasecmp(optarg, "ERROR") == 0)
+                    l = TSA_LOG_ERROR;
+                else if (strcasecmp(optarg, "QUIET") == 0)
+                    l = TSA_LOG_QUIET;
+                else if (strcasecmp(optarg, "REPORT") == 0)
+                    l = TSA_LOG_REPORT;
+                tsa_log_set_level(l);
+                break;
+            }
             case 'h':
-                print_usage(argv[0]);
+                usage(argv[0]);
+                tsa_log_destroy();
                 return 0;
             default:
+                tsa_log_destroy();
                 return 1;
         }
     }
@@ -251,7 +282,8 @@ int main(int argc, char** argv) {
     }
 
     if (!filename[0] && udp_port == 0 && !srt_url[0] && !interface[0]) {
-        print_usage(argv[0]);
+        usage(argv[0]);
+        tsa_log_destroy();
         return 1;
     }
 
@@ -264,7 +296,8 @@ int main(int argc, char** argv) {
 
     tsa_handle_t* h = tsa_create(&cfg);
     if (!h) {
-        fprintf(stderr, "Failed to create TSA handle\n");
+        tsa_error("CLI", "Failed to create TSA handle");
+        tsa_log_destroy();
         return 1;
     }
 
@@ -277,8 +310,9 @@ int main(int argc, char** argv) {
         char bind_addr[64];
         snprintf(bind_addr, sizeof(bind_addr), "http://0.0.0.0:%d", http_port);
         if (mg_http_listen(&mgr, bind_addr, http_handler, NULL) == NULL) {
-            fprintf(stderr, "FATAL: Failed to listen on %s\n", bind_addr);
-            goto cleanup;
+            tsa_warn("CLI", "Failed to start Web Dashboard on %s (Port already in use?). Continuing in headless mode.",
+                     bind_addr);
+            http_port = 0;  // Mark as disabled
         } else {
             pthread_create(&http_tid, NULL, http_thread_func, &mgr);
         }
@@ -323,7 +357,7 @@ int main(int argc, char** argv) {
         /* Replay mode: simple synchronous loop for maximum determinism */
         FILE* fp = fopen(filename, "rb");
         if (!fp) {
-            perror("fopen");
+            tsa_error("CLI", "Failed to open file: %s (%s)", filename, strerror(errno));
             goto cleanup;
         }
 
@@ -356,21 +390,27 @@ cleanup:
         mg_mgr_free(&mgr);
     }
 
-    /* Final JSON output */
+    /* Final Result output */
     tsa_snapshot_full_t final_snap;
     if (tsa_take_snapshot_full(h, &final_snap) == 0) {
         char* jbuf = malloc(1024 * 1024);
         if (jbuf) {
             tsa_snapshot_to_json(h, &final_snap, jbuf, 1024 * 1024);
+
+            /* The Result Output Level */
+            tsa_log_result("\n--- Analysis Summary ---\n%s\n------------------------\n", jbuf);
+
             FILE* f_out = fopen("final_metrology.json", "w");
             if (f_out) {
                 fprintf(f_out, "%s\n", jbuf);
                 fclose(f_out);
+                tsa_info("CLI", "Analysis complete. Full report saved to [final_metrology.json]");
             }
             free(jbuf);
         }
     }
 
     tsa_destroy(h);
+    tsa_log_destroy();
     return 0;
 }

@@ -36,10 +36,21 @@ static bool tsa_alert_should_suppress(tsa_handle_t* h, tsa_alert_id_t id, uint16
     atomic_store(&entry->hit_count, 1);
     atomic_store(&entry->window_start_ns, now);
     atomic_store(&entry->last_hit_ns, now);
-    strncpy(entry->stream_id, h->config.input_label[0] ? h->config.input_label : "unknown",
-            sizeof(entry->stream_id) - 1);
-    strncpy(entry->alert_name, name, sizeof(entry->alert_name) - 1);
-    strncpy(entry->message, message, sizeof(entry->message) - 1);
+    const char* label = h->config.input_label[0] ? h->config.input_label : "unknown";
+    size_t label_len = strlen(label);
+    if (label_len >= sizeof(entry->stream_id)) label_len = sizeof(entry->stream_id) - 1;
+    memcpy(entry->stream_id, label, label_len);
+    entry->stream_id[label_len] = '\0';
+
+    size_t name_len = strlen(name);
+    if (name_len >= sizeof(entry->alert_name)) name_len = sizeof(entry->alert_name) - 1;
+    memcpy(entry->alert_name, name, name_len);
+    entry->alert_name[name_len] = '\0';
+
+    size_t msg_len = strlen(message);
+    if (msg_len >= sizeof(entry->message)) msg_len = sizeof(entry->message) - 1;
+    memcpy(entry->message, message, msg_len);
+    entry->message[msg_len] = '\0';
     entry->active = true;
 
     return false;

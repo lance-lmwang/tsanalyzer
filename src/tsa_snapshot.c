@@ -23,6 +23,7 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
     uint64_t min_window = (h->config.op_mode == TSA_MODE_REPLAY) ? 100000000ULL : 500000000ULL;
     if (dt < min_window) return;
 
+    /* 1. Global Bitrate */
     uint64_t dp = (curr_pkts >= h->phys_stats.last_snap_bytes) ? (curr_pkts - h->phys_stats.last_snap_bytes) : 0;
     if (dp > 0) {
         uint64_t inst_bps = (uint64_t)(((unsigned __int128)dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
@@ -33,6 +34,29 @@ static void tsa_calc_stream_bitrate(tsa_handle_t* h, uint64_t n) {
             h->phys_stats.last_bps = (uint64_t)(alpha * inst_bps + (1.0f - alpha) * h->phys_stats.last_bps);
     }
     h->phys_stats.last_snap_bytes = curr_pkts;
+
+    /* 2. Per-PID Bitrate */
+    for (uint32_t i = 0; i < h->pid_tracker_count; i++) {
+        uint16_t pid = h->pid_active_list[i];
+        if (pid >= TS_PID_MAX) continue;
+
+        uint64_t p_pkts = h->live->pid_packet_count[pid];
+        uint64_t p_dp =
+            (p_pkts >= h->phys_stats.pid_last_snap_pkts[pid]) ? (p_pkts - h->phys_stats.pid_last_snap_pkts[pid]) : 0;
+
+        if (p_dp > 0) {
+            uint64_t p_bps = (uint64_t)(((unsigned __int128)p_dp * TS_PACKET_BITS * NS_PER_SEC) / dt);
+            if (h->live->pid_bitrate_bps[pid] == 0)
+                h->live->pid_bitrate_bps[pid] = p_bps;
+            else
+                h->live->pid_bitrate_bps[pid] = (uint64_t)(0.5 * p_bps + 0.5 * h->live->pid_bitrate_bps[pid]);
+        } else {
+            /* If no packets seen in window, decay bitrate slowly */
+            h->live->pid_bitrate_bps[pid] = (uint64_t)(h->live->pid_bitrate_bps[pid] * 0.5);
+        }
+        h->phys_stats.pid_last_snap_pkts[pid] = p_pkts;
+    }
+
     h->phys_stats.window_start_ns = now_metrology;
     h->live->physical_bitrate_bps = h->phys_stats.last_bps;
 }

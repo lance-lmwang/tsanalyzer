@@ -45,6 +45,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 *   **[7-Layer Observability](./docs/04_operations/observability_model.md)**: Tiered abstraction model.
 *   **[Forensic Time Machine](./docs/04_operations/forensic_time_machine.md)**: Post-mortem incident reconstruction.
 *   **[RCA Scoring](./docs/04_operations/rca_model.md)** | **[SLA Engine](./docs/04_operations/sla_engine.md)** | **[ASCII Monitor Design](./docs/04_operations/ascii_interface_design.md)**
+*   **[Logging System](./docs/04_operations/logging_system.md)**: High-performance asynchronous architecture and rotation strategy.
 
 ### 🔗 Pillar 5: Interfaces & Integration
 *   **[REST API](./docs/06_interfaces/rest_api.md)** | **[Prometheus](./docs/06_interfaces/prometheus.md)** | **[CLI (tsa_top)](./docs/06_interfaces/cli.md)**

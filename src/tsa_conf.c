@@ -26,6 +26,38 @@ static bool match(parser_t* p, tsa_token_type_t type) {
     return false;
 }
 
+static void parse_logging(parser_t* p) {
+    match(p, TSA_TOKEN_LBRACE);
+    while (p->lookahead.type == TSA_TOKEN_WORD) {
+        char key[TSA_ID_MAX];
+        snprintf(key, sizeof(key), "%s", p->lookahead.text);
+        next_token(p);
+
+        char val[TSA_ID_MAX];
+        snprintf(val, sizeof(val), "%s", p->lookahead.text);
+        next_token(p);
+        match(p, TSA_TOKEN_SEMICOLON);
+
+        if (strcmp(key, "level") == 0) {
+            size_t l = strlen(val);
+            if (l >= sizeof(p->conf->logging.level)) l = sizeof(p->conf->logging.level) - 1;
+            memcpy(p->conf->logging.level, val, l);
+            p->conf->logging.level[l] = '\0';
+        } else if (strcmp(key, "dir") == 0) {
+            size_t l = strlen(val);
+            if (l >= sizeof(p->conf->logging.dir)) l = sizeof(p->conf->logging.dir) - 1;
+            memcpy(p->conf->logging.dir, val, l);
+            p->conf->logging.dir[l] = '\0';
+        } else if (strcmp(key, "rotate_size_mb") == 0)
+            p->conf->logging.rotate_size_mb = atoi(val);
+        else if (strcmp(key, "rotate_files") == 0)
+            p->conf->logging.rotate_files = atoi(val);
+        else if (strcmp(key, "json") == 0)
+            p->conf->logging.json = tsa_units_to_bool(val);
+    }
+    match(p, TSA_TOKEN_RBRACE);
+}
+
 static void parse_metrology(parser_t* p, tsa_config_t* cfg) {
     match(p, TSA_TOKEN_LBRACE);
     while (p->lookahead.type == TSA_TOKEN_WORD) {
@@ -143,9 +175,14 @@ int tsa_conf_load(tsa_full_conf_t* conf, const char* filename) {
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
             } else if (strcmp(word, "api_secret") == 0) {
-                snprintf(conf->api_secret, sizeof(conf->api_secret), "%s", p.lookahead.text);
+                size_t l = strlen(p.lookahead.text);
+                if (l >= sizeof(conf->api_secret)) l = sizeof(conf->api_secret) - 1;
+                memcpy(conf->api_secret, p.lookahead.text, l);
+                conf->api_secret[l] = '\0';
                 next_token(&p);
                 match(&p, TSA_TOKEN_SEMICOLON);
+            } else if (strcmp(word, "logging") == 0) {
+                parse_logging(&p);
             } else if (strcmp(word, "vhost") == 0) {
                 char id[TSA_ID_MAX];
                 snprintf(id, sizeof(id), "%s", p.lookahead.text);

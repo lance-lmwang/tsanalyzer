@@ -45,6 +45,15 @@ static tsa_program_model_t *find_program(struct tsa_handle *h, uint16_t pid) {
     return NULL;
 }
 
+static void trim_spaces(char *s) {
+    if (!s) return;
+    int len = strlen(s);
+    while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r' || s[len - 1] == '\n')) {
+        s[len - 1] = '\0';
+        len--;
+    }
+}
+
 static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,
                            uint8_t *stream_type) {
     (void)tag;
@@ -58,6 +67,7 @@ static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, cons
     size_t copy_prov = (provider_len < 255) ? provider_len : 255;
     memcpy(p->provider_name, &data[2], copy_prov);
     p->provider_name[copy_prov] = '\0';
+    trim_spaces(p->provider_name);
 
     uint8_t service_len = data[2 + provider_len];
     if (provider_len + service_len + 3 > len) return;
@@ -65,6 +75,7 @@ static void handle_service(struct tsa_handle *h, uint16_t pid, uint8_t tag, cons
     size_t copy_serv = (service_len < 255) ? service_len : 255;
     memcpy(p->service_name, &data[3 + provider_len], copy_serv);
     p->service_name[copy_serv] = '\0';
+    trim_spaces(p->service_name);
 }
 
 static void handle_lcn(struct tsa_handle *h, uint16_t pid, uint8_t tag, const uint8_t *data, uint8_t len,

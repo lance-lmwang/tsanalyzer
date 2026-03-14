@@ -100,6 +100,8 @@ bool tsa_pcr_track_update(tsa_pcr_track_t* track, uint64_t pcr_ticks, uint64_t a
         track->anchors.last_pid_pkts_anchor = pid_pkts;
         track->anchors.last_total_pkts_anchor = total_pkts;
         track->anchors.sync_done = false;
+
+        tsa_info_ctx(TAG, 0, track->pid, "PCR Track initialized (First PCR: %lu ticks)", pcr_ticks);
         return false;
     }
 
@@ -146,6 +148,8 @@ bool tsa_pcr_track_update(tsa_pcr_track_t* track, uint64_t pcr_ticks, uint64_t a
             if (pcr_track_regress(track, &slope, &intercept, &max_err_ns) == 0) {
                 track->clock.slope = slope;
                 track->clock.intercept = intercept;
+
+                bool was_locked = track->clock.locked;
                 track->clock.locked = (max_err_ns < 1000000); /* 1ms lock threshold */
                 track->drift_ppm = (slope - 1.0) * 1e6;
 
@@ -155,6 +159,14 @@ bool tsa_pcr_track_update(tsa_pcr_track_t* track, uint64_t pcr_ticks, uint64_t a
                     track->pcr_jitter_ms = inst_jitter_ms;
                 else
                     track->pcr_jitter_ms = (0.1f * inst_jitter_ms) + (0.9f * track->pcr_jitter_ms);
+
+                if (track->clock.locked && !was_locked) {
+                    tsa_info_ctx(TAG, 0, track->pid, "PCR Clock LOCKED (Drift: %.2f ppm, Jitter: %.2f ms)",
+                                 track->drift_ppm, inst_jitter_ms);
+                } else if (!track->clock.locked && was_locked) {
+                    tsa_warn_ctx(TAG, 0, track->pid, "PCR Clock UNLOCKED (Jitter: %.2f ms exceeds 1ms threshold)",
+                                 inst_jitter_ms);
+                }
             }
         }
     }

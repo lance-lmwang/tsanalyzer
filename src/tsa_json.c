@@ -16,48 +16,83 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
 
     const tsa_tr101290_stats_t* st = &sn->stats;
 
-    SAFE_JSON("{");
-    SAFE_JSON("\"status\":{\"signal_lock\":%s,\"master_health\":%.1f},", sn->summary.signal_lock ? "true" : "false",
-              sn->predictive.master_health);
+    SAFE_JSON("{\n");
+    SAFE_JSON("  \"status\": {\n");
+    SAFE_JSON("    \"signal_lock\": %s,\n", sn->summary.signal_lock ? "true" : "false");
+    SAFE_JSON("    \"master_health\": %.1f\n", sn->predictive.master_health);
+    SAFE_JSON("  },\n");
 
-    SAFE_JSON(
-        "\"tier1_link\":{\"physical_bitrate_bps\":%llu,\"mdi_df_ms\":%.2f,\"hls_buffer_ms\":%.2f,\"hls_download_"
-        "errors\":%llu},",
-        (unsigned long long)st->physical_bitrate_bps, (float)st->mdi_df_ms, st->hls_buffer_ms,
-        (unsigned long long)st->hls_download_errors);
+    SAFE_JSON("  \"tier1_link\": {\n");
+    SAFE_JSON("    \"physical_bitrate_bps\": %llu,\n", (unsigned long long)st->physical_bitrate_bps);
+    SAFE_JSON("    \"mdi_df_ms\": %.2f,\n", (float)st->mdi_df_ms);
+    SAFE_JSON("    \"hls_buffer_ms\": %.2f,\n", st->hls_buffer_ms);
+    SAFE_JSON("    \"hls_download_errors\": %llu\n", (unsigned long long)st->hls_download_errors);
+    SAFE_JSON("  },\n");
 
-    SAFE_JSON(
-        "\"tier2_compliance\":{\"p1\":{\"cc_error\":{\"count\":%llu,\"last_offset\":%llu}},\"p2\":{\"pcr_jitter_ms\":%."
-        "3f,\"tsa_compliance_"
-        "pcr_repetition_errors\": %llu,\"suppression_count\": %llu}},",
-        (unsigned long long)st->cc_error.count, (unsigned long long)st->cc_error.absolute_byte_offset,
-        st->pcr_jitter_avg_ns / 1000000.0, (unsigned long long)st->pcr_repetition_error.count,
-        (unsigned long long)st->alert_suppression_count);
+    SAFE_JSON("  \"tr101290\": {\n");
 
-    SAFE_JSON("\"pids\":[");
+    /* Priority 1: Basic Ingest Integrity */
+    SAFE_JSON("    \"p1\": {\n");
+    SAFE_JSON("      \"ts_sync_loss\": %llu,\n", (unsigned long long)st->sync_loss_count);
+    SAFE_JSON("      \"sync_byte_error\": %llu,\n", (unsigned long long)st->sync_byte_error_count);
+    SAFE_JSON("      \"pat_error\": %llu,\n", (unsigned long long)st->pat_error_count);
+    SAFE_JSON("      \"continuity_count_error\": %llu,\n", (unsigned long long)st->cc_error.count);
+    SAFE_JSON("      \"pmt_error\": %llu,\n", (unsigned long long)st->pmt_error_count);
+    SAFE_JSON("      \"pid_error\": %llu\n", (unsigned long long)st->pid_error_count);
+    SAFE_JSON("    },\n");
+
+    /* Priority 2: Transport & Timing */
+    SAFE_JSON("    \"p2\": {\n");
+    SAFE_JSON("      \"transport_error_indicator\": %llu,\n", (unsigned long long)st->tei_error_count);
+    SAFE_JSON("      \"crc_error\": %llu,\n", (unsigned long long)st->crc_error.count);
+    SAFE_JSON("      \"pcr_repetition_error\": %llu,\n", (unsigned long long)st->pcr_repetition_error.count);
+    SAFE_JSON("      \"pcr_repetition_max_ms\": %.2f,\n", (float)st->pcr_repetition_max_ms);
+    SAFE_JSON("      \"pcr_accuracy_error_ms\": %.3f,\n", st->pcr_jitter_avg_ns / 1000000.0);
+    SAFE_JSON("      \"pcr_drift_ppm\": %.2f\n", st->pcr_drift_ppm);
+    SAFE_JSON("    },\n");
+
+    /* Priority 3: SI/PSI Tables */
+    SAFE_JSON("    \"p3\": {\n");
+    SAFE_JSON("      \"nit_error\": %llu,\n", (unsigned long long)st->nit_error_count);
+    SAFE_JSON("      \"sdt_error\": %llu,\n", (unsigned long long)st->sdt_error_count);
+    SAFE_JSON("      \"eit_error\": %llu,\n", (unsigned long long)st->eit_error_count);
+    SAFE_JSON("      \"tdt_error\": %llu\n", (unsigned long long)st->tdt_error_count);
+    SAFE_JSON("    }\n");
+    SAFE_JSON("  },\n");
+
+    SAFE_JSON("  \"observability\": {\n");
+    SAFE_JSON("    \"alert_suppression_count\": %llu\n", (unsigned long long)st->alert_suppression_count);
+    SAFE_JSON("  },\n");
+
+    SAFE_JSON("  \"pids\": [\n");
     for (uint32_t i = 0; i < sn->active_pid_count; i++) {
         const tsa_pid_info_t* p = &sn->pids[i];
-        SAFE_JSON(
-            "%s{\"pid\":\"0x%04x\",\"type\":\"%s\",\"bitrate_bps\":%llu,\"width\":%u,\"height\":%u,\"fps\":%.2f,\"gop_"
-            "structure\":\"%s\",\"i_frame_bytes\":%llu,\"p_frame_bytes\":%llu,\"b_frame_bytes\":%llu}",
-            (i == 0) ? "" : ",", p->pid, tsa_get_pid_type_name(h, p->pid),
-            (unsigned long long)sn->stats.pid_bitrate_bps[p->pid], p->width, p->height, p->exact_fps,
-            p->gop_structure[0] ? p->gop_structure : "", (unsigned long long)p->i_frame_size_bytes,
-            (unsigned long long)p->p_frame_size_bytes, (unsigned long long)p->b_frame_size_bytes);
+        SAFE_JSON("    {\n");
+        SAFE_JSON("      \"pid\": \"0x%04x\",\n", p->pid);
+        SAFE_JSON("      \"type\": \"%s\",\n", tsa_get_pid_type_name(h, p->pid));
+        SAFE_JSON("      \"bitrate_bps\": %llu,\n", (unsigned long long)sn->stats.pid_bitrate_bps[p->pid]);
+        if (p->width > 0) {
+            SAFE_JSON("      \"resolution\": \"%ux%u\",\n", p->width, p->height);
+            SAFE_JSON("      \"fps\": %.2f,\n", p->exact_fps);
+            SAFE_JSON("      \"gop\": \"%s\",\n", p->gop_structure[0] ? p->gop_structure : "unknown");
+        }
+        SAFE_JSON("      \"cc_errors\": %llu\n", (unsigned long long)p->cc_errors);
+        SAFE_JSON("    }%s\n", (i == sn->active_pid_count - 1) ? "" : ",");
     }
-    SAFE_JSON("]");
+    SAFE_JSON("  ],\n");
 
-    SAFE_JSON(",\"programs\":[");
+    SAFE_JSON("  \"programs\": [\n");
     for (uint32_t i = 0; i < h->ts_model.program_count; i++) {
         const tsa_program_model_t* p = &h->ts_model.programs[i];
-        SAFE_JSON(
-            "%s{\"program_number\":%u,\"pmt_pid\":%u,\"lcn\":%u,\"service_name\":\"%s\",\"provider_name\":\"%s\"}",
-            (i == 0) ? "" : ",", p->program_number, p->pmt_pid, p->lcn,
-            p->service_name[0] ? p->service_name : "unknown", p->provider_name[0] ? p->provider_name : "unknown");
+        SAFE_JSON("    {\n");
+        SAFE_JSON("      \"program\": %u,\n", p->program_number);
+        SAFE_JSON("      \"pmt_pid\": %u,\n", p->pmt_pid);
+        SAFE_JSON("      \"service\": \"%s\",\n", p->service_name[0] ? p->service_name : "unknown");
+        SAFE_JSON("      \"provider\": \"%s\"\n", p->provider_name[0] ? p->provider_name : "unknown");
+        SAFE_JSON("    }%s\n", (i == h->ts_model.program_count - 1) ? "" : ",");
     }
-    SAFE_JSON("]");
-
-    SAFE_JSON("}");
+    SAFE_JSON("  ]\n");
+    SAFE_JSON("}\n");
 
 #undef SAFE_JSON
     return (size_t)off;

@@ -195,7 +195,7 @@ static int l_tsa_analyzer_drop_pid(lua_State* L) {
 }
 
 static int l_tsa_analyzer_on(lua_State* L) {
-    lua_tsa_analyzer_t* ana = (lua_tsa_analyzer_t*)luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
+    luaL_checkudata(L, 1, TSA_LUA_ANALYZER_MT);
     const char* event_name = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TFUNCTION);
 

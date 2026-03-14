@@ -10,6 +10,8 @@ void test_now_ns128() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     int128_t t2 = ts_time_to_ns128(ts);
+    (void)t1;
+    (void)t2;
 
     assert(t1 > 0);
     assert(t2 >= t1);

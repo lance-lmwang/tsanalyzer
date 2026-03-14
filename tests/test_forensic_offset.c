@@ -50,6 +50,7 @@ int main() {
 
     bool found_scrambled = false;
     uint64_t scrambled_offset = 0;
+    (void)found_scrambled;
     while (tail < head) {
         tsa_event_t* ev = &h->event_q->events[tail % MAX_EVENT_QUEUE];
         if (ev->type == TSA_EVENT_SCRAMBLED) {

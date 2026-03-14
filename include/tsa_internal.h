@@ -281,6 +281,7 @@ struct tsa_handle {
         uint64_t last_snap_bytes;
         uint64_t last_bps;
         uint64_t window_start_ns;
+        uint64_t pid_last_snap_pkts[8192];
     } phys_stats;
     ts_section_filter_t* pid_filters;
     uint32_t program_count;

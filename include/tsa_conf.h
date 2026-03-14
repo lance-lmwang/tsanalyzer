@@ -15,14 +15,24 @@ typedef struct {
 } tsa_stream_conf_t;
 
 typedef struct {
+    char level[16];
+    char dir[256];
+    int rotate_size_mb;
+    int rotate_files;
+    int disk_min_free_mb;
+    bool json;
+} tsa_log_conf_t;
+
+typedef struct {
     // Global settings
     int http_listen_port;
     int srt_listen_port;
     int worker_threads;
     int worker_slice_us;
     bool shm_enabled;
-    char log_format[16];
     char api_secret[128];
+
+    tsa_log_conf_t logging;
 
     // VHost templates (we use __default__ as index 0)
     tsa_config_t vhost_default;
