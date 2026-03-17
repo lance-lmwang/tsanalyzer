@@ -88,6 +88,12 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
             SAFE_JSON("      \"fps\": %.2f,\n", p->exact_fps);
             SAFE_JSON("      \"gop\": \"%s\",\n", p->gop_structure[0] ? p->gop_structure : "unknown");
         }
+        if (p->audio_sample_rate > 0) {
+            SAFE_JSON("      \"audio_sample_rate\": %u,\n", p->audio_sample_rate);
+            SAFE_JSON("      \"audio_channels\": %u,\n", p->audio_channels);
+            SAFE_JSON("      \"loudness_lufs\": %.1f,\n", p->audio_loudness_lufs);
+            SAFE_JSON("      \"peak_db\": %.1f,\n", p->audio_peak_db);
+        }
         SAFE_JSON("      \"cc_errors\": %llu\n", (unsigned long long)p->cc_errors);
         SAFE_JSON("    }%s\n", (i == sn->active_pid_count - 1) ? "" : ",");
     }

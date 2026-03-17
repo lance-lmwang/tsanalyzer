@@ -175,6 +175,10 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].width = es->video.width;
         sn->pids[ai].height = es->video.height;
         sn->pids[ai].exact_fps = es->video.exact_fps;
+        sn->pids[ai].audio_sample_rate = es->audio.sample_rate;
+        sn->pids[ai].audio_channels = es->audio.channels;
+        sn->pids[ai].audio_loudness_lufs = es->audio.loudness_lufs;
+        sn->pids[ai].audio_peak_db = es->audio.peak_db;
         sn->pids[ai].eb_fill_pct = (float)((double)(es->tstd.eb_fill_q64 >> 64) * 100.0 / 1200000.0);
 
         sn->pids[ai].i_frames = es->video.i_frames;

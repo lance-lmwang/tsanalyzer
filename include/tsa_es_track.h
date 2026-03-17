@@ -95,6 +95,9 @@ typedef struct {
     struct {
         uint32_t sample_rate;
         uint8_t channels;
+        float loudness_lufs;
+        float peak_db;
+        void* ebur128_state;
     } audio;
 
     /* SCTE-35 Splicing State */

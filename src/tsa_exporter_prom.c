@@ -228,6 +228,13 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                 SAFE_APPEND("tsa_compliance_pid_tstd_tb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].tb_fill_pct);
                 SAFE_APPEND("tsa_compliance_pid_tstd_mb_fill_pct%s %.2f\n", pid_labels, snap->pids[j].mb_fill_pct);
             }
+            if (snap->pids[j].audio_sample_rate > 0) {
+                SAFE_APPEND("tsa_essence_pid_audio_sample_rate%s %u\n", pid_labels, snap->pids[j].audio_sample_rate);
+                SAFE_APPEND("tsa_essence_pid_audio_channels%s %u\n", pid_labels, snap->pids[j].audio_channels);
+                SAFE_APPEND("tsa_essence_pid_audio_loudness_lufs%s %.1f\n", pid_labels,
+                            (float)snap->pids[j].audio_loudness_lufs);
+                SAFE_APPEND("tsa_essence_pid_audio_peak_db%s %.1f\n", pid_labels, (float)snap->pids[j].audio_peak_db);
+            }
             SAFE_APPEND("tsa_compliance_pid_has_cea708%s %d\n", pid_labels, snap->pids[j].has_cea708 ? 1 : 0);
             SAFE_APPEND("tsa_compliance_pid_has_scte35%s %d\n", pid_labels, snap->pids[j].has_scte35 ? 1 : 0);
             SAFE_APPEND("tsa_compliance_pid_is_closed_gop%s %d\n", pid_labels, snap->pids[j].is_closed_gop ? 1 : 0);

@@ -195,6 +195,8 @@ typedef struct {
     float exact_fps;
     uint32_t audio_sample_rate;
     uint8_t audio_channels;
+    float audio_loudness_lufs;
+    float audio_peak_db;
     uint32_t gop_n;
     uint32_t gop_min;
     uint32_t gop_max;

@@ -9,6 +9,10 @@
 #include "tsa_lua.h"
 #include "tsa_units.h"
 
+// Forward declaration from src/tsa_thumbnailer.c
+void tsa_thumbnailer_process(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len,
+                             const tsa_nalu_info_t* nalu);
+
 #define TAG "ES_ANALYZER"
 
 /* LTN UUID for High Precision Forensic SEI (Aligned with test expectations) */

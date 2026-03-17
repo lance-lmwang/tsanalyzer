@@ -171,6 +171,10 @@ void tsa_destroy(tsa_handle_t* h) {
         free(h->pcr_tracks);
     }
     if (h->es_tracks) {
+        for (int i = 0; i < TS_PID_MAX; i++) {
+            void tsa_audio_audit_destroy(tsa_es_track_t * es);
+            tsa_audio_audit_destroy(&h->es_tracks[i]);
+        }
         free(h->es_tracks);
     }
     FREE_IF(h->phys_stats.pid_last_snap_pkts);

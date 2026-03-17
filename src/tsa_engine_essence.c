@@ -171,6 +171,11 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
         tsa_alert_update(h, TSA_ALERT_TSTD, true, "TSTD", pid);
     }
 
+    if (tsa_is_audio(es->stream_type)) {
+        void tsa_audio_audit_process_es(tsa_handle_t * h, uint16_t pid, const uint8_t* payload, int len);
+        tsa_audio_audit_process_es(h, pid, pkt + 4 + res->af_len, res->payload_len);
+    }
+
     /* Professional Compliance: Check for EB Underflow before and after drain */
     if (es->au_q.head != es->au_q.tail) {
         uint64_t next_dts = es->au_q.queue[es->au_q.head].dts_ns;
