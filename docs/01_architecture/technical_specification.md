@@ -147,10 +147,9 @@ Each stream is executed as a dynamically assembled graph of specialized **Stages
 ## 7. The 5-Layer Observation Model (Analyzers)
 ### 7.1 Layer 1: Metrology (Physical & Temporal)
 - **High-Precision Bitrate**:
-    - **Physical Tier**: Total TS Bitrate derived from engine-synchronized unique packet counts. Includes PID+CC de-duplication to handle PCAP loopback duplicates.
+    - **Physical Tier**: Total TS Bitrate derived from engine-synchronized unique packet counts.
     - **Business Tier**: Multi-program (MPTS) aware bitrate calculation. Per-program rates are summed to report global throughput without program collision.
 - **Clock Analysis**: Software PLL sync (< 10ns precision), Jitter Decomposition (AC/DR/OJ), HLS fetch latency vs. media segment duration, manifest drift tracking, Network MDI (DF/MLR), and IAT Histograms.
-- **T-STD Simulation**: Real-time Annex D compliant mathematical model for TB, MB, and EB buffers. Includes **Predictive Underflow** logic that anticipates buffer starvation up to 500ms before it impacts the decoder.
 
 ### 7.2 Layer 2: Compliance (ISO/Standard)
 - TR 101 290 (P1, P2, P3), MPTS structure verification, and cross-table (PAT/PMT/SDT) consistency check.
@@ -163,6 +162,7 @@ Each stream is executed as a dynamically assembled graph of specialized **Stages
 
 ### 7.4 Layer 4: Essence (Payload & Metadata)
 - Zero-copy NALU sniffing (SPS/PPS/GOP), SCTE-35/104 extraction, and Closed Caption presence auditing.
+- **T-STD Simulation**: Real-time Annex D compliant mathematical model for TB, MB, and EB buffers. Includes **Predictive Underflow** logic that anticipates buffer starvation up to 500ms before it impacts the decoder.
 - **SCTE-35 Alignment Audit**: Nanosecond-level verification of `splice_insert` command placement relative to the nearest IDR frame.
 
 ### 7.5 Layer 5: Scripting (Dynamic Pipeline)

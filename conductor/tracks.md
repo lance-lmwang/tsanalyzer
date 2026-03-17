@@ -1,3 +1,4 @@
+- [025-architecture-realignment](./tracks/025-architecture-realignment/plan.md): Deep decoupling of thread models and QoE modularization
 # Project Tracks
 
 This file tracks all major tracks for the project. Each track has its own detailed plan in its respective folder.
