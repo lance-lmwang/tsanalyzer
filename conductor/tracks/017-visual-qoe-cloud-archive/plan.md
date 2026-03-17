@@ -8,7 +8,7 @@
   - [x] Validate: Verified via `tests/test_essence_metrology.c`.
 
 - [ ] **Phase 2: Sidecar IDR Thumbnailer**
-  - [ ] Research: Integrate lightweight IDR extraction (using `FFmpeg` or direct NALU dumping).
+  - [x] Research: Integrate lightweight IDR extraction (using `FFmpeg` or direct NALU dumping).
   - [ ] Implement: Background worker to save JPEG/Base64 thumbnails.
 
 - [ ] **Phase 3: Event-Triggered S3 Archive**

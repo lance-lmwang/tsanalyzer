@@ -133,7 +133,28 @@ cd "$CURL_SRC_DIR"
 make -j$(nproc)
 make install
 
-# 6. TSDuck (Containerized for cross-test)
+# 6. Build libebur128 (Static)
+EBUR128_VERSION="v1.2.6"
+EBUR128_SRC_DIR="$DEPS_DIR/libebur128_src"
+EBUR128_INSTALL_DIR="$DEPS_DIR/libebur128"
+EBUR128_BUILD_DIR="$DEPS_DIR/libebur128_build_tmp"
+if [ ! -d "$EBUR128_SRC_DIR" ]; then
+    echo "--- Downloading libebur128 $EBUR128_VERSION ---"
+    git clone --depth 1 --branch "$EBUR128_VERSION" https://github.com/jiixyj/libebur128.git "$EBUR128_SRC_DIR"
+fi
+echo "--- Building libebur128 (Static) ---"
+mkdir -p "$EBUR128_BUILD_DIR"
+cd "$EBUR128_BUILD_DIR"
+cmake "$EBUR128_SRC_DIR" -DCMAKE_INSTALL_PREFIX="$EBUR128_INSTALL_DIR" \
+         -DCMAKE_INSTALL_LIBDIR=lib \
+         -DBUILD_STATIC_LIBS=ON \
+         -DBUILD_SHARED_LIBS=OFF \
+         -DENABLE_INTERNAL_QUEUE=ON
+make -j$(nproc)
+make install
+rm -rf "$EBUR128_BUILD_DIR"
+
+# 7. TSDuck (Containerized for cross-test)
 echo "--- Preparing TSDuck (via Docker) ---"
 if command -v docker >/dev/null 2>&1; then
     docker pull tsduck/tsduck:latest || true

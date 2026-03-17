@@ -66,10 +66,11 @@ tsa_use_dep(libpcap "libpcap.a" "include" HAVE_PCAP)
 tsa_use_dep(lua "liblua.a" "include" HAVE_LUA)
 tsa_use_dep(curl "libcurl.a" "include" HAVE_CURL)
 tsa_use_dep(zlib "libz.a" "include" HAVE_ZLIB)
+tsa_use_dep(libebur128 "libebur128.a" "include" HAVE_EBUR128)
 
 # Link order matters for static libs
 set(TSA_EXTERNAL_LIBS
-    ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB}
+    ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB} ${libebur128_LIB}
     ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB}
     pthread m dl stdc++)
 
@@ -79,6 +80,7 @@ set(TSA_CORE_SRCS
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c
     src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c
     src/tsa_descriptors.c src/tsa_health.c src/tsa_histogram.c
+    src/tsa_audio_audit.c src/tsa_thumbnailer.c
     src/tsa_exporter_prom.c  src/tsa_gateway.c src/srt_ingest.c
     src/tsa_source.c  src/alloc_tracker.c src/spsc_queue.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
@@ -166,6 +168,7 @@ tsa_test(test_hls_rst test_hls_rst.c)
 tsa_test(test_hybrid_sleep test_hybrid_sleep.c)
 tsa_test(test_init_stability test_init_stability.c)
 tsa_test(test_integration test_integration.c)
+tsa_test(test_loudness test_loudness.c)
 tsa_test(test_iat_histogram test_iat_histogram.c)
 tsa_test(test_jitter_burn test_jitter_burn.c)
 tsa_test(test_json_serialization test_json_serialization.c)
@@ -267,7 +270,6 @@ tsa_test(test_lua_pipeline test_lua_pipeline.c)
 tsa_test(test_essence_metrology test_essence_metrology.c)
 tsa_test(test_auth_jwt test_auth_jwt.c)
 tsa_test(test_auth_toggle test_auth_toggle.c)
-tsa_test(test_crc_fix test_crc_fix.c)
 
 add_executable(test_pcr_null_inclusion tests/test_pcr_null_inclusion.c)
 target_link_libraries(test_pcr_null_inclusion tsp_core m pthread)

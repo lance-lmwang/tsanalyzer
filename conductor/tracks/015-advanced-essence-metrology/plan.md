@@ -1,10 +1,10 @@
 # Implementation Plan: Advanced Essence Metrology (Loudness & Metadata)
 
 ## Status
-- [ ] **Phase 1: Audio Loudness Engine (Momentary)**
-  - [ ] Research: Select/Integrate `libebur128` for LUFS calculation.
-  - [ ] Implement: `src/tsa_audio_audit.c` to extract PCM from AAC/AC3 and push to loudness engine.
-  - [ ] Implement: Momentary LUFS (400ms) calculation and export to Prometheus.
+- [x] **Phase 1: Audio Loudness Engine (Momentary)**
+  - [x] Research: Select/Integrate `libebur128` for LUFS calculation.
+  - [x] Implement: `src/tsa_audio_audit.c` to extract PCM from AAC/AC3 and push to loudness engine.
+  - [x] Implement: Momentary LUFS (400ms) calculation and export to Prometheus.
 
 - [x] **Phase 2: Closed Caption (CC) Presence Monitoring**
   - [x] Implement: Extract EIA-608/708 data from H.264/H.265 SEI NALUs in `src/tsa_es.c`.
