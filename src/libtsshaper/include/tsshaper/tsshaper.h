@@ -1,0 +1,123 @@
+/**
+ * @file tsshaper.h
+ * @brief Professional MPEG-TS Traffic Shaper & T-STD Engine (ABI Stable)
+ *
+ * libtsshaper provides hardware-level precision for TS multiplexing,
+ * ensuring TR 101 290 compliance and sub-microsecond jitter.
+ */
+
+#ifndef TSSHAPER_H
+#define TSSHAPER_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Unified nanosecond time domain (based on CLOCK_MONOTONIC_RAW).
+ */
+typedef int64_t tss_time_ns;
+
+/**
+ * @brief Opaque handle for the shaper context.
+ */
+typedef struct tsshaper_ctx tsshaper_t;
+
+/**
+ * @brief Return value when no packets are available in the scheduler.
+ */
+#define TSS_IDLE -1
+
+/**
+ * @brief Configuration for libtsshaper initialization.
+ */
+typedef struct {
+    uint64_t bitrate_bps;      /**< Target CBR bitrate in bits per second */
+    uint32_t pcr_interval_ms;  /**< Max interval between PCR anchors (default: 35) */
+    uint32_t io_batch_size;    /**< Number of packets per sendmmsg (default: 7) */
+    uint32_t max_latency_ms;   /**< Internal buffer depth (backpressure threshold) */
+    bool     use_raw_clock;    /**< Use CLOCK_MONOTONIC_RAW for zero-jitter timing */
+} tsshaper_config_t;
+
+/**
+ * @brief Create a new shaper instance.
+ * @param cfg Configuration struct.
+ * @return Handle to the shaper, or NULL on memory failure.
+ */
+tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg);
+
+/**
+ * @brief Destroy the shaper instance and free all resources.
+ */
+void tsshaper_destroy(tsshaper_t* ctx);
+
+/**
+ * @brief Push a VBR TS packet into the shaper (Non-blocking).
+ *
+ * If the internal T-STD buffer reaches the High-Water Mark (95%),
+ * this function will return -1 to signal backpressure to the source.
+ *
+ * @param ctx Shaper handle.
+ * @param pid The PID of the packet (for quick routing/T-STD tracking).
+ * @param pkt Pointer to the 188-byte TS packet data.
+ * @param arrival_ts External timestamp (ns). If 0, the library uses internal clock.
+ * @return 0 on success, -1 if the buffer is full (Backpressure).
+ */
+int tsshaper_push(tsshaper_t* ctx,
+                  uint16_t pid,
+                  const uint8_t* pkt,
+                  tss_time_ns arrival_ts);
+
+/**
+ * @brief Pull the next scheduled packet from the interleaver (Synchronous Mode).
+ *
+ * This is used for custom pacer loops.
+ *
+ * @param ctx Shaper handle.
+ * @param out_pkt Pointer to a 188-byte buffer to receive the packet.
+ * @return The target emission time (T_emit) in ns, or TSS_IDLE if queue is empty.
+ */
+tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt);
+
+/**
+ * @brief Start the internal asynchronous pacer thread (High-Priority/Real-time).
+ *
+ * The thread will run with SCHED_FIFO policy (if permitted) and perform
+ * precision busy-wait I/O.
+ *
+ * @param ctx Shaper handle.
+ * @param fd The output file descriptor (socket, file, or pipe).
+ * @return 0 on success, < 0 on thread creation error.
+ */
+int tsshaper_start_pacer(tsshaper_t* ctx, int fd);
+
+/**
+ * @brief Stop the asynchronous pacer thread.
+ */
+void tsshaper_stop_pacer(tsshaper_t* ctx);
+
+/**
+ * @brief Runtime statistics for monitoring.
+ */
+typedef struct {
+    double   current_bitrate_bps;    /**< Measured output bitrate */
+    uint32_t buffer_fullness_pct;    /**< Current T-STD buffer level (0-100) */
+    double   pcr_jitter_ns;          /**< Estimated PCR jitter deviation */
+    uint64_t null_packets_inserted;  /**< Total padding packets generated */
+    uint64_t continuity_errors;      /**< Cumulative ingest errors */
+} tsshaper_stats_t;
+
+/**
+ * @brief Retrieve current metrics from the shaper.
+ */
+void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TSSHAPER_H
