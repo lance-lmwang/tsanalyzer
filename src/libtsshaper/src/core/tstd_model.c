@@ -59,5 +59,16 @@ void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t no
 }
 
 bool tstd_check_backpressure(program_ctx_t* prog, uint16_t pid) {
+    for (int i = 0; i < prog->num_pids; i++) {
+        if (prog->pids[i].pid == pid) {
+            uint32_t current = atomic_load_explicit(&prog->pids[i].buffer_fullness, memory_order_relaxed);
+            // 95% High Water Mark
+            if (current > (prog->pids[i].buffer_size * 95 / 100)) {
+                return true;
+            }
+            return false;
+        }
+    }
+    // New PID (not tracked yet), assume no backpressure until first push
     return false;
 }

@@ -113,6 +113,36 @@ typedef struct {
  */
 void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats);
 
+/**
+ * @brief Log levels for the shaper library.
+ */
+typedef enum {
+    TSS_LOG_ERROR = 0,
+    TSS_LOG_WARN,
+    TSS_LOG_INFO,
+    TSS_LOG_DEBUG,
+    TSS_LOG_TRACE
+} tss_log_level_t;
+
+/**
+ * @brief Log callback function signature.
+ * @param level Log severity.
+ * @param msg The log message.
+ * @param opaque User data provided at registration.
+ */
+typedef void (*tss_log_cb)(tss_log_level_t level, const char* msg, void* opaque);
+
+/**
+ * @brief Set a custom logging callback.
+ *
+ * If not set, the library will log to stderr by default (if built with debug).
+ *
+ * @param ctx Shaper handle.
+ * @param cb The callback function.
+ * @param opaque User data pointer passed to the callback.
+ */
+void tsshaper_set_log_callback(tsshaper_t* ctx, tss_log_cb cb, void* opaque);
+
 #ifdef __cplusplus
 }
 #endif

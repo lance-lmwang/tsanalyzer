@@ -39,7 +39,7 @@ int hal_setup_rt(int cpu_affinity, int priority) {
         CPU_ZERO(&cpuset);
         CPU_SET(cpu_affinity, &cpuset);
         if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0) {
-            perror("pthread_setaffinity_np");
+            // Error handling left to caller via errno
         }
     }
 
@@ -47,7 +47,6 @@ int hal_setup_rt(int cpu_affinity, int priority) {
         struct sched_param param;
         param.sched_priority = priority;
         if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
-            perror("pthread_setschedparam (Check CAP_SYS_NICE)");
             return -1;
         }
     }

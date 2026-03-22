@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Optimization Flags
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-O3 -march=native -Wall -Wextra -Wno-unused-parameter)
+    add_compile_options(-O3 -Wall -Wextra -Wno-unused-parameter)
     add_compile_options(-fPIC)
 endif()
 

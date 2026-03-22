@@ -20,14 +20,14 @@ ts_packet_t* interleaver_select(tsshaper_t* ctx) {
     }
 
     if (best_prog) {
-        static ts_packet_t out_pkt;
-        if (spsc_queue_pop(best_prog->ingest_queue, &out_pkt)) {
+        // Use context-bound scratch buffer instead of static
+        if (spsc_queue_pop(best_prog->ingest_queue, &ctx->scratch_pkt)) {
             // Update T-STD and WFQ state
-            tstd_update_on_pop(best_prog, &out_pkt, hal_get_time_ns());
+            tstd_update_on_pop(best_prog, &ctx->scratch_pkt, hal_get_time_ns());
 
             // Advance virtual time based on packet size and weight
             best_prog->wfq_vtime += (double)TS_PACKET_SIZE * 8 / best_prog->wfq_weight;
-            return &out_pkt;
+            return &ctx->scratch_pkt;
         }
     }
 

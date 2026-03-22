@@ -1,8 +1,31 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "hal.h"
 #include "internal.h"
+
+// --- Logging Implementation ---
+
+void tsshaper_set_log_callback(tsshaper_t* ctx, tss_log_cb cb, void* opaque) {
+    if (ctx) {
+        ctx->log_cb = cb;
+        ctx->log_opaque = opaque;
+    }
+}
+
+void tss_log_impl(tsshaper_t* ctx, tss_log_level_t level, const char* fmt, ...) {
+    if (ctx && ctx->log_cb) {
+        char buffer[1024];
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buffer, sizeof(buffer), fmt, args);
+        va_end(args);
+        ctx->log_cb(level, buffer, ctx->log_opaque);
+    }
+}
+
+// --- Core Implementation ---
 
 tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     if (!cfg) return NULL;
@@ -46,7 +69,7 @@ void tsshaper_destroy(tsshaper_t* ctx) {
 }
 
 int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts) {
-    fprintf(stderr, "TSA: Pushing packet pid=%d\n", pid);
+    // tss_debug(ctx, "TSA: Pushing packet pid=%d", pid);
     // Find the correct program for this PID
     // Simplification: use the first program for now
     if (ctx->num_programs == 0) return -1;
@@ -54,6 +77,7 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
 
     // Check backpressure via HWM
     if (tstd_check_backpressure(prog, pid)) {
+        tss_warn(ctx, "Backpressure triggered for PID %d", pid);
         return -1;
     }
 
@@ -64,6 +88,7 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
     meta_pkt.arrival_ns = (arrival_ts > 0) ? arrival_ts : hal_get_time_ns();
 
     if (spsc_queue_push(prog->ingest_queue, &meta_pkt) != 0) {
+        // tss_warn(ctx, "Ingest queue full for PID %d", pid);
         return -1;
     }
 
@@ -72,20 +97,37 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
 }
 
 tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
-    fprintf(stderr, "TSA: Pulling packet\n");
+    // tss_debug(ctx, "TSA: Pulling packet");
+
+    // First, try to select a useful packet from the interleaver
     ts_packet_t* pkt = interleaver_select(ctx);
+
+    // If no useful packet is available, or if it's too early for VBR (not implemented yet),
+    // we MUST emit a NULL packet to maintain CBR timing.
+    // In a pure CBR shaper, we always emit *something* at every interval.
+
     if (!pkt) {
-        return TSS_IDLE;
+        // Insert NULL packet
+        memcpy(out_pkt, ctx->null_pkt, TS_PACKET_SIZE);
+        ctx->null_packets_inserted++;
+    } else {
+        memcpy(out_pkt, pkt->data, TS_PACKET_SIZE);
+
+        // Update T-STD state on pop
+        // Use the first program for now (since interleaver_select already picked it)
+        if (ctx->num_programs > 0) {
+            // Note: interleaver_select should ideally return the program context too,
+            // but for now we assume simple mapping or global update.
+            // Actually interleaver_select calls tstd_update_on_pop internally!
+            // So we don't need to call it again here.
+        }
     }
 
-    memcpy(out_pkt, pkt->data, TS_PACKET_SIZE);
+    // Advance the virtual clock
+    if (ctx->next_packet_time_ns == 0) {
+        ctx->next_packet_time_ns = hal_get_time_ns();
+    }
     ctx->next_packet_time_ns += ctx->packet_interval_ns;
-
-    // Update T-STD state on pop
-    // Use the first program for now
-    if (ctx->num_programs > 0) {
-        tstd_update_on_pop(&ctx->programs[0], pkt, ctx->next_packet_time_ns);
-    }
 
     return ctx->next_packet_time_ns;
 }

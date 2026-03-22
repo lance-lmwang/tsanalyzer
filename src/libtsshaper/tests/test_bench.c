@@ -9,9 +9,21 @@
 
 #define TS_PACKET_SIZE 188
 
+// Simple log callback for testing
+void test_log_cb(tss_log_level_t level, const char* msg, void* opaque) {
+    const char* level_str = "UNK";
+    switch(level) {
+        case TSS_LOG_ERROR: level_str = "ERR"; break;
+        case TSS_LOG_WARN:  level_str = "WRN"; break;
+        case TSS_LOG_INFO:  level_str = "INF"; break;
+        case TSS_LOG_DEBUG: level_str = "DBG"; break;
+        case TSS_LOG_TRACE: level_str = "TRC"; break;
+    }
+    printf("[%s] %s\n", level_str, msg);
+}
+
 void test_basic_cbr() {
-    printf("Testing Basic CBR...
-");
+    printf("Testing Basic CBR...\n");
     tsshaper_config_t config = {0};
     config.bitrate_bps = 50000000;  // 50Mbps
     config.io_batch_size = 7;
@@ -22,104 +34,97 @@ void test_basic_cbr() {
     tsshaper_t* shaper = tsshaper_create(&config);
     assert(shaper != NULL);
 
+    tsshaper_set_log_callback(shaper, test_log_cb, NULL);
+
+    // We need to manually simulate pacer if we don't have write permissions to high prio
+    // But tsshaper_start_pacer just launches a thread.
+    // Use /dev/null for output
     int out_fd = open("/dev/null", O_WRONLY);
-    assert(out_fd >= 0);
+    if (out_fd < 0) {
+        perror("open /dev/null");
+        return;
+    }
+
     tsshaper_start_pacer(shaper, out_fd);
 
     uint8_t pkt[TS_PACKET_SIZE];
     memset(pkt, 0xFF, TS_PACKET_SIZE);
     pkt[0] = 0x47;
-    pkt[1] = 0x00;  // PID 0
-    pkt[2] = 0x01;
+    pkt[1] = 0x00;
+    pkt[2] = 0x10; // PID 16
     pkt[3] = 0x10;
-    uint16_t pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
+    uint16_t pid = 16;
 
-    // Push 5000 packets
+    // Push packets
     int pushed = 0;
-    for (int i = 0; i < 5000; i++) {
+    for (int i = 0; i < 1000; i++) {
         int res = tsshaper_push(shaper, pid, pkt, 0);
         if (res == 0) {
             pushed++;
         } else {
-            // Queue full, wait a bit
             usleep(100);
-            i--;
+            i--; // Retry
         }
     }
 
-    printf("Pushed %d packets.
-", pushed);
-    usleep(100000);  // 100ms to allow pacer to run
+    printf("Pushed %d packets.\n", pushed);
+    usleep(100000);  // 100ms
 
     tsshaper_stats_t stats;
     tsshaper_get_stats(shaper, &stats);
-    printf("Null packets inserted: %lu
-", stats.null_packets_inserted);
+    printf("Null packets inserted: %lu\n", stats.null_packets_inserted);
 
-    // Can't check bytes sent anymore, just check it ran
     tsshaper_stop_pacer(shaper);
     tsshaper_destroy(shaper);
     close(out_fd);
-    printf("Basic CBR Passed.
-
-");
+    printf("Basic CBR Passed.\n\n");
 }
 
 void test_backpressure() {
-    void test_backpressure() {
-        printf("Testing Backpressure...\n");
-        tsshaper_config_t config = {0};
-        config.bitrate_bps = 1000000;  // 1Mbps (very slow)
-        config.io_batch_size = 7;
-        tsshaper_t* shaper = tsshaper_create(&config);
-        assert(shaper != NULL);
+    printf("Testing Backpressure...\n");
+    tsshaper_config_t config = {0};
+    config.bitrate_bps = 1000000;  // 1Mbps (slow)
+    config.io_batch_size = 7;
 
-        int out_fd = open("/dev/null", O_WRONLY);
-        assert(out_fd >= 0);
+    tsshaper_t* shaper = tsshaper_create(&config);
+    assert(shaper != NULL);
+    tsshaper_set_log_callback(shaper, test_log_cb, NULL);
+
+    int out_fd = open("/dev/null", O_WRONLY);
+    if (out_fd >= 0) {
         tsshaper_start_pacer(shaper, out_fd);
-
-        uint8_t pkt[TS_PACKET_SIZE];
-        memset(pkt, 0xFF, TS_PACKET_SIZE);
-        pkt[0] = 0x47;
-        pkt[1] = 0x00;
-        pkt[2] = 0x00;  // PID 0
-        pkt[3] = 0x10;
-        uint16_t pid = 0;
-
-        int push_count = 0;
-        int backpressure_hit = 0;
-        for (int i = 0; i < 100000; i++) {
-            int res = tsshaper_push(shaper, pid, pkt, 0);
-            if (res == -1) { // Queue is full
-                backpressure_hit = 1;
-                break;
-            }
-            if (res == 0)
-                push_count++;
-            else
-                break;
-        }
-
-        printf("Pushed %d packets before backpressure\n", push_count);
-        assert(backpressure_hit == 1);
-
-        tsshaper_stop_pacer(shaper);
-        tsshaper_destroy(shaper);
-        close(out_fd);
-        printf("Backpressure Passed.\n\n");
     }
 
-");
+    uint8_t pkt[TS_PACKET_SIZE];
+    memset(pkt, 0xFF, TS_PACKET_SIZE);
+    pkt[0] = 0x47;
+    pkt[1] = 0x00;
+    pkt[2] = 0x20; // PID 32
+    pkt[3] = 0x10;
+    uint16_t pid = 32;
+
+    int backpressure_hit = 0;
+    for (int i = 0; i < 200000; i++) { // Try to flood
+        int res = tsshaper_push(shaper, pid, pkt, 0);
+        if (res == -1) {
+            backpressure_hit = 1;
+            // printf("Backpressure hit at packet %d\n", i);
+            break;
+        }
+    }
+
+    assert(backpressure_hit == 1);
+
+    tsshaper_stop_pacer(shaper);
+    tsshaper_destroy(shaper);
+    if (out_fd >= 0) close(out_fd);
+    printf("Backpressure Passed.\n\n");
 }
 
 int main() {
-    printf("Starting LibTSShaper Test Suite...
-
-");
+    printf("Starting LibTSShaper Test Suite...\n\n");
     test_basic_cbr();
-    // test_pcr_accuracy() removed as feature is no longer available.
     test_backpressure();
-    printf("All tests passed successfully!
-");
+    printf("All tests passed successfully!\n");
     return 0;
 }

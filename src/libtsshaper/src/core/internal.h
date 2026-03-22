@@ -81,13 +81,28 @@ struct tsshaper_ctx {
     _Atomic uint64_t pcr_count;
     _Atomic uint64_t null_packets_inserted;
 
+    // Logging
+    tss_log_cb log_cb;
+    void* log_opaque;
+
     // Internal timing
     uint64_t next_packet_time_ns;
     uint64_t start_time_ns;
 
     // NULL packet template
     uint8_t null_pkt[TS_PACKET_SIZE];
+
+    // Scratch buffer for interleaver (avoid static)
+    ts_packet_t scratch_pkt;
 };
+
+// Internal Logging Helper
+void tss_log_impl(tsshaper_t* ctx, tss_log_level_t level, const char* fmt, ...);
+
+#define tss_error(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_ERROR, fmt, ##__VA_ARGS__)
+#define tss_warn(ctx, fmt, ...)  tss_log_impl(ctx, TSS_LOG_WARN, fmt, ##__VA_ARGS__)
+#define tss_info(ctx, fmt, ...)  tss_log_impl(ctx, TSS_LOG_INFO, fmt, ##__VA_ARGS__)
+#define tss_debug(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_DEBUG, fmt, ##__VA_ARGS__)
 
 // Internal functions
 void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt);
