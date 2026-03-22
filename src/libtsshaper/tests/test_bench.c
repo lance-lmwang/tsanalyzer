@@ -12,12 +12,22 @@
 // Simple log callback for testing
 void test_log_cb(tss_log_level_t level, const char* msg, void* opaque) {
     const char* level_str = "UNK";
-    switch(level) {
-        case TSS_LOG_ERROR: level_str = "ERR"; break;
-        case TSS_LOG_WARN:  level_str = "WRN"; break;
-        case TSS_LOG_INFO:  level_str = "INF"; break;
-        case TSS_LOG_DEBUG: level_str = "DBG"; break;
-        case TSS_LOG_TRACE: level_str = "TRC"; break;
+    switch (level) {
+        case TSS_LOG_ERROR:
+            level_str = "ERR";
+            break;
+        case TSS_LOG_WARN:
+            level_str = "WRN";
+            break;
+        case TSS_LOG_INFO:
+            level_str = "INF";
+            break;
+        case TSS_LOG_DEBUG:
+            level_str = "DBG";
+            break;
+        case TSS_LOG_TRACE:
+            level_str = "TRC";
+            break;
     }
     printf("[%s] %s\n", level_str, msg);
 }
@@ -51,7 +61,7 @@ void test_basic_cbr() {
     memset(pkt, 0xFF, TS_PACKET_SIZE);
     pkt[0] = 0x47;
     pkt[1] = 0x00;
-    pkt[2] = 0x10; // PID 16
+    pkt[2] = 0x10;  // PID 16
     pkt[3] = 0x10;
     uint16_t pid = 16;
 
@@ -63,7 +73,7 @@ void test_basic_cbr() {
             pushed++;
         } else {
             usleep(100);
-            i--; // Retry
+            i--;  // Retry
         }
     }
 
@@ -99,12 +109,12 @@ void test_backpressure() {
     memset(pkt, 0xFF, TS_PACKET_SIZE);
     pkt[0] = 0x47;
     pkt[1] = 0x00;
-    pkt[2] = 0x20; // PID 32
+    pkt[2] = 0x20;  // PID 32
     pkt[3] = 0x10;
     uint16_t pid = 32;
 
     int backpressure_hit = 0;
-    for (int i = 0; i < 200000; i++) { // Try to flood
+    for (int i = 0; i < 200000; i++) {  // Try to flood
         int res = tsshaper_push(shaper, pid, pkt, 0);
         if (res == -1) {
             backpressure_hit = 1;

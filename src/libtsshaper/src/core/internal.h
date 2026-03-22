@@ -44,12 +44,13 @@ typedef struct {
     double complexity;
     double error_sum;
     double last_error;
-    spsc_queue_t* ingest_queue;
+    spsc_queue_t* queues[MAX_PRIO];
     tstd_pid_ctx_t pids[MAX_PIDS_PER_PROGRAM];
     int num_pids;
     bool active;
     double wfq_vtime;
     double wfq_weight;
+    void* parent_ctx;  // Pointer to tsshaper_t
 } program_ctx_t;
 
 /**
@@ -88,6 +89,7 @@ struct tsshaper_ctx {
     // Internal timing
     uint64_t next_packet_time_ns;
     uint64_t start_time_ns;
+    uint64_t start_pcr_base;  // Base PCR value from the first packet
 
     // NULL packet template
     uint8_t null_pkt[TS_PACKET_SIZE];
@@ -100,8 +102,8 @@ struct tsshaper_ctx {
 void tss_log_impl(tsshaper_t* ctx, tss_log_level_t level, const char* fmt, ...);
 
 #define tss_error(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_ERROR, fmt, ##__VA_ARGS__)
-#define tss_warn(ctx, fmt, ...)  tss_log_impl(ctx, TSS_LOG_WARN, fmt, ##__VA_ARGS__)
-#define tss_info(ctx, fmt, ...)  tss_log_impl(ctx, TSS_LOG_INFO, fmt, ##__VA_ARGS__)
+#define tss_warn(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_WARN, fmt, ##__VA_ARGS__)
+#define tss_info(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_INFO, fmt, ##__VA_ARGS__)
 #define tss_debug(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_DEBUG, fmt, ##__VA_ARGS__)
 
 // Internal functions

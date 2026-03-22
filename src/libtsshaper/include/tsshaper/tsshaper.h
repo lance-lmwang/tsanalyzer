@@ -116,13 +116,7 @@ void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats);
 /**
  * @brief Log levels for the shaper library.
  */
-typedef enum {
-    TSS_LOG_ERROR = 0,
-    TSS_LOG_WARN,
-    TSS_LOG_INFO,
-    TSS_LOG_DEBUG,
-    TSS_LOG_TRACE
-} tss_log_level_t;
+typedef enum { TSS_LOG_ERROR = 0, TSS_LOG_WARN, TSS_LOG_INFO, TSS_LOG_DEBUG, TSS_LOG_TRACE } tss_log_level_t;
 
 /**
  * @brief Log callback function signature.

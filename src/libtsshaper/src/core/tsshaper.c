@@ -50,8 +50,11 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     ctx->num_programs = 1;
     ctx->programs[0].active = true;
     ctx->programs[0].program_id = 1;
-    ctx->programs[0].ingest_queue = spsc_queue_create(1024);  // Internal buffer
+    for (int p = 0; p < MAX_PRIO; p++) {
+        ctx->programs[0].queues[p] = spsc_queue_create(1024);
+    }
     ctx->programs[0].wfq_weight = 1.0;
+    ctx->programs[0].parent_ctx = ctx;
 
     return ctx;
 }
@@ -61,8 +64,10 @@ void tsshaper_destroy(tsshaper_t* ctx) {
     tsshaper_stop_pacer(ctx);
     // Free programs and queues
     for (int i = 0; i < ctx->num_programs; i++) {
-        if (ctx->programs[i].ingest_queue) {
-            spsc_queue_free(ctx->programs[i].ingest_queue);
+        for (int p = 0; p < MAX_PRIO; p++) {
+            if (ctx->programs[i].queues[p]) {
+                spsc_queue_free(ctx->programs[i].queues[p]);
+            }
         }
     }
     free(ctx);
@@ -70,8 +75,6 @@ void tsshaper_destroy(tsshaper_t* ctx) {
 
 int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts) {
     // tss_debug(ctx, "TSA: Pushing packet pid=%d", pid);
-    // Find the correct program for this PID
-    // Simplification: use the first program for now
     if (ctx->num_programs == 0) return -1;
     program_ctx_t* prog = &ctx->programs[0];
 
@@ -87,12 +90,22 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
     meta_pkt.pid = pid;
     meta_pkt.arrival_ns = (arrival_ts > 0) ? arrival_ts : hal_get_time_ns();
 
-    if (spsc_queue_push(prog->ingest_queue, &meta_pkt) != 0) {
-        // tss_warn(ctx, "Ingest queue full for PID %d", pid);
+    // Call T-STD update first to determine priority
+    tstd_update_on_push(prog, &meta_pkt);
+
+    // Identify priority (T-STD model updated ctx->priority)
+    packet_prio_t prio = PRIO_MEDIUM;
+    for (int i = 0; i < prog->num_pids; i++) {
+        if (prog->pids[i].pid == pid) {
+            prio = prog->pids[i].priority;
+            break;
+        }
+    }
+
+    if (spsc_queue_push(prog->queues[prio], &meta_pkt) != 0) {
         return -1;
     }
 
-    tstd_update_on_push(prog, &meta_pkt);
     return 0;
 }
 
