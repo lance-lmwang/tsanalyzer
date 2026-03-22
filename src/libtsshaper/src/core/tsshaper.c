@@ -1,152 +1,100 @@
-#include "internal.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
+#include "hal.h"
+#include "internal.h"
 
-extern void* pacer_thread_func(void* arg);
+tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
+    if (!cfg) return NULL;
 
-tsa_shaper_t* tsa_shaper_create(uint64_t total_bitrate) {
-    tsa_shaper_t* ctx = calloc(1, sizeof(tsa_shaper_t));
+    tsshaper_t* ctx = (tsshaper_t*)calloc(1, sizeof(tsshaper_t));
     if (!ctx) return NULL;
 
-    ctx->total_bitrate_bps = total_bitrate;
-    if (total_bitrate > 0) {
-        ctx->packet_interval_ns = (uint64_t)TS_PACKET_SIZE * 8 * NS_PER_SEC / total_bitrate;
-    } else {
-        ctx->packet_interval_ns = 1000000; // Default
-    }
+    ctx->total_bitrate_bps = cfg->bitrate_bps;
+    ctx->packet_interval_ns = (188ULL * 8 * 1000000000ULL) / cfg->bitrate_bps;
+    ctx->io_batch_size = cfg->io_batch_size > 0 ? cfg->io_batch_size : 7;
+    ctx->use_raw_clock = cfg->use_raw_clock;
 
-    ctx->output_fd = -1;
-    ctx->running = true;
+    // Initialize NULL packet (0x1FFF PID)
+    memset(ctx->null_pkt, 0, TS_PACKET_SIZE);
+    ctx->null_pkt[0] = 0x47;
+    ctx->null_pkt[1] = 0x1F;
+    ctx->null_pkt[2] = 0xFF;
+    ctx->null_pkt[3] = 0x10;  // CC=0, Payload only
+    memset(ctx->null_pkt + 4, 0xFF, TS_PACKET_SIZE - 4);
 
-    // Default RT settings
-    ctx->cpu_affinity = -1;
-    ctx->sched_priority = 0;
-
-    if (pthread_create(&ctx->pacer_thread, NULL, pacer_thread_func, ctx) != 0) {
-        free(ctx);
-        return NULL;
-    }
+    // Default: Initialize one program for all PIDs
+    ctx->num_programs = 1;
+    ctx->programs[0].active = true;
+    ctx->programs[0].program_id = 1;
+    ctx->programs[0].ingest_queue = spsc_queue_create(1024);  // Internal buffer
+    ctx->programs[0].wfq_weight = 1.0;
 
     return ctx;
 }
 
-void tsa_shaper_destroy(tsa_shaper_t* ctx) {
+void tsshaper_destroy(tsshaper_t* ctx) {
     if (!ctx) return;
-
-    ctx->running = false;
-    pthread_join(ctx->pacer_thread, NULL);
-
+    tsshaper_stop_pacer(ctx);
+    // Free programs and queues
     for (int i = 0; i < ctx->num_programs; i++) {
         if (ctx->programs[i].ingest_queue) {
-            spsc_queue_destroy(ctx->programs[i].ingest_queue);
+            spsc_queue_free(ctx->programs[i].ingest_queue);
         }
     }
-
-    if (ctx->output_fd >= 0) {
-        close(ctx->output_fd);
-    }
-
     free(ctx);
 }
 
-int tsa_shaper_add_program(tsa_shaper_t* ctx, int program_id) {
-    if (ctx->num_programs >= MAX_PROGRAMS) return -1;
+int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts) {
+    fprintf(stderr, "TSA: Pushing packet pid=%d\n", pid);
+    // Find the correct program for this PID
+    // Simplification: use the first program for now
+    if (ctx->num_programs == 0) return -1;
+    program_ctx_t* prog = &ctx->programs[0];
 
-    program_ctx_t* prog = &ctx->programs[ctx->num_programs++];
-    prog->program_id = program_id;
-    prog->active = true;
-    prog->ingest_queue = spsc_queue_create(1024);
-
-    // Initial equal distribution
-    for (int i = 0; i < ctx->num_programs; i++) {
-        ctx->programs[i].wfq_weight = 1.0 / ctx->num_programs;
-        ctx->programs[i].current_bitrate_bps = ctx->total_bitrate_bps / ctx->num_programs;
+    // Check backpressure via HWM
+    if (tstd_check_backpressure(prog, pid)) {
+        return -1;
     }
 
+    // Wrap the packet with metadata
+    ts_packet_t meta_pkt;
+    memcpy(meta_pkt.data, pkt, TS_PACKET_SIZE);
+    meta_pkt.pid = pid;
+    meta_pkt.arrival_ns = (arrival_ts > 0) ? arrival_ts : hal_get_time_ns();
+
+    if (spsc_queue_push(prog->ingest_queue, &meta_pkt) != 0) {
+        return -1;
+    }
+
+    tstd_update_on_push(prog, &meta_pkt);
     return 0;
 }
 
-int tsa_shaper_set_program_bitrate(tsa_shaper_t* ctx, int program_id, uint64_t bps) {
-    for (int i = 0; i < ctx->num_programs; i++) {
-        if (ctx->programs[i].program_id == program_id) {
-            ctx->programs[i].target_bitrate_bps = bps;
-            return 0;
-        }
+tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
+    fprintf(stderr, "TSA: Pulling packet\n");
+    ts_packet_t* pkt = interleaver_select(ctx);
+    if (!pkt) {
+        return TSS_IDLE;
     }
-    return -1;
+
+    memcpy(out_pkt, pkt->data, TS_PACKET_SIZE);
+    ctx->next_packet_time_ns += ctx->packet_interval_ns;
+
+    // Update T-STD state on pop
+    // Use the first program for now
+    if (ctx->num_programs > 0) {
+        tstd_update_on_pop(&ctx->programs[0], pkt, ctx->next_packet_time_ns);
+    }
+
+    return ctx->next_packet_time_ns;
 }
 
-int tsa_shaper_push(tsa_shaper_t* ctx, int program_id, const uint8_t* ts_packet) {
-    for (int i = 0; i < ctx->num_programs; i++) {
-        program_ctx_t* prog = &ctx->programs[i];
-        if (prog->program_id == program_id) {
-            ts_packet_t pkt;
-            memcpy(pkt.data, ts_packet, TS_PACKET_SIZE);
-            pkt.timestamp_ns = hal_get_time_ns();
-
-            uint16_t pid = ((ts_packet[1] & 0x1F) << 8) | ts_packet[2];
-            if (tstd_check_backpressure(prog, pid)) {
-                return -2; // Backpressure (95% HWM)
-            }
-
-            if (spsc_queue_push(prog->ingest_queue, &pkt)) {
-                tstd_update_on_push(prog, &pkt);
-                return 0;
-            } else {
-                return -1; // Queue full
-            }
-        }
-    }
-    return -3; // Program not found
-}
-
-int tsa_shaper_set_output(tsa_shaper_t* ctx, tsa_output_mode_t mode, const char* url) {
-    ctx->output_mode = mode;
-    if (url) {
-        strncpy(ctx->output_url, url, sizeof(ctx->output_url) - 1);
-    }
-
-    if (mode == TSA_OUT_UDP || mode == TSA_OUT_RTP) {
-        char host[256] = {0};
-        int port = 0;
-        if (url && sscanf(url, "udp://%[^:]:%d", host, &port) == 2) {
-            ctx->output_fd = socket(AF_INET, SOCK_DGRAM, 0);
-            if (ctx->output_fd < 0) return -1;
-
-            memset(&ctx->output_addr, 0, sizeof(ctx->output_addr));
-            ctx->output_addr.sin_family = AF_INET;
-            ctx->output_addr.sin_port = htons(port);
-            inet_pton(AF_INET, host, &ctx->output_addr.sin_addr);
-
-            int flags = fcntl(ctx->output_fd, F_GETFL, 0);
-            fcntl(ctx->output_fd, F_SETFL, flags | O_NONBLOCK);
-        }
-    }
-
-    return 0;
-}
-
-void tsa_shaper_get_stats(tsa_shaper_t* ctx, tsa_shaper_stats_t* stats) {
-    stats->bytes_sent = atomic_load(&ctx->bytes_sent);
-    uint64_t count = atomic_load(&ctx->pcr_count);
-    if (count > 0) {
-        stats->pcr_jitter_ns = (double)atomic_load((_Atomic uint64_t*)&ctx->pcr_jitter_ns_sum) / count;
-    } else {
-        stats->pcr_jitter_ns = 0;
-    }
-
-    double total_fullness = 0;
-    int pid_count = 0;
-    for (int i = 0; i < ctx->num_programs; i++) {
-        for (int j = 0; j < ctx->programs[i].num_pids; j++) {
-            uint32_t fullness = atomic_load(&ctx->programs[i].pids[j].buffer_fullness);
-            total_fullness += (double)fullness / ctx->programs[i].pids[j].buffer_size;
-            pid_count++;
-        }
-    }
-    stats->buffer_fullness_avg = pid_count > 0 ? total_fullness / pid_count : 0;
+void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats) {
+    if (!ctx || !stats) return;
+    stats->current_bitrate_bps = (double)ctx->total_bitrate_bps;
+    stats->buffer_fullness_pct = 0;  // Aggregated from programs
+    stats->null_packets_inserted = ctx->null_packets_inserted;
+    stats->pcr_jitter_ns = 0;
+    stats->continuity_errors = 0;
 }

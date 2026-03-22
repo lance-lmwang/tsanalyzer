@@ -1,8 +1,8 @@
 #ifndef TSA_SHAPER_H
 #define TSA_SHAPER_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,12 +22,7 @@ int tsa_shaper_set_program_bitrate(tsa_shaper_t* ctx, int program_id, uint64_t b
 int tsa_shaper_push(tsa_shaper_t* ctx, int program_id, const uint8_t* ts_packet);
 
 // Output Protocol Selection
-typedef enum {
-    TSA_OUT_UDP,
-    TSA_OUT_RTP,
-    TSA_OUT_SRT,
-    TSA_OUT_FILE
-} tsa_output_mode_t;
+typedef enum { TSA_OUT_UDP, TSA_OUT_RTP, TSA_OUT_SRT, TSA_OUT_FILE } tsa_output_mode_t;
 
 int tsa_shaper_set_output(tsa_shaper_t* ctx, tsa_output_mode_t mode, const char* url);
 
@@ -44,4 +39,4 @@ void tsa_shaper_get_stats(tsa_shaper_t* ctx, tsa_shaper_stats_t* stats);
 }
 #endif
 
-#endif // TSA_SHAPER_H
+#endif  // TSA_SHAPER_H

@@ -1,7 +1,7 @@
-#include "internal.h"
 #include <math.h>
+#include "internal.h"
 
-void statmux_rebalance(tsa_shaper_t* ctx) {
+void statmux_rebalance(tsshaper_t* ctx) {
     if (ctx->num_programs == 0) return;
 
     // If only one program, it gets everything
@@ -23,7 +23,7 @@ void statmux_rebalance(tsa_shaper_t* ctx) {
         }
 
         double queue_fill = (double)spsc_queue_count(prog->ingest_queue) / 1024.0;
-        double buffer_fill = (double)total_fullness / (2 * 1024 * 1024); // Based on 2MB avg
+        double buffer_fill = (double)total_fullness / (2 * 1024 * 1024);  // Based on 2MB avg
 
         prog->complexity = 0.7 * queue_fill + 0.3 * buffer_fill;
         if (prog->complexity < 0.01) prog->complexity = 0.01;
@@ -39,7 +39,7 @@ void statmux_rebalance(tsa_shaper_t* ctx) {
         if (!prog->active) continue;
 
         double target_share = prog->complexity / total_complexity;
-        double current_share = prog->wfq_weight; // Simplified share
+        double current_share = prog->wfq_weight;  // Simplified share
 
         double error = target_share - current_share;
         prog->error_sum += error;

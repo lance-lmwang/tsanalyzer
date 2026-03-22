@@ -9,9 +9,9 @@
 #ifndef TSSHAPER_H
 #define TSSHAPER_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,11 +36,11 @@ typedef struct tsshaper_ctx tsshaper_t;
  * @brief Configuration for libtsshaper initialization.
  */
 typedef struct {
-    uint64_t bitrate_bps;      /**< Target CBR bitrate in bits per second */
-    uint32_t pcr_interval_ms;  /**< Max interval between PCR anchors (default: 35) */
-    uint32_t io_batch_size;    /**< Number of packets per sendmmsg (default: 7) */
-    uint32_t max_latency_ms;   /**< Internal buffer depth (backpressure threshold) */
-    bool     use_raw_clock;    /**< Use CLOCK_MONOTONIC_RAW for zero-jitter timing */
+    uint64_t bitrate_bps;     /**< Target CBR bitrate in bits per second */
+    uint32_t pcr_interval_ms; /**< Max interval between PCR anchors (default: 35) */
+    uint32_t io_batch_size;   /**< Number of packets per sendmmsg (default: 7) */
+    uint32_t max_latency_ms;  /**< Internal buffer depth (backpressure threshold) */
+    bool use_raw_clock;       /**< Use CLOCK_MONOTONIC_RAW for zero-jitter timing */
 } tsshaper_config_t;
 
 /**
@@ -67,10 +67,7 @@ void tsshaper_destroy(tsshaper_t* ctx);
  * @param arrival_ts External timestamp (ns). If 0, the library uses internal clock.
  * @return 0 on success, -1 if the buffer is full (Backpressure).
  */
-int tsshaper_push(tsshaper_t* ctx,
-                  uint16_t pid,
-                  const uint8_t* pkt,
-                  tss_time_ns arrival_ts);
+int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts);
 
 /**
  * @brief Pull the next scheduled packet from the interleaver (Synchronous Mode).
@@ -104,11 +101,11 @@ void tsshaper_stop_pacer(tsshaper_t* ctx);
  * @brief Runtime statistics for monitoring.
  */
 typedef struct {
-    double   current_bitrate_bps;    /**< Measured output bitrate */
-    uint32_t buffer_fullness_pct;    /**< Current T-STD buffer level (0-100) */
-    double   pcr_jitter_ns;          /**< Estimated PCR jitter deviation */
-    uint64_t null_packets_inserted;  /**< Total padding packets generated */
-    uint64_t continuity_errors;      /**< Cumulative ingest errors */
+    double current_bitrate_bps;     /**< Measured output bitrate */
+    uint32_t buffer_fullness_pct;   /**< Current T-STD buffer level (0-100) */
+    double pcr_jitter_ns;           /**< Estimated PCR jitter deviation */
+    uint64_t null_packets_inserted; /**< Total padding packets generated */
+    uint64_t continuity_errors;     /**< Cumulative ingest errors */
 } tsshaper_stats_t;
 
 /**
@@ -120,4 +117,4 @@ void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats);
 }
 #endif
 
-#endif // TSSHAPER_H
+#endif  // TSSHAPER_H

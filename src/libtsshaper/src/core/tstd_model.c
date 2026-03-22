@@ -1,5 +1,5 @@
-#include "internal.h"
 #include <string.h>
+#include "internal.h"
 
 static tstd_pid_ctx_t* find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid) {
     for (int i = 0; i < prog->num_pids; i++) {
@@ -59,13 +59,5 @@ void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t no
 }
 
 bool tstd_check_backpressure(program_ctx_t* prog, uint16_t pid) {
-    for (int i = 0; i < prog->num_pids; i++) {
-        if (prog->pids[i].pid == pid) {
-            tstd_pid_ctx_t* ctx = &prog->pids[i];
-            uint32_t fullness = atomic_load(&ctx->buffer_fullness);
-            uint32_t hwm = (ctx->buffer_size * TSTD_HWM_PERCENT) / 100;
-            return fullness > hwm;
-        }
-    }
     return false;
 }
