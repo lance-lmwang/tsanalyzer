@@ -31,6 +31,11 @@ void spsc_queue_free(spsc_queue_t* q) {
     free(q);
 }
 
+// Alias for compatibility with core
+void spsc_queue_destroy(spsc_queue_t* q) {
+    spsc_queue_free(q);
+}
+
 bool spsc_queue_push(spsc_queue_t* q, const ts_packet_t* pkt) {
     size_t head = atomic_load_explicit(&q->head, memory_order_relaxed);
     size_t tail = atomic_load_explicit(&q->tail, memory_order_acquire);

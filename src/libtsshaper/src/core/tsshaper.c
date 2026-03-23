@@ -51,6 +51,7 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     ctx->num_programs = 1;
     ctx->programs[0].active = true;
     ctx->programs[0].program_id = 1;
+    ctx->programs[0].target_bitrate_bps = cfg->bitrate_bps;
     for (int p = 0; p < MAX_PRIO; p++) {
         ctx->programs[0].queues[p] = spsc_queue_create(1024);
     }
@@ -75,7 +76,7 @@ void tsshaper_destroy(tsshaper_t* ctx) {
 }
 
 int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts) {
-    if (ctx->num_programs == 0) return -1;
+    if (!ctx || ctx->num_programs == 0) return -1;
     program_ctx_t* prog = &ctx->programs[0];
 
     // TR 101 290 T-STD Buffer Monitoring (Backpressure)
@@ -101,7 +102,12 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
         }
     }
 
-    if (spsc_queue_push(prog->queues[prio], &meta_pkt) != 0) {
+    if (!prog->queues[prio]) {
+        fprintf(stderr, "ERROR: Queue for priority %d not initialized!\n", prio);
+        return -1;
+    }
+
+    if (!spsc_queue_push(prog->queues[prio], &meta_pkt)) {
         return -1;
     }
 

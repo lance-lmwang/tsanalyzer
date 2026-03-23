@@ -37,6 +37,10 @@ typedef struct {
     bool is_pcr;
     uint8_t last_cc;
     bool first_packet;
+
+    // Traffic Shaping (Leaky Bucket)
+    double shaping_credit_bits;
+    uint64_t shaping_rate_bps;
 } tstd_pid_ctx_t;
 
 typedef struct {
@@ -52,6 +56,7 @@ typedef struct {
     bool active;
     double wfq_vtime;
     double wfq_weight;
+    double queue_vtime[MAX_PRIO];
     void* parent_ctx;  // Pointer to tsshaper_t
 } program_ctx_t;
 

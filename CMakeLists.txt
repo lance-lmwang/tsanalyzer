@@ -17,6 +17,9 @@ find_library(RT_LIB rt REQUIRED)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/libtsshaper/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/libtsshaper/src/core")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/libtsshaper/src/platform")
 include_directories(${OPENSSL_INCLUDE_DIR})
 
 set(TSA_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps")
@@ -76,13 +79,19 @@ set(TSA_EXTERNAL_LIBS
 
 set(TSA_CORE_SRCS
     src/tsp.c src/tsa.c src/tsa_engine_tr101290.c
+    src/libtsshaper/src/core/tsshaper.c
+    src/libtsshaper/src/core/interleaver.c
+    src/libtsshaper/src/core/tstd_model.c
+    src/libtsshaper/src/core/spsc_queue.c
+    src/libtsshaper/src/platform/hal_linux.c
+    src/libtsshaper/src/pacer/pacer_loop.c
     src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c
     src/tsa_psi.c src/tsa_scte35.c src/tsa_engine_scte35.c src/tsa_es.c
     src/tsa_descriptors.c src/tsa_health.c src/tsa_histogram.c
     src/tsa_audio_audit.c src/tsa_thumbnailer.c
     src/tsa_exporter_prom.c  src/tsa_gateway.c src/srt_ingest.c
-    src/tsa_source.c  src/alloc_tracker.c src/spsc_queue.c
+    src/tsa_source.c  src/alloc_tracker.c
     src/mpmc_queue.c src/tsa_stream.c src/tsa_plugin.c src/tsa_event.c
     src/mongoose.c src/nalu_sniffer.c src/tsa_pcr_track.c src/tsa_lua.c
     src/tsa_hls_parser.c src/tsa_hls_ingest.c src/tsa_webhook.c src/tsa_alert.c
@@ -113,6 +122,7 @@ tsa_exe(tsa_server src/tsa_server_pro.c)
 tsa_exe(tsa_server_pro src/tsa_server_pro.c)
 tsa_exe(tsa_top tools/tsa_top.c)
 target_link_libraries(tsa_top ${NCURSES_LIB} ${RT_LIB})
+tsa_exe(offline_shaper tools/offline_shaper.c)
 
 enable_testing()
 macro(tsa_test name src)

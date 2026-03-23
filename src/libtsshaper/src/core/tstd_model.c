@@ -36,9 +36,24 @@ static tstd_pid_ctx_t* find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid)
         if (pid == 0x00 || pid == 0x01 || pid == 0x11 || pid == 0x12) {
             ctx->priority = PRIO_CRITICAL;  // PAT/CAT/SDT/EIT
             ctx->buffer_size = 64 * 1024;
+            ctx->shaping_rate_bps = 0; // Unlimited/Critical
         } else {
             ctx->priority = PRIO_MEDIUM;
-            ctx->buffer_size = 1024 * 1024;
+            ctx->buffer_size = 4 * 1024 * 1024; // Increased buffer for smoothing
+
+            // Heuristic: Assign shaping rates based on PID to enforce smoothness
+            // In a real system, this would be configured via API.
+            if (prog->target_bitrate_bps > 0) {
+                if (pid == 0x0100 || pid == 0x1500) { // Video PIDs
+                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 85 / 100;
+                } else if (pid == 0x0101 || pid == 0x1501) { // Audio PIDs
+                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 10 / 100;
+                } else {
+                    ctx->shaping_rate_bps = prog->target_bitrate_bps;
+                }
+                // Allow 500ms burst
+                ctx->shaping_credit_bits = (double)ctx->shaping_rate_bps * 0.5;
+            }
         }
         return ctx;
     }
