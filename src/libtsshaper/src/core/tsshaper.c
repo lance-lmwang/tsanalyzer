@@ -58,6 +58,10 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     ctx->programs[0].wfq_weight = 1.0;
     ctx->programs[0].parent_ctx = ctx;
 
+    // Initialize Pacer PI Controller for clock stability (Weak P, Very Weak I)
+    // Limits: +/- 10ms adjustment, 1s integral window.
+    tss_pi_init(&ctx->pacer_pi, 0.1f, 0.005f, 10.0f, -10.0f, 1000.0f, -1000.0f);
+
     return ctx;
 }
 

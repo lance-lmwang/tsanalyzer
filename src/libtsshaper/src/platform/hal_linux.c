@@ -20,9 +20,10 @@ void hal_precision_wait(uint64_t target_ns) {
         uint64_t diff = target_ns - now;
         if (diff > 1000000) {  // > 1ms
             struct timespec ts;
-            ts.tv_sec = 0;
-            ts.tv_nsec = 500000;  // 0.5ms sleep
-            nanosleep(&ts, NULL);
+            ts.tv_sec = target_ns / 1000000000ULL;
+            ts.tv_nsec = target_ns % 1000000000ULL;
+            // TIMER_ABSTIME is crucial: it prevents cumulative drift from interrupted sleep
+            clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &ts, NULL);
         } else if (diff > 10000) {  // > 10us
             sched_yield();
         } else {

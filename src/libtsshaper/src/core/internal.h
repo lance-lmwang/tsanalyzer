@@ -21,6 +21,7 @@
 // ============================================================================
 #define Q16_SHIFT 16
 #define FLOAT_TO_Q16(f) ((int32_t)((f) * (1 << Q16_SHIFT)))
+#define Q16_TO_FLOAT(q) ((float)(q) / (1 << Q16_SHIFT))
 #define Q16_MUL(a, b)   ((int32_t)(((int64_t)(a) * (b)) >> Q16_SHIFT))
 
 typedef struct {
@@ -112,11 +113,15 @@ struct tsshaper_ctx {
 
     // Internal timing
     uint64_t next_packet_time_ns;
+    uint64_t ideal_packet_time_ns;  // Theoretical CBR grid
     uint64_t start_time_ns;
     uint64_t start_pcr_base;  // Base PCR value from the first packet
 
     // NULL packet template
     uint8_t null_pkt[TS_PACKET_SIZE];
+
+    // Pacer clock stability
+    tss_pi_controller_t pacer_pi;
 
     // Scratch buffer for interleaver (avoid static)
     ts_packet_t scratch_pkt;
