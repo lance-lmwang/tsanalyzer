@@ -101,6 +101,45 @@ void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt) {
     }
 }
 
+/**
+ * @brief Updates the fixed-point PI controller to compute the target bitrate adjustment.
+ * Executes in O(1) integer arithmetic without FPU usage.
+ *
+ * @param pi The PI controller context.
+ * @param error Current error (target_fullness - current_fullness) in bytes.
+ * @return int32_t Target adjustment in Q16.16 format.
+ */
+int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error) {
+    // 1. Deadband check to maintain CBR stability
+    if (error > -pi->deadband && error < pi->deadband) {
+        error = 0;
+    }
+
+    // 2. Proportional term: Kp * error
+    // Error is in bytes, convert to Q16 before multiplication
+    int32_t p_term = Q16_MUL((int64_t)error << Q16_SHIFT, pi->kp);
+
+    // 3. Integral term: Ki * error with Anti-Windup
+    pi->integral += Q16_MUL((int64_t)error << Q16_SHIFT, pi->ki);
+
+    if (pi->integral > pi->integral_max) {
+        pi->integral = pi->integral_max;
+    } else if (pi->integral < pi->integral_min) {
+        pi->integral = pi->integral_min;
+    }
+
+    // 4. Combine and clamp output
+    int32_t output = p_term + pi->integral;
+
+    if (output > pi->out_max) {
+        output = pi->out_max;
+    } else if (output < pi->out_min) {
+        output = pi->out_min;
+    }
+
+    return output;
+}
+
 void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t now_ns) {
     uint16_t pid = ((pkt->data[1] & 0x1F) << 8) | pkt->data[2];
     for (int i = 0; i < prog->num_pids; i++) {
