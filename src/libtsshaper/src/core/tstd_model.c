@@ -102,25 +102,40 @@ void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt) {
 }
 
 /**
+ * @brief Initializes the PI controller with floating point parameters, converting them to Q16.16.
+ */
+void tss_pi_init(tss_pi_controller_t* pi, float kp, float ki,
+                 float out_max, float out_min, float int_max, float int_min) {
+    memset(pi, 0, sizeof(*pi));
+    pi->kp = FLOAT_TO_Q16(kp);
+    pi->ki = FLOAT_TO_Q16(ki);
+    pi->out_max = FLOAT_TO_Q16(out_max);
+    pi->out_min = FLOAT_TO_Q16(out_min);
+    pi->integral_max = FLOAT_TO_Q16(int_max);
+    pi->integral_min = FLOAT_TO_Q16(int_min);
+    pi->deadband = 188; // Default deadband of 1 TS packet
+}
+
+/**
  * @brief Updates the fixed-point PI controller to compute the target bitrate adjustment.
  * Executes in O(1) integer arithmetic without FPU usage.
  *
  * @param pi The PI controller context.
- * @param error Current error (target_fullness - current_fullness) in bytes.
+ * @param error_q16 Current error in Q16.16 format.
  * @return int32_t Target adjustment in Q16.16 format.
  */
-int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error) {
-    // 1. Deadband check to maintain CBR stability
-    if (error > -pi->deadband && error < pi->deadband) {
-        error = 0;
+int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16) {
+    // 1. Deadband check (scaled to Q16)
+    int32_t q16_deadband = pi->deadband << Q16_SHIFT;
+    if (error_q16 > -q16_deadband && error_q16 < q16_deadband) {
+        error_q16 = 0;
     }
 
     // 2. Proportional term: Kp * error
-    // Error is in bytes, convert to Q16 before multiplication
-    int32_t p_term = Q16_MUL((int64_t)error << Q16_SHIFT, pi->kp);
+    int32_t p_out = Q16_MUL(pi->kp, error_q16);
 
-    // 3. Integral term: Ki * error with Anti-Windup
-    pi->integral += Q16_MUL((int64_t)error << Q16_SHIFT, pi->ki);
+    // 3. Integral accumulation with Anti-Windup
+    pi->integral += error_q16;
 
     if (pi->integral > pi->integral_max) {
         pi->integral = pi->integral_max;
@@ -128,18 +143,20 @@ int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error) {
         pi->integral = pi->integral_min;
     }
 
-    // 4. Combine and clamp output
-    int32_t output = p_term + pi->integral;
+    // 4. Integral term: Ki * integrated_error
+    int32_t i_out = Q16_MUL(pi->ki, pi->integral);
 
-    if (output > pi->out_max) {
-        output = pi->out_max;
-    } else if (output < pi->out_min) {
-        output = pi->out_min;
+    // 5. Combine and clamp output
+    int32_t total_out = p_out + i_out;
+
+    if (total_out > pi->out_max) {
+        total_out = pi->out_max;
+    } else if (total_out < pi->out_min) {
+        total_out = pi->out_min;
     }
 
-    return output;
+    return total_out;
 }
-
 void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t now_ns) {
     uint16_t pid = ((pkt->data[1] & 0x1F) << 8) | pkt->data[2];
     for (int i = 0; i < prog->num_pids; i++) {
