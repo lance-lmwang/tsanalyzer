@@ -1,4 +1,8 @@
 #define _GNU_SOURCE
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdio.h>
@@ -7,15 +11,51 @@
 #include "hal.h"
 #include "internal.h"
 
-uint64_t hal_get_time_ns(void) {
+typedef struct {
+    int fd;
+    struct sockaddr_in addr;
+} linux_backend_t;
+
+static int linux_io_init(tsshaper_t* ctx, void* params) {
+    linux_backend_t* backend = calloc(1, sizeof(linux_backend_t));
+    if (!backend) return -1;
+    if (params) memcpy(backend, params, sizeof(linux_backend_t));
+    ctx->backend_priv = backend;
+    return 0;
+}
+
+static int linux_io_send(tsshaper_t* ctx, struct mmsghdr* msgs, int count) {
+    linux_backend_t* backend = (linux_backend_t*)ctx->backend_priv;
+    if (!backend || backend->fd < 0) return -1;
+    for (int i = 0; i < count; i++) {
+        msgs[i].msg_hdr.msg_name = &backend->addr;
+        msgs[i].msg_hdr.msg_namelen = sizeof(backend->addr);
+    }
+    return sendmmsg(backend->fd, msgs, count, 0);
+}
+
+static void linux_io_close(tsshaper_t* ctx) {
+    if (ctx->backend_priv) {
+        free(ctx->backend_priv);
+        ctx->backend_priv = NULL;
+    }
+}
+
+void hal_init_linux_backend(tsshaper_t* ctx) {
+    ctx->hal_ops.io_init  = linux_io_init;
+    ctx->hal_ops.io_send  = linux_io_send;
+    ctx->hal_ops.io_close = linux_io_close;
+}
+
+uint64_t hal_get_linux_time_ns(void) {
     struct timespec ts;
     // Use CLOCK_MONOTONIC_RAW to avoid NTP/PTP slewing
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
 
-void hal_precision_wait(uint64_t target_ns) {
-    uint64_t now = hal_get_time_ns();
+void hal_precision_wait_linux(uint64_t target_ns) {
+    uint64_t now = hal_get_linux_time_ns();
     while (now < target_ns) {
         uint64_t diff = target_ns - now;
         if (diff > 1000000) {  // > 1ms

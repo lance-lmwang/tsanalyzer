@@ -35,6 +35,7 @@ TsAnalyzer is a tiered ecosystem of deterministic, high-performance measurement 
 
 ### ⚙️ Pillar 3: Engineering & Ingestion
 *   **[Ingestion Engine](./docs/03_engine/ingestion_engine.md)**: Hardware timestamping and zero-copy ingress.
+*   **[libtsshaper: Traffic Shaper](./src/libtsshaper/README.md)**: Standalone high-precision T-STD engine and shaping library.
 *   **[Pipeline Architecture](./docs/03_engine/pipeline_architecture.md)**: Lock-free SPSC routing logic.
 *   **[SIMD Parser Design](./docs/03_engine/simd_parser_design.md)**: AVX-512/AVX2 implementation details.
 *   **[Pacing Architecture](./docs/03_engine/tsp_pacing_architecture.md)**: High-precision scheduling math.

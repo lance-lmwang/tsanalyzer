@@ -2,6 +2,15 @@
 #define LIBTSSHAPER_HAL_H
 
 #include <stdint.h>
+#include <sys/socket.h>
+
+struct mmsghdr;
+typedef struct tsshaper_ctx tsshaper_t;
+
+/**
+ * @brief Initialize the HAL Ops table for a specific backend type.
+ */
+int hal_init_ops(tsshaper_t* ctx, int backend_type);
 
 /**
  * @brief Get high-resolution monotonic time in nanoseconds.

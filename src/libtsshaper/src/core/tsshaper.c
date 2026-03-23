@@ -58,9 +58,18 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     ctx->programs[0].wfq_weight = 1.0;
     ctx->programs[0].parent_ctx = ctx;
 
+    // Initialize Program PI for statmux weight rebalancing
+    tss_pi_init(&ctx->programs[0].pi, 0.1f, 0.01f, 0.2f, -0.2f, 1.0f, -1.0f);
+
     // Initialize Pacer PI Controller for clock stability (Weak P, Very Weak I)
     // Limits: +/- 10ms adjustment, 1s integral window.
     tss_pi_init(&ctx->pacer_pi, 0.1f, 0.005f, 10.0f, -10.0f, 1000.0f, -1000.0f);
+
+    // Initialize HAL Ops and then the specific I/O backend
+    hal_init_ops(ctx, cfg->backend);
+    if (ctx->hal_ops.io_init) {
+        ctx->hal_ops.io_init(ctx, cfg->backend_params);
+    }
 
     return ctx;
 }
@@ -68,6 +77,12 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
 void tsshaper_destroy(tsshaper_t* ctx) {
     if (!ctx) return;
     tsshaper_stop_pacer(ctx);
+
+    // Professional cleanup of abstracted I/O via ops
+    if (ctx->hal_ops.io_close) {
+        ctx->hal_ops.io_close(ctx);
+    }
+
     // Free programs and queues
     for (int i = 0; i < ctx->num_programs; i++) {
         for (int p = 0; p < MAX_PRIO; p++) {
@@ -92,7 +107,7 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
     ts_packet_t meta_pkt;
     memcpy(meta_pkt.data, pkt, TS_PACKET_SIZE);
     meta_pkt.pid = pid;
-    meta_pkt.arrival_ns = (arrival_ts > 0) ? arrival_ts : hal_get_time_ns();
+    meta_pkt.arrival_ns = (arrival_ts > (tss_time_ns)0) ? (uint64_t)arrival_ts : hal_get_time_ns();
 
     // Call T-STD update first to determine priority (PAT/PMT/PCR)
     tstd_update_on_push(prog, &meta_pkt);

@@ -31,13 +31,12 @@ void* pacer_thread_func(void* arg) {
 
     // Initialize mmsghdr structures for batched I/O
     memset(msgs, 0, sizeof(msgs));
-    for (int i = 0; i < ctx->io_batch_size; i++) {
+    for (uint32_t i = 0; i < ctx->io_batch_size; i++) {
         iovecs[i].iov_base = packet_bufs[i];
         iovecs[i].iov_len = TS_PACKET_SIZE;
         msgs[i].msg_hdr.msg_iov = &iovecs[i];
         msgs[i].msg_hdr.msg_iovlen = 1;
-        msgs[i].msg_hdr.msg_name = &ctx->output_addr;
-        msgs[i].msg_hdr.msg_namelen = sizeof(ctx->output_addr);
+        // Address management is now handled internally by HAL io_send
     }
 
     // Initialize dual-clock state machine for Phase-Locked Loop (PLL)
@@ -50,46 +49,64 @@ void* pacer_thread_func(void* arg) {
     while (ctx->running) {
         int batch_count = 0;
 
-        for (int i = 0; i < (int)ctx->io_batch_size; i++) {
+        for (uint32_t i = 0; i < ctx->io_batch_size; i++) {
             // 1. Calculate Scheduling Error (Actual vs Ideal Grid)
-            uint64_t actual_time_ns = hal_get_time_ns();
-            int64_t error_ns = (int64_t)actual_time_ns - (int64_t)expected_send_time_ns;
+            uint64_t now_ns = hal_get_time_ns();
+            int64_t error_ns = (int64_t)now_ns - (int64_t)expected_send_time_ns;
 
             // 2. PI Controller Feedback Loop
-            // Convert error to milliseconds for the PI engine to avoid overflow in Q16.16
             float error_ms = (float)error_ns / 1000000.0f;
             int32_t q16_adj_ms = tss_pi_update(&ctx->pacer_pi, FLOAT_TO_Q16(error_ms));
             int64_t adj_ns = (int64_t)(Q16_TO_FLOAT(q16_adj_ms) * 1000000.0f);
 
             // 3. Compute absolute next wakeup time with PI compensation
-            // Formula: next_sleep = base_interval - adjustment
             int64_t current_interval_ns = (int64_t)ctx->packet_interval_ns - adj_ns;
             if (current_interval_ns < 0) current_interval_ns = 0;
 
             timespec_add_ns(&next_wakeup_ts, current_interval_ns);
-            expected_send_time_ns += ctx->packet_interval_ns; // Advance theoretical CBR grid
 
             // 4. High-Precision Absolute Sleep
-            // TIMER_ABSTIME prevents cumulative drift from interrupted sleep or context switches
-            clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &next_wakeup_ts, NULL);
+            hal_precision_wait(0); // Mock jump or Linux busy-wait hint
+            struct timespec ts_sleep = next_wakeup_ts;
+            clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &ts_sleep, NULL);
 
-            // 5. Packet Selection & JIT Synthesis
+            // 5. Capture the DEFINITIVE emission time for this packet
+            uint64_t emission_ts_ns = hal_get_time_ns();
+            expected_send_time_ns += ctx->packet_interval_ns;
+
+            // 6. Packet Selection & JIT Synthesis
             ts_packet_t* pkt = interleaver_select(ctx);
             if (pkt) {
                 memcpy(packet_bufs[i], pkt->data, TS_PACKET_SIZE);
+
+                // JIT PCR Rewrite based on DEFINITIVE emission time
+                if ((packet_bufs[i][3] & 0x20) && packet_bufs[i][4] > 0 && (packet_bufs[i][5] & 0x10)) {
+                    uint64_t elapsed_ns = emission_ts_ns - ctx->start_time_ns;
+                    uint64_t pcr_27m = ctx->start_pcr_base + (elapsed_ns * 27) / 1000;
+                    uint64_t base = pcr_27m / 300;
+                    uint32_t ext = pcr_27m % 300;
+
+                    uint8_t* pcr_buf = packet_bufs[i] + 6;
+                    pcr_buf[0] = (base >> 25) & 0xFF;
+                    pcr_buf[1] = (base >> 17) & 0xFF;
+                    pcr_buf[2] = (base >> 9) & 0xFF;
+                    pcr_buf[3] = (base >> 1) & 0xFF;
+                    pcr_buf[4] = ((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01);
+                    pcr_buf[5] = ext & 0xFF;
+                }
+
                 batch_count++;
             } else {
-                // Synthesize NULL packet to maintain strict physical CBR
                 memcpy(packet_bufs[i], ctx->null_pkt, TS_PACKET_SIZE);
                 batch_count++;
                 ctx->null_packets_inserted++;
             }
         }
 
-        // 6. Precision Burst Emission via sendmmsg
-        if (batch_count > 0 && ctx->output_fd >= 0) {
-            sendmmsg(ctx->output_fd, msgs, batch_count, 0);
-            ctx->bytes_sent += batch_count * TS_PACKET_SIZE;
+        // 7. Precision Burst Emission via abstracted HAL ops
+        if (batch_count > 0 && ctx->hal_ops.io_send) {
+            ctx->hal_ops.io_send(ctx, msgs, batch_count);
+            ctx->bytes_sent += (uint64_t)batch_count * TS_PACKET_SIZE;
         }
     }
 
@@ -98,7 +115,6 @@ void* pacer_thread_func(void* arg) {
 
 int tsshaper_start_pacer(tsshaper_t* ctx, int fd) {
     if (ctx->running) return -1;
-    ctx->output_fd = fd;
     ctx->running = true;
     if (pthread_create(&ctx->pacer_thread, NULL, pacer_thread_func, ctx) != 0) {
         ctx->running = false;

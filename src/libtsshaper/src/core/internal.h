@@ -9,6 +9,8 @@
 #include "spsc_queue.h"
 #include "tsshaper/tsshaper.h"
 
+struct mmsghdr; // Forward declaration
+
 #define MAX_PROGRAMS 128
 #define MAX_PIDS_PER_PROGRAM 64
 #define NS_PER_SEC 1000000000ULL
@@ -98,9 +100,15 @@ struct tsshaper_ctx {
     int sched_priority;
     bool use_raw_clock;
 
-    // Output state
-    int output_fd;
-    struct sockaddr_in output_addr;
+    // Generic Output Backend
+    void* backend_priv;
+
+    // HAL Ops for Backend Dispatching (Professional Abstraction)
+    struct {
+        int (*io_init)(tsshaper_t* ctx, void* params);
+        int (*io_send)(tsshaper_t* ctx, struct mmsghdr* msgs, int count);
+        void (*io_close)(tsshaper_t* ctx);
+    } hal_ops;
 
     // Stats
     _Atomic uint64_t bytes_sent;
@@ -129,6 +137,11 @@ struct tsshaper_ctx {
 
 // Internal Logging Helper
 void tss_log_impl(tsshaper_t* ctx, tss_log_level_t level, const char* fmt, ...);
+
+// PI Controller
+void tss_pi_init(tss_pi_controller_t* pi, float kp, float ki,
+                 float out_max, float out_min, float int_max, float int_min);
+int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16);
 
 #define tss_error(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_ERROR, fmt, ##__VA_ARGS__)
 #define tss_warn(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_WARN, fmt, ##__VA_ARGS__)

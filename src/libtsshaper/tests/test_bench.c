@@ -131,10 +131,69 @@ void test_backpressure() {
     printf("Backpressure Passed.\n\n");
 }
 
+void test_virtual_pcap() {
+    printf("Testing Virtual Time Domain (PCAP Output)...\n");
+    tsshaper_config_t config = {0};
+    config.bitrate_bps = 40000000;  // 40Mbps
+    config.backend = TSS_BACKEND_VIRTUAL_PCAP;
+    config.backend_params = "virtual_test.pcap";
+    config.pcr_interval_ms = 35;
+
+    tsshaper_t* shaper = tsshaper_create(&config);
+    assert(shaper != NULL);
+    tsshaper_set_log_callback(shaper, test_log_cb, NULL);
+
+    // Start pacer - in virtual mode, this will run at CPU speed
+    tsshaper_start_pacer(shaper, -1);
+
+    uint8_t pkt[TS_PACKET_SIZE];
+    memset(pkt, 0x55, TS_PACKET_SIZE); // Dummy payload
+    pkt[0] = 0x47;
+    pkt[1] = 0x01; pkt[2] = 0x00; // PID 0x100 (Video)
+    pkt[3] = 0x30; // AF + Payload
+    pkt[4] = 183;  // AF Length
+    pkt[5] = 0x10; // PCR Flag
+
+    // Push 1000 packets with PCRs
+    for (int i = 0; i < 1000; i++) {
+        // We only provide a base PCR for the first packet.
+        // The engine's JIT Rewriter will automatically stamp the correct
+        // physical emission time onto all subsequent packets.
+        uint64_t arrival_ts = 0;
+        if (i == 0) {
+            uint64_t pcr_ns = 1000000000ULL; // 1s
+            uint64_t ticks = (pcr_ns * 27) / 1000;
+            uint64_t base = ticks / 300;
+            uint16_t ext = ticks % 300;
+            pkt[6] = (base >> 25) & 0xFF; pkt[7] = (base >> 17) & 0xFF;
+            pkt[8] = (base >> 9) & 0xFF;  pkt[9] = (base >> 1) & 0xFF;
+            pkt[10] = ((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01);
+            pkt[11] = ext & 0xFF;
+            arrival_ts = pcr_ns;
+        }
+
+        // Push into the shaper.
+        // Note: For pure virtual testing, we should avoid backpressure blocking
+        // by occasionally yielding if the queue is full, but with our settings
+        // the virtual pacer runs instantly.
+        while (tsshaper_push(shaper, 0x100, pkt, arrival_ts) != 0) {
+            usleep(100);
+        }
+    }
+
+    // Give the pacer thread a tiny bit of real-world time to finish the batch
+    usleep(50000);
+
+    tsshaper_stop_pacer(shaper);
+    tsshaper_destroy(shaper);
+    printf("Virtual PCAP Test Finished. Check virtual_test.pcap.\n\n");
+}
+
 int main() {
     printf("Starting LibTSShaper Test Suite...\n\n");
     test_basic_cbr();
     test_backpressure();
+    test_virtual_pcap();
     printf("All tests passed successfully!\n");
     return 0;
 }

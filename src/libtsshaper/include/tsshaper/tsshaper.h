@@ -33,6 +33,14 @@ typedef struct tsshaper_ctx tsshaper_t;
 #define TSS_IDLE -1
 
 /**
+ * @brief Output backend types.
+ */
+typedef enum {
+    TSS_BACKEND_REAL_NETWORK = 0, /**< Standard sendmmsg on Linux */
+    TSS_BACKEND_VIRTUAL_PCAP      /**< Write to PCAP file (Virtual Time Domain) */
+} tss_backend_type_t;
+
+/**
  * @brief Configuration for libtsshaper initialization.
  */
 typedef struct {
@@ -41,6 +49,9 @@ typedef struct {
     uint32_t io_batch_size;   /**< Number of packets per sendmmsg (default: 7) */
     uint32_t max_latency_ms;  /**< Internal buffer depth (backpressure threshold) */
     bool use_raw_clock;       /**< Use CLOCK_MONOTONIC_RAW for zero-jitter timing */
+
+    tss_backend_type_t backend;     /**< Selected output method */
+    void*              backend_params; /**< Opaque params (e.g. filename string for PCAP) */
 } tsshaper_config_t;
 
 /**
