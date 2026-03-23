@@ -146,6 +146,7 @@ typedef struct {
     uint8_t pusi;
     uint8_t af_len;
     bool has_payload;
+    bool has_pcr;
     int payload_len;
     uint8_t cc;
     bool scrambled;
@@ -175,6 +176,7 @@ typedef struct {
     uint16_t pmt_pid;
     uint16_t pcr_pid;
     uint32_t stream_count;
+    uint64_t last_pmt_ns;
     tsa_stream_info_t streams[MAX_STREAMS_PER_PROG];
 } tsa_program_info_t;
 

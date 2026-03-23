@@ -35,6 +35,8 @@ typedef struct {
     packet_prio_t priority;
     uint64_t last_update_ns;
     bool is_pcr;
+    uint8_t last_cc;
+    bool first_packet;
 } tstd_pid_ctx_t;
 
 typedef struct {

@@ -178,6 +178,7 @@ typedef struct {
     uint32_t pid;
     char type_str[16];
     int64_t bitrate_q16_16;
+    uint64_t bitrate_avg;
     uint64_t bitrate_min;
     uint64_t bitrate_max;
     uint64_t bitrate_peak;
@@ -219,6 +220,8 @@ typedef struct {
     uint64_t b_frame_size_bytes;
     uint64_t encoder_latency_ms;
     uint64_t network_latency_ms;
+    float pts_jitter_ms_peak;
+    float pts_offset_ms_avg;
 } tsa_pid_info_t;
 
 typedef struct {

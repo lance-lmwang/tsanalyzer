@@ -82,7 +82,16 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
         SAFE_JSON("    {\n");
         SAFE_JSON("      \"pid\": \"0x%04x\",\n", p->pid);
         SAFE_JSON("      \"type\": \"%s\",\n", tsa_get_pid_type_name(h, p->pid));
-        SAFE_JSON("      \"bitrate_bps\": %llu,\n", (unsigned long long)sn->stats.pid_bitrate_bps[p->pid]);
+        SAFE_JSON("      \"bitrate_bps\": %llu,\n", (unsigned long long)p->bitrate_avg);
+        SAFE_JSON("      \"bitrate_peak_bps\": %llu,\n", (unsigned long long)p->bitrate_max);
+        SAFE_JSON("      \"bitrate_min_bps\": %llu,\n", (unsigned long long)p->bitrate_min);
+
+        float fluctuation = 0;
+        if (p->bitrate_avg > 0) {
+            fluctuation = (float)(p->bitrate_max - p->bitrate_min) * 100.0f / p->bitrate_avg;
+        }
+        SAFE_JSON("      \"bitrate_fluctuation_pct\": %.2f,\n", fluctuation);
+
         if (p->width > 0) {
             SAFE_JSON("      \"resolution\": \"%ux%u\",\n", p->width, p->height);
             SAFE_JSON("      \"fps\": %.2f,\n", p->exact_fps);
@@ -93,6 +102,10 @@ size_t tsa_snapshot_to_json(tsa_handle_t* h, const tsa_snapshot_full_t* sn, char
             SAFE_JSON("      \"audio_channels\": %u,\n", p->audio_channels);
             SAFE_JSON("      \"loudness_lufs\": %.1f,\n", p->audio_loudness_lufs);
             SAFE_JSON("      \"peak_db\": %.1f,\n", p->audio_peak_db);
+        }
+        if (p->pts_jitter_ms_peak > 0 || p->pts_offset_ms_avg != 0) {
+            SAFE_JSON("      \"pts_jitter_ms\": %.2f,\n", p->pts_jitter_ms_peak);
+            SAFE_JSON("      \"pts_offset_ms\": %.2f,\n", p->pts_offset_ms_avg);
         }
         SAFE_JSON("      \"cc_errors\": %llu\n", (unsigned long long)p->cc_errors);
         SAFE_JSON("    }%s\n", (i == sn->active_pid_count - 1) ? "" : ",");

@@ -34,11 +34,12 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     if (!ctx) return NULL;
 
     ctx->total_bitrate_bps = cfg->bitrate_bps;
+    // Standard MPEG-TS Packet Interval Calculation for CBR (ISO 13818-1)
     ctx->packet_interval_ns = (188ULL * 8 * 1000000000ULL) / cfg->bitrate_bps;
     ctx->io_batch_size = cfg->io_batch_size > 0 ? cfg->io_batch_size : 7;
     ctx->use_raw_clock = cfg->use_raw_clock;
 
-    // Initialize NULL packet (0x1FFF PID)
+    // Initialize NULL packet (0x1FFF PID) - Broadcast Grade Template
     memset(ctx->null_pkt, 0, TS_PACKET_SIZE);
     ctx->null_pkt[0] = 0x47;
     ctx->null_pkt[1] = 0x1F;
@@ -74,13 +75,11 @@ void tsshaper_destroy(tsshaper_t* ctx) {
 }
 
 int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts) {
-    // tss_debug(ctx, "TSA: Pushing packet pid=%d", pid);
     if (ctx->num_programs == 0) return -1;
     program_ctx_t* prog = &ctx->programs[0];
 
-    // Check backpressure via HWM
+    // TR 101 290 T-STD Buffer Monitoring (Backpressure)
     if (tstd_check_backpressure(prog, pid)) {
-        tss_warn(ctx, "Backpressure triggered for PID %d", pid);
         return -1;
     }
 
@@ -90,10 +89,10 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
     meta_pkt.pid = pid;
     meta_pkt.arrival_ns = (arrival_ts > 0) ? arrival_ts : hal_get_time_ns();
 
-    // Call T-STD update first to determine priority
+    // Call T-STD update first to determine priority (PAT/PMT/PCR)
     tstd_update_on_push(prog, &meta_pkt);
 
-    // Identify priority (T-STD model updated ctx->priority)
+    // Identify priority for the interleaver
     packet_prio_t prio = PRIO_MEDIUM;
     for (int i = 0; i < prog->num_pids; i++) {
         if (prog->pids[i].pid == pid) {
@@ -110,35 +109,24 @@ int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns
 }
 
 tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
-    // tss_debug(ctx, "TSA: Pulling packet");
+    uint64_t now_ns = hal_get_time_ns();
 
-    // First, try to select a useful packet from the interleaver
+    // Select the best packet based on ISO 13818-1 / TR 101 290 priorities
     ts_packet_t* pkt = interleaver_select(ctx);
 
-    // If no useful packet is available, or if it's too early for VBR (not implemented yet),
-    // we MUST emit a NULL packet to maintain CBR timing.
-    // In a pure CBR shaper, we always emit *something* at every interval.
-
     if (!pkt) {
-        // Insert NULL packet
+        // Strict CBR: Always insert NULL packet if no data available
         memcpy(out_pkt, ctx->null_pkt, TS_PACKET_SIZE);
-        ctx->null_packets_inserted++;
+        atomic_fetch_add(&ctx->null_packets_inserted, 1);
     } else {
         memcpy(out_pkt, pkt->data, TS_PACKET_SIZE);
-
-        // Update T-STD state on pop
-        // Use the first program for now (since interleaver_select already picked it)
-        if (ctx->num_programs > 0) {
-            // Note: interleaver_select should ideally return the program context too,
-            // but for now we assume simple mapping or global update.
-            // Actually interleaver_select calls tstd_update_on_pop internally!
-            // So we don't need to call it again here.
-        }
+        // Note: tstd_update_on_pop was already called inside interleaver_select!
     }
 
-    // Advance the virtual clock
+    // Advance the virtual clock to the exact point of emission
     if (ctx->next_packet_time_ns == 0) {
-        ctx->next_packet_time_ns = hal_get_time_ns();
+        ctx->next_packet_time_ns = now_ns;
+        ctx->start_time_ns = now_ns;
     }
     ctx->next_packet_time_ns += ctx->packet_interval_ns;
 
@@ -148,8 +136,8 @@ tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
 void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats) {
     if (!ctx || !stats) return;
     stats->current_bitrate_bps = (double)ctx->total_bitrate_bps;
-    stats->buffer_fullness_pct = 0;  // Aggregated from programs
-    stats->null_packets_inserted = ctx->null_packets_inserted;
+    stats->null_packets_inserted = atomic_load(&ctx->null_packets_inserted);
+    stats->buffer_fullness_pct = 0;
     stats->pcr_jitter_ns = 0;
     stats->continuity_errors = 0;
 }

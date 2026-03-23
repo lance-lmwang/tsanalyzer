@@ -7,8 +7,16 @@
 
 #define TAG "TR101290"
 
+// TR 101 290 Thresholds (Standard DVB)
+#define PAT_TIMEOUT_NS 500000000ULL  // 500ms
+#define PMT_TIMEOUT_NS 500000000ULL  // 500ms
+#define PCR_TIMEOUT_NS 40000000ULL   // 40ms
+#define PTS_TIMEOUT_NS 700000000ULL  // 700ms
+
 typedef struct {
     tsa_handle_t* h;
+    uint64_t last_pat_check_ns;
+    uint64_t last_pmt_check_ns;
 } tr101290_ctx_t;
 
 static void tr_on_ts(void* self, const uint8_t* pkt);
@@ -33,9 +41,6 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
 
     // 1. Transport Error Check (P2.1)
     if (pkt[1] & 0x80) {
-        if (h->live->transport_error.count == 0) h->live->transport_error.first_timestamp_ns = now;
-        h->live->transport_error.count++;
-        h->live->transport_error.last_timestamp_ns = now;
         tsa_alert_update(h, TSA_ALERT_TRANSPORT, true, "TRANSPORT", pid);
     }
 
@@ -45,42 +50,58 @@ static void tr_on_ts(void* self, const uint8_t* pkt) {
                                              (pkt[3] & 0x20) && !(pkt[3] & 0x10));
 
         if (s == TS_CC_LOSS || s == TS_CC_OUT_OF_ORDER) {
-            if (s == TS_CC_LOSS) {
-                h->live->cc_loss_count += (res->cc - ((h->es_tracks[pid].last_cc + 1) & 0x0F)) & 0x0F;
-            }
-
             if (!h->es_tracks[pid].ignore_next_cc) {
-                if (h->live->cc_error.count == 0) h->live->cc_error.first_timestamp_ns = now;
-                h->live->cc_error.count++;
-                h->live->cc_error.last_timestamp_ns = now;
-                h->live->cc_error.triggering_vstc = h->stc_ns;
-                h->live->cc_error.absolute_byte_offset = h->current_packet_offset;
-                h->live->pid_cc_errors[pid]++;
-                h->live->latched_cc_error = 1;
-                h->es_tracks[pid].status = TSA_STATUS_DEGRADED;
-
                 tsa_alert_update(h, TSA_ALERT_CC, true, "CC", pid);
             }
         }
     }
+    h->es_tracks[pid].last_cc = res->cc;
     h->es_tracks[pid].ignore_next_cc = false;
 
-    // 3. PTS Error Check (P2.5)
+    // 3. PAT Error Check (P1.3)
+    if (now - h->last_pat_ns > PAT_TIMEOUT_NS) {
+        tsa_alert_update(h, TSA_ALERT_PAT, true, "PAT_TIMEOUT", 0);
+    } else {
+        tsa_alert_update(h, TSA_ALERT_PAT, false, "PAT_OK", 0);
+    }
+
+    // 4. PMT Error Check (P1.5) - Multi-Program Support
+    for (uint32_t i = 0; i < h->program_count; i++) {
+        if (h->programs[i].pmt_pid == 0) continue;
+        if (now - h->programs[i].last_pmt_ns > PMT_TIMEOUT_NS) {
+            tsa_alert_update(h, TSA_ALERT_PMT, true, "PMT_TIMEOUT", h->programs[i].pmt_pid);
+        } else {
+            tsa_alert_update(h, TSA_ALERT_PMT, false, "PMT_OK", h->programs[i].pmt_pid);
+        }
+    }
+
+    // 5. PCR Repetition Error Check (P2.3)
+    if (res->has_pcr) {
+        uint64_t last_pcr_ns = h->es_tracks[pid].last_pcr_ns;
+        if (last_pcr_ns > 0) {
+            uint64_t diff_ns = now - last_pcr_ns;
+            if (diff_ns > PCR_TIMEOUT_NS) {
+                tsa_alert_update(h, TSA_ALERT_PCR, true, "PCR_REPETITION", pid);
+            } else {
+                tsa_alert_update(h, TSA_ALERT_PCR, false, "PCR_OK", pid);
+            }
+        }
+        h->es_tracks[pid].last_pcr_ns = now;
+    }
+
+    // 6. PTS Error Check (P2.5)
     if (res->has_pes_header) {
-        uint64_t last_pts_ns = h->es_tracks[pid].last_seen_vstc;
-        if (last_pts_ns > 0) {
-            uint64_t diff_ns = h->stc_ns - last_pts_ns;
-            if (diff_ns > 700000000ULL) { /* 700ms threshold according to TR 101 290 */
-                if (h->live->pts_error.count == 0) h->live->pts_error.first_timestamp_ns = now;
-                h->live->pts_error.count++;
-                h->live->pts_error.last_timestamp_ns = now;
-                tsa_alert_update(h, TSA_ALERT_PTS, true, "PTS", pid);
+        uint64_t last_pts_vstc = h->es_tracks[pid].last_seen_vstc;
+        if (last_pts_vstc > 0) {
+            uint64_t diff_ns = h->stc_ns - last_pts_vstc;
+            if (diff_ns > PTS_TIMEOUT_NS) {
+                tsa_alert_update(h, TSA_ALERT_PTS, true, "PTS_TIMEOUT", pid);
+            } else {
+                tsa_alert_update(h, TSA_ALERT_PTS, false, "PTS_OK", pid);
             }
         }
         h->es_tracks[pid].last_seen_vstc = h->stc_ns;
     }
-
-    h->es_tracks[pid].last_cc = res->cc;
 }
 
 tsa_plugin_ops_t tr101290_ops = {

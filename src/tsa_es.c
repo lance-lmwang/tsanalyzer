@@ -8,6 +8,7 @@
 #include "tsa_log.h"
 #include "tsa_lua.h"
 #include "tsa_units.h"
+#include <math.h>
 
 // Forward declaration from src/tsa_thumbnailer.c
 void tsa_thumbnailer_process(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len,
@@ -433,20 +434,28 @@ void tsa_es_track_push_packet(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt,
             }
 
             /* Professional Jitter Analysis: PTS vs Arrival STC (ISO/IEC 13818-1) */
-            if (res->has_pts && es->last_pts_val > 0) {
-                uint64_t pts_delta = (res->pts > es->last_pts_val) ? (res->pts - es->last_pts_val) : 0;
-                uint64_t vstc_delta_ticks =
-                    (h->stc_ns > es->last_pts_vstc) ? ((h->stc_ns - es->last_pts_vstc) * 90 / 1000000) : 0;
-
-                if (pts_delta > 0 && vstc_delta_ticks > 0) {
-                    int64_t jitter = (int64_t)pts_delta - (int64_t)vstc_delta_ticks;
-                    es->pts_jitter_q64 = INT_TO_Q64_64(jitter);
-                }
-            }
-
             if (res->has_pts) {
+                double current_pts_ms = (double)res->pts / 90.0;
+                double current_stc_ms = (double)h->stc_ns / 1000000.0;
+                double offset_ms = current_pts_ms - current_stc_ms;
+
+                if (es->pts_count > 0) {
+                    /* Calculate Jitter: deviation in offset between successive samples */
+                    double prev_offset_ms = (double)es->last_pts_val / 90.0 - (double)es->last_pts_vstc / 1000000.0;
+                    double jitter_ms = fabs(offset_ms - prev_offset_ms);
+
+                    /* Update Statistics - skip the very first jitter sample which is always huge */
+                    if (es->pts_count > 1) {
+                        es->pts_offset_ms_avg = (es->pts_offset_ms_avg * (es->pts_count - 1) + offset_ms) / es->pts_count;
+                        if (fabs(offset_ms) > fabs(es->pts_offset_ms_max)) es->pts_offset_ms_max = offset_ms;
+                        if (jitter_ms > es->pts_jitter_ms_peak) es->pts_jitter_ms_peak = jitter_ms;
+                        es->pts_jitter_q64 = INT_TO_Q64_64((int64_t)(jitter_ms * 90.0));
+                    }
+                }
+
                 es->last_pts_val = res->pts;
                 es->last_pts_vstc = h->stc_ns;
+                es->pts_count++;
             }
 
             es->pes.last_pts_33 = res->pts;

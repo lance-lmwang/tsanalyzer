@@ -235,6 +235,10 @@ void tsa_exporter_prom_v2(tsa_handle_t** handles, int count, char* buf, size_t s
                             (float)snap->pids[j].audio_loudness_lufs);
                 SAFE_APPEND("tsa_essence_pid_audio_peak_db%s %.1f\n", pid_labels, (float)snap->pids[j].audio_peak_db);
             }
+            if (snap->pids[j].pts_jitter_ms_peak > 0 || snap->pids[j].pts_offset_ms_avg != 0) {
+                SAFE_APPEND("tsa_essence_pid_pts_jitter_ms%s %.3f\n", pid_labels, snap->pids[j].pts_jitter_ms_peak);
+                SAFE_APPEND("tsa_essence_pid_pts_offset_ms%s %.3f\n", pid_labels, snap->pids[j].pts_offset_ms_avg);
+            }
             SAFE_APPEND("tsa_compliance_pid_has_cea708%s %d\n", pid_labels, snap->pids[j].has_cea708 ? 1 : 0);
             SAFE_APPEND("tsa_compliance_pid_has_scte35%s %d\n", pid_labels, snap->pids[j].has_scte35 ? 1 : 0);
             SAFE_APPEND("tsa_compliance_pid_is_closed_gop%s %d\n", pid_labels, snap->pids[j].is_closed_gop ? 1 : 0);

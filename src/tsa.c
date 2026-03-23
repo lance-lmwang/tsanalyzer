@@ -237,6 +237,7 @@ void tsa_decode_packet_pure(tsa_handle_t* h, const uint8_t* p, uint64_t n, ts_de
     r->cc = p[3] & 0x0F;
     r->scrambled = (p[3] & 0xC0) != 0;
     r->has_discontinuity = (r->af_len > 1) && (p[5] & 0x80);
+    r->has_pcr = (r->af_len > 1) && (p[5] & 0x10);
     r->has_pes_header = false;
     r->has_pts = false;
     r->has_dts = false;

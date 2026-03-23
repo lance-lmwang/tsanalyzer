@@ -108,8 +108,13 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t 
 static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now, size_t max_len) {
     (void)p;
     (void)max_len;
-    (void)pid;
-    h->last_pmt_ns = now;
+    for (uint32_t i = 0; i < h->program_count; i++) {
+        if (h->programs[i].pmt_pid == pid) {
+            h->programs[i].last_pmt_ns = now;
+            h->seen_pmt = true;
+            break;
+        }
+    }
 }
 
 void tsa_psi_process_packet(tsa_handle_t* h, const uint8_t* pkt, const ts_decode_result_t* res) {

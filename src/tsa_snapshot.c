@@ -172,6 +172,9 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         tsa_es_track_t* es = &h->es_tracks[p];
         sn->pids[ai].pid = p;
         sn->pids[ai].cc_errors = h->live->pid_cc_errors[p];
+        sn->pids[ai].bitrate_avg = h->live->pid_bitrate_avg_bps[p];
+        sn->pids[ai].bitrate_min = h->live->pid_bitrate_min_bps[p];
+        sn->pids[ai].bitrate_max = h->live->pid_bitrate_peak_bps[p];
         sn->pids[ai].width = es->video.width;
         sn->pids[ai].height = es->video.height;
         sn->pids[ai].exact_fps = es->video.exact_fps;
@@ -194,6 +197,8 @@ void tsa_commit_snapshot(tsa_handle_t* h, uint64_t n) {
         sn->pids[ai].b_frame_size_bytes = es->video.b_frame_size_bytes;
         sn->pids[ai].encoder_latency_ms = es->video.encoder_latency_ms;
         sn->pids[ai].network_latency_ms = es->video.network_latency_ms;
+        sn->pids[ai].pts_jitter_ms_peak = (float)es->pts_jitter_ms_peak;
+        sn->pids[ai].pts_offset_ms_avg = (float)es->pts_offset_ms_avg;
         snprintf(sn->pids[ai].gop_structure, sizeof(sn->pids[ai].gop_structure), "%s", es->video.gop_structure);
 
         ai++;
