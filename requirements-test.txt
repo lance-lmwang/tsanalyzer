@@ -1,0 +1,4 @@
+scapy==2.5.0
+plotly==5.18.0
+pandas==1.1.5
+tenacity>=6.2.0
