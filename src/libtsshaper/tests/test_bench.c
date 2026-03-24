@@ -189,11 +189,61 @@ void test_virtual_pcap() {
     printf("Virtual PCAP Test Finished. Check virtual_test.pcap.\n\n");
 }
 
+static int g_packets_received = 0;
+int tss_test_write_cb(const uint8_t* pkt, void* opaque) {
+    if (pkt[0] == 0x47) {
+        g_packets_received++;
+    }
+    return 0;
+}
+
+void test_callback_backend() {
+    printf("Testing Callback Backend (AVIO Simulation)...\n");
+    g_packets_received = 0;
+
+    tsshaper_config_t config = {0};
+    config.bitrate_bps = 20000000;  // 20Mbps
+    config.backend = TSS_BACKEND_CALLBACK;
+    config.write_cb = tss_test_write_cb;
+    config.write_opaque = NULL;
+    config.io_batch_size = 1; // Single packet batches for simple counting
+
+    tsshaper_t* shaper = tsshaper_create(&config);
+    assert(shaper != NULL);
+    tsshaper_set_log_callback(shaper, test_log_cb, NULL);
+
+    tsshaper_start_pacer(shaper, -1);
+
+    uint8_t pkt[TS_PACKET_SIZE];
+    memset(pkt, 0xAA, TS_PACKET_SIZE);
+    pkt[0] = 0x47;
+    pkt[1] = 0x00; pkt[2] = 0x50; // PID 0x50
+    pkt[3] = 0x10;
+
+    for (int i = 0; i < 500; i++) {
+        while (tsshaper_push(shaper, 0x50, pkt, 0) != 0) {
+            usleep(100);
+        }
+    }
+
+    // Wait for the pacer to drain the queue (at 20Mbps, 500 packets take ~4ms)
+    usleep(100000);
+
+    tsshaper_stop_pacer(shaper);
+
+    printf("Callback received %d packets (expected >= 500).\n", g_packets_received);
+    assert(g_packets_received >= 500);
+
+    tsshaper_destroy(shaper);
+    printf("Callback Backend Passed.\n\n");
+}
+
 int main() {
     printf("Starting LibTSShaper Test Suite...\n\n");
     test_basic_cbr();
     test_backpressure();
     test_virtual_pcap();
+    test_callback_backend();
     printf("All tests passed successfully!\n");
     return 0;
 }

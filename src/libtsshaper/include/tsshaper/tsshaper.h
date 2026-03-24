@@ -37,8 +37,17 @@ typedef struct tsshaper_ctx tsshaper_t;
  */
 typedef enum {
     TSS_BACKEND_REAL_NETWORK = 0, /**< Standard sendmmsg on Linux */
-    TSS_BACKEND_VIRTUAL_PCAP      /**< Write to PCAP file (Virtual Time Domain) */
+    TSS_BACKEND_VIRTUAL_PCAP,     /**< Write to PCAP file (Virtual Time Domain) */
+    TSS_BACKEND_CALLBACK          /**< User-provided callback (for FFmpeg AVIOContext) */
 } tss_backend_type_t;
+
+/**
+ * @brief User-provided write callback signature.
+ * @param pkt Pointer to the 188-byte TS packet.
+ * @param opaque User data pointer.
+ * @return 0 on success, < 0 on error.
+ */
+typedef int (*tss_write_cb)(const uint8_t* pkt, void* opaque);
 
 /**
  * @brief Configuration for libtsshaper initialization.
@@ -52,6 +61,9 @@ typedef struct {
 
     tss_backend_type_t backend;     /**< Selected output method */
     void*              backend_params; /**< Opaque params (e.g. filename string for PCAP) */
+
+    tss_write_cb write_cb;     /**< Callback for TSS_BACKEND_CALLBACK */
+    void*        write_opaque; /**< Opaque data for write_cb */
 } tsshaper_config_t;
 
 /**
@@ -147,6 +159,21 @@ typedef void (*tss_log_cb)(tss_log_level_t level, const char* msg, void* opaque)
  * @param opaque User data pointer passed to the callback.
  */
 void tsshaper_set_log_callback(tsshaper_t* ctx, tss_log_cb cb, void* opaque);
+
+/**
+ * @brief Set the target bitrate (leak rate) for a specific PID.
+ *
+ * According to ISO/IEC 13818-1 T-STD model, data enters the Transport Buffer (TB)
+ * at the channel rate but leaves at the leak rate (Rx). Since TB is small (512 bytes),
+ * the input rate must effectively match the leak rate to avoid overflow.
+ *
+ * @param ctx Shaper handle.
+ * @param pid The PID to configure.
+ * @param bitrate_bps The target shaping rate for this PID (e.g. 1.2Mbps for a 1Mbps video).
+ *                    Set to 0 to auto-share remaining bandwidth (default).
+ * @return 0 on success, -1 if PID context not found (push a packet first or add program manually).
+ */
+int tsshaper_set_pid_bitrate(tsshaper_t* ctx, uint16_t pid, uint64_t bitrate_bps);
 
 #ifdef __cplusplus
 }

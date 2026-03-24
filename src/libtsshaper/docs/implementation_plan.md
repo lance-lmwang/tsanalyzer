@@ -19,10 +19,10 @@ This document outlines the step-by-step implementation strategy for `libtsshaper
 - **Task 2.1: Q16.16 Fixed-Point PI Controller [DONE]**
   - Implemented in `src/core/tstd_model.c` with anti-windup and deadband logic.
   - Verified stability in pacer clock compensation loop.
-- **Task 2.2: Lock-Free SIMD Buffer [CURRENT TASK]**
-  - Implement the SPSC queue with `alignas(128)` for false-sharing prevention.
-  - Implement 192-byte internal padding for AVX2 zero-loop copies.
-  - Apply C11 `memory_order_acquire/release` semantics.
+- **Task 2.2: Lock-Free SIMD Buffer [DONE]**
+  - Implemented the SPSC queue with `alignas(128)` for false-sharing prevention.
+  - Implemented 192-byte internal padding with `alignas(256)` for AVX2 zero-loop copies.
+  - Applied C11 `memory_order_acquire/release` semantics.
 - **Task 2.3: PCAPNG Mock Exporter [DONE]**
   - `hal_mock.c` generates nanosecond-precise PCAP files.
   - Fully automated via `make check-jitter`.

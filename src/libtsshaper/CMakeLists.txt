@@ -23,6 +23,7 @@ set(TSSHAPER_SOURCES
     src/platform/hal.c
     src/platform/hal_linux.c
     src/platform/hal_mock.c
+    src/platform/hal_callback.c
 )
 
 add_library(tsshaper STATIC ${TSSHAPER_SOURCES})

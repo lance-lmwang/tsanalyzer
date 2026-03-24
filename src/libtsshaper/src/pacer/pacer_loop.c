@@ -54,6 +54,14 @@ void* pacer_thread_func(void* arg) {
             uint64_t now_ns = hal_get_time_ns();
             int64_t error_ns = (int64_t)now_ns - (int64_t)expected_send_time_ns;
 
+            // SAFETY: If we are behind by more than 100ms, reset the grid to now.
+            // This prevents "catch-up" bursts that create millions of NULL packets.
+            if (error_ns > 100000000LL) {
+                expected_send_time_ns = now_ns;
+                clock_gettime(CLOCK_MONOTONIC_RAW, &next_wakeup_ts);
+                error_ns = 0;
+            }
+
             // 2. PI Controller Feedback Loop
             float error_ms = (float)error_ns / 1000000.0f;
             int32_t q16_adj_ms = tss_pi_update(&ctx->pacer_pi, FLOAT_TO_Q16(error_ms));

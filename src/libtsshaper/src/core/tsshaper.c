@@ -66,9 +66,16 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     tss_pi_init(&ctx->pacer_pi, 0.1f, 0.005f, 10.0f, -10.0f, 1000.0f, -1000.0f);
 
     // Initialize HAL Ops and then the specific I/O backend
-    hal_init_ops(ctx, cfg->backend);
-    if (ctx->hal_ops.io_init) {
-        ctx->hal_ops.io_init(ctx, cfg->backend_params);
+    if (cfg->backend == 2) { // TSS_BACKEND_CALLBACK
+        void hal_init_callback_backend(tsshaper_t* ctx, tss_write_cb cb, void* opaque);
+        hal_init_callback_backend(ctx, cfg->write_cb, cfg->write_opaque);
+        tss_info(ctx, "TS Shaper initialized in CALLBACK mode (AVIO compatible)");
+    } else {
+        hal_init_ops(ctx, cfg->backend);
+        if (ctx->hal_ops.io_init) {
+            ctx->hal_ops.io_init(ctx, cfg->backend_params);
+        }
+        tss_info(ctx, "TS Shaper initialized in NETWORK/FILE mode (Direct I/O)");
     }
 
     return ctx;
@@ -155,6 +162,12 @@ tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
     }
     ctx->next_packet_time_ns += ctx->packet_interval_ns;
 
+    // In synchronous/offline mode (where pacer isn't running),
+    // we must update ideal_packet_time_ns so the interleaver knows time has passed.
+    if (!ctx->running) {
+        ctx->ideal_packet_time_ns = ctx->next_packet_time_ns;
+    }
+
     return ctx->next_packet_time_ns;
 }
 
@@ -165,4 +178,26 @@ void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats) {
     stats->buffer_fullness_pct = 0;
     stats->pcr_jitter_ns = 0;
     stats->continuity_errors = 0;
+}
+
+int tsshaper_set_pid_bitrate(tsshaper_t* ctx, uint16_t pid, uint64_t bitrate_bps) {
+    if (!ctx || ctx->num_programs == 0) return -1;
+    program_ctx_t* prog = &ctx->programs[0];
+
+    tstd_pid_ctx_t* pid_ctx = tstd_find_or_create_pid_ctx(prog, pid);
+    if (!pid_ctx) return -1;
+
+    pid_ctx->shaping_rate_bps = bitrate_bps;
+
+    // Recalculate burst credit limit based on new rate (50ms window)
+    double max_credit = (double)bitrate_bps * 0.05;
+    if (pid_ctx->shaping_credit_bits > max_credit) {
+        pid_ctx->shaping_credit_bits = max_credit;
+    }
+
+    // Explicitly update priority based on PID type heuristics if needed,
+    // or just assume caller knows what they are doing.
+    // For now, we trust the existing priority logic unless overridden.
+
+    return 0;
 }

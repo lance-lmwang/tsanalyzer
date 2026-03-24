@@ -21,7 +21,7 @@ static void restamp_pcr(uint8_t* pkt, uint64_t now_ns, uint64_t start_time_ns, u
     pcr_buf[5] = ext & 0xFF;
 }
 
-static tstd_pid_ctx_t* find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid) {
+tstd_pid_ctx_t* tstd_find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid) {
     for (int i = 0; i < prog->num_pids; i++) {
         if (prog->pids[i].pid == pid) return &prog->pids[i];
     }
@@ -41,18 +41,20 @@ static tstd_pid_ctx_t* find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid)
             ctx->priority = PRIO_MEDIUM;
             ctx->buffer_size = 4 * 1024 * 1024; // Increased buffer for smoothing
 
-            // Heuristic: Assign shaping rates based on PID to enforce smoothness
-            // In a real system, this would be configured via API.
             if (prog->target_bitrate_bps > 0) {
-                if (pid == 0x0100 || pid == 0x1500) { // Video PIDs
-                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 85 / 100;
-                } else if (pid == 0x0101 || pid == 0x1501) { // Audio PIDs
-                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 10 / 100;
+                // T-STD SMOOTHING ENFORCEMENT:
+                // We deliberately restrict video PID to 25% of the pipe capacity.
+                // This forces the interleaver to pace video packets at 1.25Mbps (for 1Mbps source),
+                // filling the rest with NULL packets, resulting in a "straight line" video bitrate.
+                if (pid == 0x0100 || pid == 0x1500) {
+                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 25 / 100;
+                } else if (pid == 0x0101 || pid == 0x1501) {
+                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 5 / 100;
                 } else {
                     ctx->shaping_rate_bps = prog->target_bitrate_bps;
                 }
-                // Allow 500ms burst
-                ctx->shaping_credit_bits = (double)ctx->shaping_rate_bps * 0.5;
+                // Allow tight 50ms burst window
+                ctx->shaping_credit_bits = (double)ctx->shaping_rate_bps * 0.05;
             }
         }
         return ctx;
@@ -62,7 +64,7 @@ static tstd_pid_ctx_t* find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid)
 
 void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt) {
     uint16_t pid = ((pkt->data[1] & 0x1F) << 8) | pkt->data[2];
-    tstd_pid_ctx_t* ctx = find_or_create_pid_ctx(prog, pid);
+    tstd_pid_ctx_t* ctx = tstd_find_or_create_pid_ctx(prog, pid);
     if (ctx) {
         // Continuity Counter Check (TR 101 290 P1 - Continuity_error)
         uint8_t current_cc = pkt->data[3] & 0x0F;

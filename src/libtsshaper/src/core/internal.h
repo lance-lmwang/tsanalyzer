@@ -152,6 +152,7 @@ int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16);
 void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt);
 void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t now_ns);
 bool tstd_check_backpressure(program_ctx_t* prog, uint16_t pid);
+tstd_pid_ctx_t* tstd_find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid);
 void statmux_rebalance(tsshaper_t* ctx);
 ts_packet_t* interleaver_select(tsshaper_t* ctx);
 
