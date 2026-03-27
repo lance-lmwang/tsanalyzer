@@ -1,8 +1,9 @@
 #define _GNU_SOURCE
-#include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+
 #include "hal.h"
 #include "internal.h"
 
@@ -23,7 +24,7 @@ typedef struct {
     uint32_t magic;
     uint16_t major;
     uint16_t minor;
-    int32_t  zone;
+    int32_t zone;
     uint32_t sigfigs;
     uint32_t snaplen;
     uint32_t network;
@@ -65,20 +66,22 @@ static int mock_io_send(tsshaper_t* ctx, struct mmsghdr* msgs, int count) {
 
     for (int i = 0; i < count; i++) {
         uint8_t dummy_headers[42] = {0};
-        dummy_headers[12] = 0x08; dummy_headers[13] = 0x00;
+        dummy_headers[12] = 0x08;
+        dummy_headers[13] = 0x00;
         dummy_headers[14] = 0x45;
-        dummy_headers[16] = 0x00; dummy_headers[17] = 0xD8;
+        dummy_headers[16] = 0x00;
+        dummy_headers[17] = 0xD8;
         dummy_headers[23] = 17;
-        dummy_headers[24] = 0xAA; dummy_headers[25] = 0x27;
-        dummy_headers[36] = 0x04; dummy_headers[37] = 0xD2;
-        dummy_headers[38] = 0x00; dummy_headers[39] = 0xC4;
+        dummy_headers[24] = 0xAA;
+        dummy_headers[25] = 0x27;
+        dummy_headers[36] = 0x04;
+        dummy_headers[37] = 0xD2;
+        dummy_headers[38] = 0x00;
+        dummy_headers[39] = 0xC4;
 
         // Use the current virtual clock for the PCAP timestamp
-        pcaprec_hdr_t rec = {
-            (uint32_t)(virtual_clock_ns / 1000000000ULL),
-            (uint32_t)(virtual_clock_ns % 1000000000ULL),
-            42 + TS_PACKET_SIZE, 42 + TS_PACKET_SIZE
-        };
+        pcaprec_hdr_t rec = {(uint32_t)(virtual_clock_ns / 1000000000ULL), (uint32_t)(virtual_clock_ns % 1000000000ULL),
+                             42 + TS_PACKET_SIZE, 42 + TS_PACKET_SIZE};
 
         fwrite(&rec, 1, sizeof(rec), backend->pcap_fp);
         fwrite(dummy_headers, 1, 42, backend->pcap_fp);
@@ -102,8 +105,8 @@ static void mock_io_close(tsshaper_t* ctx) {
 }
 
 void hal_init_mock_backend(tsshaper_t* ctx) {
-    ctx->hal_ops.io_init  = mock_io_init;
-    ctx->hal_ops.io_send  = mock_io_send;
+    ctx->hal_ops.io_init = mock_io_init;
+    ctx->hal_ops.io_send = mock_io_send;
     ctx->hal_ops.io_close = mock_io_close;
 }
 

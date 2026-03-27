@@ -97,7 +97,7 @@ vhost __default__ {
 # Multi-tenant Stream with Pipeline
 stream tenant-a/live/ch1 {
     input srt://tenant-a/ch1; # Matched via StreamID
-    
+
     # Custom QoE for high-value stream
     qoe {
         freeze_detect on;
@@ -109,7 +109,7 @@ stream tenant-a/live/ch1 {
         enabled on;
         bitrate 10Mbps;
         outputs [
-            udp://239.1.1.1:1234, 
+            udp://239.1.1.1:1234,
             srt://:9001?streamid=output_handoff
         ];
     }

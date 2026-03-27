@@ -10,21 +10,21 @@ RESET='\033[0m'
 echo -e "${BLUE}=== Starting Zero-Network Engine Core Audit ===${RESET}"
 
 # 1. Start Analysis Engine in Background
-# We'll use tsa_server but since it requires a port, we'll confirm 
+# We'll use tsa_server but since it requires a port, we'll confirm
 # if we can at least reach it via localhost for metrics.
 pkill tsa_server
 ./build/tsa_server > server_e2e.log 2>&1 &
 TSA_PID=$!
 sleep 2
 
-# 2. Feed Stream via Python directly to the node's loop if possible, 
+# 2. Feed Stream via Python directly to the node's loop if possible,
 # or use localhost which is usually exempt from VPN routing.
 # We'll use 127.0.0.1 which is the most reliable loopback.
 PAT_HEX="474000100000b00d0001c100000001e020a700e5dc"
 PAT_FULL=$(printf "$PAT_HEX" ; printf 'f%.0s' {1..334})
 
 echo "TSP: Feeding 1Mbps stream via localhost..."
-(while true; do echo -n "$PAT_FULL" | xxd -r -p; done) | 
+(while true; do echo -n "$PAT_FULL" | xxd -r -p; done) |
 ./build/tsp -b 1000000 -i 127.0.0.1 -p 19001 -l > /dev/null 2>&1 &
 TSP_PID=$!
 

@@ -33,6 +33,12 @@ static void pcr_on_ts(void* self, const uint8_t* pkt) {
     uint64_t now = h->current_ns;
     uint16_t pid = res->pid;
 
+    /* Professional Override: Lock to specific PID if requested by config */
+    if (h->master_pcr_pid == 0x1FFF && h->config.analysis.pcr_pid_override > 0) {
+        h->master_pcr_pid = (uint16_t)h->config.analysis.pcr_pid_override;
+        tsa_info(TAG, "Forcing Master PCR lock to user-specified PID 0x%04x", h->master_pcr_pid);
+    }
+
     if (res->af_len >= 6 && (pkt[5] & 0x10)) {
         uint64_t pcr_base = ((uint64_t)pkt[6] << 25) | ((uint64_t)pkt[7] << 17) | ((uint64_t)pkt[8] << 9) |
                             ((uint64_t)pkt[9] << 1) | ((uint64_t)pkt[10] >> 7);

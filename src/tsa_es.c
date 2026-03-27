@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +9,6 @@
 #include "tsa_log.h"
 #include "tsa_lua.h"
 #include "tsa_units.h"
-#include <math.h>
 
 // Forward declaration from src/tsa_thumbnailer.c
 void tsa_thumbnailer_process(tsa_handle_t* h, uint16_t pid, const uint8_t* payload, int len,
@@ -446,7 +446,8 @@ void tsa_es_track_push_packet(tsa_handle_t* h, uint16_t pid, const uint8_t* pkt,
 
                     /* Update Statistics - skip the very first jitter sample which is always huge */
                     if (es->pts_count > 1) {
-                        es->pts_offset_ms_avg = (es->pts_offset_ms_avg * (es->pts_count - 1) + offset_ms) / es->pts_count;
+                        es->pts_offset_ms_avg =
+                            (es->pts_offset_ms_avg * (es->pts_count - 1) + offset_ms) / es->pts_count;
                         if (fabs(offset_ms) > fabs(es->pts_offset_ms_max)) es->pts_offset_ms_max = offset_ms;
                         if (jitter_ms > es->pts_jitter_ms_peak) es->pts_jitter_ms_peak = jitter_ms;
                         es->pts_jitter_q64 = INT_TO_Q64_64((int64_t)(jitter_ms * 90.0));

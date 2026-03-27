@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+
 #include "hal.h"
 #include "internal.h"
 
@@ -11,6 +12,7 @@ typedef struct {
 } callback_backend_t;
 
 static int callback_io_init(tsshaper_t* ctx, void* params) {
+    (void)params;
     callback_backend_t* backend = calloc(1, sizeof(callback_backend_t));
     if (!backend) return -1;
 
@@ -34,7 +36,7 @@ static int callback_io_send(tsshaper_t* ctx, struct mmsghdr* msgs, int count) {
         if (backend->write_cb(pkt_data, backend->opaque) == 0) {
             sent++;
         } else {
-            break; // Callback requested stop or error
+            break;  // Callback requested stop or error
         }
     }
     return sent;
@@ -48,8 +50,8 @@ static void callback_io_close(tsshaper_t* ctx) {
 }
 
 void hal_init_callback_backend(tsshaper_t* ctx, tss_write_cb cb, void* opaque) {
-    ctx->hal_ops.io_init  = callback_io_init;
-    ctx->hal_ops.io_send  = callback_io_send;
+    ctx->hal_ops.io_init = callback_io_init;
+    ctx->hal_ops.io_send = callback_io_send;
     ctx->hal_ops.io_close = callback_io_close;
 
     // We need to trigger io_init to allocate the private struct

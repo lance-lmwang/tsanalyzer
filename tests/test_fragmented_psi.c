@@ -34,7 +34,7 @@ int main() {
     tsa_decode_packet(h, pkt1, 1000, &res);
     tsa_section_filter_push(h, pid, pkt1, &res);
 
-    assert(h->pid_filters[pid].active == true);
+    assert(h->pid_filters[pid] != NULL && h->pid_filters[pid]->active == true);
     printf("Packet 1 processed (Section pending)\n");
 
     /* Construct Packet 2: Tail of Section 1 AND Start of Section 2

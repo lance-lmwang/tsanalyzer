@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
 #include "tsshaper/tsshaper.h"
 
 #define TS_PACKET_SIZE 188
@@ -147,12 +148,13 @@ void test_virtual_pcap() {
     tsshaper_start_pacer(shaper, -1);
 
     uint8_t pkt[TS_PACKET_SIZE];
-    memset(pkt, 0x55, TS_PACKET_SIZE); // Dummy payload
+    memset(pkt, 0x55, TS_PACKET_SIZE);  // Dummy payload
     pkt[0] = 0x47;
-    pkt[1] = 0x01; pkt[2] = 0x00; // PID 0x100 (Video)
-    pkt[3] = 0x30; // AF + Payload
-    pkt[4] = 183;  // AF Length
-    pkt[5] = 0x10; // PCR Flag
+    pkt[1] = 0x01;
+    pkt[2] = 0x00;  // PID 0x100 (Video)
+    pkt[3] = 0x30;  // AF + Payload
+    pkt[4] = 183;   // AF Length
+    pkt[5] = 0x10;  // PCR Flag
 
     // Push 1000 packets with PCRs
     for (int i = 0; i < 1000; i++) {
@@ -161,12 +163,14 @@ void test_virtual_pcap() {
         // physical emission time onto all subsequent packets.
         uint64_t arrival_ts = 0;
         if (i == 0) {
-            uint64_t pcr_ns = 1000000000ULL; // 1s
+            uint64_t pcr_ns = 1000000000ULL;  // 1s
             uint64_t ticks = (pcr_ns * 27) / 1000;
             uint64_t base = ticks / 300;
             uint16_t ext = ticks % 300;
-            pkt[6] = (base >> 25) & 0xFF; pkt[7] = (base >> 17) & 0xFF;
-            pkt[8] = (base >> 9) & 0xFF;  pkt[9] = (base >> 1) & 0xFF;
+            pkt[6] = (base >> 25) & 0xFF;
+            pkt[7] = (base >> 17) & 0xFF;
+            pkt[8] = (base >> 9) & 0xFF;
+            pkt[9] = (base >> 1) & 0xFF;
             pkt[10] = ((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01);
             pkt[11] = ext & 0xFF;
             arrival_ts = pcr_ns;
@@ -206,7 +210,7 @@ void test_callback_backend() {
     config.backend = TSS_BACKEND_CALLBACK;
     config.write_cb = tss_test_write_cb;
     config.write_opaque = NULL;
-    config.io_batch_size = 1; // Single packet batches for simple counting
+    config.io_batch_size = 1;  // Single packet batches for simple counting
 
     tsshaper_t* shaper = tsshaper_create(&config);
     assert(shaper != NULL);
@@ -217,7 +221,8 @@ void test_callback_backend() {
     uint8_t pkt[TS_PACKET_SIZE];
     memset(pkt, 0xAA, TS_PACKET_SIZE);
     pkt[0] = 0x47;
-    pkt[1] = 0x00; pkt[2] = 0x50; // PID 0x50
+    pkt[1] = 0x00;
+    pkt[2] = 0x50;  // PID 0x50
     pkt[3] = 0x10;
 
     for (int i = 0; i < 500; i++) {

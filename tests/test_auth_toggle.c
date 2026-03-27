@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "tsa_auth.h"
 
 int main() {

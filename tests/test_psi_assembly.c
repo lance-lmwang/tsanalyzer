@@ -30,11 +30,10 @@ void test_pat_assembly() {
 
     // Send first 10 bytes
     memcpy(pkt1 + 5, full_pat, 10);
-    ts_decode_result_t res1;
-    tsa_decode_packet(h, pkt1, 1000, &res1);
+    tsa_process_packet(h, pkt1, 1000);
 
-    assert(h->pid_filters[0].active == true);
-    assert(h->pid_filters[0].complete == false);
+    assert(h->pid_filters[0] != NULL && h->pid_filters[0]->active == true);
+    assert(h->pid_filters[0]->complete == false);
     assert(h->program_count == 0);
 
     uint8_t pkt2[188] = {0};
@@ -45,8 +44,7 @@ void test_pat_assembly() {
 
     // Remaining 10 bytes
     memcpy(pkt2 + 4, full_pat + 10, 10);
-    ts_decode_result_t res2;
-    tsa_decode_packet(h, pkt2, 2000, &res2);
+    tsa_process_packet(h, pkt2, 2000);
 
     assert(h->seen_pat == true);
     assert(h->program_count == 2);
@@ -90,8 +88,7 @@ void test_sdt_assembly() {
     pkt[4] = 0x00;  // Pointer
     memcpy(pkt + 5, sdt, sizeof(sdt));
 
-    ts_decode_result_t res;
-    tsa_decode_packet(h, pkt, 1000, &res);
+    tsa_process_packet(h, pkt, 1000);
 
     assert(strcmp(h->service_name, "My Service 1") == 0);
     assert(strcmp(h->provider_name, "Provider") == 0);

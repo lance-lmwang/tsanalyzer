@@ -3,17 +3,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 #include "tsshaper/tsshaper.h"
 
 #define TS_PACKET_SIZE 188
-#define TARGET_BITRATE 10000000 // 10Mbps
+#define TARGET_BITRATE 10000000  // 10Mbps
 #define TEST_DURATION_SEC 5
 
 static FILE* g_output_file = NULL;
 static uint64_t g_total_bytes = 0;
 
 // The callback that will write to the real file
-static int file_write_cb(const uint8_t *packet, void *opaque) {
+static int file_write_cb(const uint8_t* packet, void* opaque) {
     if (g_output_file) {
         fwrite(packet, 1, TS_PACKET_SIZE, g_output_file);
         g_total_bytes += TS_PACKET_SIZE;
@@ -38,14 +39,15 @@ int main() {
     uint8_t video_pkt[TS_PACKET_SIZE];
     memset(video_pkt, 0x55, TS_PACKET_SIZE);
     video_pkt[0] = 0x47;
-    video_pkt[1] = 0x01; video_pkt[2] = 0x00; // PID 0x100
+    video_pkt[1] = 0x01;
+    video_pkt[2] = 0x00;  // PID 0x100
     video_pkt[3] = 0x10;
 
     // SCENARIO: 5 seconds of total time
     uint64_t packet_interval_ns = (188ULL * 8 * 1000000000ULL) / TARGET_BITRATE;
     uint64_t packets_total = (TARGET_BITRATE * TEST_DURATION_SEC) / 8 / 188;
 
-    printf("Generating %lu total packets at %d Mbps CBR...\n", packets_total, TARGET_BITRATE/1000000);
+    printf("Generating %lu total packets at %d Mbps CBR...\n", packets_total, TARGET_BITRATE / 1000000);
 
     for (uint64_t p = 0; p < packets_total; p++) {
         // Every 1 second (approx), we burst 1 second's worth of video packets

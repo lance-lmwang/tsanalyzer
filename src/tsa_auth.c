@@ -1,10 +1,12 @@
 #include "tsa_auth.h"
+
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
 #include "tsa_log.h"
 
 #define TAG "AUTH"

@@ -5,7 +5,7 @@
 
 ### Task 1.1: Standardize PCR Extraction
 - **Files**: `include/tsa_bitstream.h`, `include/tsp.h`
-- **Action**: 
+- **Action**:
     - Implement `static inline uint64_t tsa_pkt_get_pcr(const uint8_t *pkt)` with full 42-bit reconstruction.
     - Implement `static inline uint64_t tsa_pcr_to_ns(uint64_t pcr_ticks)`.
 - **Validation**: `make && ./tests/test_bitstream_pcr`
@@ -37,7 +37,7 @@
 
 ### Task 3.1: Refactor `pcr_on_ts`
 - **Files**: `src/tsa_engine_pcr.c`
-- **Action**: 
+- **Action**:
     1. Call `tsa_pkt_get_pcr`.
     2. Feed to `tsa_pcr_track_update`.
     3. Push metrics to `h->live` snapshot directly from the track state.
@@ -50,7 +50,7 @@
 
 ### Task 4.1: Program-Aware Metrics
 - **Files**: `include/tsa_internal.h`, `src/tsa_snapshot.c`
-- **Action**: 
+- **Action**:
     - Replace `h->live->pcr_jitter_max_ns` with a per-program lookup.
     - Implement a "Master Clock Election" per PMT.
 - **Validation**: Load a multi-program PCAP. Verify each program has its own independent jitter/drift stats in the CLI monitor.

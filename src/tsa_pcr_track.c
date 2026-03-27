@@ -118,6 +118,14 @@ bool tsa_pcr_track_update(tsa_pcr_track_t* track, uint64_t pcr_ticks, uint64_t a
         /* Update Monotonic PCR Time Axis (Unwrapping) only on valid PCR packets */
         track->last_unwrapped_pcr_ns += tsa_pcr_to_ns(pcr_delta_ticks);
         pcr_gap_violation = (pcr_delta_ticks > PCR_REPETITION_MAX_TICKS);
+
+        tsa_tr101290_stats_t* s = (tsa_tr101290_stats_t*)track->live;
+        if (s) {
+            double pcr_delta_ms = tsa_pcr_to_ns_f((double)pcr_delta_ticks) / 1000000.0;
+            if (pcr_delta_ms > s->pcr_repetition_max_ms) {
+                s->pcr_repetition_max_ms = pcr_delta_ms;
+            }
+        }
     }
 
     if (pcr_gap_violation || arrival_violation) {
@@ -172,6 +180,10 @@ bool tsa_pcr_track_update(tsa_pcr_track_t* track, uint64_t pcr_ticks, uint64_t a
                 uint64_t abs_err_ns = (max_err_ns < 0) ? (uint64_t)(-max_err_ns) : (uint64_t)max_err_ns;
                 tsa_tr101290_stats_t* s = (tsa_tr101290_stats_t*)track->live;
                 if (s) {
+                    if (abs_err_ns > s->pcr_jitter_max_ns) {
+                        s->pcr_jitter_max_ns = abs_err_ns;
+                    }
+
                     if (abs_err_ns < 500)
                         s->pcr_jitter_hist.bucket_under_500ns++;
                     else if (abs_err_ns < 1000)

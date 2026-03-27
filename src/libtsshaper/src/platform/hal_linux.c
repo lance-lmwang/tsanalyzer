@@ -1,13 +1,14 @@
 #define _GNU_SOURCE
 #include <netinet/in.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <string.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+
 #include "hal.h"
 #include "internal.h"
 
@@ -42,8 +43,8 @@ static void linux_io_close(tsshaper_t* ctx) {
 }
 
 void hal_init_linux_backend(tsshaper_t* ctx) {
-    ctx->hal_ops.io_init  = linux_io_init;
-    ctx->hal_ops.io_send  = linux_io_send;
+    ctx->hal_ops.io_init = linux_io_init;
+    ctx->hal_ops.io_send = linux_io_send;
     ctx->hal_ops.io_close = linux_io_close;
 }
 

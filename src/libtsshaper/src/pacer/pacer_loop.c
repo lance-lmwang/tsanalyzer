@@ -1,17 +1,18 @@
 #define _GNU_SOURCE
-#include <time.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
+
 #include "hal.h"
 #include "internal.h"
 
 /**
  * @brief Helper to add nanoseconds to a timespec structure, handling overflows.
  */
-static inline void timespec_add_ns(struct timespec *ts, int64_t ns) {
+static inline void timespec_add_ns(struct timespec* ts, int64_t ns) {
     ts->tv_nsec += ns;
     while (ts->tv_nsec >= 1000000000L) {
         ts->tv_sec++;
@@ -74,7 +75,7 @@ void* pacer_thread_func(void* arg) {
             timespec_add_ns(&next_wakeup_ts, current_interval_ns);
 
             // 4. High-Precision Absolute Sleep
-            hal_precision_wait(0); // Mock jump or Linux busy-wait hint
+            hal_precision_wait(0);  // Mock jump or Linux busy-wait hint
             struct timespec ts_sleep = next_wakeup_ts;
             clock_nanosleep(CLOCK_MONOTONIC_RAW, TIMER_ABSTIME, &ts_sleep, NULL);
 
@@ -122,6 +123,7 @@ void* pacer_thread_func(void* arg) {
 }
 
 int tsshaper_start_pacer(tsshaper_t* ctx, int fd) {
+    (void)fd;
     if (ctx->running) return -1;
     ctx->running = true;
     if (pthread_create(&ctx->pacer_thread, NULL, pacer_thread_func, ctx) != 0) {

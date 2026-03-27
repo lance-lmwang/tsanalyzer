@@ -2,6 +2,7 @@
 #define TSA_PACKET_POOL_H
 
 #include <stddef.h>
+
 #include "mpmc_queue.h"
 #include "tsa_pipeline.h"
 

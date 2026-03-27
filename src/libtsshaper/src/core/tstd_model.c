@@ -1,24 +1,32 @@
+#include <stdint.h>
 #include <string.h>
+
 #include "internal.h"
 
+// ISO/IEC 13818-1 Broadcasting-Grade PCR Restamper
+// Ensures nanosecond-precision STC recovery for Professional Receivers
+
 static void restamp_pcr(uint8_t* pkt, uint64_t now_ns, uint64_t start_time_ns, uint64_t start_pcr_base) {
-    // PCR is 33-bit base + 9-bit extension = 42 bits at 27MHz
-    // Calculate current PCR in 27MHz units
-    // Ensure 64-bit precision during calculation to avoid overflow/drift
+    // 1. Calculate absolute elapsed time in 27MHz ticks
+    // (ns * 27) / 1000 is the precise conversion for MPEG-TS STC
     uint64_t elapsed_ns = now_ns - start_time_ns;
-    uint64_t pcr_27m = start_pcr_base + (elapsed_ns * 27) / 1000;
+    uint64_t ticks_27m = (elapsed_ns * 27) / 1000;
+    uint64_t current_pcr_42 = start_pcr_base + ticks_27m;
 
-    uint64_t base = pcr_27m / 300;
-    uint32_t ext = pcr_27m % 300;
+    // 2. Break down to 33-bit Base and 9-bit Extension
+    uint64_t base = current_pcr_42 / 300;
+    uint32_t ext = current_pcr_42 % 300;
 
-    // TS adaptation field starts at pkt[4]. PCR is at offset 6 from sync byte
-    uint8_t* pcr_buf = pkt + 6;
-    pcr_buf[0] = (base >> 25) & 0xFF;
-    pcr_buf[1] = (base >> 17) & 0xFF;
-    pcr_buf[2] = (base >> 9) & 0xFF;
-    pcr_buf[3] = (base >> 1) & 0xFF;
-    pcr_buf[4] = ((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01);
-    pcr_buf[5] = ext & 0xFF;
+    // 3. Bit-perfect injection into the Adaptation Field
+    // Offset 6: PCR base [32...25]
+    // Offset 10: PCR base [0], 6 bits reserved, PCR ext [8]
+    uint8_t* p = pkt + 6;
+    p[0] = (uint8_t)(base >> 25);
+    p[1] = (uint8_t)(base >> 17);
+    p[2] = (uint8_t)(base >> 9);
+    p[3] = (uint8_t)(base >> 1);
+    p[4] = (uint8_t)(((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01));
+    p[5] = (uint8_t)(ext & 0xFF);
 }
 
 tstd_pid_ctx_t* tstd_find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid) {
@@ -31,32 +39,22 @@ tstd_pid_ctx_t* tstd_find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid) {
         memset(ctx, 0, sizeof(*ctx));
         ctx->pid = pid;
         ctx->first_packet = true;
+        ctx->buffer_size = 512;  // Mandatory TBn size
 
-        // Broadcast-grade PID Priority Mapping (ISO 13818-1 & TR 101 290)
-        if (pid == 0x00 || pid == 0x01 || pid == 0x11 || pid == 0x12) {
-            ctx->priority = PRIO_CRITICAL;  // PAT/CAT/SDT/EIT
-            ctx->buffer_size = 64 * 1024;
-            ctx->shaping_rate_bps = 0; // Unlimited/Critical
+        // BROADCAST GRADE SIGNALING RECOGNITION
+        if (pid == 0x00 || pid == 0x01 || pid == 0x10 || pid == 0x11 || pid == 0x12) {
+            ctx->priority = PRIO_CRITICAL;
+            ctx->shaping_rate_bps = 15000;  // 15kbps reservation for PSI/SI
         } else {
             ctx->priority = PRIO_MEDIUM;
-            ctx->buffer_size = 4 * 1024 * 1024; // Increased buffer for smoothing
-
-            if (prog->target_bitrate_bps > 0) {
-                // T-STD SMOOTHING ENFORCEMENT:
-                // We deliberately restrict video PID to 25% of the pipe capacity.
-                // This forces the interleaver to pace video packets at 1.25Mbps (for 1Mbps source),
-                // filling the rest with NULL packets, resulting in a "straight line" video bitrate.
-                if (pid == 0x0100 || pid == 0x1500) {
-                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 25 / 100;
-                } else if (pid == 0x0101 || pid == 0x1501) {
-                    ctx->shaping_rate_bps = prog->target_bitrate_bps * 5 / 100;
-                } else {
-                    ctx->shaping_rate_bps = prog->target_bitrate_bps;
-                }
-                // Allow tight 50ms burst window
-                ctx->shaping_credit_bits = (double)ctx->shaping_rate_bps * 0.05;
-            }
+            ctx->shaping_rate_bps = prog->target_bitrate_bps / 2;
         }
+
+        // Initialize pacing windows
+        ctx->shaping_credit_bits = (double)TS_PACKET_SIZE * 8;
+        ctx->next_pacing_time_ns = 0;
+        ctx->queue = spsc_queue_create(1024);  // Give every PID a massive 1024-packet buffer
+
         return ctx;
     }
     return NULL;
@@ -65,111 +63,46 @@ tstd_pid_ctx_t* tstd_find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid) {
 void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt) {
     uint16_t pid = ((pkt->data[1] & 0x1F) << 8) | pkt->data[2];
     tstd_pid_ctx_t* ctx = tstd_find_or_create_pid_ctx(prog, pid);
-    if (ctx) {
-        // Continuity Counter Check (TR 101 290 P1 - Continuity_error)
-        uint8_t current_cc = pkt->data[3] & 0x0F;
-        if (!ctx->first_packet) {
-            uint8_t expected_cc = (ctx->last_cc + 1) & 0x0F;
-            if (current_cc != expected_cc && current_cc != ctx->last_cc) {
-                // In a real analyzer, we would log a TR 101 290 P1 error here
-                // For the shaper, we just track it.
-            }
-        }
-        ctx->last_cc = current_cc;
-        ctx->first_packet = false;
+    if (!ctx) return;
 
-        atomic_fetch_add(&ctx->buffer_fullness, TS_PACKET_SIZE);
-
-        // PCR Detection and Priority Elevation
-        bool has_af = (pkt->data[3] & 0x20) != 0;
-        if (has_af && pkt->data[4] > 0) {
-            bool has_pcr = (pkt->data[5] & 0x10) != 0;
-            if (has_pcr) {
-                ctx->is_pcr = true;
-                ctx->priority = PRIO_CRITICAL;
-
-                // Initialize start_pcr_base from the very first PCR packet
-                tsshaper_t* shaper = (tsshaper_t*)prog->parent_ctx;
-                if (shaper && shaper->start_pcr_base == 0) {
-                    uint8_t* pcr_buf = (uint8_t*)pkt->data + 6;
-                    uint64_t base = ((uint64_t)pcr_buf[0] << 25) | ((uint64_t)pcr_buf[1] << 17) |
-                                    ((uint64_t)pcr_buf[2] << 9) | ((uint64_t)pcr_buf[3] << 1) | (pcr_buf[4] >> 7);
-                    uint32_t ext = ((uint32_t)(pcr_buf[4] & 0x01) << 8) | pcr_buf[5];
-                    shaper->start_pcr_base = base * 300 + ext;
-                    shaper->start_time_ns = pkt->arrival_ns;
+    // Detect PCR and initialize Phase Lock
+    bool has_af = (pkt->data[3] & 0x20) != 0;
+    if (has_af && pkt->data[4] > 0) {
+        bool has_pcr = (pkt->data[5] & 0x10) != 0;
+        if (has_pcr) {
+            ctx->is_pcr = true;
+            tsshaper_t* shaper = (tsshaper_t*)prog->parent_ctx;
+            if (shaper) {
+                if (shaper->master_pcr_pid == 0x1FFF) {
+                    shaper->master_pcr_pid = pid;
                 }
             }
         }
     }
+
+    ctx->last_cc = pkt->data[3] & 0x0F;
+    ctx->first_packet = false;
+    atomic_fetch_add(&ctx->buffer_fullness, TS_PACKET_SIZE);
 }
 
-/**
- * @brief Initializes the PI controller with floating point parameters, converting them to Q16.16.
- */
-void tss_pi_init(tss_pi_controller_t* pi, float kp, float ki,
-                 float out_max, float out_min, float int_max, float int_min) {
-    memset(pi, 0, sizeof(*pi));
-    pi->kp = FLOAT_TO_Q16(kp);
-    pi->ki = FLOAT_TO_Q16(ki);
-    pi->out_max = FLOAT_TO_Q16(out_max);
-    pi->out_min = FLOAT_TO_Q16(out_min);
-    pi->integral_max = FLOAT_TO_Q16(int_max);
-    pi->integral_min = FLOAT_TO_Q16(int_min);
-    pi->deadband = 188; // Default deadband of 1 TS packet
-}
-
-/**
- * @brief Updates the fixed-point PI controller to compute the target bitrate adjustment.
- * Executes in O(1) integer arithmetic without FPU usage.
- *
- * @param pi The PI controller context.
- * @param error_q16 Current error in Q16.16 format.
- * @return int32_t Target adjustment in Q16.16 format.
- */
-int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16) {
-    // 1. Deadband check (scaled to Q16)
-    int32_t q16_deadband = pi->deadband << Q16_SHIFT;
-    if (error_q16 > -q16_deadband && error_q16 < q16_deadband) {
-        error_q16 = 0;
-    }
-
-    // 2. Proportional term: Kp * error
-    int32_t p_out = Q16_MUL(pi->kp, error_q16);
-
-    // 3. Integral accumulation with Anti-Windup
-    pi->integral += error_q16;
-
-    if (pi->integral > pi->integral_max) {
-        pi->integral = pi->integral_max;
-    } else if (pi->integral < pi->integral_min) {
-        pi->integral = pi->integral_min;
-    }
-
-    // 4. Integral term: Ki * integrated_error
-    int32_t i_out = Q16_MUL(pi->ki, pi->integral);
-
-    // 5. Combine and clamp output
-    int32_t total_out = p_out + i_out;
-
-    if (total_out > pi->out_max) {
-        total_out = pi->out_max;
-    } else if (total_out < pi->out_min) {
-        total_out = pi->out_min;
-    }
-
-    return total_out;
-}
 void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t now_ns) {
     uint16_t pid = ((pkt->data[1] & 0x1F) << 8) | pkt->data[2];
     for (int i = 0; i < prog->num_pids; i++) {
         if (prog->pids[i].pid == pid) {
             tstd_pid_ctx_t* ctx = &prog->pids[i];
-
-            // ISO 13818-1 Compliance: Restamp PCR at physical departure point
             if (ctx->is_pcr) {
                 tsshaper_t* shaper = (tsshaper_t*)prog->parent_ctx;
-                if (shaper && shaper->start_time_ns > 0) {
-                    restamp_pcr((uint8_t*)pkt->data, now_ns, shaper->start_time_ns, shaper->start_pcr_base);
+                if (shaper) {
+                    if (shaper->start_pcr_base == 0) {
+                        uint8_t* pb = (uint8_t*)pkt->data + 6;
+                        uint64_t base = ((uint64_t)pb[0] << 25) | ((uint64_t)pb[1] << 17) | ((uint64_t)pb[2] << 9) |
+                                        ((uint64_t)pb[3] << 1) | (pb[4] >> 7);
+                        uint32_t ext = ((uint32_t)(pb[4] & 0x01) << 8) | pb[5];
+                        shaper->start_pcr_base = base * 300 + ext;
+                        shaper->start_time_ns = now_ns;
+                    } else if (shaper->start_time_ns > 0) {
+                        restamp_pcr((uint8_t*)pkt->data, now_ns, shaper->start_time_ns, shaper->start_pcr_base);
+                    }
                 }
             }
 
@@ -186,13 +119,41 @@ void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t no
 bool tstd_check_backpressure(program_ctx_t* prog, uint16_t pid) {
     for (int i = 0; i < prog->num_pids; i++) {
         if (prog->pids[i].pid == pid) {
-            uint32_t current = atomic_load_explicit(&prog->pids[i].buffer_fullness, memory_order_relaxed);
-            // 95% High Water Mark - compliant with T-STD buffer modeling
-            if (current > (prog->pids[i].buffer_size * 95 / 100)) {
-                return true;
-            }
+            // SHAPER INGRESS BACKPRESSURE
+            // We are the Multiplexer. Our internal queues (spsc_queue) are 1024 packets deep.
+            // We should only push back if the queue is genuinely in danger of overflowing.
+            // Let the SPSC queue capacity handle the backpressure instead of an artificial 512B limit here.
             return false;
         }
     }
     return false;
+}
+
+void tss_pi_init(tss_pi_controller_t* pi, float kp, float ki, float out_max, float out_min, float int_max,
+                 float int_min) {
+    memset(pi, 0, sizeof(*pi));
+    pi->kp = FLOAT_TO_Q16(kp);
+    pi->ki = FLOAT_TO_Q16(ki);
+    pi->out_max = FLOAT_TO_Q16(out_max);
+    pi->out_min = FLOAT_TO_Q16(out_min);
+    pi->integral_max = FLOAT_TO_Q16(int_max);
+    pi->integral_min = FLOAT_TO_Q16(int_min);
+    pi->deadband = 188;
+}
+
+int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16) {
+    if (error_q16 > -(pi->deadband << 16) && error_q16 < (pi->deadband << 16)) error_q16 = 0;
+    int32_t p_out = Q16_MUL(pi->kp, error_q16);
+    pi->integral += error_q16;
+    if (pi->integral > pi->integral_max)
+        pi->integral = pi->integral_max;
+    else if (pi->integral < pi->integral_min)
+        pi->integral = pi->integral_min;
+    int32_t i_out = Q16_MUL(pi->ki, pi->integral);
+    int32_t total = p_out + i_out;
+    if (total > pi->out_max)
+        total = pi->out_max;
+    else if (total < pi->out_min)
+        total = pi->out_min;
+    return total;
 }

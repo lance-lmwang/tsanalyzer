@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "tsa_log.h"
+
 #include <pthread.h>
 #include <stdalign.h>
 #include <stdarg.h>

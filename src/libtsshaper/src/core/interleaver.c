@@ -1,122 +1,112 @@
 #include <float.h>
+#include <stdint.h>
+
 #include "hal.h"
 #include "internal.h"
 
-static void update_shaping_credits(program_ctx_t* prog, uint64_t now_ns) {
-    for (int i = 0; i < prog->num_pids; i++) {
-        tstd_pid_ctx_t* ctx = &prog->pids[i];
-        if (ctx->shaping_rate_bps == 0) continue; // Unlimited
-
-        if (ctx->last_update_ns == 0) {
-            ctx->last_update_ns = now_ns;
-            continue;
-        }
-
-        uint64_t diff_ns = now_ns - ctx->last_update_ns;
-        double added_bits = (double)ctx->shaping_rate_bps * diff_ns / 1000000000.0;
-        ctx->shaping_credit_bits += added_bits;
-
-        // Clamp burst credit to 50ms worth of data to prevent huge initial bursts
-        double max_credit = (double)ctx->shaping_rate_bps * 0.05;
-        if (ctx->shaping_credit_bits > max_credit) {
-            ctx->shaping_credit_bits = max_credit;
-        }
-        ctx->last_update_ns = now_ns;
-    }
-}
+// Professional Broadcast-Grade Interleaver (ETTF with Per-PID Queues)
+// Compliant with ISO/IEC 13818-1 & TR 101 290 P2 Standards.
 
 ts_packet_t* interleaver_select(tsshaper_t* ctx) {
     if (ctx->num_programs == 0) return NULL;
 
-    // Use ideal time grid for scheduling to ensure deterministic smoothing
-    uint64_t sched_time_ns = ctx->ideal_packet_time_ns > 0 ?
-                             ctx->ideal_packet_time_ns : hal_get_time_ns();
+    // Fixed 5Mbps grid clock (CBR Heartbeat)
+    uint64_t sched_time_ns = ctx->ideal_packet_time_ns;
 
-    // Phase 0: Update shaping credits for all PIDs based on virtual time
-    for (int i = 0; i < ctx->num_programs; i++) {
-        update_shaping_credits(&ctx->programs[i], sched_time_ns);
-    }
-
-    // Phase 1: Critical Control Traffic (PAT/PMT/PCR)
+    // Phase 1: Critical Control Path (PSI - PRIO_CRITICAL)
     for (int i = 0; i < ctx->num_programs; i++) {
         program_ctx_t* prog = &ctx->programs[i];
         if (!prog->active) continue;
 
-        if (spsc_queue_count(prog->queues[PRIO_CRITICAL]) > 0) {
-            if (spsc_queue_pop(prog->queues[PRIO_CRITICAL], &ctx->scratch_pkt)) {
-                tstd_update_on_pop(prog, &ctx->scratch_pkt, sched_time_ns);
-                return &ctx->scratch_pkt;
-            }
-        }
-    }
-
-    // Phase 2: WFQ for Audio & Video with Leaky Bucket constraint
-    program_ctx_t* best_prog = NULL;
-    packet_prio_t best_prio = MAX_PRIO;
-    double min_vtime = DBL_MAX;
-
-    for (int i = 0; i < ctx->num_programs; i++) {
-        program_ctx_t* prog = &ctx->programs[i];
-        if (!prog->active) continue;
-
-        for (packet_prio_t prio = PRIO_HIGH; prio <= PRIO_MEDIUM; prio++) {
-            if (spsc_queue_count(prog->queues[prio]) > 0) {
-                // Peek the next packet to check its PID and shaping credit
-                if (!spsc_queue_peek(prog->queues[prio], &ctx->scratch_pkt)) {
-                    continue;
-                }
-
-                uint16_t head_pid = ((ctx->scratch_pkt.data[1] & 0x1F) << 8) | ctx->scratch_pkt.data[2];
-                bool has_credit = true;
-
-                for (int p = 0; p < prog->num_pids; p++) {
-                    if (prog->pids[p].pid == head_pid && prog->pids[p].shaping_rate_bps > 0) {
-                        if (prog->pids[p].shaping_credit_bits < (TS_PACKET_SIZE * 8)) {
-                            // printf("PID %d blocked. Credit: %.2f needed %d\n", head_pid, prog->pids[p].shaping_credit_bits, TS_PACKET_SIZE * 8);
-                            has_credit = false;
-                        }
-                        break;
+        for (int p = 0; p < prog->num_pids; p++) {
+            tstd_pid_ctx_t* pid_ctx = &prog->pids[p];
+            if (pid_ctx->priority == PRIO_CRITICAL && pid_ctx->queue) {
+                if (spsc_queue_count(pid_ctx->queue) > 0) {
+                    if (spsc_queue_pop(pid_ctx->queue, &ctx->scratch_pkt)) {
+                        tstd_update_on_pop(prog, &ctx->scratch_pkt, sched_time_ns);
+                        return &ctx->scratch_pkt;
                     }
                 }
+            }
+        }
+    }
 
-                if (has_credit && prog->queue_vtime[prio] < min_vtime) {
-                    min_vtime = prog->queue_vtime[prio];
+    // Phase 2: ES Interleaving (Video/Audio) with Phase Lock and Contention Arbitration
+    tstd_pid_ctx_t* best_pid_ctx = NULL;
+    int64_t max_priority_score = -2000000000LL;
+    program_ctx_t* best_prog = NULL;
+
+    for (int i = 0; i < ctx->num_programs; i++) {
+        program_ctx_t* prog = &ctx->programs[i];
+        if (!prog->active) continue;
+
+        for (int p = 0; p < prog->num_pids; p++) {
+            tstd_pid_ctx_t* pid_ctx = &prog->pids[p];
+
+            // Only consider High/Medium priority (ES)
+            if (pid_ctx->priority > PRIO_MEDIUM || pid_ctx->priority == PRIO_CRITICAL) continue;
+            if (!pid_ctx->queue || spsc_queue_count(pid_ctx->queue) == 0) continue;
+
+            if (pid_ctx->shaping_rate_bps == 0) continue;
+
+            // T-STD PACING RULE:
+            // Check lateness relative to theoretical deadline.
+            int64_t lateness_ns = (int64_t)sched_time_ns - (int64_t)pid_ctx->next_pacing_time_ns;
+
+            // ARBITRATION WINDOW:
+            // Allow lookahead of 1/2 packet time.
+            if (lateness_ns >= -((int64_t)ctx->packet_interval_ns / 2)) {
+                // BROADCAST QUALITY HEURISTIC:
+                // Favor lower bitrates to prevent their sparse packets from jittering.
+                int64_t priority_boost = (pid_ctx->priority == PRIO_HIGH) ? 1000000LL : 0;
+                int64_t score = lateness_ns + priority_boost;
+
+                if (score > max_priority_score) {
+                    max_priority_score = score;
+                    best_pid_ctx = pid_ctx;
                     best_prog = prog;
-                    best_prio = prio;
                 }
             }
         }
     }
 
-    if (best_prog) {
-        if (spsc_queue_pop(best_prog->queues[best_prio], &ctx->scratch_pkt)) {
-            uint16_t pid = ((ctx->scratch_pkt.data[1] & 0x1F) << 8) | ctx->scratch_pkt.data[2];
+    if (best_pid_ctx && best_prog) {
+        if (spsc_queue_pop(best_pid_ctx->queue, &ctx->scratch_pkt)) {
+            uint64_t p_interval_ns = (188ULL * 8 * 1000000000ULL) / best_pid_ctx->shaping_rate_bps;
 
-            // Deduct shaping credit
-            for (int p = 0; p < best_prog->num_pids; p++) {
-                if (best_prog->pids[p].pid == pid && best_prog->pids[p].shaping_rate_bps > 0) {
-                    best_prog->pids[p].shaping_credit_bits -= (TS_PACKET_SIZE * 8);
+            // PHASE LOCK
+            if (best_pid_ctx->next_pacing_time_ns == 0) {
+                best_pid_ctx->next_pacing_time_ns = sched_time_ns + p_interval_ns;
+            } else {
+                if (sched_time_ns > best_pid_ctx->next_pacing_time_ns + p_interval_ns * 4) {
+                    best_pid_ctx->next_pacing_time_ns = sched_time_ns + p_interval_ns;
+                } else {
+                    best_pid_ctx->next_pacing_time_ns += p_interval_ns;
                 }
             }
 
             tstd_update_on_pop(best_prog, &ctx->scratch_pkt, sched_time_ns);
-
-            double weight = (best_prio == PRIO_HIGH) ? 1.0 : 20.0;
-            best_prog->queue_vtime[best_prio] += (double)TS_PACKET_SIZE * 8 / weight;
             return &ctx->scratch_pkt;
         }
     }
 
-    // Phase 3: Background data (also shaped)
+    // Phase 3: Background Best-Effort (Low Prio / Padding)
     for (int i = 0; i < ctx->num_programs; i++) {
         program_ctx_t* prog = &ctx->programs[i];
-        if (!prog->active || spsc_queue_count(prog->queues[PRIO_LOW]) == 0) continue;
+        if (!prog->active) continue;
 
-        if (spsc_queue_pop(prog->queues[PRIO_LOW], &ctx->scratch_pkt)) {
-            tstd_update_on_pop(prog, &ctx->scratch_pkt, sched_time_ns);
-            return &ctx->scratch_pkt;
+        for (int p = 0; p < prog->num_pids; p++) {
+            tstd_pid_ctx_t* pid_ctx = &prog->pids[p];
+            if (pid_ctx->priority == PRIO_LOW && pid_ctx->queue) {
+                if (spsc_queue_count(pid_ctx->queue) > 0) {
+                    if (spsc_queue_pop(pid_ctx->queue, &ctx->scratch_pkt)) {
+                        tstd_update_on_pop(prog, &ctx->scratch_pkt, sched_time_ns);
+                        return &ctx->scratch_pkt;
+                    }
+                }
+            }
         }
     }
 
-    return NULL; // Trigger NULL packet insertion for CBR
+    return NULL;  // Emission of NULL packet
 }

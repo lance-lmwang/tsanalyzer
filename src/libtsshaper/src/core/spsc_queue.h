@@ -1,11 +1,11 @@
 #ifndef SPSC_QUEUE_H
 #define SPSC_QUEUE_H
 
+#include <stdalign.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdalign.h>
 
 #define TS_PACKET_SIZE 188
 
@@ -14,10 +14,10 @@
  * Optimized for AVX2 copies (192 bytes for data) and cache line alignment.
  */
 typedef struct {
-    alignas(256) uint8_t data[192]; // 188 (TS) + 4 (Padding for AVX2)
+    alignas(256) uint8_t data[192];  // 188 (TS) + 4 (Padding for AVX2)
     uint16_t pid;
     uint64_t arrival_ns;
-    uint8_t reserved[54];           // Pad to 256 bytes total size
+    uint8_t reserved[54];  // Pad to 256 bytes total size
 } ts_packet_t;
 
 typedef struct {

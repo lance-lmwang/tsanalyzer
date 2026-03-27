@@ -83,7 +83,10 @@ set(TSA_CORE_SRCS
     src/libtsshaper/src/core/interleaver.c
     src/libtsshaper/src/core/tstd_model.c
     src/libtsshaper/src/core/spsc_queue.c
+    src/libtsshaper/src/platform/hal.c
     src/libtsshaper/src/platform/hal_linux.c
+    src/libtsshaper/src/platform/hal_mock.c
+    src/libtsshaper/src/platform/hal_callback.c
     src/libtsshaper/src/pacer/pacer_loop.c
     src/tsa_engine_pcr.c src/tsa_engine_essence.c src/tsa_utils.c src/tsa_json.c
     src/tsa_dashboard.c src/tsa_snapshot.c src/tsa_regress.c src/tsa_clock.c

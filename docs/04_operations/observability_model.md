@@ -89,7 +89,7 @@ To ensure metrological consistency across all monitoring surfaces, the following
 The primary entry point for NOC operators. It must be implemented as a compact color matrix.
 *   **Visual Target**: **1x8 or 8xN tight grid**.
 *   **Component**: `stat` panel.
-*   **Key Options**: 
+*   **Key Options**:
     *   `Orientation`: Horizontal.
     *   `Text Mode`: Name (Stream ID only).
     *   `Color Mode`: Background (Solid fill based on thresholds).

@@ -53,7 +53,7 @@ if [ "$SRT_COUNT" -ge 4 ] && [ "$UDP_FOUND" -ge 1 ]; then
     # Even if RTT is 0, we want to see bitrates
     SRT_BITRATE_TOTAL=$(echo "$METRICS" | grep "tsa_metrology_physical_bitrate_bps" | grep "stream_id=\"SRT-" | awk '{sum+=$2} END {print sum}')
     echo -e "Total SRT Bitrate: $SRT_BITRATE_TOTAL bps"
-    
+
     if (( $(echo "$SRT_BITRATE_TOTAL > 0" | bc -l) )); then
         echo -e "RESULT: ${GREEN}SUCCESS${NC}"
         killall tsa_server_pro tsp

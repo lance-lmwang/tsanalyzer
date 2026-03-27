@@ -59,11 +59,11 @@ typedef struct {
     uint32_t max_latency_ms;  /**< Internal buffer depth (backpressure threshold) */
     bool use_raw_clock;       /**< Use CLOCK_MONOTONIC_RAW for zero-jitter timing */
 
-    tss_backend_type_t backend;     /**< Selected output method */
-    void*              backend_params; /**< Opaque params (e.g. filename string for PCAP) */
+    tss_backend_type_t backend; /**< Selected output method */
+    void* backend_params;       /**< Opaque params (e.g. filename string for PCAP) */
 
-    tss_write_cb write_cb;     /**< Callback for TSS_BACKEND_CALLBACK */
-    void*        write_opaque; /**< Opaque data for write_cb */
+    tss_write_cb write_cb; /**< Callback for TSS_BACKEND_CALLBACK */
+    void* write_opaque;    /**< Opaque data for write_cb */
 } tsshaper_config_t;
 
 /**

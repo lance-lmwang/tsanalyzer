@@ -30,11 +30,11 @@
 typedef struct {
     uint32_t pid;
     uint32_t program_id;      // 所属节目 ID，用于 MPTS 聚合
-    
+
     /* Layer 1: Raw Sampling */
     uint64_t last_pcr_ticks;  // 原始 42-bit Ticks
     uint64_t last_arrival_ns; // 系统 CLOCK_MONOTONIC 纳秒
-    
+
     /* Layer 2: Clock Domain (Locked) */
     struct {
         double slope;         // 线性回归斜率

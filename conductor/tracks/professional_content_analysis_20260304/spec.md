@@ -12,7 +12,7 @@ Advance `tsanalyzer` from transport-stream metrology to deep essence-layer quali
 ### 2.2 GOP (Group of Pictures) Structural Analysis
 - **NAL Unit Scanning**: Implement a fast, stateful scanner to detect H.264/HEVC start codes (`0x000001` / `0x00000001`).
 - **Frame Type Detection**: Identify I, P, and B frames based on NAL unit types and slice headers.
-- **GOP Metrics**: 
+- **GOP Metrics**:
     - **N**: Total frames in GOP.
     - **M**: P-frame interval (B-frame count).
     - **GOP MS**: Duration of the GOP in milliseconds.

@@ -385,13 +385,14 @@ void tsa_process_packet(tsa_handle_t* h, const uint8_t* p, uint64_t n) {
         if (h->consecutive_good_syncs >= 5 && !h->signal_lock) h->signal_lock = true;
     }
     if (h->op_mode == TSA_MODE_REPLAY) {
-        double bpp = (double)TS_PACKET_BITS;
-        uint64_t step = (uint64_t)(bpp * FROM_Q64_64(h->stc_slope_q64));
+        /* Update the System Time Clock (STC) */
+        uint64_t step = (uint64_t)(188ULL * 8 * FROM_Q64_64(h->stc_slope_q64));
         if (step < 10000 || step > 1000000) {
             uint64_t tbr = h->config.forced_cbr_bitrate ? h->config.forced_cbr_bitrate : DEFAULT_REPLAY_BITRATE;
-            step = (uint64_t)(bpp * NS_PER_SEC / tbr);
+            step = (uint64_t)(188ULL * 8 * NS_PER_SEC / tbr);
         }
         h->stc_ns += step;
+
     } else {
         if (h->stc_locked)
             h->stc_ns = (uint64_t)((h->stc_intercept_q64 + (int128_t)n * h->stc_slope_q64) >> 64);

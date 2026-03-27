@@ -22,7 +22,7 @@
 *Status: [x] Completed*
 - [x] **Dual-Queue Instantiation**: In `tsa_server_pro.c`, update `conn_t` to hold two SPSC queues per stream: `tx_q` and `ana_q`.
 - [x] **O(1) Primary Forwarding Path**: Implement the Egress thread (or handle directly in I/O if AF_XDP/Socket permits). Ensure packets received are pushed to `tx_q` and forwarded to network/disk with **Zero Modification** and **Emission Granularity Consistency** (preserving bursts).
-- [x] **Best-Effort ANA Enqueue**: After TX push, attempt to push the pointer/packet to `ana_q`. 
+- [x] **Best-Effort ANA Enqueue**: After TX push, attempt to push the pointer/packet to `ana_q`.
 - [x] **Silent Fast-Fail**: If `ana_q` is full, increment `atomic_inc(&c->internal_drop)` and return instantly without logging or blocking the Forward Path.
 - [x] **Edge-Triggered Wakeup**: If `ana_q` transitions from empty to non-empty, use the double-checked relaxed atomic logic to push the `stream_id` to the MPSC Ready Queue.
 

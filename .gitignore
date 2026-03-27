@@ -34,3 +34,19 @@ sample/*.ts
 # Archives
 *.tar.gz
 conductor/setup_state.json
+__pycache__/
+src/libtsshaper/tests/test_bench
+src/libtsshaper/tests/test_real_file_shaping
+src/libtsshaper/tests/test_ffmpeg_integration
+src/libtsshaper/tests/test_offline_export
+src/libtsshaper/libtsshaper.a
+bin/
+*.a
+src/libtsshaper/tests/test_*
+__pycache__/
+*.pyc
+matrix_test/
+jitter_debug.html
+new.diff
+Dockerfile.tsduck
+bin/

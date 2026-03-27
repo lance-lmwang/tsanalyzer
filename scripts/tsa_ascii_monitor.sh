@@ -12,7 +12,7 @@ while true; do
 
     # Fetch Core Metrics
     METRICS=$(curl -s http://localhost:8088/metrics/core)
-    
+
     if [ -z "$METRICS" ]; then
         echo -e "\e[31m  [ERROR] Backend Offline @ 8088. Attempting to check process...\e[0m"
         ps aux | grep tsa_server | grep -v grep | head -n 1
@@ -23,7 +23,7 @@ while true; do
             # Parse metrics
             HEALTH=$(echo "$METRICS" | grep "tsa_system_health_score{stream_id=\"$ID\"}" | awk '{print $2}')
             LOCKED=$(echo "$METRICS" | grep "tsa_system_signal_locked{stream_id=\"$ID\"}" | awk '{print $2}')
-            
+
             # Default values
             HEALTH=${HEALTH:-0.0}
             LOCKED=${LOCKED:-0}
@@ -31,8 +31,8 @@ while true; do
             # Status Label
             if [ "$LOCKED" == "1" ]; then
                 S_LABEL="\e[42m\e[30m LOCKED \e[0m"
-                if (( $(echo "$HEALTH > 90" | bc -l) )); then H_COLOR="\e[32m"; 
-                elif (( $(echo "$HEALTH > 70" | bc -l) )); then H_COLOR="\e[33m"; 
+                if (( $(echo "$HEALTH > 90" | bc -l) )); then H_COLOR="\e[32m";
+                elif (( $(echo "$HEALTH > 70" | bc -l) )); then H_COLOR="\e[33m";
                 else H_COLOR="\e[31m"; fi
             else
                 S_LABEL="\e[41m\e[37m NO SIG \e[0m"
@@ -53,7 +53,7 @@ while true; do
     echo -e "----------------------------------------------------------------------"
     echo -e " \e[1;34m[TIP]\e[0m Open big_screen_noc.html for 7-Layer Deep Insight Grid."
     echo -e " \e[1;34m[CMD]\e[0m curl -s http://localhost:8088/api/v1/snapshot?id=ST-1 | jq"
-    
+
     # Run once if not interactive
     if [[ ! -t 0 ]]; then exit 0; fi
     sleep 1

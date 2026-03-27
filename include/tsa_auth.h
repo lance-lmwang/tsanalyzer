@@ -2,6 +2,7 @@
 #define TSA_AUTH_H
 
 #include <stdbool.h>
+
 #include "mongoose.h"
 
 /**

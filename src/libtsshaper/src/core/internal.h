@@ -6,10 +6,11 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <sys/socket.h>
+
 #include "spsc_queue.h"
 #include "tsshaper/tsshaper.h"
 
-struct mmsghdr; // Forward declaration
+struct mmsghdr;  // Forward declaration
 
 #define MAX_PROGRAMS 128
 #define MAX_PIDS_PER_PROGRAM 64
@@ -24,17 +25,17 @@ struct mmsghdr; // Forward declaration
 #define Q16_SHIFT 16
 #define FLOAT_TO_Q16(f) ((int32_t)((f) * (1 << Q16_SHIFT)))
 #define Q16_TO_FLOAT(q) ((float)(q) / (1 << Q16_SHIFT))
-#define Q16_MUL(a, b)   ((int32_t)(((int64_t)(a) * (b)) >> Q16_SHIFT))
+#define Q16_MUL(a, b) ((int32_t)(((int64_t)(a) * (b)) >> Q16_SHIFT))
 
 typedef struct {
-    int32_t kp;           // Proportional gain (Q16.16)
-    int32_t ki;           // Integral gain (Q16.16)
-    int32_t integral;     // Integral accumulator (Q16.16)
-    int32_t out_max;      // Output clamp high (Q16.16)
-    int32_t out_min;      // Output clamp low (Q16.16)
-    int32_t integral_max; // Anti-windup high (Q16.16)
-    int32_t integral_min; // Anti-windup low (Q16.16)
-    int32_t deadband;     // Error deadband (Bytes)
+    int32_t kp;            // Proportional gain (Q16.16)
+    int32_t ki;            // Integral gain (Q16.16)
+    int32_t integral;      // Integral accumulator (Q16.16)
+    int32_t out_max;       // Output clamp high (Q16.16)
+    int32_t out_min;       // Output clamp low (Q16.16)
+    int32_t integral_max;  // Anti-windup high (Q16.16)
+    int32_t integral_min;  // Anti-windup low (Q16.16)
+    int32_t deadband;      // Error deadband (Bytes)
 } __attribute__((aligned(64))) tss_pi_controller_t;
 
 typedef enum {
@@ -60,6 +61,9 @@ typedef struct {
     // Traffic Shaping (Leaky Bucket)
     double shaping_credit_bits;
     uint64_t shaping_rate_bps;
+    uint64_t next_pacing_time_ns;  // Earliest time this PID can send next packet
+
+    spsc_queue_t* queue;  // PER-PID independent queue to avoid HOL blocking
 } tstd_pid_ctx_t;
 
 typedef struct {
@@ -68,7 +72,7 @@ typedef struct {
     uint64_t current_bitrate_bps;
     double complexity;
 
-    tss_pi_controller_t pi; // Fixed-point bitrate controller
+    tss_pi_controller_t pi;  // Fixed-point bitrate controller
 
     spsc_queue_t* queues[MAX_PRIO];
     tstd_pid_ctx_t pids[MAX_PIDS_PER_PROGRAM];
@@ -125,6 +129,11 @@ struct tsshaper_ctx {
     uint64_t start_time_ns;
     uint64_t start_pcr_base;  // Base PCR value from the first packet
 
+    // PCR Interpolation Engine
+    uint32_t pcr_interval_ms;
+    uint64_t last_pcr_time_ns;
+    uint16_t master_pcr_pid;
+
     // NULL packet template
     uint8_t null_pkt[TS_PACKET_SIZE];
 
@@ -139,8 +148,8 @@ struct tsshaper_ctx {
 void tss_log_impl(tsshaper_t* ctx, tss_log_level_t level, const char* fmt, ...);
 
 // PI Controller
-void tss_pi_init(tss_pi_controller_t* pi, float kp, float ki,
-                 float out_max, float out_min, float int_max, float int_min);
+void tss_pi_init(tss_pi_controller_t* pi, float kp, float ki, float out_max, float out_min, float int_max,
+                 float int_min);
 int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16);
 
 #define tss_error(ctx, fmt, ...) tss_log_impl(ctx, TSS_LOG_ERROR, fmt, ##__VA_ARGS__)

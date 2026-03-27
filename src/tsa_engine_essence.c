@@ -54,9 +54,12 @@ static void tsa_tstd_update_leak(tsa_handle_t* h, tsa_es_track_t* es, uint64_t n
     /* 1. TB Leakage: R_x flows into MB (or EB for non-video)
      * R_rx is tied to the real-time physical bitrate of the TS or synced from level. */
     uint64_t r_x = es->tstd.leak_rate_rx;
-    if (r_x == 0 && is_live) r_x = h->live->physical_bitrate_bps;
+    if (r_x == 0 && is_live && h->live->physical_bitrate_bps > 0) r_x = h->live->physical_bitrate_bps;
+    if (r_x == 0 && h->config.forced_cbr_bitrate > 0) r_x = h->config.forced_cbr_bitrate;
     if (r_x == 0 && is_live) r_x = (uint64_t)(h->live->pid_bitrate_bps[es->pid] * 6 / 5);
-    if (r_x == 0) r_x = TSA_DEFAULT_RX_BPS;
+    if (r_x == 0) r_x = 100000000ULL;  // 100 Mbps safe default for un-signaled replay
+
+    r_x = r_x * 101 / 100;  // Add 1% tolerance for integer math accumulation
 
     int128_t tb_leaked_q64 = (((int128_t)r_x * dt) << 64) / TSA_NANOS_PER_SEC;
     if (tb_leaked_q64 > es->tstd.tb_fill_q64) tb_leaked_q64 = es->tstd.tb_fill_q64;
@@ -146,7 +149,7 @@ static void essence_on_ts(void* self, const uint8_t* pkt) {
     const ts_decode_result_t* res = &h->current_res;
     uint16_t pid = res->pid;
 
-    if (pid >= TS_PID_MAX) return;
+    if (pid >= TS_PID_MAX || pid == 0x1FFF) return;
 
     tsa_es_track_t* es = &h->es_tracks[pid];
 

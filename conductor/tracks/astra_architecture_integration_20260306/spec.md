@@ -1,7 +1,7 @@
 # Track: Astra Architecture Integration (Dynamic Lua Pipeline)
 
 ## Objective
-Transition TsAnalyzer from a statically compiled, fixed-pipeline tool into a **dynamic, script-programmable stream processing framework** by deeply integrating a Lua runtime, inspired by the architecture of the `Astra` project. 
+Transition TsAnalyzer from a statically compiled, fixed-pipeline tool into a **dynamic, script-programmable stream processing framework** by deeply integrating a Lua runtime, inspired by the architecture of the `Astra` project.
 The goal is to allow users to construct complex Transport Stream routing, analysis, and multiplexing graphs (Pipelines) dynamically via Lua scripts without altering the underlying C core.
 
 ## Key Requirements

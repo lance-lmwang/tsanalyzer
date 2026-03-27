@@ -1,7 +1,7 @@
 # Specification: Professional Parity & Professional Robustness (20260304)
 
 ## 1. Background and Motivation
-The current `tsanalyzer` has established a robust baseline for synchronized metrology (Sync-Lock, PCR VSTC, Sampling Barriers). However, when benchmarked against industrial-grade tools like `Professional`, gaps remain in comprehensive protocol decoding and deep validation. Specifically, the parser currently assumes a simplified SI/PSI layout and lacks a full TR 101 290 state machine. 
+The current `tsanalyzer` has established a robust baseline for synchronized metrology (Sync-Lock, PCR VSTC, Sampling Barriers). However, when benchmarked against industrial-grade tools like `Professional`, gaps remain in comprehensive protocol decoding and deep validation. Specifically, the parser currently assumes a simplified SI/PSI layout and lacks a full TR 101 290 state machine.
 
 To achieve full "Measurement Instrument" status, `tsanalyzer` must adopt `Professional`'s architectural rigor in section filtering, table reassembly, and comprehensive error probing.
 

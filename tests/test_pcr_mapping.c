@@ -30,8 +30,8 @@ void test_pcr_mapping() {
     // PCR = 0
     tsp_enqueue(h, pkt, 1);
 
-    assert(h->schedule_pcr_base == 0);
-    assert(h->schedule_start_ns > 0);
+    assert(h->base_pcr_ticks == 0);
+    assert(h->base_wall_ns > 0);
     uint64_t start_ns = h->ts_buffer[h->tail % RING_BUFFER_SIZE];
     printf("  Start NS: %lu\n", start_ns);
 

@@ -1,4 +1,5 @@
 #include <math.h>
+
 #include "internal.h"
 
 void statmux_rebalance(tsshaper_t* ctx) {

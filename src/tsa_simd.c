@@ -51,19 +51,34 @@ typedef struct {
     bool has_sse42;
 } tsa_cpu_caps_t;
 
+static tsa_cpu_caps_t g_cpu_caps = {0};
+
 static tsa_cpu_caps_t tsa_get_cpu_caps(void) {
     tsa_cpu_caps_t caps = {0};
     unsigned int eax, ebx, ecx, edx;
 
-    /* Check for SSE4.2 */
+    /* Check for SSE4.2 (Leaf 1, ECX bit 20) */
     if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
         caps.has_sse42 = (ecx & (1 << 20)) != 0;
 
-        /* Check for AVX2 (requires OSXSAVE and Leaf 7) */
-        if (ecx & (1 << 28)) {
-            unsigned int eax7, ebx7, ecx7, edx7;
-            if (__get_cpuid_count(7, 0, &eax7, &ebx7, &ecx7, &edx7)) {
-                caps.has_avx2 = (ebx7 & (1 << 5)) != 0;
+        /* Check for AVX2 (Leaf 7, EBX bit 5)
+         * Requires:
+         * 1. CPUID Leaf 1, ECX bit 27 (OSXSAVE)
+         * 2. CPUID Leaf 1, ECX bit 28 (AVX)
+         * 3. XGETBV Result bit 1 & 2 (XMM & YMM state)
+         */
+        bool has_osxsave = (ecx & (1 << 27)) != 0;
+        bool has_avx = (ecx & (1 << 28)) != 0;
+
+        if (has_osxsave && has_avx) {
+            /* Check XCR0 for AVX state enablement */
+            uint32_t xcr0_eax, xcr0_edx;
+            __asm__("xgetbv" : "=a"(xcr0_eax), "=d"(xcr0_edx) : "c"(0));
+            if ((xcr0_eax & 0x6) == 0x6) { /* XMM (bit 1) and YMM (bit 2) */
+                unsigned int eax7, ebx7, ecx7, edx7;
+                if (__get_cpuid_count(7, 0, &eax7, &ebx7, &ecx7, &edx7)) {
+                    caps.has_avx2 = (ebx7 & (1 << 5)) != 0;
+                }
             }
         }
     }
@@ -71,17 +86,16 @@ static tsa_cpu_caps_t tsa_get_cpu_caps(void) {
 }
 
 bool tsa_simd_capable(void) {
-    tsa_cpu_caps_t caps = tsa_get_cpu_caps();
-    return caps.has_avx2 || caps.has_sse42;
+    return g_cpu_caps.has_avx2 || g_cpu_caps.has_sse42;
 }
 
 static void tsa_simd_init_impl(void) {
-    tsa_cpu_caps_t caps = tsa_get_cpu_caps();
-    if (caps.has_avx2) {
+    g_cpu_caps = tsa_get_cpu_caps();
+    if (g_cpu_caps.has_avx2) {
         tsa_simd.find_sync = tsa_simd_find_sync_avx2;
         tsa_simd.extract_pids_8 = tsa_simd_extract_pids_8_avx2;
         tsa_simd.is_accelerated = true;
-    } else if (caps.has_sse42) {
+    } else if (g_cpu_caps.has_sse42) {
         tsa_simd.find_sync = tsa_simd_find_sync_sse42;
         tsa_simd.extract_pids_8 = tsa_simd_extract_pids_8_sse42;
         tsa_simd.is_accelerated = true;

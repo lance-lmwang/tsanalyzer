@@ -1,4 +1,5 @@
 #include "hal.h"
+
 #include "internal.h"
 
 // Forward declarations
@@ -10,17 +11,17 @@ uint64_t hal_get_linux_time_ns(void);
 void hal_precision_wait_mock(uint64_t target_ns);
 void hal_precision_wait_linux(uint64_t target_ns);
 
-static int active_backend_type = 0; // Default to linux
+static int active_backend_type = 0;  // Default to linux
 
 int hal_init_ops(tsshaper_t* ctx, int backend_type) {
     active_backend_type = backend_type;
-    if (backend_type == 0) { // TSS_BACKEND_REAL_NETWORK
+    if (backend_type == 0) {  // TSS_BACKEND_REAL_NETWORK
         hal_init_linux_backend(ctx);
         return 0;
-    } else if (backend_type == 1) { // TSS_BACKEND_VIRTUAL_PCAP
+    } else if (backend_type == 1) {  // TSS_BACKEND_VIRTUAL_PCAP
         hal_init_mock_backend(ctx);
         return 0;
-    } else if (backend_type == 2) { // TSS_BACKEND_CALLBACK
+    } else if (backend_type == 2) {  // TSS_BACKEND_CALLBACK
         // Note: Callback configuration will be handled in tsshaper_create
         // using the extra parameters in the config struct.
         return 0;

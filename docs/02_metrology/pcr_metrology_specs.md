@@ -6,7 +6,7 @@ According to the ISO/IEC 13818-1 specification, the Transport Stream bitrate $R_
 $$R_{ts} = \frac{\Delta Packets \times 188 \times 8 \times 27,000,000}{\Delta PCR (ticks)}$$
 
 ## 2. Null Packet Handling (PID 0x1FFF)
-**Critical Implementation Detail**: To ensure the calculated bitrate represents the true physical line speed (L2), Null packets (PID 0x1FFF) MUST NOT be filtered before the bitrate calculation point. 
+**Critical Implementation Detail**: To ensure the calculated bitrate represents the true physical line speed (L2), Null packets (PID 0x1FFF) MUST NOT be filtered before the bitrate calculation point.
 
 - The `total_ts_packets` counter must be incremented for every valid 188-byte packet entering the engine.
 - PCR metrology engines must use this global counter to capture the full interval span, even if they do not process the content of Null packets.

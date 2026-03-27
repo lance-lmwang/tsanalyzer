@@ -264,6 +264,7 @@ typedef struct {
         bool entropy;
         double pcr_ema_alpha;
         bool enable_reactive_pid_filter;
+        int pcr_pid_override;
     } analysis;
 
     struct {

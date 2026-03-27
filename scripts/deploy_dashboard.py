@@ -27,7 +27,7 @@ def create_dashboard_base(uid, title, refresh='5s'):
 # -----------------------------------------------------------------------------
 def deploy_global_wall():
     dash = create_dashboard_base('global-wall', 'TsAnalyzer Pro - GLOBAL STREAM WALL (PLANE 1)')
-    
+
     dash['panels'].append({
         'title': 'GLOBAL MONITORING MATRIX (CLICK TO FOCUS)',
         'type': 'stat',
@@ -186,7 +186,7 @@ def deploy_stream_focus():
         'type': 'row', 'title': 'TIER 6: ESSENCE QUALITY & TEMPORAL STABILITY', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 34}, 'collapsed': False
     })
     # (FPS, GOP, AV SYNC)
-    
+
     # TIER 7: ALARM RECAP
     dash['panels'].append({
         'type': 'row', 'title': 'TIER 7: ALARM RECAP & FORENSIC AUDIT TRAIL', 'gridPos': {'h': 1, 'w': 24, 'x': 0, 'y': 44}, 'collapsed': False
@@ -219,10 +219,10 @@ def main():
         ('tsa_stream_focus.json', deploy_stream_focus()),
         ('tsa_forensic_replay.json', deploy_forensic_replay())
     ]
-    
+
     base_path = 'monitoring/grafana/provisioning/dashboards'
     os.makedirs(base_path, exist_ok=True)
-    
+
     for filename, content in dashboards:
         path = os.path.join(base_path, filename)
         with open(path, 'w') as f:

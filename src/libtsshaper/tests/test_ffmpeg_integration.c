@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
+
 #include "tsshaper/tsshaper.h"
 
 #define TS_PACKET_SIZE 188
@@ -18,13 +19,13 @@ typedef struct {
 // Mock function to mimic FFmpeg's get_pcr (Simplified)
 static int64_t mock_get_pcr(void *priv) {
     static int64_t pcr = 0;
-    pcr += 1260; // Simulate 35ms steps roughly
+    pcr += 1260;  // Simulate 35ms steps roughly
     return pcr;
 }
 
 // THE REAL CALLBACK implemented for FFmpeg integration
 static int mock_ffmpeg_write_cb(const uint8_t *packet, void *opaque) {
-    mock_ffmpeg_ctx *ts = (mock_ffmpeg_ctx*)opaque;
+    mock_ffmpeg_ctx *ts = (mock_ffmpeg_ctx *)opaque;
 
     if (ts->m2ts_mode) {
         int64_t pcr = mock_get_pcr(ts);
@@ -37,9 +38,8 @@ static int mock_ffmpeg_write_cb(const uint8_t *packet, void *opaque) {
 
     // Store last PCR seen for jitter calculation in test
     if ((packet[3] & 0x20) && packet[4] > 0 && (packet[5] & 0x10)) {
-        uint64_t pcr_high = (uint64_t)packet[6] << 25 | (uint64_t)packet[7] << 17 |
-                            (uint64_t)packet[8] << 9  | (uint64_t)packet[9] << 1  |
-                            (packet[10] >> 7);
+        uint64_t pcr_high = (uint64_t)packet[6] << 25 | (uint64_t)packet[7] << 17 | (uint64_t)packet[8] << 9 |
+                            (uint64_t)packet[9] << 1 | (packet[10] >> 7);
         ts->last_pcr_val = pcr_high;
     }
 
@@ -49,16 +49,16 @@ static int mock_ffmpeg_write_cb(const uint8_t *packet, void *opaque) {
 void test_integration_logic() {
     printf("Starting FFmpeg Integration Self-Test (Mocked Callback)...\n");
 
-    mock_ffmpeg_ctx ctx = { .m2ts_mode = 0, .total_size = 0, .last_pcr_val = 0 };
+    mock_ffmpeg_ctx ctx = {.m2ts_mode = 0, .total_size = 0, .last_pcr_val = 0};
 
     tsshaper_config_t config = {0};
-    config.bitrate_bps = 5000000; // 5Mbps
+    config.bitrate_bps = 5000000;  // 5Mbps
     config.backend = TSS_BACKEND_CALLBACK;
     config.write_cb = mock_ffmpeg_write_cb;
     config.write_opaque = &ctx;
     config.pcr_interval_ms = 40;
 
-    tsshaper_t* shaper = tsshaper_create(&config);
+    tsshaper_t *shaper = tsshaper_create(&config);
     assert(shaper != NULL);
 
     tsshaper_start_pacer(shaper, -1);
@@ -66,7 +66,8 @@ void test_integration_logic() {
     uint8_t pkt[TS_PACKET_SIZE];
     memset(pkt, 0xFF, TS_PACKET_SIZE);
     pkt[0] = 0x47;
-    pkt[1] = 0x01; pkt[2] = 0x00; // PID 0x100
+    pkt[1] = 0x01;
+    pkt[2] = 0x00;  // PID 0x100
     pkt[3] = 0x10;
 
     // SCENARIO: 2-second burst of video (5Mbps = 625KB/s)
@@ -75,13 +76,13 @@ void test_integration_logic() {
     int push_count = 6648;
     for (int i = 0; i < push_count; i++) {
         while (tsshaper_push(shaper, 0x100, pkt, 0) != 0) {
-            usleep(100); // Backpressure wait
+            usleep(100);  // Backpressure wait
         }
         if (i % 1000 == 0) printf("Pushed %d packets...\n", i);
     }
 
     printf("Waiting for pacer to drain...\n");
-    usleep(2500000); // Wait 2.5s for 2s data
+    usleep(2500000);  // Wait 2.5s for 2s data
 
     tsshaper_stop_pacer(shaper);
 

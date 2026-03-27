@@ -1,6 +1,8 @@
 #include "spsc_queue.h"
+
 #include <stdlib.h>
 #include <string.h>
+
 #include "internal.h"
 
 spsc_queue_t* spsc_queue_create(size_t size) {
@@ -89,4 +91,10 @@ size_t spsc_queue_count(spsc_queue_t* q) {
     size_t head = atomic_load_explicit(&q->head, memory_order_acquire);
     size_t tail = atomic_load_explicit(&q->tail, memory_order_acquire);
     return (head - tail);
+}
+
+bool spsc_queue_is_empty(spsc_queue_t* q) {
+    size_t head = atomic_load_explicit(&q->head, memory_order_acquire);
+    size_t tail = atomic_load_explicit(&q->tail, memory_order_acquire);
+    return (head == tail);
 }

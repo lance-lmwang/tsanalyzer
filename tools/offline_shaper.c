@@ -47,12 +47,12 @@ int main(int argc, char* argv[]) {
     uint64_t total_in = 0;
     uint64_t total_out = 0;
     uint64_t null_pkts = 0;
+    double elapsed = 0, out_mbps = 0;
+    double start_time = get_timestamp();
 
     printf("[OFFLINE] Shaping %s -> %s\n", input_path, output_path);
     printf("[OFFLINE] Target Bitrate: %lu bps\n", bitrate);
     printf("[OFFLINE] Loops: %d\n", loop_count);
-
-    double start_time = get_timestamp();
 
     for (int l = 0; l < loop_count; l++) {
         fseek(in, 0, SEEK_SET);
@@ -82,24 +82,17 @@ int main(int argc, char* argv[]) {
     }
 
     // Drain the shaper
-    // In strict CBR, we should drain until the logical time matches the input duration.
-    // For simplicity here, we drain until empty + a small buffer to flush queues.
     printf("[OFFLINE] Input consumed. Draining shaper queues...\n");
     int empty_pulls = 0;
-    while (empty_pulls < 1000) { // arbitrary threshold to stop when only NULLs are generated
+    while (empty_pulls < 1000) {
         uint8_t out_pkt[188];
-        tsshaper_pull(shaper, out_pkt); // pull will generate NULL if empty
-
-        // We want to stop when the valid data is gone.
-        // But tsshaper_pull ALWAYS returns a packet (NULL if empty).
-        // So we need a way to know if it was a "real" packet or a "fill" packet.
-        // Currently tsshaper_pull doesn't return that info directly, but we can check PID.
+        tsshaper_pull(shaper, out_pkt);
 
         uint16_t out_pid = ((out_pkt[1] & 0x1F) << 8) | out_pkt[2];
         if (out_pid == 0x1FFF) {
             empty_pulls++;
         } else {
-            empty_pulls = 0; // Reset counter if we got real data
+            empty_pulls = 0;
         }
 
         fwrite(out_pkt, 1, 188, out);
@@ -108,13 +101,16 @@ int main(int argc, char* argv[]) {
     }
 
 cleanup:
-    double elapsed = get_timestamp() - start_time;
-    double out_mbps = (double)total_out * 188 * 8 / elapsed / 1000000.0; // Write speed, not stream bitrate
+    elapsed = get_timestamp() - start_time;
+    if (elapsed > 0) {
+        out_mbps = (double)total_out * 188 * 8 / elapsed / 1000000.0;
+    }
 
     printf("[OFFLINE] Done.\n");
     printf("  Total Input : %lu pkts\n", total_in);
     printf("  Total Output: %lu pkts\n", total_out);
     printf("  Null Packets: %lu (%.1f%%)\n", null_pkts, (double)null_pkts * 100.0 / total_out);
+    printf("  Processing Speed: %.2f Mbps\n", out_mbps);
 
     // Validate strict CBR constraint: Output must be >= Input
     if (total_out < total_in) {

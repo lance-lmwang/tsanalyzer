@@ -201,6 +201,8 @@ int main(int argc, char** argv) {
     char stream_label[32] = "";
     bool pacing = false;
 
+    int pcr_pid_override = 0;
+    uint64_t forced_bitrate = 0;
     static struct option long_options[] = {{"mode", required_argument, 0, 'm'},
                                            {"udp", required_argument, 0, 'u'},
                                            {"srt", required_argument, 0, 's'},
@@ -209,13 +211,21 @@ int main(int argc, char** argv) {
                                            {"label", required_argument, 0, 'l'},
                                            {"http", required_argument, 0, 'H'},
                                            {"alpha", required_argument, 0, 'a'},
+                                           {"pcr-pid", required_argument, 0, 'P'},
+                                           {"bitrate", required_argument, 0, 'b'},
                                            {"log-level", required_argument, 0, 'v'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "m:u:s:i:pl:H:a:v:h", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "m:u:s:i:pl:H:a:v:hP:b:", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'P':
+                pcr_pid_override = (int)strtol(optarg, NULL, 0);
+                break;
+            case 'b':
+                forced_bitrate = strtoull(optarg, NULL, 10);
+                break;
             case 'm':
                 if (strcasecmp(optarg, "live") == 0) {
                     cfg.op_mode = TSA_MODE_LIVE;
@@ -287,8 +297,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (stream_label[0]) {
-        strncpy(cfg.input_label, stream_label, sizeof(cfg.input_label) - 1);
+    if (forced_bitrate > 0) {
+        cfg.forced_cbr_bitrate = forced_bitrate;
+    }
+
+    if (pcr_pid_override > 0) {
+        cfg.analysis.pcr_pid_override = pcr_pid_override;
     }
 
     signal(SIGINT, sig_handler);
@@ -315,6 +329,15 @@ int main(int argc, char** argv) {
             http_port = 0;  // Mark as disabled
         } else {
             pthread_create(&http_tid, NULL, http_thread_func, &mgr);
+        }
+    }
+
+    if (interface[0]) {
+        struct stat st;
+        if (stat(interface, &st) == 0 && S_ISREG(st.st_mode)) {
+            strncpy(filename, interface, sizeof(filename) - 1);
+            cfg.op_mode = TSA_MODE_REPLAY;
+            tsa_info("CLI", "Auto-detected regular file. Switching to REPLAY mode: %s", filename);
         }
     }
 
