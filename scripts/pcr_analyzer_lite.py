@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 PCR Analyzer Lite (Zero-Dependency Version)
-Parses PCAPNG files directly via binary inspection to validate PCR jitter.
-Works with raw Python 3.x (no scapy required).
+Supports both raw TS files and PCAPNG captures.
+Validates PCR jitter and repetition intervals.
 """
 
 import sys
@@ -18,7 +18,10 @@ PCAPNG_IDB = 0x00000001
 PCAPNG_EPB = 0x00000006
 TS_PACKET_SIZE = 188
 SYNC_BYTE = 0x47
-MAX_JITTER_NS = 30
+
+# Thresholds
+MAX_JITTER_PCAP_NS = 30    # Strict for network captures
+MAX_JITTER_FILE_NS = 500   # Loose for raw TS files (local jitter)
 MAX_INTERVAL_NS = 40_000_000
 
 def extract_pcr_ns(ts_pkt):
@@ -33,8 +36,57 @@ def extract_pcr_ns(ts_pkt):
     pcr_ext = pcr_l & 0x1FF
     return int(((pcr_base * 300) + pcr_ext) * 1000 // 27)
 
+def analyze_raw_ts(file_path, target_pid):
+    print(f"[*] Lite TS Analysis: {file_path} (PID 0x{target_pid:04X})")
+    pcr_data = []
+    pkt_count = 0
+
+    with open(file_path, 'rb') as f:
+        while True:
+            pkt = f.read(TS_PACKET_SIZE)
+            if not pkt: break
+            if pkt[0] != SYNC_BYTE:
+                f.seek(-TS_PACKET_SIZE + 1, 1)
+                continue
+
+            pid = ((pkt[1] & 0x1F) << 8) | pkt[2]
+            if pid == target_pid:
+                pcr = extract_pcr_ns(pkt)
+                if pcr is not None:
+                    pcr_data.append((pkt_count, pcr))
+            pkt_count += 1
+
+    if len(pcr_data) < 2:
+        print("[!] No PCR data found.")
+        sys.exit(1)
+
+    print(f"[*] Found {len(pcr_data)} PCRs in {pkt_count} packets.")
+
+    # Calculate bitrate based on PCR
+    s_idx, s_pcr = pcr_data[0]
+    e_idx, e_pcr = pcr_data[-1]
+    duration_sec = (e_pcr - s_pcr) / 1e9
+    if duration_sec > 0:
+        bitrate = (e_idx - s_idx) * TS_PACKET_SIZE * 8 / duration_sec
+        print(f"[*] Average Bitrate: {bitrate/1e6:.3f} Mbps")
+
+    # Jitter Calc (Relative to ideal packet delivery)
+    ideal_gap = Decimal(e_pcr - s_pcr) / Decimal(e_idx - s_idx)
+
+    max_j = 0
+    for idx, pcr in pcr_data:
+        expected = s_pcr + int(Decimal(idx - s_idx) * ideal_gap)
+        jitter = abs(pcr - expected)
+        max_j = max(max_j, jitter)
+
+    print(f"[*] Results: Max Deviation={max_j}ns")
+    if max_j > MAX_JITTER_FILE_NS:
+        print("[!] FAIL: High jitter detected for file source.")
+        sys.exit(1)
+    print("[+] PASS: PCR consistency verified.")
+
 def analyze_pcapng(file_path, target_pid):
-    print(f"[*] Lite Analysis: {file_path} (PID 0x{target_pid:04X})")
+    print(f"[*] Lite PCAPNG Analysis: {file_path} (PID 0x{target_pid:04X})")
 
     pcr_data = []
     ts_resol = 10**-6 # Default microsecond
@@ -58,11 +110,7 @@ def analyze_pcapng(file_path, target_pid):
             f.read(4) # Skip trailing block_len
 
             if block_type == PCAPNG_IDB:
-                # Basic check for if_tsresol option (9)
-                # Option format: Code(2), Len(2), Value(Len)
                 if len(payload) > 16:
-                    # Search for option code 0x0009 in the options part of IDB
-                    # Options start after the fixed IDB header (16 bytes)
                     options = payload[16:]
                     idx = 0
                     while idx + 4 <= len(options):
@@ -79,8 +127,6 @@ def analyze_pcapng(file_path, target_pid):
                 ticks = (ts_high << 32) | ts_low
                 pcap_ns = int(Decimal(ticks) * Decimal(ts_resol) * Decimal(1e9))
 
-                # Internal EPB structure:
-                # interface_id(4), ts_high(4), ts_low(4), cap_len(4), orig_len(4) = 20 bytes
                 packet_data = payload[20:20+cap_len]
                 # Assume standard Ethernet(14)+IP(20)+UDP(8) = 42 bytes offset for TS
                 ts_payload = packet_data[42:]
@@ -113,7 +159,7 @@ def analyze_pcapng(file_path, target_pid):
         max_j = max(max_j, abs(cur_pcap - expected))
 
     print(f"[*] Results: Jitter={max_j}ns, Interval={max_i/1e6:.2f}ms")
-    if max_j > MAX_JITTER_NS or max_i > MAX_INTERVAL_NS:
+    if max_j > MAX_JITTER_PCAP_NS or max_i > MAX_INTERVAL_NS:
         print("[!] FAIL: Compliance violation detected.")
         sys.exit(1)
     print("[+] PASS: 100-Point Compliance Achieved.")
@@ -123,4 +169,15 @@ if __name__ == '__main__':
     p.add_argument('file')
     p.add_argument('--pid', type=lambda x: int(x,0), default=0x100)
     args = p.parse_args()
-    analyze_pcapng(args.file, args.pid)
+
+    with open(args.file, 'rb') as f:
+        magic_bytes = f.read(4)
+        if not magic_bytes:
+            print("[!] Empty file.")
+            sys.exit(1)
+        magic = struct.unpack("<I", magic_bytes)[0]
+
+        if magic == PCAPNG_SHB:
+            analyze_pcapng(args.file, args.pid)
+        else:
+            analyze_raw_ts(args.file, args.pid)
