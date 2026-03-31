@@ -58,10 +58,19 @@ typedef struct {
     uint8_t last_cc;
     bool first_packet;
 
-    // Traffic Shaping (Leaky Bucket)
+    // Traffic Shaping (Leaky Bucket / T-STD TB Model)
     double shaping_credit_bits;
     uint64_t shaping_rate_bps;
     uint64_t next_pacing_time_ns;  // Earliest time this PID can send next packet
+
+    // Strict T-STD TBn (Transport Buffer) Simulation
+    double tb_fullness_bits;     // Current bits in TBn
+    uint64_t last_tb_update_ns;  // Last time TBn was leaked
+
+    // Bitrate Estimation (Sliding Window)
+    uint64_t est_window_start_ns;
+    uint32_t est_bits_in_window;
+    uint64_t measured_bitrate_bps;
 
     spsc_queue_t* queue;  // PER-PID independent queue to avoid HOL blocking
 } tstd_pid_ctx_t;
@@ -103,6 +112,8 @@ struct tsshaper_ctx {
     int cpu_affinity;
     int sched_priority;
     bool use_raw_clock;
+    bool is_offline;
+    bool strict_cbr;
 
     // Generic Output Backend
     void* backend_priv;
@@ -126,6 +137,7 @@ struct tsshaper_ctx {
     // Internal timing
     uint64_t next_packet_time_ns;
     uint64_t ideal_packet_time_ns;  // Theoretical CBR grid
+    uint64_t last_arrival_ns;       // Latest arrival from producer
     uint64_t start_time_ns;
     uint64_t start_pcr_base;  // Base PCR value from the first packet
 
@@ -160,6 +172,7 @@ int32_t tss_pi_update(tss_pi_controller_t* pi, int32_t error_q16);
 // Internal functions
 void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt);
 void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t now_ns);
+bool tstd_can_send_packet(tstd_pid_ctx_t* ctx, uint64_t now_ns);
 bool tstd_check_backpressure(program_ctx_t* prog, uint16_t pid);
 tstd_pid_ctx_t* tstd_find_or_create_pid_ctx(program_ctx_t* prog, uint16_t pid);
 void statmux_rebalance(tsshaper_t* ctx);

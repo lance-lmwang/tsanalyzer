@@ -83,18 +83,11 @@ int main(int argc, char* argv[]) {
 
     // Drain the shaper
     printf("[OFFLINE] Input consumed. Draining shaper queues...\n");
-    int empty_pulls = 0;
-    while (empty_pulls < 1000) {
+    while (!tsshaper_is_empty(shaper)) {
         uint8_t out_pkt[188];
         tsshaper_pull(shaper, out_pkt);
 
         uint16_t out_pid = ((out_pkt[1] & 0x1F) << 8) | out_pkt[2];
-        if (out_pid == 0x1FFF) {
-            empty_pulls++;
-        } else {
-            empty_pulls = 0;
-        }
-
         fwrite(out_pkt, 1, 188, out);
         total_out++;
         if (out_pid == 0x1FFF) null_pkts++;

@@ -89,6 +89,7 @@ int main(int argc, char** argv) {
 
     tsshaper_config_t config = {0};
     config.bitrate_bps = total_bitrate;
+    config.strict_cbr = true;
     tsshaper_t* shaper = tsshaper_create(&config);
 
     tsshaper_set_pid_bitrate(shaper, v_pid, v_bitrate);

@@ -65,7 +65,31 @@ void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt) {
     tstd_pid_ctx_t* ctx = tstd_find_or_create_pid_ctx(prog, pid);
     if (!ctx) return;
 
-    // Detect PCR and initialize Phase Lock
+    // 1. Bitrate Estimation (500ms sliding window)
+    if (ctx->est_window_start_ns == 0) {
+        ctx->est_window_start_ns = pkt->arrival_ns;
+        ctx->est_bits_in_window = 0;
+    }
+    ctx->est_bits_in_window += (TS_PACKET_SIZE * 8);
+    uint64_t duration_ns = pkt->arrival_ns - ctx->est_window_start_ns;
+    if (duration_ns >= (500 * 1000000ULL)) {
+        ctx->measured_bitrate_bps = (uint64_t)((double)ctx->est_bits_in_window * 1000000000.0 / (double)duration_ns);
+
+        // Auto-update shaping rate if not manually locked
+        if (ctx->shaping_rate_bps == 0 || ctx->shaping_rate_bps == (prog->target_bitrate_bps / 2)) {
+            // Apply a 5% margin to avoid T-STD underflow
+            ctx->shaping_rate_bps = (uint64_t)(ctx->measured_bitrate_bps * 1.05);
+            // Cap at program rate
+            if (ctx->shaping_rate_bps > prog->target_bitrate_bps) {
+                ctx->shaping_rate_bps = prog->target_bitrate_bps;
+            }
+        }
+
+        ctx->est_window_start_ns = pkt->arrival_ns;
+        ctx->est_bits_in_window = 0;
+    }
+
+    // 2. Detect PCR and initialize Phase Lock
     bool has_af = (pkt->data[3] & 0x20) != 0;
     if (has_af && pkt->data[4] > 0) {
         bool has_pcr = (pkt->data[5] & 0x10) != 0;
@@ -83,6 +107,11 @@ void tstd_update_on_push(program_ctx_t* prog, const ts_packet_t* pkt) {
     ctx->last_cc = pkt->data[3] & 0x0F;
     ctx->first_packet = false;
     atomic_fetch_add(&ctx->buffer_fullness, TS_PACKET_SIZE);
+
+    tsshaper_t* shaper = (tsshaper_t*)prog->parent_ctx;
+    if (shaper) {
+        shaper->last_arrival_ns = pkt->arrival_ns;
+    }
 }
 
 void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t now_ns) {
@@ -90,6 +119,18 @@ void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t no
     for (int i = 0; i < prog->num_pids; i++) {
         if (prog->pids[i].pid == pid) {
             tstd_pid_ctx_t* ctx = &prog->pids[i];
+
+            // 1. LEAK RECEIVER TBn BUFFER
+            if (ctx->last_tb_update_ns > 0 && now_ns > ctx->last_tb_update_ns) {
+                double delta_s = (double)(now_ns - ctx->last_tb_update_ns) / 1000000000.0;
+                double leak_bits = delta_s * (double)ctx->shaping_rate_bps;
+                ctx->tb_fullness_bits -= leak_bits;
+                if (ctx->tb_fullness_bits < 0) ctx->tb_fullness_bits = 0;
+            }
+            // 2. FILL RECEIVER TBn BUFFER (Packet arrival at receiver)
+            ctx->tb_fullness_bits += (188.0 * 8.0);
+            ctx->last_tb_update_ns = now_ns;
+
             if (ctx->is_pcr) {
                 tsshaper_t* shaper = (tsshaper_t*)prog->parent_ctx;
                 if (shaper) {
@@ -116,13 +157,60 @@ void tstd_update_on_pop(program_ctx_t* prog, const ts_packet_t* pkt, uint64_t no
     }
 }
 
+bool tstd_can_send_packet(tstd_pid_ctx_t* ctx, uint64_t now_ns) {
+    if (!ctx->queue || spsc_queue_count(ctx->queue) == 0) return false;
+    if (ctx->shaping_rate_bps == 0) return true;  // Best effort
+
+    // 1. LEAK SIMULATION
+    double current_tb_bits = ctx->tb_fullness_bits;
+    if (ctx->last_tb_update_ns > 0 && now_ns > ctx->last_tb_update_ns) {
+        double delta_s = (double)(now_ns - ctx->last_tb_update_ns) / 1000000000.0;
+        double leak_bits = delta_s * (double)ctx->shaping_rate_bps;
+        current_tb_bits -= leak_bits;
+        if (current_tb_bits < 0) current_tb_bits = 0;
+    }
+
+    // 2. TBn OVERFLOW PROTECTION (ISO/IEC 13818-1)
+    // TBn size is 512 bytes. We cannot send if it would overflow.
+    if (current_tb_bits + (188.0 * 8.0) > (512.0 * 8.0)) {
+        return false;
+    }
+
+    // 2.1 PANIC MODE (95% HWM)
+    // If TB is nearly full, we apply an aggressive pacing penalty to favor other PIDs
+    // and force the shaper to "cool down" this specific PID.
+    if (current_tb_bits > (512.0 * 8.0 * 0.95)) {
+        // Add a 1ms artificial delay to the next pacing time
+        if (ctx->next_pacing_time_ns < now_ns + 1000000ULL) {
+            ctx->next_pacing_time_ns = now_ns + 1000000ULL;
+        }
+        return false;
+    }
+
+    // 3. LEAKY BUCKET CREDIT CHECK (Pacing)
+    if (ctx->next_pacing_time_ns > 0 && now_ns < ctx->next_pacing_time_ns) {
+        // printf("[DEBUG] PID 0x%x Pacing: now %lu < next %lu\n", ctx->pid, now_ns, ctx->next_pacing_time_ns);
+        return false;
+    }
+
+    return true;
+}
+
 bool tstd_check_backpressure(program_ctx_t* prog, uint16_t pid) {
     for (int i = 0; i < prog->num_pids; i++) {
         if (prog->pids[i].pid == pid) {
+            tstd_pid_ctx_t* ctx = &prog->pids[i];
+            if (!ctx->queue) return false;
+
             // SHAPER INGRESS BACKPRESSURE
-            // We are the Multiplexer. Our internal queues (spsc_queue) are 1024 packets deep.
-            // We should only push back if the queue is genuinely in danger of overflowing.
-            // Let the SPSC queue capacity handle the backpressure instead of an artificial 512B limit here.
+            // We use the SPSC queue capacity as the primary backpressure signal.
+            // If the queue is > 90% full, we tell the upstream (FFmpeg) to slow down.
+            uint32_t count = spsc_queue_count(ctx->queue);
+            uint32_t capacity = 1024;  // Defined in tstd_find_or_create_pid_ctx
+
+            if (count > (capacity * 9) / 10) {
+                return true;
+            }
             return false;
         }
     }

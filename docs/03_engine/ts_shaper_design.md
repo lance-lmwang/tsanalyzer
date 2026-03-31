@@ -51,9 +51,18 @@ $$R_{i}(t) = K_{p} \cdot C_{i} + K_{i} \cdot (F_{target} - F_{current})$$
 - **Proportional Gain ($K_p$)**: Reacts to immediate complexity spikes (e.g., scene cuts).
 - **Integral Gain ($K_i$)**: Corrects long-term drift. It incorporates an **Anti-Windup** mechanism (clamping the integral accumulator) to prevent instability during prolonged I-frame bursts.
 - **Deadband**: Micro-fluctuations in buffer size are ignored to keep the CBR rock solid.
-- **Panic Mode (Asymmetric Penalty)**: If the buffer exceeds the 95% High-Water Mark (HWM), the PI controller instantly bypasses standard math, drops the target bitrate to absolute minimum (`min_bitrate_bps`), and sets an `is_urgent` cross-layer flag. Layer 2 reads this flag and breaks normal polling, aggressively discarding or delaying video packets to protect the T-STD Multiplexing Buffer from overflow.
+- **Panic Mode (Asymmetric Penalty)**: If the Transport Buffer (TB) exceeds the 95% High-Water Mark (HWM), the model instantly bypasses standard math and imposes an aggressive pacing penalty (e.g., adding a 1ms artificial delay). This forces the shaper to "cool down" the specific PID, allowing other PIDs or NULL packets to flow, protecting the receiver from overflow.
 
-### 3.3 PCR Regulator & PLL
+### 3.3 Strict CBR Arbitration & Custom ES Fluctuation Control
+While ETSI TR 101 290 and ISO/IEC 13818-1 do not mandate strict bitrate fluctuation limits for Elementary Streams (they only require T-STD buffer compliance and PCR accuracy), specific commercial deployments often impose extreme Custom SLAs (e.g., keeping ES fluctuation under **44 kbps**).
+These ultra-strict custom limits are often implemented as Custom Alarms on Tektronix MTS analyzers to protect legacy downstream modulators with extremely shallow ingress FIFOs.
+Achieving < 44kbps means the shaper must restrict packet emission to **strictly ±1 packet deviation** per micro-window (e.g., 34ms).
+To support these commercial SLAs, Layer 2 (Interleaver) implements **Strict CBR Arbitration**:
+- **Zero Lookahead**: The interleaver forbids early emission. Even if bandwidth is available, a packet is only eligible for emission if it is strictly due (`lateness >= 0`).
+- **Anti-Burst Clamp**: To prevent "catch up" bursts after latency debt, the pacer enforces a minimum physical spacing between back-to-back packets of the same PID (90% of the nominal interval).
+If no packet is strictly due, the interleaver decisively emits a **NULL packet (0x1FFF)**. This completely suppresses micro-bursts (e.g., clustered I-Frames), crushing ES fluctuation from typical VBR levels (>200% CV) down to a strict CBR-compliant < 5%.
+
+### 3.4 PCR Regulator & PLL
 PCR is a **Timing Function** anchored to the physical emission clock:
 - **Interval Regulation**: Forces PCR insertion if no anchor is seen for $> 35ms$. To ensure strict Continuity Counter (CC) compliance and prevent TR 101 290 Priority 1 CC Errors, the shaper inserts a **PCR-only packet** (a TS packet containing only an Adaptation Field without payload). This preserves the original CC sequence.
 - **Precision Rewrite**: PCR values are calculated using the *Target Emission Time* ($T_{emit}$) at the nanosecond level.
@@ -200,6 +209,7 @@ void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats);
 | :--- | :--- | :--- |
 | **PCR Accuracy** | < 30 ns | Exceeds TR 101 290 (500ns) requirements; critical for professional satellite uplink. |
 | **PCR Interval** | 20ms - 35ms | Ensures fast clock recovery and prevents player buffer oscillations. |
+| **ES Fluctuation** | < 44 kbps | Optional Custom SLA (Tektronix custom alarm profile) to protect specific legacy hardware. |
 | **CBR Variance** | < 0.001% | Measured over 100ms window; essential for strict bandwidth policing. |
 | **T-STD Safety** | Zero Errors | Verified by 24h stress test with Tektronix MTS; ensures no decoder buffer overflows. |
 | **Latency** | < 10 ms | Minimizes the impact on end-to-end "glass-to-glass" delay for live sports. |

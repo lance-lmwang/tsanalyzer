@@ -39,6 +39,8 @@ tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
     ctx->packet_interval_ns = (188ULL * 8 * 1000000000ULL) / cfg->bitrate_bps;
     ctx->io_batch_size = cfg->io_batch_size > 0 ? cfg->io_batch_size : 7;
     ctx->use_raw_clock = cfg->use_raw_clock;
+    ctx->is_offline = cfg->is_offline;
+    ctx->strict_cbr = cfg->strict_cbr;
 
     // Initialize NULL packet (0x1FFF PID) - Broadcast Grade Template
     memset(ctx->null_pkt, 0, TS_PACKET_SIZE);
@@ -220,6 +222,19 @@ tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
     ctx->next_packet_time_ns += ctx->packet_interval_ns;
 
     return ctx->next_packet_time_ns;
+}
+
+bool tsshaper_is_empty(tsshaper_t* ctx) {
+    if (!ctx) return true;
+    for (int i = 0; i < ctx->num_programs; i++) {
+        program_ctx_t* prog = &ctx->programs[i];
+        for (int p = 0; p < prog->num_pids; p++) {
+            if (prog->pids[p].queue && spsc_queue_count(prog->pids[p].queue) > 0) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats) {

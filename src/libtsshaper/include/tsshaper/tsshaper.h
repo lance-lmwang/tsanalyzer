@@ -58,6 +58,8 @@ typedef struct {
     uint32_t io_batch_size;   /**< Number of packets per sendmmsg (default: 7) */
     uint32_t max_latency_ms;  /**< Internal buffer depth (backpressure threshold) */
     bool use_raw_clock;       /**< Use CLOCK_MONOTONIC_RAW for zero-jitter timing */
+    bool is_offline;          /**< Fast-forward mode for file processing */
+    bool strict_cbr;          /**< Enable extreme ES smoothing (<44kbps) but increases NULLs/Latency */
 
     tss_backend_type_t backend; /**< Selected output method */
     void* backend_params;       /**< Opaque params (e.g. filename string for PCAP) */
@@ -135,6 +137,12 @@ typedef struct {
  * @brief Retrieve current metrics from the shaper.
  */
 void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats);
+
+/**
+ * @brief Check if all internal PID queues are empty.
+ * @return true if shaper has no more data to send (excluding synthesized NULLs/PCRs).
+ */
+bool tsshaper_is_empty(tsshaper_t* ctx);
 
 /**
  * @brief Log levels for the shaper library.

@@ -94,55 +94,75 @@ make clean
 cd "$PROJECT_ROOT"
 
 # 4. Build Zlib
+ZLIB_VERSION="1.3.1"
 ZLIB_SRC_DIR="$DEPS_DIR/zlib_src"
 ZLIB_INSTALL_DIR="$DEPS_DIR/zlib"
-if [ -d "$ZLIB_SRC_DIR" ]; then
-    echo "--- Building Zlib (Static) ---"
-    cd "$ZLIB_SRC_DIR"
-    ./configure --prefix="$ZLIB_INSTALL_DIR" --static
-    make -j$(nproc)
-    make install
-    make distclean || true
-    cd "$PROJECT_ROOT"
+if [ ! -d "$ZLIB_SRC_DIR" ]; then
+    echo "--- Downloading Zlib $ZLIB_VERSION ---"
+    cd "$DEPS_DIR"
+    curl -L "https://github.com/madler/zlib/releases/download/v$ZLIB_VERSION/zlib-$ZLIB_VERSION.tar.gz" -o zlib.tar.gz
+    tar -zxf zlib.tar.gz
+    DIR_NAME=$(tar -tf zlib.tar.gz | head -1 | cut -f1 -d"/")
+    mv "$DIR_NAME" zlib_src
+    rm zlib.tar.gz
 fi
+echo "--- Building Zlib (Static) ---"
+cd "$ZLIB_SRC_DIR"
+./configure --prefix="$ZLIB_INSTALL_DIR" --static
+make -j$(nproc)
+make install
+make distclean || true
+cd "$PROJECT_ROOT"
 
 # 5. Build Libcurl (Static)
+CURL_VERSION="8.6.0"
 CURL_SRC_DIR="$DEPS_DIR/curl_src"
 CURL_INSTALL_DIR="$DEPS_DIR/curl"
 ZLIB_DIR="$DEPS_DIR/zlib"
-if [ -d "$CURL_SRC_DIR" ]; then
-    echo "--- Building Curl (Static) ---"
-    cd "$CURL_SRC_DIR"
-    [ -f Makefile ] && make distclean || true
-    ./configure --prefix="$CURL_INSTALL_DIR" \
-                --enable-static --disable-shared --disable-ftp --disable-ldap --disable-ldaps \
-                --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp \
-                --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher \
-                --disable-mqtt --with-zlib="$ZLIB_DIR" --with-openssl \
-                --without-libpsl --without-libidn2 --without-brotli --without-zstd --without-librtmp
-    make -j$(nproc)
-    make install
-    make distclean || true
-    cd "$PROJECT_ROOT"
+if [ ! -d "$CURL_SRC_DIR" ]; then
+    echo "--- Downloading Curl $CURL_VERSION ---"
+    cd "$DEPS_DIR"
+    curl -L "https://curl.se/download/curl-$CURL_VERSION.tar.gz" -o curl.tar.gz
+    tar -zxf curl.tar.gz
+    DIR_NAME=$(tar -tf curl.tar.gz | head -1 | cut -f1 -d"/")
+    mv "$DIR_NAME" curl_src
+    rm curl.tar.gz
 fi
+echo "--- Building Curl (Static) ---"
+cd "$CURL_SRC_DIR"
+[ -f Makefile ] && make distclean || true
+./configure --prefix="$CURL_INSTALL_DIR" \
+            --enable-static --disable-shared --disable-ftp --disable-ldap --disable-ldaps \
+            --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp \
+            --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher \
+            --disable-mqtt --with-zlib="$ZLIB_DIR" --with-openssl \
+            --without-libpsl --without-libidn2 --without-brotli --without-zstd --without-librtmp
+make -j$(nproc)
+make install
+make distclean || true
+cd "$PROJECT_ROOT"
 
 # 6. Build libebur128 (Static)
+EBUR128_VERSION="v1.2.6"
 EBUR128_SRC_DIR="$DEPS_DIR/libebur128_src"
 EBUR128_INSTALL_DIR="$DEPS_DIR/libebur128"
 EBUR128_BUILD_DIR="$DEPS_DIR/libebur128_build_tmp"
-if [ -d "$EBUR128_SRC_DIR" ]; then
-    echo "--- Building libebur128 (Static) ---"
-    mkdir -p "$EBUR128_BUILD_DIR"
-    cd "$EBUR128_BUILD_DIR"
-    cmake "$EBUR128_SRC_DIR" -DCMAKE_INSTALL_PREFIX="$EBUR128_INSTALL_DIR" \
-             -DCMAKE_INSTALL_LIBDIR=lib \
-             -DBUILD_STATIC_LIBS=ON \
-             -DBUILD_SHARED_LIBS=OFF \
-             -DENABLE_INTERNAL_QUEUE=ON
-    make -j$(nproc)
-    make install
-    cd "$PROJECT_ROOT"
-    rm -rf "$EBUR128_BUILD_DIR"
+if [ ! -d "$EBUR128_SRC_DIR" ]; then
+    echo "--- Downloading libebur128 $EBUR128_VERSION ---"
+    git clone --depth 1 --branch "$EBUR128_VERSION" https://github.com/jiixyj/libebur128.git "$EBUR128_SRC_DIR"
 fi
+echo "--- Building libebur128 (Static) ---"
+mkdir -p "$EBUR128_BUILD_DIR"
+cd "$EBUR128_BUILD_DIR"
+cmake "$EBUR128_SRC_DIR" -DCMAKE_INSTALL_PREFIX="$EBUR128_INSTALL_DIR" \
+         -DCMAKE_INSTALL_LIBDIR=lib \
+         -DBUILD_STATIC_LIBS=ON \
+         -DBUILD_SHARED_LIBS=OFF \
+         -DENABLE_INTERNAL_QUEUE=ON
+make -j$(nproc)
+make install
+cd "$PROJECT_ROOT"
+rm -rf "$EBUR128_BUILD_DIR"
+cleanup_submodule "$EBUR128_SRC_DIR"
 
 echo "=== TSA: All Dependencies Built and Installed Cleanly ==="
