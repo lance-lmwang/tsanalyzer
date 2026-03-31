@@ -227,9 +227,10 @@ In the CI/CD environment (e.g., GitHub Actions), relying on wall-clock time (`cp
 1. **Level 1: Semantic Compliance (TSDuck)**
    - The generated `output.pcapng` is parsed by TSDuck (`tsp -I pcap ... -P analyze --tr101290`).
    - **Assertion**: CI strictly asserts zero Priority 1/2/3 errors (e.g., CC Continuity errors, PAT/PMT > 500ms).
-2. **Level 2: Nanosecond Clock Analysis (Python)**
+2. **Level 2: Nanosecond Clock & ES Fluctuation Analysis (Python)**
    - A custom Python script extracts the absolute $T_{pcap}$ nanosecond timestamps from the PCAPNG file and compares them against the decoded $T_{pcr}$ values embedded inside the payload.
-   - **Assertion**: $\max(|T_{pcap} - T_{pcr}|) < 30ns$ and PCR intervals strictly bounded between 20ms and 35ms.
+   - **ES Stability**: For deployments requiring < 44kbps fluctuation, `scripts/verify_es_fluctuation.py` is executed over the output TS.
+   - **Assertion**: $\max(|T_{pcap} - T_{pcr}|) < 30ns$ and PCR intervals strictly bounded between 20ms and 35ms. The **Coefficient of Variation (CV)** for the target ES must be < 5% over 100ms windows.
 3. **Level 3: Commercial-Grade Endorsement**
    - The CI artifact is passed to software-based commercial analyzers (e.g., DekTec StreamXpert or Tektronix MTS) via an offline API to parse the final XML report as the definitive sign-off.
 
