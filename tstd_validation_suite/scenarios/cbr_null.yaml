@@ -1,0 +1,9 @@
+name: cbr_null
+description: "Base CBR check with zero payload to verify clock and NULL rhythm."
+mux_rate: 10000000
+duration_sec: 10
+assertions:
+  - type: bitrate_stability
+    max_std: 0.001
+  - type: pcr_accuracy
+    max_ns: 50

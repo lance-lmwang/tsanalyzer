@@ -1,0 +1,11 @@
+name: tier1_4k_contribution
+description: "Tier 1: High-bandwidth contribution link (80Mbps). Focus on PCR precision."
+mux_rate: 80000000
+duration_sec: 10
+assertions:
+  - type: pcr_accuracy
+    max_ns: 100
+  - type: bitrate_fluctuation
+    max_abs_bps: 128000
+  - type: token_conservation
+    strict: True

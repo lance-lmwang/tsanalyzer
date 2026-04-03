@@ -1,0 +1,8 @@
+name: long_run
+description: "Stability check over 1 million steps to detect integrator drift."
+mux_rate: 10000000
+duration_steps: 1000000
+assertions:
+  - type: token_conservation
+  - type: no_drift
+  - type: bounded_debt

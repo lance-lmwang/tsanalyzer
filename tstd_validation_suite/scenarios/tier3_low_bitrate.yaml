@@ -1,0 +1,11 @@
+name: tier3_low_bitrate
+description: "Tier 3: Low bitrate mobile stream (1.5Mbps). Focus on quantization and relative stability."
+mux_rate: 1500000
+duration_sec: 15
+assertions:
+  - type: pcr_accuracy
+    max_ns: 500
+  - type: bitrate_fluctuation_relative
+    max_percent: 0.01  # 1% limit for low bitrate
+  - type: null_rhythm_entropy
+    min_score: 0.8

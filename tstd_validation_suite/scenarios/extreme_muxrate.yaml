@@ -1,0 +1,8 @@
+name: extreme_muxrate
+description: "Edge case testing for ultra-low and ultra-high bitrates."
+mux_rate: 80000000
+duration_sec: 5
+assertions:
+  - type: pcr_accuracy
+    max_ns: 200
+  - type: token_conservation

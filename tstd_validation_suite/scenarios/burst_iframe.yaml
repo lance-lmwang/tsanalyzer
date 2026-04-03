@@ -1,0 +1,23 @@
+name: burst_iframe
+description: "Verify VBV integrity and borrowing during massive I-frame burst."
+
+mux_rate: 20000000
+
+streams:
+  - pid: 256
+    type: video
+    bitrate: 15000000
+    pattern: iframe_burst
+    gop: 25
+    bucket_size: 1048576 # 1MB TBn
+
+duration_sec: 5
+
+assertions:
+  - type: pcr_accuracy
+    max_ns: 500
+  - type: vbv_no_violation
+  - type: bitrate_stability
+    max_std: 0.02
+  - type: no_oscillation
+  - type: token_conservation

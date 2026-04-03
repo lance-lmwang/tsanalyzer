@@ -1,0 +1,14 @@
+name: mpts_balance
+description: "Multiple programs competing for bandwidth with damped scoring."
+mux_rate: 30000000
+programs:
+  - id: 1
+    bitrate: 10000000
+  - id: 2
+    bitrate: 15000000
+duration_sec: 20
+assertions:
+  - type: no_oscillation
+    threshold: 0.05
+  - type: bitrate_stability
+    max_std: 0.01
