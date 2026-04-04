@@ -1,35 +1,30 @@
-# TsAnalyzer Scripts Directory
+# TsAnalyzer Scripts Archive System
 
-This directory contains production-grade validation, deployment, and stress-testing tools for the TsAnalyzer ecosystem.
+## 📂 Directory Structure Overview
 
-## 1. Metrology & Audit (TR 101 290)
-*   `pcr_analyzer.py`: Professional PCAP/TS PCR jitter analyzer (Nanosecond precision).
-*   `pcr_analyzer_lite.py`: Lightweight TS-only PCR sampler (Zero-dependency).
-*   `verify_shaper_compliance.sh`: Validates libtsshaper output against T-STD leak rates.
-*   `verify_pcr_repetition.sh`: Checks PCR arrival intervals against 40ms limit.
+| Directory | Category | Description | Key Entrypoint |
+| :--- | :--- | :--- | :--- |
+| `ffmpeg_tstd/` | **FFmpeg T-STD Core** | Specialized T-STD Muxer validation. | `ffmpeg_tstd_run_stable.sh` |
+| `verification/` | **Atomic Verification** | Small-scale feature validation (CBR, PCR, CC). | `verify_tstd_compliance.sh` |
+| `e2e/` | **Scenario Tests** | Full-chain E2E integration scenarios. | `test-e2e.sh` |
+| `stability/` | **Stability & Stress** | Long-run soak tests and extreme load. | `test_stability_5min.py` |
+| `ops/` | **Operations & Env** | Deployment, initialization, and tuning. | `env_ready.sh` |
+| `tools/` | **Power Tools** | Offline data analysis and generator utilities. | `pcr_analyzer.py` |
+| `chaos/` | **Resilience** | Fault injection and chaos simulation. | `tsa_run_chaos_suite.sh` |
+| `monitoring/` | **Dashboards & NOC** | Live UI and metric monitoring tools. | `tsa_monitor.py` |
 
-## 2. End-to-End Validation (E2E)
-*   `test_tsshaper_e2e.sh`: Full FFmpeg + libtsshaper integration test.
-*   `test-e2e-srt.sh`: Validates SRT ingest and shaping.
-*   `verify_network_io.sh`: Tests HAL-layer socket performance and packet loss.
-*   `test_server_pro.sh`: Validates the high-performance multi-stream conductor.
+---
 
-## 3. Stability & Stress
-*   `professional_stress_runner.py`: Orchestrates multi-stream load testing.
-*   `extreme_stress_test.py`: Boundary testing for buffer overflows and resource exhaustion.
-*   `verify_5m_soak.sh`: 5-minute stability audit for regression testing.
-*   `test_stability_5min_simple.py`: Basic concurrency and memory leak check.
+## 🚀 Top 3 Most Important Scripts
 
-## 4. System & Environment
-*   `sys_tune_perf.sh`: Tunes NIC, CPU, and IRQ for low-latency processing.
-*   `grant_rt_perms.sh`: Enables REALTIME scheduling for non-root users.
-*   `env_ready.sh`: Verifies that the OS environment meets TSA prerequisites.
+1.  **`ffmpeg_tstd/ffmpeg_tstd_run_stable.sh`**: Runs the full T-STD muxer stability soak test.
+2.  **`verification/verify_tstd_compliance.sh`**: The "referee" for T-STD conformance.
+3.  **`stability/test_stability_5min.py`**: Standard 5-minute stability benchmark.
 
-## 5. Observability
-*   `deploy_dashboard.py`: Automatically provisions Grafana dashboards.
-*   `metrics_exporter.py`: Bridges internal TSA metrics to Prometheus.
-*   `tsa_ascii_monitor.sh`: Terminal-based real-time telemetry viewer.
+---
 
-## 6. Chaos & Debug
-*   `chaos_proxy.py`: Simulates network impairments (jitter, drop, reorder).
-*   `simulate_mdi_srt_incident.py`: Reconstructs specific field-reported issues.
+## 🛠 Usage Guardrails
+
+*   **Pathing**: Most scripts use `SCRIPT_DIR=$(dirname $(readlink -f $0))` to handle relative paths correctly within subdirectories.
+*   **Renaming**: T-STD scripts follow the `ffmpeg_tstd_` prefix standard.
+*   **Environment**: Always run `ops/env_ready.sh` before starting a fresh validation cycle.

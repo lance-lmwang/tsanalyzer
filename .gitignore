@@ -50,3 +50,4 @@ jitter_debug.html
 new.diff
 Dockerfile.tsduck
 bin/
+output/

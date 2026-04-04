@@ -40,28 +40,24 @@ ts_ingest_srt_t* ts_ingest_srt_create(const char* url) {
     inet_pton(AF_INET, host[0] ? host : "0.0.0.0", &sa.sin_addr.s_addr);
 
     if (is_listener) {
-        // For listener, we MUST wait for the caller to connect.
-        // Temporarily enable blocking for accept.
+        // Listener mode: wait for connection
         int sync = 1;
         srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof(sync));
-
         if (srt_bind(s, (struct sockaddr*)&sa, sizeof(sa)) == SRT_ERROR) {
-            tsa_error(TAG, "SRT Listener: Bind failed: %s", srt_getlasterror_str());
+            tsa_error(TAG, "SRT Bind failed: %s", srt_getlasterror_str());
             srt_close(s);
             return NULL;
         }
-
         srt_listen(s, 1);
-        tsa_info(TAG, "SRT Listener: Waiting for caller on %d...", port);
-
+        tsa_info(TAG, "SRT Listener active on %d, waiting for connection...", port);
         SRTSOCKET client = srt_accept(s, NULL, NULL);
         if (client == SRT_INVALID_SOCK) {
-            tsa_error(TAG, "SRT Listener: Accept failed: %s", srt_getlasterror_str());
+            tsa_error(TAG, "SRT Accept failed: %s", srt_getlasterror_str());
             srt_close(s);
             return NULL;
         }
-
-        // srt_close(s); // Leak listener to prevent libsrt crash
+        // Connection established, replace s with client socket
+        srt_close(s);
         s = client;
     } else {
         // Caller mode
