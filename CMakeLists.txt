@@ -66,6 +66,17 @@ if(EXISTS "${TSA_DEPS_DIR}/srt/include/srt")
 endif()
 
 tsa_use_dep(libpcap "libpcap.a" "include" HAVE_PCAP)
+
+# libpcap might have internal dependencies on dbus-1 if built with it
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(DBUS QUIET dbus-1)
+    if(DBUS_FOUND)
+        set(TSA_DBUS_LIBS ${DBUS_LIBRARIES})
+        include_directories(${DBUS_INCLUDE_DIRS})
+    endif()
+endif()
+
 tsa_use_dep(lua "liblua.a" "include" HAVE_LUA)
 tsa_use_dep(curl "libcurl.a" "include" HAVE_CURL)
 tsa_use_dep(zlib "libz.a" "include" HAVE_ZLIB)
@@ -74,7 +85,7 @@ tsa_use_dep(libebur128 "libebur128.a" "include" HAVE_EBUR128)
 # Link order matters for static libs
 set(TSA_EXTERNAL_LIBS
     ${srt_LIB} ${curl_LIB} ${lua_LIB} ${libpcap_LIB} ${zlib_LIB} ${libebur128_LIB}
-    ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB}
+    ${OPENSSL_LIBRARIES} ${RT_LIB} ${NCURSES_LIB} ${TSA_DBUS_LIBS}
     pthread m dl stdc++)
 
 set(TSA_CORE_SRCS
