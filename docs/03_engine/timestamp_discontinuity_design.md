@@ -45,9 +45,23 @@ sequenceDiagram
 
     Note over STC,PCR: Initial Phase (Timeline Absolutely Continuous)
 
-    V->>STC: Raw DTS=100 (rel=100)
-    A->>STC: Raw DTS=102 (rel=102)
-    PCR->>STC: Raw PCR=105 (rel=105)
+
+## 4. Physical Layer Phase-Aligned PCR Injection
+
+To eliminate PCR jitter caused by scheduler priority competition, the engine moves from simple "count-based" trigger to "Physical Phase-Aligned Injection".
+
+### 4.1 Flywheel Token Refill (Continuous Time Domain)
+Instead of discrete `refill_tokens` calls, the engine employs a flywheel mechanism driven by STC (System Time Clock). The refill rate is calculated as:
+`add_bits = (delta_vstc * bitrate_bps) / 27MHz`
+This ensures constant bit-level smoothing across all PIDs, effectively preventing micro-bursts and stabilizing the `NULL` distribution.
+
+### 4.2 Phase-Aligned PCR Injection
+PCR trigger is no longer just a counter-match. The Pacer implements a **Phase Lookahead Window**:
+1. **Dynamic Priority Boosting**: As `v_stc` approaches the target PCR arrival, the scheduler dynamically elevates the priority of the PCR-PID.
+2. **Phase Injection**: PCR is injected precisely into the physical packet slot that matches the expected time base.
+3. **Non-Blocking Signaling**: PCR packets (Adaptation Field only) are synthesized on-the-fly without occupying the PID FIFO, ensuring the Continuity Counter state remains unchanged.
+
+This decoupling of "Semantic PCR Timing" from "Physical PID Scheduling" eliminates jitter even under high-load VBR-to-CBR re-encoding scenarios.
 
     Note over STC: max_dts_seen = 105, global_offset = 0
 
