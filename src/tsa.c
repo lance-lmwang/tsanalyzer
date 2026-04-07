@@ -54,7 +54,8 @@ tsa_handle_t* tsa_create(const tsa_config_t* cfg) {
     if (!h->phys_stats.pid_last_snap_pkts) goto fail;
 
     h->pid_seen = calloc(TS_PID_MAX, sizeof(bool));
-    if (!h->pid_seen) goto fail;
+    h->pid_types = calloc(TS_PID_MAX, sizeof(uint8_t));
+    if (!h->pid_seen || !h->pid_types) goto fail;
 
     h->pid_is_pmt = calloc(TS_PID_MAX, sizeof(bool));
     if (!h->pid_is_pmt) goto fail;
@@ -181,6 +182,7 @@ void tsa_destroy(tsa_handle_t* h) {
     for (int i = 0; i < TS_PID_MAX; i++)
         if (h->pid_histograms[i]) free(h->pid_histograms[i]);
     FREE_IF(h->pid_seen);
+    FREE_IF(h->pid_types);
     FREE_IF(h->pid_is_pmt);
     FREE_IF(h->pid_is_scte35);
     FREE_IF(h->prev_snap_base_frames);

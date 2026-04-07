@@ -13,10 +13,11 @@ static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_
 void tsa_precompile_pid_labels(struct tsa_handle* h, uint16_t pid) {
     if (!h || pid >= TS_PID_MAX) return;
     const char* type = "Other";
-    if (pid == 0)
-        type = "PAT";
-    else if (h->pid_is_pmt[pid])
-        type = "PMT";
+    if (pid == 0) type = "PAT";
+    else if (h->pid_is_pmt[pid]) type = "PMT";
+    else if (h->pid_types[pid] == 1) type = "Video";
+    else if (h->pid_types[pid] == 2) type = "Audio";
+    else if (h->pid_types[pid] == 3) type = "Data";
     snprintf(h->pid_labels[pid], TSA_LABEL_MAX, "{stream_id=\"%s\",pid=\"0x%04x\",type=\"%s\"}",
              h->config.input_label[0] ? h->config.input_label : "unknown", pid, type);
 }
@@ -106,12 +107,34 @@ static void process_pat(tsa_handle_t* h, const uint8_t* p, uint64_t now, size_t 
 }
 
 static void process_pmt(tsa_handle_t* h, uint16_t pid, const uint8_t* p, uint64_t now, size_t max_len) {
-    (void)p;
-    (void)max_len;
+    h->seen_pmt = true;
     for (uint32_t i = 0; i < h->program_count; i++) {
         if (h->programs[i].pmt_pid == pid) {
             h->programs[i].last_pmt_ns = now;
-            h->seen_pmt = true;
+
+            uint16_t sl = (((p[1] & 0x0F) << 8) | p[2]) + 3;
+            int offset = 12 + (((p[10] & 0x0F) << 8) | p[11]);
+
+            h->programs[i].stream_count = 0; // Reset existing mappings
+
+            while (offset < sl - 4) {
+                uint8_t type = p[offset];
+                uint16_t es_pid = ((p[offset + 1] & 0x1F) << 8) | p[offset + 2];
+                uint16_t es_info_len = ((p[offset + 3] & 0x0F) << 8) | p[offset + 4];
+
+                // Map PID type
+                if (type == 0x1B || type == 0x10 || type == 0x06) h->pid_types[es_pid] = 1; // Video
+                else if (type == 0x0F || type == 0x03 || type == 0x04) h->pid_types[es_pid] = 2; // Audio
+                else h->pid_types[es_pid] = 3; // Data
+
+                // Register to Program
+                if (h->programs[i].stream_count < MAX_STREAMS_PER_PROG) {
+                    h->programs[i].streams[h->programs[i].stream_count].pid = es_pid;
+                    h->programs[i].streams[h->programs[i].stream_count++].stream_type = type;
+                }
+
+                offset += 5 + es_info_len;
+            }
             break;
         }
     }

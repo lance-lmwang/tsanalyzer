@@ -267,6 +267,7 @@ struct tsa_handle {
     uint64_t snapshot_stc;
     float last_health_score;
     bool* pid_seen;
+    uint8_t* pid_types;
     bool* pid_is_pmt;
     bool* pid_is_scte35;
     uint32_t* pid_cc_error_suppression;
