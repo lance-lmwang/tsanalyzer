@@ -10,7 +10,7 @@ In the ISO/IEC 13818-1 standard, all PES / ES / PCR must strictly share the same
 
 ---
 
-## 2. Core Architectural Design (Industrial Model V3/V4)
+### 2. Core Architectural Design (Industrial Model)
 
 To balance "System Timeline Continuity" and "PCR Semantic Consistency", the system implements the following mechanism decoupling:
 
