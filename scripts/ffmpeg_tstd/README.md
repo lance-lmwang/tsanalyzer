@@ -25,6 +25,29 @@ The V4/V5 architecture is designed to survive the following "killer" scenarios:
 
 ## 🚀 Standard Verification Workflow
 
+### Daily Regression Recommendations (日常化回归建议)
+To ensure the T-STD engine remains bit-accurate and compliant after any codebase modifications, **always run the UDP End-to-End CBR test** as your primary gatekeeper.
+
+1. **Primary Gate (UDP Real-time Metrology)**:
+   ```bash
+   ./scripts/ffmpeg_tstd/ffmpeg_tstd_udp_cbr.sh
+   ```
+   *Pass Criteria*: `Score: 100/100` and `[PASS] ES Layer and Timestamps verified.`
+
+2. **Long-Term Soak Test**:
+   ```bash
+   ./scripts/ffmpeg_tstd/ffmpeg_tstd_run_stable.sh
+   ```
+   *Pass Criteria*: `PCR_drift_ppm: 0.000` after extended runs.
+
+3. **Chaos/Discontinuity Re-encode Test**:
+   ```bash
+   ./scripts/ffmpeg_tstd/ffmpeg_tstd_jaco_reencode.sh
+   ```
+   *Pass Criteria*: Engine must survive input timestamp jumps/rollbacks and output a smooth CBR stream.
+
+---
+
 ### Step 1: Generate Baseline
 ```bash
 ffmpeg -f lavfi -i testsrc=size=1280x720:rate=25 -f lavfi -i sine=frequency=1000 \

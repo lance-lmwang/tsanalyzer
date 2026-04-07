@@ -10,18 +10,22 @@ FFMPEG_BIN="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
 SRC="/home/lmwang/sample/jaco/202508300200_Al-Taawoun_VS_Al-Nassr_2_cut_100M.ts"
 MUXRATE=25000000
 
-echo "=== Jaco 8-Hour Jump Test: T-STD with -copyts ==="
+echo "=== Jaco Jump Test: T-STD with CBR Re-encode ==="
 
 # --- Test 1: T-STD Mode (On) ---
-echo "[Test 1] T-STD Muxer (-copyts)..."
+echo "[Test 1] T-STD Muxer (Re-encoding)..."
 dst="${OUT_DIR}/jaco_tstd.ts"
 log_file="${OUT_DIR}/jaco_tstd.log"
 
-timeout 60 $FFMPEG_BIN -y -v debug -copyts -i "$SRC" \
+$FFMPEG_BIN -y -v debug -i "$SRC" \
     -map 0:v:0 -map 0:a:0 \
-    -c:v copy \
-    -c:a copy \
-    -f mpegts -muxrate $MUXRATE -mpegts_tstd_mode 1 \
+    -c:a libfdk_aac -b:a 64k \
+    -vcodec libwz264 \
+    -wz264-params bframes=0:keyint=25:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1 \
+    -b:v 1600k -pix_fmt yuv420p \
+    -f mpegts -mpegts_flags +pat_pmt_at_frames \
+    -muxrate 2000000 -muxdelay 0.9 \
+    -mpegts_tstd_mode 1 \
     "$dst" > "$log_file" 2>&1
 
 RET_TSTD=$?

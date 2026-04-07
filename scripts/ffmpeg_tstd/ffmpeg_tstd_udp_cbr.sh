@@ -1,6 +1,6 @@
 #!/bin/bash
-# T-STD End-to-End Real-time UDP CBR Verification
-# FFmpeg (Real-time) -> UDP Loopback -> TSA Analysis
+# T-STD End-to-End Real-time UDP CBR Verification (Professional Grade)
+# FFmpeg (T-STD Engine) -> UDP Port -> nc (Bit-accurate Capture) -> TSA Analysis
 
 ROOT_DIR=$(dirname $(dirname $(dirname $(readlink -f $0))))
 OUT_DIR="${ROOT_DIR}/output"
@@ -8,47 +8,53 @@ mkdir -p "$OUT_DIR"
 
 FFMPEG_BIN="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
 FFPROBE_BIN="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffprobe"
-TSA_CLI="${ROOT_DIR}/build/tsa_cli"
+VERIFY_SCRIPT="${ROOT_DIR}/scripts/ffmpeg_tstd/ffmpeg_tstd_verify_compliance.sh"
 SRC="${ROOT_DIR}/../sample/input.mp4"
 UDP_ADDR="127.0.0.1"
-UDP_PORT="1234"
-MUXRATE=2600000
+UDP_PORT="12345"
+CAPTURE_FILE="${OUT_DIR}/udp_capture.ts"
+LOG_FILE="${OUT_DIR}/udp_capture.log"
+TEST_DURATION=15
 
-# Cleanup on exit
-trap "echo '[*] Cleaning up...'; kill $FF_PID $TSA_PID 2>/dev/null; exit" EXIT
+# 1. Environment Guard
+echo "[*] Cleaning up environment..."
+fuser -k ${UDP_PORT}/udp 2>/dev/null
+rm -f "$CAPTURE_FILE" "$LOG_FILE"
 
-echo "[1/3] Starting FFmpeg Real-time Pusher (Loop)..."
-# Using -v info to reduce log overhead
-$FFMPEG_BIN -y -re -stream_loop -1 -v info -i "$SRC" \
+# 2. Start nc Receiver (Background)
+echo "[1/4] Starting bit-accurate UDP receiver (nc) on port $UDP_PORT..."
+nc -u -l -p $UDP_PORT > "$CAPTURE_FILE" &
+NC_PID=$!
+
+# 3. Start FFmpeg Pusher
+echo "[2/4] Pushing T-STD stream for ${TEST_DURATION}s..."
+# Note: Use -v debug to provide telemetry for the compliance script
+$FFMPEG_BIN -y -re -v debug -i "$SRC" \
+      -t $TEST_DURATION \
       -map 0:v:0 -map 0:a:0 \
       -c:a libfdk_aac -b:a 64k \
       -vcodec libwz264 \
-      -wz264-params bframes=0:keyint=25:vbv-maxrate=2100:vbv-bufsize=2100:nal-hrd=cbr:force-cfr=1:aud=1 \
-      -b:v 2300000 -pix_fmt yuv420p \
+      -wz264-params bframes=0:keyint=25:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1 \
+      -b:v 1600k -pix_fmt yuv420p \
       -f mpegts -mpegts_flags +pat_pmt_at_frames \
-      -muxrate $MUXRATE -muxdelay 0.9 \
+      -muxrate 2000000 -muxdelay 0.9 \
       -mpegts_tstd_mode 1 \
-      -pcr_period 25 -pat_period 0.1s -sdt_period 0.25s \
-      "udp://$UDP_ADDR:$UDP_PORT?pkt_size=1316&bitrate=$MUXRATE" > "${OUT_DIR}/ffmpeg_live.log" 2>&1 &
-FF_PID=$!
+      "udp://$UDP_ADDR:$UDP_PORT?pkt_size=1316" > "$LOG_FILE" 2>&1
 
-sleep 3 # Wait for stream to stabilize
+# Wait for nc to finish writing and kill it
+sleep 2
+kill $NC_PID 2>/dev/null || true
 
-echo "[2/3] Verifying stream availability via ffprobe..."
-$FFPROBE_BIN -v error -show_format -show_streams "udp://$UDP_ADDR:$UDP_PORT"
+# 4. Post-Mortem Audit
+echo "[3/4] Verifying bitstream integrity via ffprobe..."
+$FFPROBE_BIN -i "$CAPTURE_FILE" -hide_banner
 if [ $? -ne 0 ]; then
-    echo "[ERROR] Cannot pull stream from UDP. Check ${OUT_DIR}/ffmpeg_live.log"
+    echo "[ERROR] Captured bitstream is invalid or empty. Check $LOG_FILE"
     exit 1
 fi
-echo "[SUCCESS] Stream is alive."
 
-echo "[3/3] Launching TSA Real-time Analysis (30 seconds)..."
-echo "Press Ctrl+C to stop early."
-# Start TSA_CLI in live mode
-$TSA_CLI -u $UDP_PORT -v INFO &
-TSA_PID=$!
+echo "[4/4] Running Deep Metrology Audit..."
+"$VERIFY_SCRIPT" "$LOG_FILE"
 
-# Run for 30 seconds
-sleep 30
-
-echo "[*] Test completed successfully."
+echo ""
+echo "[*] UDP End-to-End Test finished."

@@ -92,13 +92,19 @@ if [ $EXIT_CODE -eq 0 ]; then
     else
         echo "[*] Auditing ES Layer for: $TS_INPUT"
         FFPROBE_BIN=$(echo "$FFMPEG_BIN" | sed 's/ffmpeg$/ffprobe/')
-        # Use ffprobe to count actual media streams
-        STREAM_FOUND=$($FFPROBE_BIN -v error -show_entries stream=index -of csv=p=0 "$TS_INPUT" | wc -l)
+        # Use ffprobe to count actual media streams correctly mapped in the PMT
+        STREAM_FOUND=$($FFPROBE_BIN -v error -show_entries program_stream=index -of csv=p=0 "$TS_INPUT" | grep -v '^\s*$' | wc -l)
+
+        # Also check global streams to distinguish between "No Data" and "Empty PMT"
+        GLOBAL_STREAM_FOUND=$($FFPROBE_BIN -v error -show_entries stream=index -of csv=p=0 "$TS_INPUT" | grep -v '^\s*$' | wc -l)
 
         $FFMPEG_BIN -v warning -i "$TS_INPUT" -f null - 2>&1 | tee "$DECODE_LOG"
 
-        if [ "$STREAM_FOUND" -eq 0 ]; then
-            echo "[CRITICAL] ES Layer Empty: No valid media streams detected!"
+        if [ "$GLOBAL_STREAM_FOUND" -eq 0 ]; then
+            echo "[CRITICAL] ES Layer Empty: No valid media streams detected physically!"
+            EXIT_CODE=1
+        elif [ "$STREAM_FOUND" -eq 0 ]; then
+            echo "[CRITICAL] PMT Mapping Error: Streams exist physically but PMT is empty (0 mapped streams)!"
             EXIT_CODE=1
         elif grep -E "non-monotonically increasing dts|error|invalid|reordering|corrupt" "$DECODE_LOG"; then
             echo "[CRITICAL] ES Layer Corruption or Timestamp Inconsistency detected!"
