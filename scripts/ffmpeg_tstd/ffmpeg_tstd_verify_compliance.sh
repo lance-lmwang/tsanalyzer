@@ -79,8 +79,45 @@ if grep -q "\[FAIL\].*PAT interval" "$TMP_OUT"; then
 fi
 
 if [ $EXIT_CODE -eq 0 ]; then
-    # Final Security Gate: Decodability & Timestamp Audit
-    echo "[*] Running final ES Layer & Timestamp Monotonicity audit..."
+    # Hard Gate: PID-level Bitrate Audit
+echo "[*] Running PID-level Bitrate Stability Audit..."
+if [ ! -f "$TSA_CLI" ]; then
+    echo "[CRITICAL] tsa_cli not found at $TSA_CLI. Please compile the analyzer first."
+    exit 1
+fi
+$TSA_CLI -m replay "$TS_INPUT" > /dev/null 2>&1
+
+python3 -c "
+import json, sys
+import os
+report_path = 'final_metrology.json'
+if not os.path.exists(report_path):
+    print(f'[WARN] Metrology report {report_path} not found')
+    sys.exit(1)
+
+try:
+    with open(report_path) as f:
+        data = json.load(f)
+        for pid in data.get('pids', []):
+            fluct = pid.get('bitrate_fluctuation_pct', 0)
+            p = pid.get('pid', 'unknown')
+            # Video (0x0100) limit 5%, Audio (0x0101) limit 2%, Stuffing (0x1FFF) limit 10%
+            if p == '0x0100' and fluct > 5.0:
+                print(f'[CRITICAL] Video PID {p} fluctuation {fluct}% > 5%')
+                sys.exit(1)
+            if p == '0x0101' and fluct > 2.0:
+                print(f'[CRITICAL] Audio PID {p} fluctuation {fluct}% > 2%')
+                sys.exit(1)
+except Exception as e:
+    print(f'[WARN] Could not parse metrology report: {e}')
+    sys.exit(1)
+"
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "[CRITICAL] Bitrate stability check failed!"
+    exit 1
+fi
+
     # Map log to TS file
     LOG_BASE=$(basename "$LOG_FILE" .log)
     TS_INPUT="${OUT_DIR}/${LOG_BASE}.ts"
