@@ -81,6 +81,7 @@ fi
 if [ $EXIT_CODE -eq 0 ]; then
     # Hard Gate: PID-level Bitrate Audit
 echo "[*] Running PID-level Bitrate Stability Audit..."
+TSA_CLI="$TSA_DIR/../build/tsa_cli"
 if [ ! -f "$TSA_CLI" ]; then
     echo "[CRITICAL] tsa_cli not found at $TSA_CLI. Please compile the analyzer first."
     exit 1
