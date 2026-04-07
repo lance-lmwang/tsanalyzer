@@ -34,6 +34,8 @@ cmd="$ffm -y -re -v trace -stream_loop -1 -autorotate 0 -rw_timeout 10000000 -i 
       -force_key_frames 'expr:gte(t,n_forced*1)' \
       -dn \
       -flush_packets 0 \
+      -metadata service_name="wz_tstd" \
+      -metadata service_provider="wz" \
       -f mpegts -mpegts_flags +pat_pmt_at_frames \
       -muxrate $muxrate -muxdelay 0.9 \
       -mpegts_tstd_mode 1 \
