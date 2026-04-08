@@ -46,22 +46,20 @@ sequenceDiagram
     Note over STC,PCR: Initial Phase (Timeline Absolutely Continuous)
 
 
-## 4. Physical Layer Phase-Aligned PCR Injection
+## 5. Industrial T-STD Physical Pacing (Rate-Adapted)
 
-To eliminate PCR jitter caused by scheduler priority competition, the engine moves from simple "count-based" trigger to "Physical Phase-Aligned Injection".
+To achieve strict ISO/IEC 13818-1 compliance without discarding packets or causing buffer overflows, the engine implements Level-Dependent Dynamic Pacing.
 
-### 4.1 Flywheel Token Refill (Continuous Time Domain)
-Instead of discrete `refill_tokens` calls, the engine employs a flywheel mechanism driven by STC (System Time Clock). The refill rate is calculated as:
-`add_bits = (delta_vstc * bitrate_bps) / 27MHz`
-This ensures constant bit-level smoothing across all PIDs, effectively preventing micro-bursts and stabilizing the `NULL` distribution.
+### 5.1 Admission Strategy Shift
+The previous "Admission Control" (dropping/skipping PID scheduling upon buffer overflow) is deprecated. This method caused illegal stream discontinuities and PCR discontinuities, violating the T-STD state consistency requirement.
 
-### 4.2 Phase-Aligned PCR Injection
-PCR trigger is no longer just a counter-match. The Pacer implements a **Phase Lookahead Window**:
-1. **Dynamic Priority Boosting**: As `v_stc` approaches the target PCR arrival, the scheduler dynamically elevates the priority of the PCR-PID.
-2. **Phase Injection**: PCR is injected precisely into the physical packet slot that matches the expected time base.
-3. **Non-Blocking Signaling**: PCR packets (Adaptation Field only) are synthesized on-the-fly without occupying the PID FIFO, ensuring the Continuity Counter state remains unchanged.
+### 5.2 Dynamic Pacing Logic (PID-level Throttle)
+The engine now uses an adaptive pacing mechanism based on TB_n (Transport Buffer) occupancy:
+1. **Normal Flow (Occupancy < 90%)**: The PID is scheduled using standard weighted round-robin based on `refill_rate_bps`.
+2. **Throttle Flow (Occupancy >= 90%)**: The scheduler dynamically applies a decay factor to the PID's scheduling weight, forcing a graceful reduction in throughput. This prevents the buffer from hitting the physical 100% saturation point while ensuring all packets are eventually transmitted.
+3. **Safety Gate (Occupancy = 100%)**: Only at theoretical saturation are slots prioritized for NULL packet insertion (when necessary for CBR compliance), ensuring that media buffers never overflow in the physical domain.
 
-This decoupling of "Semantic PCR Timing" from "Physical PID Scheduling" eliminates jitter even under high-load VBR-to-CBR re-encoding scenarios.
+This adaptive approach ensures that media streams remain continuous, keeping the PCR and PTS/DTS timeline intact, as the muxer regulates the pace at the scheduler level rather than the admission level.
 
     Note over STC: max_dts_seen = 105, global_offset = 0
 

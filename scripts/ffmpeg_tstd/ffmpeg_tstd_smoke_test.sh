@@ -39,7 +39,6 @@ cmd="$ffm -y -re -v trace -stream_loop -1 -autorotate 0 -rw_timeout 10000000 -i 
       -f mpegts -mpegts_flags +pat_pmt_at_frames \
       -muxrate $muxrate -muxdelay 0.9 \
       -mpegts_tstd_mode 1 \
-      -mpegts_tstd_token_floor -1024 \
       '$dst' \
       > $log_file 2>&1"
 
