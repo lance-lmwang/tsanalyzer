@@ -140,6 +140,33 @@ To verify the V6 Model, a **Digital Twin** of a broadcast receiver (IRD) is used
 - **PLL Lock Continuity**: Proves `discontinuity_indicator` allows instantaneous receiver STC reset.
 - **Interleaving Resilience**: Proves staggered jumps do not pollute global state.
 
+## 6. The "Time Alignment" Trap (Initialization Pitfalls)
+
+### 6.1 The Temptation of Absolute Alignment
+A common engineering pitfall when integrating the T-STD engine is the temptation to force the internal physical clock (`v_stc`) to align perfectly with the stream's raw absolute timestamp (`input_dts`) by initializing `dts_offset = 0`.
+The flawed assumption is that "if the stream starts at 7.2s, the engine should start at 7.2s."
+
+### 6.2 The "Shock Absorber" Failure (Why `dts_offset = 0` breaks CBR)
+In real-world FFmpeg transcoding pipelines (especially with heavily multi-threaded video encoders like `libwz264` and low-latency audio encoders like `libfdk_aac`), the **encoder output emission order is heavily skewed**.
+1. **The Skew**: Audio packets may arrive at the muxer with a DTS of 2.0s, while the corresponding video packets (also with DTS 2.0s) might not emerge from the encoder until 1-2 seconds later in wall-clock time.
+2. **The Crash**: If `dts_offset = 0`, the engine's `max_dts_seen` immediately tracks the audio's 2.0s. Because the physical clock is tied directly to this absolute value, the engine instantly advances its physical STC and starts emitting audio packets.
+3. **The Fuse Blows**: When the delayed video packet (DTS=2.0s) finally arrives, the engine's internal STC has already advanced far ahead. The engine perceives the video packet as being "massively late" (e.g., -1.5s skew) or triggering a massive `max_dts_seen` jump, which blows the `DRIVE FUSE` (Panic Sync).
+4. **The Symptom**: This forces an instantaneous jump in the STC, causing massive PCR Jitter (e.g., 7+ seconds) and completely destroying the Constant Bitrate (CBR) profile.
+
+### 6.3 The Solution: Relative Timeline Initialization
+To absorb encoder skew, the T-STD engine **MUST** initialize using a relative timeline:
+```c
+tstd->dts_offset = input_dts_27m - tstd->mux_delay_27m;
+tstd->stc_offset = 0;
+tstd->v_stc = 0;
+tstd->max_dts_seen = tstd->mux_delay_27m;
+```
+**Why this works:**
+- It establishes a "Relative Time Zero" (`v_stc = 0`).
+- It maps the first received packet to `rel_dts = mux_delay`.
+- The engine will **intentionally stall** physical emission until `max_dts_seen` exceeds `mux_delay` (i.e., it waits for `mux_delay` worth of stream time to buffer in the FIFO).
+- This initial buffering period acts as a **shock absorber**, allowing late-arriving video packets to be neatly interleaved with early-arriving audio packets before the physical clock starts driving them out.
+
 ## 8. Bitrate Enforcement & Scheduling Discipline
 
 The T-STD engine transitioned from a "mechanical throttle" to a "mathematical admission" model to ensure strict CBR compliance even during massive timestamp discontinuities.

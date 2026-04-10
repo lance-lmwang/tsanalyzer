@@ -17,7 +17,7 @@ echo "[Test 1] T-STD Muxer (Re-encoding)..."
 dst="${OUT_DIR}/jaco_tstd.ts"
 log_file="${OUT_DIR}/jaco_tstd.log"
 
-$FFMPEG_BIN -y -v debug -i "$SRC" \
+$FFMPEG_BIN -y -v trace -copyts -i "$SRC" \
     -map 0:v:0 -map 0:a:0 \
     -c:a libfdk_aac -b:a 64k \
     -vcodec libwz264 \
