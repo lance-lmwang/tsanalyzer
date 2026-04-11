@@ -79,40 +79,41 @@ if grep -q "\[FAIL\].*PAT interval" "$TMP_OUT"; then
 fi
 
 if [ $EXIT_CODE -eq 0 ]; then
-    # Hard Gate: PID-level Bitrate Audit
-    echo "[*] Running PID-level Bitrate Stability Audit..."
-    python3 -c "
-import json
-import sys
-try:
-    with open('final_metrology.json') as f:
-        data = json.load(f)
-        if 'pids' in data:
-            for pid in data.get('pids', []):
-                p_id = pid.get('pid', 'unknown')
-                avg_bps = pid.get('bitrate_bps', 0)
-                max_bps = pid.get('bitrate_peak_bps', 0)
+    # Hard Gate: Broadcast Bitrate Precision Audit
+    BITRATE_AUDITOR="$SCRIPT_DIR/tstd_bitrate_auditor.py"
+    if [ -f "$BITRATE_AUDITOR" ]; then
+        echo "[*] Running Bitrate Precision Audit (500ms Window)..."
+        $BITRATE_AUDITOR --log "$LOG_FILE" --pid 0x0100 --window 0.5 --skip 3.0
 
-                # Filter out initialization silence (avg < 100kbps)
-                if avg_bps < 100000:
-                    continue
+        echo ""
+        echo "[*] Running Broadcast Bitrate Precision Audit (1.0s Window, 64kbps Limit)..."
+        # Run the auditor and capture its output
+        AUDIT_OUT=$($BITRATE_AUDITOR --log "$LOG_FILE" --pid 0x0100 --window 1.0 --skip 3.0)
+        AUDIT_EXIT=$?
+        echo "$AUDIT_OUT"
 
-                # Video (0x0100) limit: 64kbps absolute fluctuation
-                if p_id == '0x0100':
-                    abs_fluct_bps = max_bps - avg_bps
-                    if abs_fluct_bps > 64000:
-                        print(f'[CRITICAL] Video PID {p_id} absolute fluctuation {int(abs_fluct_bps/1000)}kbps > 64kbps')
-                        sys.exit(1)
-                    else:
-                        print(f'[PASS] Video PID {p_id} stability OK (Fluct: {int(abs_fluct_bps/1000)}kbps)')
-        else:
-            print('[WARN] PID-level bitrate metrics missing in report.')
-except Exception as e:
-    print(f'[WARN] Could not parse metrology report: {e}')
-"
-    if [ $? -ne 0 ]; then
+        # Check for the 64kbps limit from the measured fluctuation in the output
+        FLUCT=$(echo "$AUDIT_OUT" | grep "Fluctuation:" | awk '{print $2}')
+        LIMIT_KBPS=64.0
+
+        if [ $AUDIT_EXIT -ne 0 ]; then
+            echo "[CRITICAL] Bitrate auditor failed to execute or find data!"
+            EXIT_CODE=1
+        elif [ -z "$FLUCT" ]; then
+            echo "[CRITICAL] Could not parse fluctuation from auditor output!"
+            EXIT_CODE=1
+        elif (( $(echo "$FLUCT > $LIMIT_KBPS" | bc -l) )); then
+            echo "[CRITICAL] Bitrate fluctuation ${FLUCT}k exceeds customer limit (${LIMIT_KBPS}k)!"
+            EXIT_CODE=1
+        else
+            echo "[PASS] Bitrate stability (1s) verified within ${LIMIT_KBPS}kbps."
+        fi
+    else
+        echo "[WARN] Bitrate auditor tool not found at $BITRATE_AUDITOR. Skipping audit."
+    fi
+
+    if [ $EXIT_CODE -ne 0 ]; then
         echo "[CRITICAL] Bitrate stability check failed!"
-        EXIT_CODE=1
     fi
 
     # Map log to TS file

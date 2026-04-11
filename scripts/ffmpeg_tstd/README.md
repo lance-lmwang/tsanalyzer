@@ -25,7 +25,7 @@ The V4/V5 architecture is designed to survive the following "killer" scenarios:
 
 ## 🚀 Standard Verification Workflow
 
-### Daily Regression Recommendations (日常化回归建议)
+### Daily Regression Recommendations
 To ensure the T-STD engine remains bit-accurate and compliant after any codebase modifications, **always run the UDP End-to-End CBR test** as your primary gatekeeper.
 
 1. **Primary Gate (UDP Real-time Metrology)**:
@@ -71,16 +71,50 @@ python3 ../tools/tstd_ird_compliance_audit.py *.ts
 
 ---
 
+## 📈 Bitrate Precision Audit
+
+To meet broadcast-grade requirements where bitrate fluctuation must be within 64kbps (1s window), the suite provides two measurement methodologies:
+
+### 1. Internal Telemetry Audit (Log-based)
+**Tool**: `tstd_bitrate_auditor.py`
+**Description**: Analyzes FFmpeg internal `[T-STD]` telemetry logs. It represents the theoretical precision at the **scheduler exit point**.
+**Usage**:
+```bash
+# Audit Video PID 0x0100 (default), 1s window, skip first 3s
+./scripts/ffmpeg_tstd/tstd_bitrate_auditor.py --log output/tstd_smoke.log --pid 0x0100 --window 1.0 --skip 3.0 --verbose
+```
+
+### 2. Physical TS Verification (Bitstream-based)
+**Tool**: `ts_pid_bitrate_pcr_analyzer.py`
+**Description**: **Log-independent**. Directly parses the `.ts` file and established a high-precision timeline via PCR (Program Clock Reference). It reflects the **actual physical behavior** seen by a receiver.
+**Usage**:
+```bash
+# Verify physical video bitrate in the TS file (skip first 5s)
+./scripts/ffmpeg_tstd/ts_pid_bitrate_pcr_analyzer.py output/tstd_smoke.ts --pid 0x0100 --skip 5.0
+```
+
+---
+
+## 📁 Key Scripts Summary
+
+| Script | Purpose |
+| :--- | :--- |
+| `ffmpeg_tstd_smoke_test.sh` | Core 30s regression test. Triggers full compliance audit. |
+| `ffmpeg_tstd_verify_compliance.sh` | The automated auditor. Enforces hard gates (PCR, Jitter, 64k Bitrate). |
+| `ffmpeg_tstd_mode_comparison.sh` | Side-by-side comparison of Mode 1 (Strict) vs Mode 2 (Elastic). |
+| `tstd_bitrate_auditor.py` | Professional tool for log-based bitrate stability analysis. |
+| `ts_pid_bitrate_pcr_analyzer.py` | Independent physical layer bitrate analyzer using PCR timing. |
+| `ts_bitrate_pcr_analyzer.py` | Calculates the total physical muxrate (all PIDs) between PCRs. |
+| `ffmpeg_tstd_run_stable.sh` | Long-term soak test for the T-STD engine. |
+| `ffmpeg_tstd_udp_cbr.sh` | Real-time UDP streaming metrology test. |
+| `ffmpeg_tstd_jaco_reencode.sh` | Validation against specifically anomalous broadcast samples. |
+
+---
+
 ## 📊 Result Interpretation
 
 *   **Score >= 80**: **PASS**. The stream is safe for professional IRDs.
 *   **Video/Audio Underflow > 0**: **CRITICAL FAIL**. Decoders will experience freeze or macroblocks.
 *   **PCR Error**: Measures the distance between Muxer clock and recovered STC.
 *   **Jitter**: Measures the stability of the output clock stream.
-
-## 📁 Key Scripts in this Folder
-
-- `ffmpeg_tstd_run_stable.sh`: Long-term soak test for the T-STD engine.
-- `ffmpeg_tstd_smoke_test.sh`: Quick 30s check for basic CBR pacing.
-- `ffmpeg_tstd_udp_cbr.sh`: Real-time UDP streaming metrology test.
-- `ffmpeg_tstd_jaco_reencode.sh`: Debug script for the anomalous Jaco broadcast sample.
+*   **Bitrate Fluctuation**: Must be < 64kbps for 1s window to meet carrier-grade CBR requirements.
