@@ -51,6 +51,13 @@ cat "$TMP_OUT"
 echo ""
 echo "--- Architectural Health Check (Hard Gates) ---"
 
+# Hard Gate: Physical Packet Integrity (MEDIA DROP)
+DROP_COUNT=$(grep -c "MEDIA DROP" "$LOG_FILE")
+if [ "$DROP_COUNT" -gt 0 ]; then
+    echo -e "\033[31m[CRITICAL] Detected $DROP_COUNT MEDIA DROP events! Physical buffer overflowed.\033[0m"
+    EXIT_CODE=1
+fi
+
 # Hard Gate: PCR Precision
 if grep -q "PCR_jitter_ns:.*max=[1-9][0-9][0-9]" "$TMP_OUT"; then
     JITTER=$(grep "PCR_jitter_ns:" "$TMP_OUT" | awk -F'=' '{print $2}' | awk -F',' '{print $1}')
