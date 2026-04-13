@@ -21,7 +21,9 @@ def analyze_pid_bitrate_pcr(ts_file, target_pid, pcr_pid, window_sec, skip_sec):
     pcr_clock = 27000000
 
     first_pcr_val = None
-    window_start_pcr = None
+    window_start_pcr_unwrapped = None
+    last_unwrapped_pcr = 0
+    prev_raw_pcr = None
     current_window_target_bytes = 0
 
     windows = []
@@ -51,19 +53,28 @@ def analyze_pid_bitrate_pcr(ts_file, target_pid, pcr_pid, window_sec, skip_sec):
                 if pcr is not None:
                     if first_pcr_val is None:
                         first_pcr_val = pcr
+                        prev_raw_pcr = pcr
+                        last_unwrapped_pcr = 0
 
-                    rel_time = (pcr - first_pcr_val) / pcr_clock
+                    # Handle 33-bit wrap-around for absolute timeline
+                    diff = pcr - prev_raw_pcr
+                    if diff < -(1 << 32) * 300: diff += (1 << 33) * 300
+                    elif diff > (1 << 32) * 300: diff -= (1 << 33) * 300
+
+                    last_unwrapped_pcr += diff
+                    prev_raw_pcr = pcr
+                    rel_time = last_unwrapped_pcr / pcr_clock
 
                     if rel_time >= skip_sec:
-                        if window_start_pcr is None:
-                            window_start_pcr = pcr
+                        if window_start_pcr_unwrapped is None:
+                            window_start_pcr_unwrapped = last_unwrapped_pcr
                             current_window_target_bytes = 0
                         else:
-                            duration_sec = (pcr - window_start_pcr) / pcr_clock
+                            duration_sec = (last_unwrapped_pcr - window_start_pcr_unwrapped) / pcr_clock
                             if duration_sec >= window_sec:
                                 bitrate_kbps = (current_window_target_bytes * 8) / (duration_sec * 1000.0)
                                 windows.append((rel_time, bitrate_kbps))
-                                window_start_pcr = pcr
+                                window_start_pcr_unwrapped = last_unwrapped_pcr
                                 current_window_target_bytes = 0
 
             # 2. Accumulate bytes for the target PID

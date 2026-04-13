@@ -150,9 +150,11 @@ def check_psi_interval(df, report):
         pat_interval = pat["time"].diff() / 27000.0
         max_pat = pat_interval.max()
         psi_metrics["pat_max_ms"] = max_pat
-        if max_pat > 100: # TR 101 290 P1: 100ms
-            print(f"[FAIL] PAT interval {max_pat:.2f} ms > 100ms limit (pat_period violation)")
+        if max_pat > 500: # ETSI TR 101 290 P1: 500ms (Hard limit)
+            print(f"[FAIL] PAT interval {max_pat:.2f} ms > 500ms limit (DVB Violation)")
             fail += 1
+        elif max_pat > 150: # Industrial best practice is ~100ms, allow some jitter
+            print(f"[WARN] PAT interval {max_pat:.2f} ms exceeds best-practice (100-150ms)")
         else:
             print(f"[PASS] PAT interval OK (Max: {max_pat:.2f} ms)")
     else:

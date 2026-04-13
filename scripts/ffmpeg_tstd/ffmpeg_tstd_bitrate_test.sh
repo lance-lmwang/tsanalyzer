@@ -7,7 +7,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
-FFMPEG="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
+FFMPEG="${FFMPEG_ROOT}/ffmpeg"
+if [ ! -f "$FFMPEG" ]; then
+    FFMPEG="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
+fi
 
 # Test settings
 SRC="/home/lmwang/dev/cae/sample/af2_srt_src.ts"

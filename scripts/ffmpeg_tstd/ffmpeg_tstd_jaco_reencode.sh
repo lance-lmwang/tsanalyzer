@@ -6,9 +6,8 @@ ROOT_DIR=$(dirname $(dirname $(dirname $(readlink -f $0))))
 OUT_DIR="${ROOT_DIR}/output"
 mkdir -p "$OUT_DIR"
 
-FFMPEG_BIN="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
-SRC="/home/lmwang/sample/jaco/202508300200_Al-Taawoun_VS_Al-Nassr_2_cut_100M.ts"
-MUXRATE=25000000
+ffm="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
+src="/home/lmwang/sample/jaco/202508300200_Al-Taawoun_VS_Al-Nassr_2_cut_400M.ts"
 
 echo "=== Jaco Jump Test: T-STD with CBR Re-encode ==="
 
@@ -17,16 +16,20 @@ echo "[Test 1] T-STD Muxer (Re-encoding)..."
 dst="${OUT_DIR}/jaco_tstd.ts"
 log_file="${OUT_DIR}/jaco_tstd.log"
 
-$FFMPEG_BIN -y -v trace -copyts -i "$SRC" \
-    -map 0:v:0 -map 0:a:0 \
-    -c:a libfdk_aac -b:a 64k \
-    -vcodec libwz264 \
-    -wz264-params bframes=0:keyint=25:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1 \
-    -b:v 1600k -pix_fmt yuv420p \
-    -f mpegts -mpegts_flags +pat_pmt_at_frames \
-    -muxrate 2000000 -muxdelay 0.9 \
-    -mpegts_tstd_mode 1 \
-    "$dst" > "$log_file" 2>&1
+base_params="-hide_banner -v error -re -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt -i '$src' \
+      -metadata comment=wzcaetrans \
+      -filter_complex '[0:v]fps=fps=25[fg_0_fps];[fg_0_fps]wzaipreopt=enhtype=WZ_FaceMask_MNN:expandRatio=0.1:speedLvlFace=1,wzoptimize=autoenh=0:ynslvl=0:uvnslvl=0:uvenh=0:sharptype=3:yenh=1.6:thrnum=2[fg_0_custom]' \
+      -map [fg_0_custom] -c:v:0 libwz264 -force_key_frames:v:0 'expr:eq(mod(n,25),0)' \
+      -preset:v:0 fast -wz264-params:v:0 'keyint=25:min-keyint=25:aq-mode=2:aq-weight=0.4:aq-strength=1.0:aq-smooth=1.0:psy-rd=0.3:psy-rd-roi=0.4:qcomp=0.65:rc-lookahead=10:pbratio=1.1:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0' \
+      -map 0:a -c:a:0 copy -map 0:d? -c:d copy -pes_payload_size 0 -threads 2 -pix_fmt yuv420p -color_range tv \
+      -b:v 1600k -flush_packets 0 -muxrate 2100k -inputbw 0 -oheadbw 25 \
+      -maxbw 0 -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
+      -mpegts_start_pid 0x21 -max_muxing_queue_size 4096 -max_interleave_delta 3000000"
+
+#cmd_tstd="$ffm $base_params -mpegts_tstd_mode 1 -f mpegts '$dst' > $log_file 2>&1"
+cmd_tstd="$ffm $base_params -mpegts_tstd_mode 1 -f mpegts '$dst'"
+echo "run: $cmd_tstd"
+eval $cmd_tstd
 
 RET_TSTD=$?
 SIZE_TSTD=$(stat -c%s "$dst" 2>/dev/null || echo 0)
