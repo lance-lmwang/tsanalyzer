@@ -3,6 +3,7 @@
 This directory contains the authoritative documentation for the native FFmpeg T-STD implementation (located in `libavformat/tstd.c`).
 
 ## Native T-STD Core
+- [tstd_implementation_plan.md](./tstd_implementation_plan.md): Detailed implementation roadmap and verification strategy.
 - [tstd_architecture_specification.md](./tstd_architecture_specification.md): T-STD Multiplexer Architecture Specification.
 - [native_tstd_integration.md](./native_tstd_integration.md): High-level integration and runtime state machine.
 - [timestamp_discontinuity_design.md](./timestamp_discontinuity_design.md): Authoritative design for discontinuity handling and PCR injection.
