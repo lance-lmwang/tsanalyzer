@@ -412,7 +412,7 @@ static void tstd_update_tbn(TSTDContext *tstd, TSTDPidState *pid) {
 ```c
 void ff_tstd_step(AVFormatContext *s) {
     /* v_stc is updated in Pacer thread based on physical emission */
-    
+
     // [Control Loop 1] Bitrate PLL: Single Integrator based on byte deviation
     tstd->null_budget = expected_total_bytes(tstd->v_stc) - tstd->total_bytes_queued;
     tstd->null_budget = av_clip64(tstd->null_budget, -BITRATE_THRESHOLD, BITRATE_THRESHOLD);
