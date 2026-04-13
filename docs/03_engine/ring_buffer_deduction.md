@@ -1,6 +1,6 @@
-# TsAnalyzer v3: Lock-Free Data Plane (Design Deduction)
+# TsAnalyzer: Lock-Free Data Plane (Design Deduction)
 
-To achieve **8M pps** (one packet every 125ns), the handoff between the Ingest RX worker and the Metrology Reactor must be zero-latency. This document deduces the memory barrier and cache-line design for the v3 SPSC (Single-Producer Single-Consumer) Ring Buffer.
+To achieve **8M pps** (one packet every 125ns), the handoff between the Ingest RX worker and the Metrology Reactor must be zero-latency. This document deduces the memory barrier and cache-line design for the SPSC (Single-Producer Single-Consumer) Ring Buffer.
 
 ---
 
