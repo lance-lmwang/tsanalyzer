@@ -48,3 +48,21 @@ The engine must treat Forward and Backward jumps with equal priority:
 Buffer safety must override bitrate smoothness during anomalies:
 - **Panic Trigger**: If any PID's FIFO exceeds **75% occupancy**, enter **Panic Mode**.
 - **Panic Policy**: In this mode, the Token Gate is bypassed. The engine will emit packets as fast as the physical `mux_rate` allows until the buffer drops below 50%.
+
+## 5. Engineering Optimizations (v2026.04 Updates)
+
+Following the initial "Never-Lock" policy implementation, additional optimizations were introduced to enhance CBR precision and system reliability:
+
+### 5.1 Dynamic Drain Throttling
+- **Concept**: Introduced `throttle_factor` based on FIFO occupancy.
+- **Logic**: Dynamically scales the drain rate from 50% to 200% of the allocated CBR rate. This ensures I-frame bursts are absorbed while maintaining strict average bitrate uniformity.
+
+### 5.2 Balanced NULL Emission
+- **Concept**: Converted reactive `ACT_NULL` into a debt-based accumulation model.
+- **Logic**: Instead of immediate insertion, NULL packet requirements are tracked in `null_debt_bits` and emitted at a steady pace to maintain constant physical bandwidth, reducing measured jitter.
+
+### 5.3 Operational Hardening
+- **Memory Clamp**: Enforced a hard 10MB limit on PID FIFO buffers to prevent OOM in high-density multi-channel deployments.
+- **Observability**: Added independent `mpegts_tstd_debug` flag. Removed `AV_LOG_TRACE` from hot paths to minimize CPU overhead, elevating critical audit logs to `AV_LOG_INFO`.
+- **PCR Sanity**: Replaced silent PCR regression correction with warning-level logging, allowing operations teams to identify source-side clock stability issues without impacting downstream stream continuity.
+- **Config Sanity**: Enforced 10kbps `mux_rate` minimum floor to prevent catastrophic calculation errors in the scheduler.
