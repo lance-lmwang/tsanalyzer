@@ -65,10 +65,10 @@ for MODE in "${MODES[@]}"; do
 
     # Step B: Re-encode through T-STD Engine
     echo "[*] Processing through T-STD Engine..."
-    $FFMPEG_BIN -y -v trace -i "$MUTATED_TS" \
+    $FFMPEG_BIN -y -i "$MUTATED_TS" \
         -c:v copy -c:a copy \
         -f mpegts \
-        -muxrate $MUXRATE -mpegts_tstd_mode 1 \
+        -muxrate $MUXRATE -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 \
         "$FINAL_TS" > "$FINAL_LOG" 2>&1
 
     # Step C: Verify Compliance

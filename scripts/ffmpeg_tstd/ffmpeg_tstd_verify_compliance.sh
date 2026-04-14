@@ -35,9 +35,9 @@ fi
 
 # 2. Run Python Deep Metrology
 echo "[*] Checking log integrity..."
-TELEMETRY_COUNT=$(grep -c "T-STD" "$LOG_FILE")
+TELEMETRY_COUNT=$(grep -c "\[T-STD\]" "$LOG_FILE")
 if [ "$TELEMETRY_COUNT" -lt 100 ]; then
-    echo "[FAIL] No T-STD telemetry found. Did you use -v debug?"
+    echo "[FAIL] No T-STD telemetry found. Did you use -mpegts_tstd_debug 1?"
     exit 1
 fi
 echo "[PASS] Found $TELEMETRY_COUNT telemetry events."
