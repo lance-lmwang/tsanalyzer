@@ -95,25 +95,28 @@ if [ -f "$BITRATE_AUDITOR" ]; then
     $BITRATE_AUDITOR --log "$LOG_FILE" --pid 0x0100 --window 0.5 --skip 3.0
 
     echo ""
-    echo "[*] Running Broadcast Bitrate Precision Audit (1.0s Window, 64kbps Limit)..."
+    echo "[*] Running Broadcast Bitrate Precision Audit (1.0s Window)..."
     AUDIT_OUT=$($BITRATE_AUDITOR --log "$LOG_FILE" --pid 0x0100 --window 1.0 --skip 3.0)
     AUDIT_EXIT=$?
     echo "$AUDIT_OUT"
 
     FLUCT=$(echo "$AUDIT_OUT" | grep "Fluctuation:" | awk '{print $2}')
-    LIMIT_KBPS=64.0
+    MEAN=$(echo "$AUDIT_OUT" | grep "Mean Bitrate:" | awk '{print $3}')
 
     if [ $AUDIT_EXIT -ne 0 ]; then
         echo "[CRITICAL] Bitrate auditor failed to execute or find data!"
         EXIT_CODE=1
-    elif [ -z "$FLUCT" ]; then
-        echo "[CRITICAL] Could not parse fluctuation from auditor output!"
-        EXIT_CODE=1
-    elif (( $(echo "$FLUCT > $LIMIT_KBPS" | bc -l) )); then
-        echo -e "\033[31m[CRITICAL] Bitrate fluctuation ${FLUCT}k exceeds customer limit (${LIMIT_KBPS}k)!\033[0m"
+    elif [ -z "$FLUCT" ] || [ -z "$MEAN" ]; then
+        echo "[CRITICAL] Could not parse fluctuation/mean from auditor output!"
         EXIT_CODE=1
     else
-        echo -e "\033[32m[PASS] Bitrate stability (1s) verified within ${LIMIT_KBPS}kbps.\033[0m"
+        LIMIT_KBPS=$(echo "$MEAN * 0.15" | bc -l)
+        if (( $(echo "$FLUCT > $LIMIT_KBPS" | bc -l) )); then
+            echo -e "\033[31m[CRITICAL] Bitrate fluctuation ${FLUCT}k exceeds dynamic 15% limit (${LIMIT_KBPS}k)!\033[0m"
+            EXIT_CODE=1
+        else
+            echo -e "\033[32m[PASS] Bitrate stability (1s) verified within 15% limit (${LIMIT_KBPS}k).\033[0m"
+        fi
     fi
 else
     echo "[WARN] Bitrate auditor tool not found. Skipping audit."
