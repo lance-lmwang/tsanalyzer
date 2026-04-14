@@ -323,6 +323,47 @@ for entry in "${MATRIX[@]}"; do
         echo "[WARN] af2_srt_src.ts not found, skipping Phase 8."
         fi
 
+        # --- Phase 9: High-Level Stream Integrity Audit ---
+        echo ""
+        echo "================================================"
+        echo "   PHASE 9: High-Level Stream Integrity Audit"
+        echo "================================================"
+        INTEGRITY_TS="${OUT_DIR}/tstd_smoke.ts"
+        if [ -f "$INTEGRITY_TS" ]; then
+            echo "[*] Auditing stream counts and metadata in $INTEGRITY_TS..."
+            V_COUNT=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams v -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$INTEGRITY_TS" | wc -l)
+            A_COUNT=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams a -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$INTEGRITY_TS" | wc -l)
+            S_NAME=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -show_entries format_tags=service_name -of default=noprint_wrappers=1:nokey=1 "$INTEGRITY_TS")
+
+            echo "    - Video streams: $V_COUNT (Expected: >=1)"
+            echo "    - Audio streams: $A_COUNT (Expected: >=1)"
+            echo "    - Service Name:  $S_NAME (Expected: wz_tstd)"
+
+            # --- Expanded: Detailed SI/PSI Audit ---
+            PAT_COUNT=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams v -show_entries packet=pid -show_packets "$INTEGRITY_TS" | grep "pid=0" | wc -l)
+            PMT_COUNT=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams v -show_entries packet=pid -show_packets "$INTEGRITY_TS" | grep "pid=4096" | wc -l)
+            SDT_COUNT=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams v -show_entries packet=pid -show_packets "$INTEGRITY_TS" | grep "pid=17" | wc -l)
+
+            echo "    - PAT Packets:   $PAT_COUNT (Expected: >0)"
+            echo "    - PMT Packets:   $PMT_COUNT (Expected: >0)"
+            echo "    - SDT Packets:   $SDT_COUNT (Expected: >0)"
+
+            if [ "$PAT_COUNT" -lt 1 ] || [ "$PMT_COUNT" -lt 1 ] || [ "$SDT_COUNT" -lt 1 ]; then
+                echo -e "    \033[31m[FAIL] SI/PSI Tables missing! TS is physically corrupted.\033[0m"
+                GLOBAL_FAIL=1
+            elif [ "$V_COUNT" -lt 1 ] || [ "$A_COUNT" -lt 1 ]; then
+                echo -e "    \033[31m[FAIL] Stream Integrity compromised! Missing Video/Audio streams.\033[0m"
+                GLOBAL_FAIL=1
+            elif [[ "$S_NAME" != *"wz_tstd"* ]]; then
+                echo -e "    \033[31m[FAIL] Metadata integrity compromised! Service Name ($S_NAME) mismatch.\033[0m"
+                GLOBAL_FAIL=1
+            else
+                echo -e "    \033[32m[PASS] High-level stream integrity verified.\033[0m"
+            fi
+        else
+            echo "[WARN] Final TS not found, skipping Phase 9."
+        fi
+
         echo ""
 echo "------------------------------------------------"
 if [ $GLOBAL_FAIL -eq 0 ]; then echo -e "\033[32mSTATUS: ALL REGRESSION PHASES PASSED (GOLDEN)\033[0m"; else echo -e "\033[31mSTATUS: REGRESSION TEST FAILED. REVIEW WARNINGS/ERRORS ABOVE.\033[0m"; fi
