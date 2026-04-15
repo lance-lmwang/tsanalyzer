@@ -37,7 +37,7 @@ fi
 echo "[*] Checking log integrity..."
 TELEMETRY_COUNT=$(grep -c "\[T-STD\]" "$LOG_FILE")
 if [ "$TELEMETRY_COUNT" -lt 100 ]; then
-    echo "[FAIL] No T-STD telemetry found. Did you use -mpegts_tstd_debug 1?"
+    echo "[FAIL] No T-STD telemetry found. Did you use -mpegts_tstd_debug 2?"
     exit 1
 fi
 echo "[PASS] Found $TELEMETRY_COUNT telemetry events."

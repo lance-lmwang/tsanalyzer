@@ -62,22 +62,23 @@ echo "[*] Log file: $log_file"
 
 # --- FFmpeg Command Logic ---
 # Optimized with libwz264 CBR settings and T-STD V3 Pacer
+vbv_buffer=$((bitrate_kb / 2))
 cmd="$ffm -y -i '$src' \
       -t $test_duration \
       -map 0:v:0 -map 0:a:0 \
       -c:a libfdk_aac -profile:a aac_low -b:a 128k \
       -vcodec libwz264 \
-      -wz264-params bframes=0:keyint=25:vbv-maxrate=$bitrate:vbv-bufsize=$bitrate:nal-hrd=cbr:force-cfr=1:aud=1 -threads 4 \
+      -wz264-params bframes=0:keyint=25:vbv-maxrate=$bitrate_kb:vbv-bufsize=$vbv_buffer:nal-hrd=cbr:force-cfr=1:aud=1 -threads 4 \
       -b:v $bitrate -profile:v Main -preset medium -pix_fmt yuv420p \
       -force_key_frames 'expr:gte(t,n_forced*1)' \
       -dn \
       -flush_packets 0 \
-      -metadata service_name="wz_tstd" \
-      -metadata service_provider="wz" \
-      -f mpegts -mpegts_flags +pat_pmt_at_frames \
-      -muxrate $muxrate -muxdelay 0.9 \
-      -pcr_period 30 -pat_period 0.1 -sdt_period 0.25 \
-      -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 \
+      -metadata service_name=\"wz_tstd\" \
+      -metadata service_provider=\"wz\" \
+      -f mpegts \
+      -muxrate $muxrate -muxdelay 1.0 \
+      -pcr_period 30 -pat_period 0.2 -sdt_period 1.0 \
+      -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
       '$dst' \
       > $log_file 2>&1"
 
@@ -212,11 +213,14 @@ for entry in "${MATRIX[@]}"; do
         s_name=$(basename "$src")
         echo "[*] Testing: $name ($v_br) | Source: $s_name"
 
+        # Strip 'k' from v_br for wz264-params
+        v_br_num=$(echo "$v_br" | sed 's/k//')
+
         CUR_LOG="${OUT_DIR}/sync_test_${name}_${s_name}.log"
         $ffm -y -hide_banner -i "$src" -t 60 \
-              -c:v libwz264 -b:v $v_br -preset ultrafast -wz264-params bframes=0:keyint=25:vbv-maxrate=$v_br:vbv-bufsize=$v_br:nal-hrd=cbr:force-cfr=1:aud=1 \
+              -c:v libwz264 -b:v $v_br -preset ultrafast -wz264-params bframes=0:keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1:aud=1 \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate $m_br -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 \
+              -f mpegts -muxrate $m_br -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
               "${OUT_DIR}/sync_${name}_${s_name}.ts" > "$CUR_LOG" 2>&1
 
         MAX_A_TOK=$(grep "PID:257" "$CUR_LOG" | tail -n 50 | grep "TOK:" | awk -F'TOK:' '{print $2}' | awk '{print $1}' | sort -nr | head -n 1)
@@ -308,7 +312,7 @@ for entry in "${MATRIX[@]}"; do
         $ffm -y -hide_banner -copyts -i "$COPYTS_SRC" -t 30 \
               -c:v libwz264 -b:v 1600k -preset ultrafast \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate 2000k -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 \
+              -f mpegts -muxrate 2000k -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
               "$COPYTS_TS" > "$COPYTS_LOG" 2>&1
 
         actual=$($ffp -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$COPYTS_TS")

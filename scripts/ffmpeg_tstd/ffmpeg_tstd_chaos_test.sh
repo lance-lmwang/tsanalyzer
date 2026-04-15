@@ -68,7 +68,7 @@ for MODE in "${MODES[@]}"; do
     $FFMPEG_BIN -y -i "$MUTATED_TS" \
         -c:v copy -c:a copy \
         -f mpegts \
-        -muxrate $MUXRATE -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 \
+        -muxrate $MUXRATE -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
         "$FINAL_TS" > "$FINAL_LOG" 2>&1
 
     # Step C: Verify Compliance
