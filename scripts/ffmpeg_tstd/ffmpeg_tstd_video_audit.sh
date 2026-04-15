@@ -9,27 +9,32 @@ mkdir -p "$OUT_DIR"
 FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 AUDITOR="${SCRIPT_DIR}/ffmpeg_tstd_pcr_sliding_window.py"
-SRC="/home/work/jinzicai/FFmpeg/SRT_PUSH_KNET_SD-s2ejvr9_20260311-13.04.03.ts"
 
-if [ ! -f "$SRC" ]; then
-    echo "[!] Warning: User specified SRC not found, falling back to af2_srt_src.ts"
-    SRC="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+SRC="$1"
+if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
+    echo "[!] Warning: User specified SRC not found or empty, falling back to default"
+    SRC="/home/lmwang/dev/cae/sample/input.mp4"
+    if [ ! -f "$SRC" ]; then
+        SRC="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+    fi
 fi
 
 echo "=============================================================================="
 echo "  T-STD PRODUCTION PARAMETERS AUDIT (PCR Time, 1504ms Window)"
 echo "=============================================================================="
-echo "MODE | GOP | VBV | MEAN_BR(bps) | MAX_BR(bps) | MIN_BR(bps) | FLUCTUATION(bps)"
-echo "------------------------------------------------------------------------------"
+echo "MODE |    MEAN_BR |     MAX_BR |     MIN_BR |   FLUCT(bps) |  NULL% | NO_TOK |   NO_DAT |      I_MAX |    I_FLUCT"
+echo "------------------------------------------------------------------------------------------------------------------------"
 
 run_mode() {
     local mode=$1
     local name=$2
     local dst="${OUT_DIR}/m${mode}_prod.ts"
 
-    # 使用用户提供的完整生产参数 (去除 -re 提高转码速度，限定 -t 60 秒保证足够审计数据)
+    local tstd_log="${dst}.log"
+
+    # 使用用户提供的完整生产参数 (去除 -re 提高转码速度，限定 -t 120 秒保证足够审计数据)
     $ffm -hide_banner -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
-        -i "$SRC" -t 60 \
+        -i "$SRC" -t 120 \
         -metadata comment=wzcaetrans \
         -filter_complex '[0:v]fps=fps=25[fg_0_fps];[fg_0_fps]wzaipreopt=enhtype=WZ_FaceMask_MNN:expandRatio=0.1:speedLvlFace=1,wzoptimize=autoenh=0:ynslvl=0:uvnslvl=0:uvenh=0:sharptype=3:yenh=1.6:thrnum=2[fg_0_custom]' \
         -map '[fg_0_custom]' -c:v:0 libwz264 -g:v:0 25 -force_key_frames:v:0 'expr:if(mod(n,25),0,1)' \
@@ -38,7 +43,7 @@ run_mode() {
         -b:v 600k -flush_packets 0 -muxrate 1100k -inputbw 0 -oheadbw 25 \
         -maxbw 0 -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
         -mpegts_start_pid 0x21 -mpegts_tstd_mode $mode -mpegts_tstd_debug 2 -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
-        -f mpegts "$dst" > /dev/null 2>&1
+        -f mpegts "$dst" > "$tstd_log" 2>&1
 
     # 专家级 PCR 审计 (1504ms 滑动窗口)
     local audit=$(python3 "$AUDITOR" "$dst" --vid_pid 0x21 --pcr_pid 0x21 --window_ms 1504.0 --skip_sec 3.0 --mode promax --muxrate 1100000)
@@ -53,10 +58,34 @@ run_mode() {
        print a[1], b[1], c[1], d[1]
     }')
 
-    printf "%4s |  1s |  1s | %12.2f | %11.2f | %11.2f | %16.2f\n" "$mode" "${mean:-0}" "${max_b:-0}" "${min_b:-0}" "${fluct:-0}"
+    # 提取 T-STD 遥感日志
+    local null_pct="N/A"
+    local tb_full="N/A"
+    local no_tok="N/A"
+    local no_dat="N/A"
+
+    local int_max="N/A"
+    local int_fluct="N/A"
+
+    if grep -q "T-STD METRICS SUMMARY" "$tstd_log"; then
+        null_pct=$(grep "NULL Packets" "$tstd_log" | awk -F'[(%]' '{print $2}')
+        tb_full=$(grep "Reason: TB Full" "$tstd_log" | awk -F':' '{print $3}' | tr -d ' ')
+        no_tok=$(grep "Reason: No Tokn" "$tstd_log" | awk -F':' '{print $3}' | tr -d ' ')
+        no_dat=$(grep "Reason: No Data" "$tstd_log" | awk -F':' '{print $3}' | tr -d ' ')
+
+        # 提取 PID 0x0021 的遥感数据：Avg=xxx, Max=xxx, Min=xxx, Fluct=xxx bps
+        # [mpegts @ 0x...]     - PID 0x0021: Avg=636308, Max=857000, Min=481125, Fluct=375875 bps
+        local pid_line=$(grep "PID 0x0021:" "$tstd_log" | tail -n 1)
+        if [ -n "$pid_line" ]; then
+            int_max=$(echo "$pid_line" | awk -F'Max=' '{print $2}' | awk -F',' '{print $1}')
+            int_fluct=$(echo "$pid_line" | awk -F'Fluct=' '{print $2}' | awk '{print $1}')
+        fi
+    fi
+
+    printf "%4s | %10.2f | %10.2f | %10.2f | %12.2f | %6s%% | %6s | %8s | %10s | %10s\n" "$mode" "${mean:-0}" "${max_b:-0}" "${min_b:-0}" "${fluct:-0}" "$null_pct" "$no_tok" "$no_dat" "$int_max" "$int_fluct"
 }
 
 #run_mode 0 "Native"
 run_mode 1 "Strict"
 #run_mode 2 "Elastic"
-echo "------------------------------------------------------------------------------"
+echo "------------------------------------------------------------------------------------------------------------------------"

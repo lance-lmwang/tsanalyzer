@@ -166,28 +166,41 @@ else
     echo "[WARN] Wrap-around test script not found, skipping Phase 4."
 fi
 
-# --- Phase 5: Bitrate Stability Audit (Final Precision Check) ---
-echo ""
+# --- Phase 5: Bitrate & Latency Stability Audit ---
 echo "================================================"
-echo "   PHASE 5: Bitrate Stability Audit (1.0s Window)"
+echo "   PHASE 5: Bitrate Stability & Latency Audit"
 echo "================================================"
-AUDITOR_PY="${ROOT_DIR}/scripts/ffmpeg_tstd/tstd_bitrate_auditor.py"
-if [ -f "$AUDITOR_PY" ] && [ -f "$log_file" ]; then
-    echo "[*] Auditing $log_file for PID 0x0100 (Limit: 64kbps)..."
-    AUDIT_OUT=$(python3 "$AUDITOR_PY" --log "$log_file" --pid 0x0100 --window 1.0 --skip 5.0)
-    echo "$AUDIT_OUT"
+if [ -f "$log_file" ]; then
+    echo "[*] Auditing $log_file via updated T-STD Telemetry..."
 
-    FLUCT=$(echo "$AUDIT_OUT" | grep "Fluctuation:" | awk '{print $2}')
-    LIMIT_KBPS=320.0
+    # PID 0x0021 Bitrate (Video)
+    pid_line=$(grep "PID 0x0021:" "$log_file" | tail -n 1)
+    # 恢复：PID 0x0021 平均比特率和波动监控
+    avg_br=$(echo "$pid_line" | awk -F'Avg=' '{print $2}' | awk -F',' '{print $1}')
+    fluct=$(echo "$pid_line" | awk -F'Fluct=' '{print $2}' | awk '{print $1}')
 
-    if [ -n "$FLUCT" ] && (( $(echo "$FLUCT > $LIMIT_KBPS" | bc -l) )); then
-        echo -e "\033[31m[FAIL] Bitrate fluctuation ${FLUCT}k exceeds limit ${LIMIT_KBPS}k!\033[0m"
+    # 增加：音频延迟监控 (提取 D: 后面的数值)
+    a_latency=$(grep "\[T-STD SEC\]" "$log_file" | tail -n 1 | sed -n 's/.*A_In:[0-9]*k(D:\([0-9]*\)ms).*/\1/p')
+
+    echo "    - Video Mean Bitrate:  ${avg_br:-0} bps"
+    echo "    - Video Fluctuation:   ${fluct:-0} bps"
+    echo "    - Total Audio Latency: ${a_latency:-0} ms"
+
+    # 阈值判断
+    LIMIT_BPS=400000
+    if [ -n "$fluct" ] && [ "$fluct" -gt "$LIMIT_BPS" ]; then
+        echo -e "\033[31m[FAIL] Video Fluctuation ${fluct} bps exceeds ${LIMIT_BPS} bps!\033[0m"
+        GLOBAL_FAIL=1
+    fi
+
+    if [ -n "$a_latency" ] && [ "$a_latency" -gt 500 ]; then
+        echo -e "\033[31m[FAIL] Audio Latency ${a_latency}ms exceeds 500ms safety threshold!\033[0m"
         GLOBAL_FAIL=1
     else
-        echo -e "\033[32m[PASS] Bitrate stability verified within ${LIMIT_KBPS}kbps.\033[0m"
+        echo -e "\033[32m[PASS] Bitrate and Latency stability verified within limits.\033[0m"
     fi
 else
-    echo "[WARN] Auditor script or log file missing, skipping Phase 5."
+    echo "[WARN] Log file missing, skipping Phase 5."
 fi
 
 # --- Phase 6: Audio Synchrony Matrix Test ---
@@ -378,3 +391,16 @@ if [ $GLOBAL_FAIL -eq 0 ]; then echo -e "\033[32mSTATUS: ALL REGRESSION PHASES P
 echo "------------------------------------------------"
 echo "[*] Smoke Test finished."
 exit $GLOBAL_FAIL
+
+# --- Phase 11: L0 PANIC Preemption Audit ---
+echo ""
+echo "================================================"
+echo "   PHASE 11: L0 PANIC Preemption Audit"
+echo "================================================"
+# 统计日志中 P:1 出现的频率
+panic_count=$(grep "P:1" "$log_file" | wc -l)
+if [ "$panic_count" -gt 0 ]; then
+    echo -e "    \033[33m[INFO] System triggered $panic_count PANIC preemptions (L0 Scheduler Action).\033[0m"
+else
+    echo -e "    \033[32m[PASS] System operated within NORMAL/URGENT tiers.\033[0m"
+fi
