@@ -1,5 +1,5 @@
 #!/bin/bash
-# T-STD V3 PCR-Based PROMAX Alignment Matrix (GOP 1s, VBV 1s)
+# T-STD MG-bitrate Audit Tool (Aligned with ETSI TR 101 290)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -10,82 +10,75 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 AUDITOR="${SCRIPT_DIR}/ffmpeg_tstd_pcr_sliding_window.py"
 
-SRC="$1"
-if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
-    echo "[!] Warning: User specified SRC not found or empty, falling back to default"
-    SRC="/home/lmwang/dev/cae/sample/input.mp4"
-    if [ ! -f "$SRC" ]; then
-        SRC="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
-    fi
-fi
-
-echo "=============================================================================="
-echo "  T-STD PRODUCTION PARAMETERS AUDIT (PCR Time, 1504ms Window)"
-echo "=============================================================================="
-echo "MODE |    MEAN_BR |     MAX_BR |     MIN_BR |   FLUCT(bps) |  NULL% | NO_TOK |   NO_DAT |      I_MAX |    I_FLUCT"
-echo "------------------------------------------------------------------------------------------------------------------------"
-
-run_mode() {
-    local mode=$1
-    local name=$2
-    local dst="${OUT_DIR}/m${mode}_prod.ts"
-
-    local tstd_log="${dst}.log"
-
-    # 使用用户提供的完整生产参数 (去除 -re 提高转码速度，限定 -t 120 秒保证足够审计数据)
-    $ffm -hide_banner -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
-        -i "$SRC" -t 120 \
-        -metadata comment=wzcaetrans \
-        -filter_complex '[0:v]fps=fps=25[fg_0_fps];[fg_0_fps]wzaipreopt=enhtype=WZ_FaceMask_MNN:expandRatio=0.1:speedLvlFace=1,wzoptimize=autoenh=0:ynslvl=0:uvnslvl=0:uvenh=0:sharptype=3:yenh=1.6:thrnum=2[fg_0_custom]' \
-        -map '[fg_0_custom]' -c:v:0 libwz264 -g:v:0 25 -force_key_frames:v:0 'expr:if(mod(n,25),0,1)' \
-        -preset:v:0 fast -wz264-params:v:0 'keyint=25:min-keyint=25:aq-mode=2:aq-weight=0.4:aq-strength=1.0:aq-smooth=1.0:psy-rd=0.3:psy-rd-roi=0.4:qcomp=0.65:rc-lookahead=10:pbratio=1.1:vbv-maxrate=600:vbv-bufsize=600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0' \
-        -map 0:a -c:a:0 copy -map '0:d?' -c:d copy -pes_payload_size 0 -threads 2 -pix_fmt yuv420p -color_range tv \
-        -b:v 600k -flush_packets 0 -muxrate 1100k -inputbw 0 -oheadbw 25 \
-        -maxbw 0 -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
-        -mpegts_start_pid 0x21 -mpegts_tstd_mode $mode -mpegts_tstd_debug 2 -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
-        -f mpegts "$dst" > "$tstd_log" 2>&1
-
-    # 专家级 PCR 审计 (1504ms 滑动窗口)
-    local audit=$(python3 "$AUDITOR" "$dst" --vid_pid 0x21 --pcr_pid 0x21 --window_ms 1504.0 --skip_sec 3.0 --mode promax --muxrate 1100000)
-
-    read mean max_b min_b fluct <<< $(echo "$audit" | awk -F':' '
-    /Mean Bitrate/ {m=$2}
-    /Max Bitrate/ {x=$2}
-    /Min Bitrate/ {n=$2}
-    /Fluctuation/ {f=$2}
-    END {
-       split(m,a," "); split(x,b," "); split(n,c," "); split(f,d," ");
-       print a[1], b[1], c[1], d[1]
-    }')
-
-    # 提取 T-STD 遥感日志
-    local null_pct="N/A"
-    local tb_full="N/A"
-    local no_tok="N/A"
-    local no_dat="N/A"
-
-    local int_max="N/A"
-    local int_fluct="N/A"
-
-    if grep -q "T-STD METRICS SUMMARY" "$tstd_log"; then
-        null_pct=$(grep "NULL Packets" "$tstd_log" | awk -F'[(%]' '{print $2}')
-        tb_full=$(grep "Reason: TB Full" "$tstd_log" | awk -F':' '{print $3}' | tr -d ' ')
-        no_tok=$(grep "Reason: No Tokn" "$tstd_log" | awk -F':' '{print $3}' | tr -d ' ')
-        no_dat=$(grep "Reason: No Data" "$tstd_log" | awk -F':' '{print $3}' | tr -d ' ')
-
-        # 提取 PID 0x0021 的遥感数据：Avg=xxx, Max=xxx, Min=xxx, Fluct=xxx bps
-        # [mpegts @ 0x...]     - PID 0x0021: Avg=636308, Max=857000, Min=481125, Fluct=375875 bps
-        local pid_line=$(grep "PID 0x0021:" "$tstd_log" | tail -n 1)
-        if [ -n "$pid_line" ]; then
-            int_max=$(echo "$pid_line" | awk -F'Max=' '{print $2}' | awk -F',' '{print $1}')
-            int_fluct=$(echo "$pid_line" | awk -F'Fluct=' '{print $2}' | awk '{print $1}')
-        fi
-    fi
-
-    printf "%4s | %10.2f | %10.2f | %10.2f | %12.2f | %6s%% | %6s | %8s | %10s | %10s\n" "$mode" "${mean:-0}" "${max_b:-0}" "${min_b:-0}" "${fluct:-0}" "$null_pct" "$no_tok" "$no_dat" "$int_max" "$int_fluct"
+show_help() {
+    echo "Usage: $0 [input_file] [vbr] [mux] [duration] [mode]"
+    exit 0
 }
 
-#run_mode 0 "Native"
-run_mode 1 "Strict"
-#run_mode 2 "Elastic"
-echo "------------------------------------------------------------------------------------------------------------------------"
+SRC="${1:-/home/lmwang/dev/cae/sample/knet_sd_03.ts}"
+VBR_TARGET="${2:-800}"
+MUX_TARGET="${3:-1200}"
+DUR="${4:-120}"
+MODE="${5:-1}"
+
+SRC_BASE=$(basename "$SRC" | cut -f 1 -d '.')
+
+print_header() {
+    echo "MODE |   V_BIT |    MUX |     MEANk |      MAXk |      MINk |    ±V_DEVk |   V_JIT% | NO_TOK |   NO_DAT |    I_MEANk |     I_MAXk |     I_MINk |    ±I_DEVk"
+    echo "----------------------------------------------------------------------------------------------------------------------------------------------------------------"
+}
+
+run_mux() {
+    local mode=$1 vbr=$2 mux=$3
+    local vbr_val=$(echo "$vbr" | sed 's/[kKmM]//g')
+    local mux_val=$(echo "$mux" | sed 's/[kKmM]//g')
+    local dst="${OUT_DIR}/${SRC_BASE}_m${mode}_v${vbr_val}.ts"
+    $ffm -hide_banner -stream_loop -1 -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
+        -i "$SRC" -t "$DUR" \
+        -preset fast -wz264-params "keyint=25:vbv-maxrate=${vbr_val}:vbv-bufsize=$((vbr_val/2)):nal-hrd=cbr" \
+        -b:v "${vbr_val}k" -muxrate "${mux_val}k" -muxdelay 0.9 -pcr_period 30 \
+        -mpegts_start_pid 0x21 -mpegts_tstd_mode "$mode" -mpegts_tstd_debug 2 \
+        -f mpegts "$dst" > "${dst}.log" 2>&1
+}
+
+run_audit() {
+    local mode=$1 vbr=$2 mux=$3
+    local vbr_val=$(echo "$vbr" | sed 's/[kKmM]//g')
+    local dst="${OUT_DIR}/${SRC_BASE}_m${mode}_v${vbr_val}.ts"
+    local tstd_log="${dst}.log"
+
+    if [ ! -f "$dst" ]; then return; fi
+
+    local audit=$(python3 "$AUDITOR" "$dst" --vid_pid 0x21 --muxrate $((mux * 1000)))
+    read mean_k max_k min_k dev_k <<< $audit
+
+    local v_jit=$(echo "scale=2; ($dev_k / $mean_k) * 100" | bc -l)
+
+    local no_tok="N/A"; local no_dat="N/A"; local i_mean="N/A"; local i_max="N/A"; local i_min="N/A"; local i_dev="N/A"
+
+    if [ "$mode" -ne 0 ] && grep -q "T-STD METRICS SUMMARY" "$tstd_log"; then
+        local pid_line=$(grep "PID 0x0021:" "$tstd_log" | tail -n 1)
+        if [ -n "$pid_line" ]; then
+            local avg_bps=$(echo "$pid_line" | awk -F'Avg=' '{print $2}' | awk -F',' '{print $1}')
+            local max_bps=$(echo "$pid_line" | awk -F'Max=' '{print $2}' | awk -F',' '{print $1}')
+            local min_bps=$(echo "$pid_line" | awk -F'Min=' '{print $2}' | awk -F',' '{print $1}')
+            local fl_bps=$(echo "$pid_line" | awk -F'Fluct=' '{print $2}' | awk '{print $1}')
+            i_mean=$(echo "scale=2; ${avg_bps:-0} / 1000" | bc); i_max=$(echo "scale=2; ${max_bps:-0} / 1000" | bc); i_min=$(echo "scale=2; ${min_bps:-0} / 1000" | bc)
+            i_dev=$(printf "±%.2f" "$(echo "scale=2; ${fl_bps:-0} / 2000" | bc)")
+        fi
+    fi
+    printf "%4s | %7s | %6s | %10.2f | %10.2f | %10.2f | %12s | %7s%% | %6s | %8s | %10s | %10s | %10s | %12s\n" \
+           "$mode" "$vbr_val" "$mux" "$mean_k" "$max_k" "$min_k" "±$dev_k" "$v_jit" "$no_tok" "$no_dat" "$i_mean" "$i_max" "$i_min" "$i_dev"
+}
+
+if [ -n "$2" ] || [ -n "$3" ]; then
+    print_header
+    run_mux "$MODE" "$VBR_TARGET" "$MUX_TARGET"
+    run_audit "$MODE" "$VBR_TARGET" "$MUX_TARGET"
+else
+    run_mux 1 800 1200 & run_mux 1 1000 1400 & run_mux 1 1300 1700 & wait
+    print_header
+    run_audit 1 800 1200
+    run_audit 1 1000 1400
+    run_audit 1 1300 1700
+fi
