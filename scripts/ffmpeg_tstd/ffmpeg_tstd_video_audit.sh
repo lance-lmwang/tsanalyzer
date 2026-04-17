@@ -39,11 +39,12 @@ run_mux() {
 run_audit() {
     local mode=$1 vbr=$2 mux=$3
     local vbr_val=$(echo "$vbr" | sed 's/[kKmM]//g')
+    local mux_val=$(echo "$mux" | sed 's/[kKmM]//g')
     local dst="${OUT_DIR}/${SRC_BASE}_m${mode}_v${vbr_val}.ts"
 
     if [ ! -f "$dst" ]; then return; fi
 
-    # 1. 如果是单次执行，输出详细的按秒及异常报告
+    # 1. 如果是单次执行，输出详细的 v7.0 滑动窗口报告
     if [ "$SINGLE_RUN" = "1" ]; then
         python3 "$AUDITOR" "$dst" --vid 0x21 --target "$vbr_val"
     fi

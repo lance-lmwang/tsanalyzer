@@ -1,185 +1,58 @@
-# T-STD 确定性物理整形器规范（v5.0 - Rate Feedback Edition）
+# T-STD 确定性物理整形器规范（v6.0 - Industrial Standard）
 
 ---
 
-## 1. 设计目标（Design Goals）
-
-本系统实现一个**广播级 MPEG-TS Muxer 核心调度引擎**，满足：
-
-### 1.1 码率稳定性（核心KPI）
-* 1s 滑动窗口：
-  * Bitrate Fluctuation ≤ ±ε（典型 ε = 4% ~ 5%）
-* 符合 ETSI TR 101 290 测量模型
-
-### 1.2 PCR 精度
-* PCR Jitter < 100ns（相对 27MHz STC）
-* 绝对零抖动无漂移（Phase-locked via Fractional STC）
-
-### 1.3 T-STD 合规
-* 满足 ISO/IEC 13818-1
-* 无 ES buffer overflow / underflow
-
-### 1.4 系统属性
-* Real-time / Offline 完全一致
-* Deterministic（无 wall-clock 依赖，基于 vSTC 虚拟节拍推移）
-* 无微观突发（No Burst Emission）
+## 1. 核心目标：物理层零抖动与微观平滑
+*   **PCR Jitter**: < 100ns (目标 0ns via Fractional STC).
+*   **Bitrate Stability**: 1s 窗口波动 ≤ ±4%.
+*   **Micro-Smoothness**: 100ms 瞬时低谷（Min_Dip）必须 > Target * 70%.
 
 ---
 
-## 2. 总体架构（Architecture）
-
-```text
-                +----------------------+
-                | Fractional STC (DDA)|
-                +----------------------+
-                           ↓
-                +----------------------+
-                |  ΣΔ Token Scheduler  |
-                +----------------------+
-                           ↓
-                +----------------------+
-                | Rate Feedback Clamp  |  ← NEW in v5.0
-                +----------------------+
-                           ↓
-                +----------------------+
-                | Output TS Packet     |
-                +----------------------+
-```
+## 2. 总体架构 (The Pipeline)
+`Fractional STC (Bresenham)` → `ΣΔ Pacing Engine` → `Closed-Loop Rate Feedback` → `Physical Emission`.
 
 ---
 
-## 3. 物理层（Physical Layer）
+## 3. 物理层审计标准 (Metrology L1 Standard)
 
-### 3.1 Fractional STC（27MHz DDA）
-用于生成无累积误差的虚拟时钟：
-$$N = \lfloor (1504 \times 27,000,000) / MuxRate \rfloor$$
-$$R = (1504 \times 27,000,000) \pmod{MuxRate}$$
+### 3.1 核心测量模型：梯形积分 (Trapezoidal Integration)
+审计仪不再采用简单的包计数，而是模拟 T-STD 排空过程：
+$$Rate(t) = \frac{\int_{t-W}^{t} Bits(\tau) d\tau}{W}$$
+其中 $W$ 为滑动窗口宽度（1s 或 100ms）。
 
-**更新规则**：
+### 3.2 判定状态 (Diagnosis States)
+| 状态标记 | 触发条件 | 物理含义 |
+| :--- | :--- | :--- |
+| **OK** | 均值正常 & 无微观坍塌 | 广播级输出，完美 CBR。 |
+| **! LOW !** | $Vid\_1s < Target \times 0.9$ | **物理上限压制**：通常由 `min_gap` 设置过大或 `window_bits` 策略过严导致。 |
+| **!!! DIP !!!** | $Min\_100ms < Target \times 0.6$ | **瞬时物理空洞**：由于带宽被 SI/PCR 挤占且视频无“补课”能力，导致解码器端可能卡顿。 |
+| **!!! STALL !!!** | $Rate < 10\text{kbps}$ | **逻辑锁死或断流**：Muxer 停止输出视频负载，仅保留 PCR/NULL。 |
+| **TIME_JUMP** | $\Delta PCR > 10\text{s}$ | **时钟断裂**：PCR 时间轴非线性跳变，属于底层引擎严重错误。 |
+
+---
+
+## 4. 控制层逻辑实现
+
+### 4.1 ΣΔ 积分器 (Sigma-Delta)
+$$err\_acc \leftarrow err\_acc + \frac{Shaping\_Rate}{Muxrate}$$
+*   **准入**: $err\_acc \ge 1.0$。
+*   **对冲**: 发包后 $err\_acc \leftarrow err\_acc - 1.0$。
+
+### 4.2 闭环速率守卫 (Rate Feedback Guard) - NEW
+为防止 1.2x OPR 导致的“全油门”超标，在 `pick_es_pid` 增加闭环限制：
 ```c
-rem += R;
-if (rem >= muxrate) {
-    v_stc += N + 1;
-    rem -= muxrate;
-} else {
-    v_stc += N;
-}
+if (pid->window_bits > pid->bitrate_bps)
+    continue; // 达到 1s 额度上限，强制点刹
 ```
 
-### 3.2 原子槽位 (Atomic Slot) & 物理间距守护 (Gap Guard)
-* 每个 slot 必须输出且仅输出 1 个 TS packet（payload 或 NULL），严禁 `while` 连续连发。
-* **Expert Pacing Guard (实现评审吸收)**：为了确保包在微观时间轴上的绝对平滑，强制实施物理槽位间距拦截。
-```c
-int64_t min_gap = (tstd->mux_rate + pid->shaping_rate_bps - 1) / pid->shaping_rate_bps;
-if (tstd->physical_pkt_idx < pid->last_sent_idx + min_gap) continue;
-```
+### 4.3 物理间距守护 (Gap Guard)
+*   **v4.0**: $min\_gap = 2$（导致 600k 瓶颈）。
+*   **v6.0**: $min\_gap = 1$（释放带宽，允许自愈补课）。
 
 ---
 
-## 4. 控制层（Control Layer）
-
-### 4.1 ΣΔ 积分器（Token Model）
-每个 PID：
-$$err\_acc += \frac{ShapingRate}{MuxRate}$$
-* **发包条件**：`if (err_acc >= 1.0) eligible = 1;`
-* **积分扣减**：发包后 `err_acc -= 1.0;`
-
-### 4.2 影子槽位对冲 (Shadow Slot Deduction - 实现评审吸收)
-当物理槽位被最高优先级的 PCR 占用时，必须从该流的 $err\_acc$ 中同步扣除额度（$-1.0$），并且更新 `last_sent_idx`，防止 PCR 抢占导致的视频配额堆积和突发。
-
-### 4.3 OPR（Over-Provisioning Rate）
-* **v4.0 经验值**：为了利用 ΣΔ 模型拉动视频包，防止 FIFO 慢性堆积，实际工程代码中采用了 `1.2x` 的 OPR（即 $OPR = 1.2$）。
-* **v5.0 推荐值**：结合 Rate Feedback 后，OPR 的主要作用退化为仅提供调度余量，无需用其硬抗波动，因此推荐更紧凑的 OPR $\approx 1.02 \sim 1.03$（$\epsilon = 5\%$）。
-
-### 4.4 欠载复位（Underflow Reset - Anti-Burst 核心）
-* 当可用数据不足 1 个 TS 包大小时，必须强制削平信用，防止“过剩信用”在下一帧（I帧）到来时产生报复性释放。
-* **v4.0 物理上限**：`if (err_acc > 1.1) err_acc = 1.1;`（允许一次极其微小的对齐补课，但不准爆发）。
-* **v5.0 更严格的限制**：`err_acc = FFMIN(err_acc, 0.5);`
-
----
-
-## 5. 核心：码率反馈控制（Rate Feedback Layer - v5.0）
-
-### 5.1 滑动窗口模型（TR 101 290 对齐）
-* **主窗口**：1s
-* **辅助窗口**：100ms（抑制 micro-burst）
-
-### 5.2 数据结构与更新
-```c
-typedef struct {
-    int64_t window_bits;
-    int64_t history_bits[N];
-    int64_t history_ts[N];
-    int head, tail;
-} RateMeter;
-
-push(bits, ts);
-while (ts_now - history_ts[tail] > WINDOW_NS) {
-    window_bits -= history_bits[tail];
-    tail++;
-}
-```
-
-### 5.3 核心控制器（Gating）
-```c
-upper = target * (1 + ε);
-lower = target * (1 - ε);
-projected = window_bits + TS_PACKET_BITS;
-
-if (projected > upper) return BLOCK;
-if (projected < lower) return FORCE;
-return NORMAL;
-```
-
----
-
-## 6. 调度融合（Scheduler Integration）
-
-**新逻辑**：
-```c
-if (err_acc >= 1.0) {
-    decision = rate_control(pid);
-
-    if (decision == BLOCK)
-        skip_video;
-    else if (decision == FORCE)
-        send_video;
-    else
-        normal EDF;
-}
-```
-
----
-
-## 7. 全局守恒（Global Constraint - 实现评审吸收）
-严格约束物理总线的发包能力，任何 Payload、NULL 还是 PCR 发射，都会消耗全局额度。
-```c
-global_bus_credit += 1.0;          // 每个 Slot 增加
-if (send_packet)
-    global_bus_credit -= 1.0;      // 发射任何包扣减
-
-if (global_bus_credit < 0.0)       // 物理拦截
-    forbid_payload;
-```
-
----
-
-## 8. 优先级规则（Priority Rules）
-
-1. **PCR**：最高优先级，不受 rate clamp 限制，但参与影子对冲。
-2. **Audio**：次高优先级，不允许 starvation。
-3. **Video**：受 ΣΔ 与 Rate Feedback 双重控制。
-4. **NULL**：最低优先级（兜底）。
-
----
-
-## 9. 最终总结 (Final Insight)
-
-该系统实现：
-> 🎯 **从“被动 CBR” $\rightarrow$ “主动码率控制” 的跃迁**
->
-> 传统系统：控制 FIFO。
-> 本系统：控制“输出码率（时间域）”。ΣΔ 保证长期平均，Rate Feedback 保证窗口稳定。
-
-并达到：
-> 💥 **Broadcast-grade deterministic mux core**
+## 5. 验证指标 (KPIs)
+1.  **MEANk**: 必须落入 $[Target \times 0.99, Target \times 1.01]$。
+2.  **SCORE**: $(Max - Min) + 2\sigma < 50.0$。
+3.  **Jitter**: 必须严格为 $0$（基于物理位置同步）。
