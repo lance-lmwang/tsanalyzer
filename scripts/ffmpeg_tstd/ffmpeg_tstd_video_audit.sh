@@ -1,5 +1,5 @@
 #!/bin/bash
-# T-STD MG-bitrate Audit Tool (Aligned with ETSI TR 101 290)
+# T-STD High-Precision Audit Tool (Physical Slot Emulation)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -10,11 +10,6 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 AUDITOR="${SCRIPT_DIR}/ffmpeg_tstd_pcr_sliding_window.py"
 
-show_help() {
-    echo "Usage: $0 [input_file] [vbr] [mux] [duration] [mode]"
-    exit 0
-}
-
 SRC="${1:-/home/lmwang/dev/cae/sample/knet_sd_03.ts}"
 VBR_TARGET="${2:-800}"
 MUX_TARGET="${3:-1200}"
@@ -24,8 +19,8 @@ MODE="${5:-1}"
 SRC_BASE=$(basename "$SRC" | cut -f 1 -d '.')
 
 print_header() {
-    echo "MODE |   V_BIT |    MUX |     MEANk |      MAXk |      MINk |    ±V_DEVk |   V_JIT% | NO_TOK |   NO_DAT |    I_MEANk |     I_MAXk |     I_MINk |    ±I_DEVk"
-    echo "----------------------------------------------------------------------------------------------------------------------------------------------------------------"
+    echo "MODE | V_BIT | MUX |  MEANk |  ±DEVk |  STDk | SCORE | PCR_JIT_ns | PKTS"
+    echo "----------------------------------------------------------------------------"
 }
 
 run_mux() {
@@ -45,30 +40,15 @@ run_audit() {
     local mode=$1 vbr=$2 mux=$3
     local vbr_val=$(echo "$vbr" | sed 's/[kKmM]//g')
     local dst="${OUT_DIR}/${SRC_BASE}_m${mode}_v${vbr_val}.ts"
-    local tstd_log="${dst}.log"
 
     if [ ! -f "$dst" ]; then return; fi
 
+    # 调用上帝视角审计仪
     local audit=$(python3 "$AUDITOR" "$dst" --vid_pid 0x21 --muxrate $((mux * 1000)))
-    read mean_k max_k min_k dev_k <<< $audit
+    read mean max min dev std score pcr_jit pkts <<< $audit
 
-    local v_jit=$(echo "scale=2; ($dev_k / $mean_k) * 100" | bc -l)
-
-    local no_tok="N/A"; local no_dat="N/A"; local i_mean="N/A"; local i_max="N/A"; local i_min="N/A"; local i_dev="N/A"
-
-    if [ "$mode" -ne 0 ] && grep -q "T-STD METRICS SUMMARY" "$tstd_log"; then
-        local pid_line=$(grep "PID 0x0021:" "$tstd_log" | tail -n 1)
-        if [ -n "$pid_line" ]; then
-            local avg_bps=$(echo "$pid_line" | awk -F'Avg=' '{print $2}' | awk -F',' '{print $1}')
-            local max_bps=$(echo "$pid_line" | awk -F'Max=' '{print $2}' | awk -F',' '{print $1}')
-            local min_bps=$(echo "$pid_line" | awk -F'Min=' '{print $2}' | awk -F',' '{print $1}')
-            local fl_bps=$(echo "$pid_line" | awk -F'Fluct=' '{print $2}' | awk '{print $1}')
-            i_mean=$(echo "scale=2; ${avg_bps:-0} / 1000" | bc); i_max=$(echo "scale=2; ${max_bps:-0} / 1000" | bc); i_min=$(echo "scale=2; ${min_bps:-0} / 1000" | bc)
-            i_dev=$(printf "±%.2f" "$(echo "scale=2; ${fl_bps:-0} / 2000" | bc)")
-        fi
-    fi
-    printf "%4s | %7s | %6s | %10.2f | %10.2f | %10.2f | %12s | %7s%% | %6s | %8s | %10s | %10s | %10s | %12s\n" \
-           "$mode" "$vbr_val" "$mux" "$mean_k" "$max_k" "$min_k" "±$dev_k" "$v_jit" "$no_tok" "$no_dat" "$i_mean" "$i_max" "$i_min" "$i_dev"
+    printf "%4s | %5s | %3s | %6s | %6s | %5s | %5s | %10s | %s\n" \
+           "$mode" "$vbr_val" "$mux" "$mean" "±$dev" "$std" "$score" "$pcr_jit" "$pkts"
 }
 
 if [ -n "$2" ] || [ -n "$3" ]; then
@@ -76,6 +56,7 @@ if [ -n "$2" ] || [ -n "$3" ]; then
     run_mux "$MODE" "$VBR_TARGET" "$MUX_TARGET"
     run_audit "$MODE" "$VBR_TARGET" "$MUX_TARGET"
 else
+    echo "[*] Running High-Precision Matrix Audit..."
     run_mux 1 800 1200 & run_mux 1 1000 1400 & run_mux 1 1300 1700 & wait
     print_header
     run_audit 1 800 1200
