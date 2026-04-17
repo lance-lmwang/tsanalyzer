@@ -8,7 +8,7 @@ mkdir -p "$OUT_DIR"
 
 FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
-AUDITOR="${SCRIPT_DIR}/ffmpeg_tstd_pcr_sliding_window.py"
+AUDITOR="${SCRIPT_DIR}/ts_expert_auditor.py"
 
 SRC="${1:-/home/lmwang/dev/cae/sample/knet_sd_03.ts}"
 VBR_TARGET="${2:-800}"
@@ -19,7 +19,7 @@ MODE="${5:-1}"
 SRC_BASE=$(basename "$SRC" | cut -f 1 -d '.')
 
 print_header() {
-    echo "MODE | V_BIT | MUX |  MEANk |  ±DEVk |  STDk | SCORE | PCR_JIT_ns | PKTS"
+    echo "MODE | V_BIT | MUX |  MEANk |   MAXk |   MINk |  STDk | SCORE"
     echo "----------------------------------------------------------------------------"
 }
 
@@ -43,21 +43,32 @@ run_audit() {
 
     if [ ! -f "$dst" ]; then return; fi
 
-    # 调用上帝视角审计仪
-    local audit=$(python3 "$AUDITOR" "$dst" --vid_pid 0x21 --muxrate $((mux * 1000)))
-    read mean max min dev std score pcr_jit pkts <<< $audit
+    # 1. 如果是单次执行，输出详细的按秒及异常报告
+    if [ "$SINGLE_RUN" = "1" ]; then
+        python3 "$AUDITOR" "$dst" --vid 0x21 --target "$vbr_val"
+    fi
 
-    printf "%4s | %5s | %3s | %6s | %6s | %5s | %5s | %10s | %s\n" \
-           "$mode" "$vbr_val" "$mux" "$mean" "±$dev" "$std" "$score" "$pcr_jit" "$pkts"
+    # 2. 获取汇总数据用于表格展示
+    local audit=$(python3 "$AUDITOR" "$dst" --vid 0x21 --target "$vbr_val" --simple)
+    read mean max min std score <<< $audit
+
+    printf "%4s | %5s | %3s | %6s | %6s | %6s | %5s | %5s\n" \
+           "$mode" "$vbr_val" "$mux" "$mean" "$max" "$min" "$std" "$score"
 }
 
 if [ -n "$2" ] || [ -n "$3" ]; then
+    SINGLE_RUN=1
     print_header
     run_mux "$MODE" "$VBR_TARGET" "$MUX_TARGET"
     run_audit "$MODE" "$VBR_TARGET" "$MUX_TARGET"
 else
-    echo "[*] Running High-Precision Matrix Audit..."
-    run_mux 1 800 1200 & run_mux 1 1000 1400 & run_mux 1 1300 1700 & wait
+    echo "[*] Running High-Precision Matrix Audit (Serial Mode)..."
+    SINGLE_RUN=0
+    # 串行运行以保证物理层采样精度，不被 IO 竞争污染
+    run_mux 1 800 1200
+    run_mux 1 1000 1400
+    run_mux 1 1300 1700
+
     print_header
     run_audit 1 800 1200
     run_audit 1 1000 1400
