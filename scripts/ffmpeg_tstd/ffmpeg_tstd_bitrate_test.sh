@@ -36,7 +36,7 @@ $FFMPEG -y -hide_banner -v trace -i "$SRC" \
 
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] FFmpeg run finished. Verifying metrics..."
-    ${ROOT_DIR}/scripts/ffmpeg_tstd/ffmpeg_tstd_verify_compliance.sh "$OUT_LOG"
+    ${ROOT_DIR}/scripts/ffmpeg_tstd/tstd_telemetry_analyzer.py "$OUT_LOG"
     exit $?
 else
     echo "[ERROR] FFmpeg crashed during bitrate test."

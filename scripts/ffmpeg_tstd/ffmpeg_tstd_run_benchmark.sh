@@ -10,7 +10,7 @@ TS_FILE="${ROOT_DIR}/../sample/cctvhd.ts"
 BITRATE=20000000
 BIN="${ROOT_DIR}/build/tsp"
 LOG_FILE="${OUT_DIR}/tstd_benchmark.log"
-AUDITOR="${ROOT_DIR}/scripts/ffmpeg_tstd/ffmpeg_tstd_verify_compliance.sh"
+AUDITOR="${ROOT_DIR}/scripts/ffmpeg_tstd/tstd_telemetry_analyzer.py"
 DURATION=30
 
 echo "=== T-STD Toolchain Benchmark ==="

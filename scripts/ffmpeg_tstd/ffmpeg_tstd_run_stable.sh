@@ -46,7 +46,7 @@ eval $cmd
 
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] Soak test completed. Analyzing results..."
-    ${ROOT_DIR}/scripts/ffmpeg_tstd/ffmpeg_tstd_verify_compliance.sh "$log_file"
+    ${ROOT_DIR}/scripts/ffmpeg_tstd/tstd_telemetry_analyzer.py "$log_file"
 else
     echo "[ERROR] FFmpeg process crashed or killed. Check $log_file"
     exit 1

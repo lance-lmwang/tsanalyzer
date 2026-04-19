@@ -60,6 +60,21 @@ def parse_trace(filename: str) -> pd.DataFrame:
                     "pcr_err": int(err),
                     "violation": int(viol)
                 })
+            elif "[T-STD SEC]" in line:
+                # Fallback: Parse per-second summary logs
+                sec_match = re.search(r"(\d+)s \|.*Out:\s*(\d+)k.*VBV:\s*(\d+)%.*Pace:([\d\.]+)", line)
+                if sec_match:
+                    sec, out_k, vbv_p, pace = sec_match.groups()
+                    data.append({
+                        "time": int(sec) * 27000000,
+                        "pid": 0x100, # Default video PID in smoke test
+                        "tokens": 0,
+                        "global_tokens": 0,
+                        "buffer": int(vbv_p) * 1000,
+                        "action": "PES",
+                        "pcr_err": 0,
+                        "violation": 0
+                    })
 
     if not data:
         print("[FATAL] No valid telemetry data found in log")

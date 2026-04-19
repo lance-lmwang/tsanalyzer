@@ -18,4 +18,4 @@ $FFMPEG -y -i "$SRC" -t 30 \
     "$DST" > "$LOG" 2>&1
 
 echo "[*] Compliance Audit..."
-bash scripts/ffmpeg_tstd/ffmpeg_tstd_verify_compliance.sh "$LOG"
+python3 scripts/ffmpeg_tstd/tstd_telemetry_analyzer.py "$LOG"

@@ -42,5 +42,5 @@ grep "T-STD" "$log_file" | tail -n 10
 
 if [ $SIZE_TSTD -gt 0 ]; then
     echo "[*] Analyzing T-STD Output Compliance..."
-    ${ROOT_DIR}/scripts/ffmpeg_tstd/ffmpeg_tstd_verify_compliance.sh "$log_file"
+    ${ROOT_DIR}/scripts/ffmpeg_tstd/tstd_telemetry_analyzer.py "$log_file"
 fi

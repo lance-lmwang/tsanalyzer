@@ -1,21 +1,16 @@
-# Engine Documentation - Native FFmpeg T-STD
+# Engine Documentation: T-STD Multiplexer
 
-This directory contains the authoritative documentation for the native FFmpeg T-STD implementation (located in `libavformat/tstd.c`).
+This directory contains the authoritative specifications and operational guides for the T-STD multiplexer implementation.
 
-## Native T-STD Core
-- [tstd_implementation_plan.md](./tstd_implementation_plan.md): Detailed implementation roadmap and verification strategy.
-- [tstd_architecture_specification.md](./tstd_architecture_specification.md): T-STD Multiplexer Architecture Specification.
-- [native_tstd_integration.md](./native_tstd_integration.md): High-level integration and runtime state machine.
-- [timestamp_discontinuity_design.md](./timestamp_discontinuity_design.md): Authoritative design for discontinuity handling and PCR injection.
+## Core Specifications
+- [**Architecture Specification**](./tstd_architecture_specification.md): Authoritative design of the physical timing model, VBV management, and TR 101 290 compliance.
+- [**Hierarchical Scheduler**](./tstd_scheduler.md): Detailed logic of the mutually-exclusive decision tree and **Opportunistic SI Injection**.
 
-## Engine Subsystems
-- [ingestion_engine.md](./ingestion_engine.md): Stream ingestion and pre-processing.
-- [metrology_core.md](./metrology_core.md): Real-time analysis metrics.
-- [tr101290_engine.md](./tr101290_engine.md): TR 101 290 compliance monitoring logic.
-- [ring_buffer_deduction.md](./ring_buffer_deduction.md): Buffer management theory.
-- [simd_parser_design.md](./simd_parser_design.md): SIMD-optimized parsing details.
-- [pipeline_architecture.md](./pipeline_architecture.md): Global stream pipeline topology.
-- [structural_decoder.md](./structural_decoder.md): Decoupled decoding path analysis.
+## Operational & Debugging Guides
+- [**Pitfalls and Tuning Guide**](./tstd_pitfalls_and_tuning.md): An extensive knowledge base covering 12 major engineering "craters" and their definitive solutions.
 
-## Archive (Legacy/Deprecated)
-- [archive/](./archive/): Documents related to deprecated `libtsshaper` or pre-2026 architectural iterations.
+## Summary of Key Features
+*   **Opportunistic SI Injection**: Zero-jitter system information delivery by utilizing idle slots.
+*   **Delay-Adaptive PI Control**: Intelligent bandwidth regulation that scales with buffer depth.
+*   **State-Decoupled Feedback**: Immune to "state poisoning" for long-term 24/7 stability.
+*   **DVM Voter System**: Multi-PID consensus mechanism for robust timestamp discontinuity handling.

@@ -48,6 +48,31 @@ In the initial development phase, we executed a 30-second `bug.sh` smoke test. W
     4. Audit tools, observing the corrupted STC timestamps in the log, calculated astronomical bitrates.
 * **Fix:** **Unified all physical state updates into a single atomic block at the end of the packet emission cycle.** Ensured that logging occurs strictly *after* the physical state update to maintain causal integrity for audit tools.
 
+### Crater 7: Double-Feedback Oscillation (The Hunting Effect)
+* **Symptom:** Output bitrate wildly oscillated (830k-980k) during the first 15 seconds of transmission, causing "hunting" patterns on bitrate analyzers.
+* **Root Cause:** Resonance between two independent feedback loops. Both the global token generator (`refill_rate_bps`) and the PID-specific consumer (`pacing_tokens`) were reacting to the same delay error. When one speeded up, the other accelerated further, leading to overshoot and subsequent violent braking.
+* **Fix:** **Unified Single-Point Control.** Locked the global `refill_rate` to a stable 101% baseline and moved all dynamic regulation to the `pacing_tokens` consumption layer with a tiered damping model.
+
+### Crater 8: Shared PID CC Synchronization (The ES Layer Killer)
+* **Symptom:** Decoder reported "Packet Corrupt" and PES layer integrity failed, despite correct VBV levels.
+* **Root Cause:** In the standard "Shared PID" mode (PCR on Video PID), the T-STD engine inserted PCR-only packets without knowing the current Continuity Counter (CC) used by the upstream Muxer. This caused random CC jumps and gaps in the PES sequence.
+* **Fix:** **Implemented Transparent CC Sniffing.** The T-STD engine now snoops the CC of every payload packet emitted and applies that value to interleaved PCR-only packets (without incrementing). This makes the T-STD pacing layer completely transparent to the TS continuity sequence.
+
+### Crater 10: Variable Scope Shadowing (The Silent Emission Killer)
+* **Symptom:** Audit results reported `MEANk: 0.00` despite healthy VBV telemetry logs.
+* **Root Cause:** A sub-block within the scheduler re-declared the `pid` or `prog` variables, shadowing the outer scope used by the emission logic. The scheduler selected a packet, but the emission logic saw a NULL pointer.
+* **Fix:** **Flattened Decision Logic.** Removed redundant curly-brace scoping within `ff_tstd_step_internal` and explicitly initialized result variables at the top of the function.
+
+### Crater 11: Non-Exclusive Scheduler Deadlock
+* **Symptom:** Video packets were selected but immediately overwritten by NULL packets in the same slot.
+* **Root Cause:** The scheduling tree was non-exclusive. If a PCR packet was due, it set `action = ACT_PCR_ONLY`, but the subsequent ES check didn't see the state change and executed `ACT_NULL` logic, leading to structural chaos.
+* **Fix:** **Strict Hierarchical if-else-if Tree.** Forced the scheduler into a mutually-exclusive path: `PCR -> ES -> SI -> NULL`. A slot can only be one thing.
+
+### Crater 12: MuxDelay vs. Pacing Corridor Mismatch
+* **Symptom:** In 0.7s delay configs, VBV would underflow; in 1.5s configs, score was high.
+* **Root Cause:** A fixed ±2.5% pacing corridor is physically incompatible with varying buffer depths. A shallow buffer needs more "bandwidth torque" to survive.
+* **Fix:** **Delay-Adaptive Control Law.** Dynamically scaled PI Gain and Corridor limits as a function of `1.0 / muxdelay`.
+
 ## III. Diagnostic & Debugging Guide
 
 To ensure future observability without polluting the production environment or causing performance regressions, we have retained key auditing hooks but configured them to the `AV_LOG_TRACE` level.
@@ -58,5 +83,18 @@ All heavy diagnostic loops (such as iterating over PIDs to determine *why* a NUL
 
 To enable these calculations and view the reports, simply run FFmpeg with `-loglevel trace`:
 
-* **`[T-STD NULL] PID 0x...`**: Prints when the system is forced to send an empty packet because a specific PID ran out of tokens.
-* **`================ T-STD METRICS SUMMARY ================`**: At the end of the `drain` phase, this prints the absolute count and percentage of Payload, PCR, SI, and NULL packets. If `No Tokn` is not 0, it indicates that the buffer model tuning mentioned above may need to be further relaxed for the new scenario.
+## IV. Expert Review & Critical Redlines (Broadcast Grade)
+
+### 1. Pacing Strategy: Never Abandon the Physical Gate
+* **The Pitfall:** Switching to pure "Throughput-Driven" emission (FIFO-only) during cold start to clear backlog.
+* **Risk:** Explodes PCR Jitter (PCR_OJ) and violates T-STD transport buffer ($TB_n$) limits, leading to downstream analyzer alarms.
+* **The "Professional" Fix:** Implement **Clamped Accelerated Pacing**. Use a "Boost Gear" (e.g., $1.1 \times Muxrate$) but keep every packet anchored to a deterministic slot. When switching gears, use **Remainder Inheritance** ($rem_{new} = rem_{old} \times D_2 / D_1$) to prevent micro-jumps in the STC timeline.
+
+### 2. VBV vs. T-STD: The Phase Mismatch
+* **Diagnostic:** 5000ms backlog in a CBR stream indicates the upstream encoder is outputting data at a rate far exceeding the allocated physical bandwidth.
+* **Constraint:** If the encoder's VBV model ignores the multiplexer's physical leakage limit, buffer growth is inevitable.
+* **Action:** Coordinate with the encoder to enable **Strict CBR** and align `maxrate` with `bufsize`.
+
+### 3. PCR Stretching: The Underflow Trap
+* **The Strategy:** Monotonically inject an offset into `vSTC` to "buy time" for massive IDR frames.
+* **The Redline:** The total PCR Stretch must **never exceed `mux_delay`** (typically 700ms). Exceeding this limit means the physical delivery time will fall behind the pre-encoded DTS in the PES header, causing catastrophic receiver underflow.

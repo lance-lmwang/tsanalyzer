@@ -58,7 +58,6 @@ run_benchmark() {
 # Execute Test Matrix
 #run_benchmark 0 "Native"
 run_benchmark 1 "Strict"
-#run_benchmark 2 "Elastic"
 
 echo "----------------------------------------------------------------"
 echo "[*] All regression tests finished. Logs in $OUT_DIR"

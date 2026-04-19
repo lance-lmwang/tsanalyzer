@@ -14,7 +14,7 @@ else
     FFMPEG_BIN="$FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffmpeg"
 fi
 
-VERIFIER="$SCRIPT_DIR/ffmpeg_tstd_verify_compliance.sh"
+VERIFIER="$SCRIPT_DIR/tstd_telemetry_analyzer.py"
 SRC="/home/lmwang/sample/input.mp4"
 
 # 1. Bitrate Sweep (500k to 50M)
