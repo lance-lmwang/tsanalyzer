@@ -14,6 +14,7 @@ mkdir -p "$OUT_DIR"
 FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 ffp="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
+AUDITOR_PY="${SCRIPT_DIR}/ts_expert_auditor.py"
 src="/home/lmwang/dev/cae/sample/knet_sd_03.ts"
 src="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
 prog_id=1
@@ -248,7 +249,7 @@ for entry in "${MATRIX[@]}"; do
         # --- Added: Bitrate Audit for Matrix Entry ---
         if [ -f "$AUDITOR_PY" ]; then
             echo "    [*] Auditing Bitrate Fluctuation for $name..."
-            AUDIT_OUT=$(python3 "$AUDITOR_PY" "$CUR_LOG" --vid 0x0100 --target "$v_br_num" --simple 2>/dev/null)
+            AUDIT_OUT=$(python3 "$AUDITOR_PY" "${OUT_DIR}/sync_${name}_${s_name}.ts" --vid 0x0100 --target "$v_br_num" --simple 2>/dev/null)
             if [ -n "$AUDIT_OUT" ]; then
                 read mean max min std score <<< "$AUDIT_OUT"
                 echo "    - Mean Bitrate: $mean kbps"
@@ -411,7 +412,7 @@ for entry in "${MATRIX[@]}"; do
             read -r vbr mux ratio m_name <<< "$m_entry"
             dst_m="${MATRIX_DIR}/smoke_${m_name}.ts"
             log_m="${dst_m}.log"
-            
+
             bufsize_val=$(echo "$vbr * $ratio" | bc | cut -f 1 -d '.')
 
             $ffm -hide_banner -y -i "/home/lmwang/dev/cae/sample/input.mp4" -t 30 \
@@ -428,7 +429,7 @@ for entry in "${MATRIX[@]}"; do
                     v_delay_ms=$(echo "${max_vbv_pct:-0} * 9" | bc)
                     printf "%-20s | %6.1f | %6.1f | %6.1f | %5dms | %5.2f\n" \
                            "$m_name" "${mean_m:-0}" "${max_m:-0}" "${min_m:-0}" "${v_delay_ms:-0}" "${score_m:-0}"
-                    
+
                     if (( $(echo "${score_m:-999} > 350" | bc -l) )); then
                         echo -e "    \033[31m[FAIL] $m_name score too high!\033[0m"
                         GLOBAL_FAIL=1
