@@ -10,7 +10,7 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 AUDITOR="${SCRIPT_DIR}/ts_expert_auditor.py"
 
-SRC="${1:-/home/lmwang/dev/cae/sample/input.mp4}"
+SRC="${1:-/home/lmwang/dev/cae/sample/knet_sd_03.ts}"
 VBR_TARGET="${2:-600}"
 MUX_TARGET="${3:-1100}"
 DUR="${4:-180}"
@@ -84,12 +84,17 @@ if [ -n "$2" ] || [ -n "$3" ]; then
     run_mux "$MODE" "$VBR_TARGET" "$MUX_TARGET"
     run_audit "$MODE" "$VBR_TARGET" "$MUX_TARGET"
 else
-    echo "[*] Running High-Precision Matrix Audit (input.mp4 800/1600)..."
+    echo "[*] Running High-Precision Matrix Audit (Parallel Mode)..."
     SINGLE_RUN=0
-    run_mux 1 600 1100
-    run_mux 1 800 1300
+    run_mux 1 600 1100 &
+    run_mux 1 800 1200 &
+    run_mux 1 1000 1400 &
+    run_mux 1 1300 1700 &
+    wait
 
     print_header
     run_audit 1 600 1100
-    run_audit 1 800 1300
+    run_audit 1 800 1200
+    run_audit 1 1000 1400
+    run_audit 1 1300 1700
 fi

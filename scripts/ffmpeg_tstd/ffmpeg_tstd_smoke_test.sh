@@ -15,6 +15,10 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 ffm="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 ffp="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
 AUDITOR_PY="${SCRIPT_DIR}/ts_expert_auditor.py"
+
+# Production License Activation
+export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+
 src="/home/lmwang/dev/cae/sample/knet_sd_03.ts"
 src="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
 prog_id=1
@@ -231,13 +235,15 @@ for entry in "${MATRIX[@]}"; do
         v_br_num=$(echo "$v_br" | sed 's/k//')
 
         CUR_LOG="${OUT_DIR}/sync_test_${name}_${s_name}.log"
+        dst_sync="${OUT_DIR}/sync_${name}_${s_name%.*}.ts"
         $ffm -y -hide_banner -i "$src" -t 60 \
               -c:v libwz264 -b:v $v_br -preset ultrafast -wz264-params bframes=0:keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1:aud=1 \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate $m_br -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
-              "${OUT_DIR}/sync_${name}_${s_name}.ts" > "$CUR_LOG" 2>&1
+              -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+              "$dst_sync" > "$CUR_LOG" 2>&1
 
-        MAX_A_TOK=$(grep "PID:257" "$CUR_LOG" | tail -n 50 | grep "TOK:" | awk -F'TOK:' '{print $2}' | awk '{print $1}' | sort -nr | head -n 1)
+        # Audio PID is 0x22 when start_pid is 0x21
+        MAX_A_TOK=$(grep "PID:0x0022" "$CUR_LOG" | tail -n 50 | grep "TOK:" | awk -F'TOK:' '{print $2}' | awk -F' ' '{print $1}' | sort -nr | head -n 1)
 
         if [ -n "$MAX_A_TOK" ] && [ "$MAX_A_TOK" -gt 100000 ]; then
             echo -e "    \033[31m[FAIL] $name: Audio Lag detected (Tokens: $MAX_A_TOK > 100k)\033[0m"
@@ -248,8 +254,9 @@ for entry in "${MATRIX[@]}"; do
 
         # --- Added: Bitrate Audit for Matrix Entry ---
         if [ -f "$AUDITOR_PY" ]; then
-            echo "    [*] Auditing Bitrate Fluctuation for $name..."
-            AUDIT_OUT=$(python3 "$AUDITOR_PY" "${OUT_DIR}/sync_${name}_${s_name}.ts" --vid 0x0100 --target "$v_br_num" --simple 2>/dev/null)
+            echo "    [*] Auditing Bitrate Fluctuation for $name (Steady State)..."
+            # Corrected to use --vid 0x21 and --skip 10.0
+            AUDIT_OUT=$(python3 "$AUDITOR_PY" "$dst_sync" --vid 0x21 --target "$v_br_num" --skip 10.0 --simple 2>/dev/null)
             if [ -n "$AUDIT_OUT" ]; then
                 read mean max min std score <<< "$AUDIT_OUT"
                 echo "    - Mean Bitrate: $mean kbps"
@@ -262,11 +269,11 @@ for entry in "${MATRIX[@]}"; do
                     echo -e "    \033[32m[PASS] $name: Fluctuation within safety limits.\033[0m"
                 fi
             else
-                echo -e "    \033[31m[ERROR] Auditor script failed to parse $CUR_LOG\033[0m"
+                echo -e "    \033[31m[ERROR] Auditor script failed to parse $dst_sync\033[0m"
             fi
         fi
 
-        verify_duration "${OUT_DIR}/sync_${name}_${s_name}.ts" 60 "$name"
+        verify_duration "$dst_sync" 60 "$name"
         done
         done
 
@@ -415,14 +422,16 @@ for entry in "${MATRIX[@]}"; do
 
             bufsize_val=$(echo "$vbr * $ratio" | bc | cut -f 1 -d '.')
 
-            $ffm -hide_banner -y -i "/home/lmwang/dev/cae/sample/input.mp4" -t 30 \
+            $ffm -hide_banner -y -i "/home/lmwang/dev/cae/sample/input.mp4" -t 40 \
                 -c:v libwz264 -b:v "${vbr}k" -preset fast \
                 -wz264-params "keyint=50:vbv-maxrate=${vbr}:vbv-bufsize=${bufsize_val}:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
                 -c:a aac -b:a 128k -f mpegts -muxrate "${mux}k" -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 \
                 "$dst_m" > "$log_m" 2>&1
 
             if [ -f "$AUDITOR_PY" ]; then
-                audit_m=$(python3 "$AUDITOR_PY" "$dst_m" --vid 0x100 --target "$vbr" --simple 2>/dev/null)
+                # Use --vid 0x21 and --skip 10.0
+                audit_m=$(python3 "$AUDITOR_PY" "$dst_m" --vid 0x21 --target "$vbr" --skip 10.0 --simple 2>/dev/null)
                 if [ -n "$audit_m" ]; then
                     read mean_m max_m min_m std_m score_m <<< "$audit_m"
                     max_vbv_pct=$(grep "\[T-STD SEC\]" "$log_m" | awk -F'VBV:' '{print $2}' | awk -F'%' '{print $1}' | sort -rn | head -n 1)
@@ -438,8 +447,7 @@ for entry in "${MATRIX[@]}"; do
                     echo -e "    \033[31m[ERROR] Auditor failed for $m_name\033[0m"
                     GLOBAL_FAIL=1
                 fi
-            fi
-        done
+            fi        done
 
         echo ""
 echo "------------------------------------------------"

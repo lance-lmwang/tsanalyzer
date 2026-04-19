@@ -118,23 +118,35 @@ class ContinuousWindow:
 def main():
     parser = argparse.ArgumentParser(description="T-STD Professional Auditor v7.0 - First-Class Metrology")
     parser.add_argument("input")
-    parser.add_argument("--vid", type=lambda x:int(x,0), default=0x21)
+    parser.add_argument("--vid", type=lambda x:int(x,0), default=None)
+    parser.add_argument("--pcr", type=lambda x:int(x,0), default=None)
     parser.add_argument("--target", type=float, required=True, help="Target Video Bitrate (kbps)")
     parser.add_argument("--simple", action="store_true", help="Output summary only for shell table")
+    parser.add_argument("--skip", type=float, default=5.0, help="Seconds to skip at start")
     args = parser.parse_args()
 
-    pcr_pid = detect_pcr_pid_strict(args.input)
+    # 1. PCR PID Detection
+    if args.pcr:
+        pcr_pid = args.pcr
+    else:
+        pcr_pid = detect_pcr_pid_strict(args.input)
+
     if pcr_pid is None:
         print("ERROR: No Valid PCR PID found")
         sys.exit(1)
 
+    # 2. Video PID Assignment
     v_pid = args.vid if args.vid else pcr_pid
+    a_pid = v_pid + 1 # Common assumption for default test
+
+    max_v_delay = 0
+    max_a_delay = 0
 
     if not args.simple:
         print(f"[*] Broadcast-Grade Audit: {args.input}")
         print(f"[*] PCR_PID: 0x{pcr_pid:04x}, Video_PID: 0x{v_pid:04x}, Target: {args.target}k")
         print("-" * 75)
-        print(f"{'Time':>8} | {'Vid_Rate(k)':>15} | {'Min_Dip(k)':>12} | {'Status'}")
+        print(f"{'Time':>8} | {'Vid_Rate(k)':>15} | {'Min_Dip(k)':>12} | {'V_Dly(ms)':>10} | Status")
         print("-" * 75)
 
     win_1s = ContinuousWindow(1.0)
@@ -145,6 +157,7 @@ def main():
     last_pcr = None
     min_dip = 9999.0
     last_sec = -1
+    first_pcr_time = None
 
     all_steady_samples = []
 
@@ -162,6 +175,7 @@ def main():
             if pid == pcr_pid:
                 pcr = get_pcr(pkt)
                 if pcr is None: continue
+                if first_pcr_time is None: first_pcr_time = pcr
 
                 if last_pcr is not None:
                     dt = pcr_delta(pcr, last_pcr) / PCR_CLOCK
@@ -170,8 +184,15 @@ def main():
                         win_1s.add(pcr, rate_vid)
                         win_100ms.add(pcr, rate_vid)
 
+                        # Reset bits for next interval regardless of skipping
                         bits_all = 0
                         bits_vid = 0
+
+                        # --- NEW: Skip Logic ---
+                        elapsed = pcr_delta(pcr, first_pcr_time) / PCR_CLOCK
+                        if elapsed < args.skip:
+                            last_pcr = pcr
+                            continue
 
                         r1 = win_1s.get_rate()
                         r100 = win_100ms.get_rate()
@@ -179,7 +200,19 @@ def main():
                         if r100 > 0:
                             min_dip = min(min_dip, r100)
 
-                        if pcr / PCR_CLOCK > 2.0 and r1 > 10:
+                        # --- Professional Fluctuation Analysis (After 8s Steady-State) ---
+                        if pcr / PCR_CLOCK > 8.0:
+                            # Use actual measured mean as baseline for stability check
+                            steady_samples = [s for i, s in enumerate(all_steady_samples) if i > 5]
+                            ref_mean = np.mean(steady_samples) if steady_samples else args.target
+                            fluctuation = abs(r1 - ref_mean) / ref_mean
+
+                            # P1: Filter End-of-Stream noise. If rate plummets below 20% of mean, it's EOF, not a jitter.
+                            if fluctuation > 0.04 and r1 > (ref_mean * 0.2):
+                                if not args.simple:
+                                    print(f"[ALERT] {pcr/PCR_CLOCK:7.2f}s | Fluctuation={fluctuation*100:.2f}% | Rate={r1:8.2f}k (Mean={ref_mean:8.2f}k)")
+
+                        if pcr / PCR_CLOCK > 5.0 and r1 > 10:
                             all_steady_samples.append(r1)
 
                         sec = int(pcr / PCR_CLOCK)
