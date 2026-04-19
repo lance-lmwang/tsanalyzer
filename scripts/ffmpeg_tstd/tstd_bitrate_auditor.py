@@ -11,59 +11,46 @@ import pandas as pd
 import numpy as np
 
 def analyze_bitrate(args):
-    # Regex captures STC and PID, but ONLY from lines representing actual packet emission.
-    # This ensures we count physical bytes, not telemetry noise.
-    pattern = re.compile(r"\[T-STD\]\s+STC:(\d+)\s+PID:(\d+).*ACT:(PES|PCR_ONLY|NULL|PSI|DATA)")
+    # Regex for new Telemetry format: [T-STD SEC]   1s | In: 941k | Out: 601k ...
+    pattern = re.compile(r"\[T-STD SEC\].*Out:\s*(\d+)k")
     data = []
-
-    target_pid = int(args.pid, 0) if args.pid.startswith('0x') else int(args.pid)
 
     with open(args.log, 'r') as f:
         for line in f:
             match = pattern.search(line)
             if match:
-                stc = int(match.group(1))
-                pid = int(match.group(2))
-                if pid == target_pid:
-                    data.append(stc)
+                kbps = float(match.group(1))
+                data.append(kbps)
 
     if not data:
-        print(f"[ERROR] No packet emission data found for PID {args.pid} in {args.log}")
+        print(f"[ERROR] No packet emission data found in {args.log}. Did you use -mpegts_tstd_debug 1 or 2?")
         return
 
-    # Create DataFrame
-    df = pd.DataFrame(data, columns=['stc'])
+    # Create Series
+    bitrate_series = pd.Series(data)
 
-    # Convert STC to relative seconds
-    first_stc = df['stc'].min()
-    df['time'] = (df['stc'] - first_stc) / 27000000.0
+    # Filter for Steady State
+    max_time = len(bitrate_series)
+    start_idx = int(args.skip)
+    end_idx = int(max_time - args.skip_tail)
 
-    # Group by window
-    df['window'] = (df['time'] / args.window).astype(int)
+    if end_idx <= start_idx:
+        print("[WARN] Not enough steady-state data to perform audit.")
+        return
 
-    # Formula: (Count * 188 bytes * 8 bits) / (WindowSize * 1000) -> kbps
-    # Note: We use the actual packet count within the STC-defined window.
-    bitrate_series = df.groupby('window').size() * 188 * 8 / (args.window * 1000.0)
-
-    # Mapping back to time for filtering
-    bitrate_df = bitrate_series.reset_index(name='kbps')
-    bitrate_df['time'] = bitrate_df['window'] * args.window
-
-    # Filter for Steady State (Global Skip and Skip-Tail)
-    max_time = bitrate_df['time'].max()
-    steady = bitrate_df[(bitrate_df['time'] >= args.skip) & (bitrate_df['time'] <= (max_time - args.skip_tail))]
+    steady = bitrate_series[start_idx:end_idx]
 
     if steady.empty:
         print("[WARN] Not enough steady-state data to perform audit. Check log duration.")
         return
 
     # Statistics calculation
-    mean_br = steady['kbps'].mean()
-    max_br = steady['kbps'].max()
-    min_br = steady['kbps'].min()
+    mean_br = steady.mean()
+    max_br = steady.max()
+    min_br = steady.min()
     fluctuation = max_br - min_br
     fluct_percent = (fluctuation / mean_br * 100) if mean_br > 0 else 0
-    std_dev = steady['kbps'].std()
+    std_dev = steady.std()
 
     print("\n=============================================")
     print(f"  BITRATE AUDIT SUMMARY (Window: {args.window}s)")
@@ -78,7 +65,8 @@ def analyze_bitrate(args):
 
     if args.verbose:
         print("\n[Time Series Data]")
-        print(steady[['time', 'kbps']].to_string(index=False))
+        for i, val in steady.items():
+            print(f"Time: {i:4d}s | Rate: {val:10.2f} kbps")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Professional T-STD Bitrate Auditor (STC-based)")
