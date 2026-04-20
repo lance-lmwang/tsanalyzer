@@ -34,25 +34,34 @@ class TSTDTelemetryAnalyzer:
 
     def generate_report(self):
         if not self.events:
-            return "No T-STD events found."
+            return {"error": "No T-STD events found in log."}
 
-        # Analysis Windows
-        outs = [e['out_k'] for e in self.events[5:-2]] # Skip transients
-        vbvs = [e['vbv_pct'] for e in self.events[5:-2]]
+        # Analysis Windows: Skip first 5 samples to avoid startup noise
+        valid_events = self.events[5:-2] if len(self.events) > 10 else self.events
+
+        if not valid_events:
+            return {"error": "Insufficient telemetry samples for analysis."}
+
+        outs = [e['out_k'] for e in valid_events]
+        vbvs = [e['vbv_pct'] for e in valid_events]
+        devs = [abs(e['dev_pct']) for e in self.events]
         modes = [e['mode'] for e in self.events]
+
+        max_dev = max(devs) if devs else 0
+        max_vbv = max(vbvs) if vbvs else 0
 
         report = {
             "summary": {
                 "duration_sampled": len(self.events),
                 "mean_bitrate": round(statistics.mean(outs), 2) if outs else 0,
-                "max_deviation": round(max([abs(e['dev_pct']) for e in self.events]), 2),
+                "max_deviation": round(max_dev, 2),
                 "avg_vbv": round(statistics.mean(vbvs), 1) if vbvs else 0,
-                "max_vbv": max(vbvs) if vbvs else 0,
+                "max_vbv": max_vbv,
                 "mode_distribution": {m: modes.count(m) for m in set(modes)}
             },
             "health_check": {
-                "bitrate_stability": "PASS" if (max([abs(e['dev_pct']) for e in self.events]) < 5.0) else "WARN",
-                "vbv_safety": "PASS" if max(vbvs) < 150 else "WARN",
+                "bitrate_stability": "PASS" if max_dev < 5.0 else "WARN",
+                "vbv_safety": "PASS" if max_vbv < 150 else "WARN",
                 "clock_drift": "PASS" if "DRIVE FUSE" not in open(self.log_path).read() else "FAIL"
             }
         }

@@ -30,7 +30,7 @@ log_file="${OUT_DIR}/tstd_smoke.log"
 test_duration=30
 
 ENABLE_MARATHON=0
-if [[ "$1" == "--all" ]]; then
+if [[ "$1" == "--all" ]] || [[ "$1" == "-all" ]]; then
     ENABLE_MARATHON=1
 fi
 

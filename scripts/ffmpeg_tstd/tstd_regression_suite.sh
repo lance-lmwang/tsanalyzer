@@ -27,6 +27,87 @@ if [ -n "$FFM_CHECK" ]; then
     echo ""
 fi
 
+# --- Fatal Error Scanner ---
+# Scans a log file for critical T-STD failures like Panic Recovery or Backlog.
+scan_fatal_errors() {
+    local log=$1
+    local label=$2
+    if grep -q "Panic Recovery" "$log"; then
+        echo -e "    \033[31m[CRITICAL] $label: Detected Panic Recovery (Pacing Bypass)!\033[0m"
+        GLOBAL_FAIL=1
+        return 1
+    fi
+    return 0
+}
+
+# --- Physical Duration Auditor ---
+# Compare output duration with input duration to detect data loss.
+audit_physical_duration() {
+    local ts_file=$1
+    local expected_dur_s=$2
+    local label=$3
+
+    # Use mediainfo to get duration in ms (General track)
+    local actual_dur_ms=$(mediainfo --Inform="General;%Duration%" "$ts_file" 2>/dev/null)
+    if [ -z "$actual_dur_ms" ]; then
+        echo -e "    \033[33m[WARN] $label: Mediainfo could not extract duration.\033[0m"
+        return 0
+    fi
+
+    local actual_dur_s=$(echo "scale=3; $actual_dur_ms / 1000" | bc -l)
+    local diff=$(echo "$actual_dur_s - $expected_dur_s" | bc -l | sed 's/-//')
+
+    echo -n "[*] Physical Duration Audit ($label): Actual ${actual_dur_s}s (Expected ${expected_dur_s}s)... "
+
+    # Assert: Tolerance 1.5 seconds (to account for container padding/header overhead)
+    if (( $(echo "$diff > 1.5" | bc -l) )); then
+        echo -e "\033[31m[FAIL] Duration Mismatch (Diff: ${diff}s)!\033[0m"
+        return 1
+    else
+        echo -e "\033[32m[PASS]\033[0m"
+        return 0
+    fi
+}
+
+# --- Physical Latency Truth Auditor ---
+# Extract actual DTS-PCR gap from the bitstream. This is the ultimate truth.
+audit_physical_latency() {
+    local ts_file=$1
+    local mux_delay_ms=$2
+    local label=$3
+
+    # Fast Probe: Just look at the first 500 packets to find the first PCR of PID 0x21
+    local first_dts=$($ffp -v error -read_intervals "%+1" -select_streams v:0 -show_packets -show_entries packet=dts -of default=noprint_wrappers=1:nokey=1 "$ts_file" | head -n 1)
+    local first_pcr=$($ffp -v error -read_intervals "%+5" -show_packets -show_entries packet=pcr,pid -of default=noprint_wrappers=1:nokey=1 "$ts_file" | grep "0x21" | awk -F'|' '{print $1}' | grep -v "N/A" | head -n 1)
+
+    if [ -z "$first_dts" ] || [ -z "$first_pcr" ]; then
+        # Fallback for different PIDs
+        first_pcr=$($ffp -v error -read_intervals "%+10" -show_packets -show_entries packet=pcr -of default=noprint_wrappers=1:nokey=1 "$ts_file" | grep -v "N/A" | head -n 1)
+    fi
+
+    if [ -z "$first_dts" ] || [ -z "$first_pcr" ]; then
+        echo -e "    \033[33m[WARN] $label: Could not extract physical timestamps.\033[0m"
+        return 0
+    fi
+
+    # Precise math for 27MHz clock
+    local d_ms=$(echo "($first_dts * 27000000 - $first_pcr) / 27000" | bc 2>/dev/null)
+
+    [ -z "$d_ms" ] && return 0
+    d_ms=${d_ms#-} # ABS
+
+    echo -n "[*] Physical Latency Audit ($label): Actual ${d_ms}ms (Target ~${mux_delay_ms}ms)... "
+
+    local threshold=$(echo "$mux_delay_ms * 1.6 / 1" | bc)
+    if [ "$d_ms" -gt "$threshold" ] || [ "$d_ms" -lt 50 ]; then
+        echo -e "\033[31m[FAIL] Physical Lag Detected!\033[0m"
+        return 1
+    else
+        echo -e "\033[32m[PASS]\033[0m"
+        return 0
+    fi
+}
+
 # --- Parameters Configuration ---
 # Assuming ffmpeg.wz.master is a sibling directory of tsanalyzer based on current path analysis
 FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
@@ -48,7 +129,7 @@ log_file="${OUT_DIR}/tstd_smoke.log"
 test_duration=30
 
 ENABLE_MARATHON=0
-if [[ "$1" == "--all" ]]; then
+if [[ "$1" == "--all" ]] || [[ "$1" == "-all" ]]; then
     ENABLE_MARATHON=1
 fi
 
@@ -62,11 +143,16 @@ verify_duration() {
 
     if [ ! -f "$file" ]; then return; fi
 
-    local actual=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file")
+    local actual=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" | head -n 1)
+    local v_actual=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 "$file" | head -n 1)
+    local a_actual=$($FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 "$file" | head -n 1)
+
     # Handle empty or invalid duration
     if [ -z "$actual" ] || [ "$actual" == "N/A" ]; then actual=0; fi
+    if [ -z "$v_actual" ] || [ "$v_actual" == "N/A" ]; then v_actual=0; fi
+    if [ -z "$a_actual" ] || [ "$a_actual" == "N/A" ]; then a_actual=0; fi
 
-    # Calculate absolute delta using bc
+    # 1. Format Duration Audit
     local diff=$(echo "$actual - $expected" | bc -l | sed 's/-//')
     local threshold=0.5
 
@@ -75,6 +161,17 @@ verify_duration() {
         echo -e "\033[32m[PASS]\033[0m"
     else
         echo -e "\033[31m[FAIL] Skew detected: ${diff}s exceeds ${threshold}s threshold!\033[0m"
+        GLOBAL_FAIL=1
+    fi
+
+    # 2. Stream Alignment Audit (Video vs Audio)
+    local sync_diff=$(echo "$v_actual - $a_actual" | bc -l | sed 's/-//')
+    local sync_threshold=1.0
+    echo -n "    - Stream Sync: V:${v_actual}s, A:${a_actual}s (Delta: ${sync_diff}s)... "
+    if (( $(echo "$sync_diff < $sync_threshold" | bc -l) )); then
+        echo -e "\033[32m[OK]\033[0m"
+    else
+        echo -e "\033[31m[FAIL] Video/Audio out of sync or truncated!\033[0m"
         GLOBAL_FAIL=1
     fi
 }
@@ -114,8 +211,13 @@ eval $cmd
 if [ $? -eq 0 ]; then
     echo "[SUCCESS] Metrology test completed. Verifying compliance..."
 
-    # NEW: Validate physical duration of the generated TS file
-    verify_duration "$dst" $test_duration "Phase 1 Main Output"
+    # NEW: Validate physical duration and latency of the generated TS file
+    scan_fatal_errors "$log_file" "Phase 1 Health"
+    audit_physical_duration "$dst" $test_duration "Phase 1 Integrity"
+    if [ $? -ne 0 ]; then GLOBAL_FAIL=1; fi
+
+    audit_physical_latency "$dst" 900 "Phase 1 Pacing"
+    if [ $? -ne 0 ]; then GLOBAL_FAIL=1; fi
 
     # --- Step 3: Industrial Telemetry Audit (Modern V6 Engine) ---
     echo "[*] Launching Deep Telemetry Engine (V6 Master Spec)..."
@@ -270,7 +372,7 @@ for entry in "${MATRIX[@]}"; do
               -c:v libwz264 -b:v $v_br -preset fast \
               -wz264-params "keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+              -muxdelay 0.9 -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
               "$dst_sync" > "$CUR_LOG" 2>&1
         # Audio PID is 0x22 when start_pid is 0x21
         MAX_A_TOK=$(grep "PID:0x0022" "$CUR_LOG" | tail -n 50 | grep "TOK:" | awk -F'TOK:' '{print $2}' | awk -F' ' '{print $1}' | sort -nr | head -n 1)
@@ -470,6 +572,10 @@ for entry in "${MATRIX[@]}"; do
                     printf "%-20s | %6.1f | %6.1f | %6.1f | %5dms | %5.2f\n" \
                            "$m_name" "${mean_m:-0}" "${max_m:-0}" "${min_m:-0}" "${v_delay_ms:-0}" "${score_m:-0}"
 
+                    # Hard Physical Truth Audit for 0.5 VBV cases
+                    audit_physical_latency "$dst_m" 900 "$m_name"
+                    if [ $? -ne 0 ]; then GLOBAL_FAIL=1; fi
+
                     # Relax threshold for High_Bitrate_Stress due to source-upscaling jitter
                     limit_m=350
                     if [ "$m_name" == "High_Bitrate_Stress" ]; then
@@ -500,7 +606,7 @@ for entry in "${MATRIX[@]}"; do
             $ffm -y -hide_banner -copyts -i "$JACO_SRC" -t 30 \
                   -c:v libwz264 -b:v 1600k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-                  -f mpegts -muxrate 2200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -muxdelay 0.9 -f mpegts -muxrate 2200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
                   "${OUT_DIR}/jaco_test.ts" > "$JACO_LOG" 2>&1
 
             # Assertion: The engine MUST handle the offset correctly
@@ -545,6 +651,10 @@ for entry in "${MATRIX[@]}"; do
 
             audit_re=$(python3 "$AUDITOR_PY" "${OUT_DIR}/re_test.ts" --vid 0x21 --target 800 --skip 10.0 --simple 2>/dev/null)
             read mean_re max_re min_re std_re score_re <<< "$audit_re"
+
+            # Hard Physical Truth Audit for -re mode (Ensure no pile-up)
+            audit_physical_latency "${OUT_DIR}/re_test.ts" 900 "Real-time Mode"
+            if [ $? -ne 0 ]; then GLOBAL_FAIL=1; fi
 
             echo ""
             echo "----------------------------------------------------------------------------"

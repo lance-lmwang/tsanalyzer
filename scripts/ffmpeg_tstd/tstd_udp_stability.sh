@@ -51,7 +51,7 @@ python3 "$AUDITOR_PY" "$CAPTURE_TS" --vid 0x21 --target 600 --simple --skip 15.0
 echo ""
 echo "--- TSDuck Industrial Analysis ---"
 if command -v tsp &> /dev/null; then
-    tsp -I file "$CAPTURE_TS" -P bitrate -P pcrverify -P continuity -O drop
+    tsp -I file "$CAPTURE_TS" -P bitrate_monitor -P pcrverify -P continuity -O drop
 else
     echo "[WARN] TSDuck (tsp) not found in system. Skipping PCR/Bitrate sub-audit."
 fi

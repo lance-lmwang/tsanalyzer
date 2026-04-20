@@ -35,7 +35,7 @@ run_stage() {
 }
 
 # --- STAGE 1: Automated Regression Suite (Phases 1-13) ---
-run_stage "CI_REGRESSION" "./scripts/ffmpeg_tstd/tstd_regression_suite.sh"
+run_stage "CI_REGRESSION" "./scripts/ffmpeg_tstd/tstd_regression_suite.sh $@"
 
 # --- STAGE 2: Physical Matrix Audit (600k-1300k, Long-run) ---
 # Using DUR=60 for a quick full-spectrum verify; use DUR=600 for deep stress
@@ -49,6 +49,9 @@ run_stage "TRUTH_CHECK" "./scripts/ffmpeg_tstd/tstd_physical_audit.sh"
 # Note: Performs real-time -re pushing to loopback and captures for PCR analysis
 export DUR=60
 run_stage "UDP_STABILITY" "./scripts/ffmpeg_tstd/tstd_udp_stability.sh"
+
+# --- STAGE 5: Edge Case Resilience Audit (Startup/Burst/Drain) ---
+run_stage "EDGE_CASES" "./scripts/ffmpeg_tstd/tstd_edge_cases.sh"
 
 # --- Final Summary ---
 echo "=========================================================="
