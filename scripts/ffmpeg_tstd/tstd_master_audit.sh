@@ -38,8 +38,8 @@ SRC_BASE=$(basename "$SRC" | cut -f 1 -d '.')
 ALERTS_TMP="${OUT_DIR}/last_alerts.tmp"
 
 print_header() {
-    echo "MODE | V_BIT | MUX |  MEANk |   MAXk |   MINk |  V_DLY  | IN_MAX | SCORE"
-    echo "----------------------------------------------------------------------------"
+    echo "MODE | V_BIT | MUX |  MEANk |   MAXk |   MINk |  DELTA |  V_DLY  | SCORE"
+    echo "---------------------------------------------------------------------------"
 }
 
 run_mux() {
@@ -78,9 +78,11 @@ run_audit() {
     local audit=$(python3 "$AUDITOR" "$dst" --vid 0x21 --target "$vbr_val" --simple)
     read mean max min std score <<< $audit
 
+    # Calculate Delta (Bitrate Fluctuation)
+    local delta=$(echo "$max - $min" | bc)
+
     local max_delay_val=0
     local max_delay_str="N/A"
-    local max_in="N/A"
     if [ -f "$tstd_log" ]; then
         local max_vbv_pct=$(grep "\[T-STD SEC\]" "$tstd_log" | awk -F'VBV:' '{print $2}' | awk -F'%' '{print $1}' | sort -rn | head -n 1)
         if [ -n "$max_vbv_pct" ]; then
@@ -88,12 +90,10 @@ run_audit() {
             max_delay_str="${max_delay_val}ms"
             if [ "$max_delay_val" -gt 2000 ]; then max_delay_str="!!${max_delay_val}"; fi
         fi
-        # Extract InMax from the new log format
-        max_in=$(grep "\[T-STD SEC\]" "$tstd_log" | awk -F'InMax:' '{print $2}' | awk -F'k' '{print $1}' | sort -rn | head -n 1)
     fi
 
-    printf "%4s | %5s | %4s | %6s | %6s | %6s | %7s | %6s | %5s\n" \
-           "$mode" "$vbr_val" "$mux_val" "$mean" "$max" "$min" "$max_delay_str" "$max_in" "$score"
+    printf "%4s | %5s | %4s | %6s | %6s | %6s | %6s | %7s | %5s\n" \
+           "$mode" "$vbr_val" "$mux_val" "$mean" "$max" "$min" "$delta" "$max_delay_str" "$score"
 }
 
 if [ -n "$2" ] || [ -n "$3" ]; then

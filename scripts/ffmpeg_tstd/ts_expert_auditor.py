@@ -3,19 +3,13 @@ import sys
 import argparse
 import signal
 import numpy as np
-from collections import deque
 
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 TS_PACKET_SIZE = 188
-TS_PACKET_BITS = TS_PACKET_SIZE * 8
 PCR_CLOCK = 27000000.0
 MAX_PCR = 1 << 42
 
-
-# =========================
-# PCR 工具
-# =========================
 def get_pcr(pkt):
     if len(pkt) < 12: return None
     afc = (pkt[3] >> 4) & 0x3
@@ -28,138 +22,36 @@ def get_pcr(pkt):
             return base*300 + ext
     return None
 
-
 def pcr_delta(a, b):
     d = a - b
-    if d > MAX_PCR//2:
-        d -= MAX_PCR
-    elif d < -MAX_PCR//2:
-        d += MAX_PCR
+    if d > MAX_PCR//2: d -= MAX_PCR
+    elif d < -MAX_PCR//2: d += MAX_PCR
     return d
 
-
-# =========================
-# PCR PID 检测（单调性评分）
-# =========================
-def detect_pcr_pid_strict(ts):
-    stats = {}
-
-    with open(ts, "rb") as f:
-        for _ in range(20000):
-            pkt = f.read(TS_PACKET_SIZE)
-            if not pkt or pkt[0] != 0x47:
-                continue
-
-            pid = ((pkt[1]&0x1F)<<8)|pkt[2]
-            pcr = get_pcr(pkt)
-            if pcr is None:
-                continue
-
-            if pid not in stats:
-                stats[pid] = {"last": pcr, "score": 0}
-                continue
-
-            d = pcr_delta(pcr, stats[pid]["last"])
-
-            # 合法 PCR 间隔：0 ~ 100ms
-            if 0 < d < 0.1 * PCR_CLOCK:
-                stats[pid]["score"] += 1
-            else:
-                stats[pid]["score"] -= 5
-
-            stats[pid]["last"] = pcr
-
-    if not stats:
-        return None
-
-    return max(stats.items(), key=lambda x: x[1]["score"])[0]
-
-
-# =========================
-# 连续时间窗口（关键升级：梯形积分模型）
-# =========================
-class ContinuousWindow:
-    def __init__(self, size_sec):
-        self.size_ticks = size_sec * PCR_CLOCK
-        self.samples = deque()  # (pcr, rate)
-
-    def add(self, pcr, rate):
-        self.samples.append((pcr, rate))
-
-        while self.samples and pcr_delta(pcr, self.samples[0][0]) > self.size_ticks:
-            self.samples.popleft()
-
-    def get_rate(self):
-        if len(self.samples) < 2:
-            return 0
-
-        total_bits_weighted = 0
-        for i in range(1, len(self.samples)):
-            p0, r0 = self.samples[i-1]
-            p1, r1 = self.samples[i]
-
-            dt = pcr_delta(p1, p0) / PCR_CLOCK
-            if dt <= 0:
-                continue
-
-            # 梯形积分：计算该时间段内的有效位流贡献
-            total_bits_weighted += (r0 + r1) / 2 * dt
-
-        duration = pcr_delta(self.samples[-1][0], self.samples[0][0]) / PCR_CLOCK
-        if duration <= 0:
-            return 0
-
-        return total_bits_weighted / duration / 1000.0
-
-
-# =========================
-# 主流程
-# =========================
 def main():
-    parser = argparse.ArgumentParser(description="T-STD Professional Auditor v7.0 - First-Class Metrology")
+    parser = argparse.ArgumentParser(description="T-STD Shadow Auditor - Aligned with tstd.c Statistics")
     parser.add_argument("input")
-    parser.add_argument("--vid", type=lambda x:int(x,0), default=None)
-    parser.add_argument("--pcr", type=lambda x:int(x,0), default=None)
+    parser.add_argument("--vid", type=lambda x:int(x,0), default=0x21)
     parser.add_argument("--target", type=float, required=True, help="Target Video Bitrate (kbps)")
-    parser.add_argument("--simple", action="store_true", help="Output summary only for shell table")
-    parser.add_argument("--skip", type=float, default=5.0, help="Seconds to skip at start")
+    parser.add_argument("--window", type=int, default=30, help="PCR Window Size")
+    parser.add_argument("--simple", action="store_true")
+    parser.add_argument("--skip", type=float, default=5.0)
     args = parser.parse_args()
 
-    # 1. PCR PID Detection
-    if args.pcr:
-        pcr_pid = args.pcr
-    else:
-        pcr_pid = detect_pcr_pid_strict(args.input)
+    v_pid = args.vid
+    pcr_win_size = args.window
 
-    if pcr_pid is None:
-        print("ERROR: No Valid PCR PID found")
-        sys.exit(1)
+    window_rates_video = []
+    window_rates_ts = []
 
-    # 2. Video PID Assignment
-    v_pid = args.vid if args.vid else pcr_pid
-    a_pid = v_pid + 1 # Common assumption for default test
+    # State Tracking (Shadowing T-STD Logic)
+    pcr_count = 0
+    win_start_pcr = None
+    win_start_v_bytes = 0
+    win_start_ts_bytes = 0
 
-    max_v_delay = 0
-    max_a_delay = 0
-
-    if not args.simple:
-        print(f"[*] Broadcast-Grade Audit: {args.input}")
-        print(f"[*] PCR_PID: 0x{pcr_pid:04x}, Video_PID: 0x{v_pid:04x}, Target: {args.target}k")
-        print("-" * 75)
-        print(f"{'Time':>8} | {'Vid_Rate(k)':>15} | {'Min_Dip(k)':>12} | {'V_Dly(ms)':>10} | Status")
-        print("-" * 75)
-
-    win_1s = ContinuousWindow(1.0)
-    win_100ms = ContinuousWindow(0.1)
-
-    bits_all = 0
-    bits_vid = 0
-    last_pcr = None
-    min_dip = 9999.0
-    last_sec = -1
-    first_pcr_time = None
-
-    all_steady_samples = []
+    total_v_bytes = 0
+    total_ts_bytes = 0
 
     with open(args.input, "rb") as f:
         while True:
@@ -167,78 +59,66 @@ def main():
             if not pkt: break
             if pkt[0] != 0x47: continue
 
+            total_ts_bytes += TS_PACKET_SIZE
             pid = ((pkt[1]&0x1F)<<8)|pkt[2]
-            bits_all += TS_PACKET_BITS
             if pid == v_pid:
-                bits_vid += TS_PACKET_BITS
+                total_v_bytes += TS_PACKET_SIZE
 
-            if pid == pcr_pid:
-                pcr = get_pcr(pkt)
-                if pcr is None: continue
-                if first_pcr_time is None: first_pcr_time = pcr
+            pcr = get_pcr(pkt)
+            if pcr is not None:
+                if win_start_pcr is None:
+                    win_start_pcr = pcr
+                    win_start_v_bytes = total_v_bytes
+                    win_start_ts_bytes = total_ts_bytes
+                    pcr_count = 0
+                else:
+                    pcr_count += 1
+                    if pcr_count >= pcr_win_size:
+                        duration = pcr_delta(pcr, win_start_pcr) / PCR_CLOCK
+                        if duration > 0:
+                            # 1. 影子统计：计算视频负载瞬时码率
+                            v_bits = (total_v_bytes - win_start_v_bytes) * 8
+                            v_rate = (v_bits / duration) / 1000.0
 
-                if last_pcr is not None:
-                    dt = pcr_delta(pcr, last_pcr) / PCR_CLOCK
-                    if dt > 0:
-                        rate_vid = bits_vid / dt
-                        win_1s.add(pcr, rate_vid)
-                        win_100ms.add(pcr, rate_vid)
+                            # 2. 影子统计：计算系统总物理码率（验证 CBR）
+                            ts_bits = (total_ts_bytes - win_start_ts_bytes) * 8
+                            ts_rate = (ts_bits / duration) / 1000.0
 
-                        # Reset bits for next interval regardless of skipping
-                        bits_all = 0
-                        bits_vid = 0
+                            curr_time = pcr / PCR_CLOCK
+                            if curr_time > args.skip:
+                                window_rates_video.append(v_rate)
+                                window_rates_ts.append(ts_rate)
 
-                        # --- NEW: Skip Logic ---
-                        elapsed = pcr_delta(pcr, first_pcr_time) / PCR_CLOCK
-                        if elapsed < args.skip:
-                            last_pcr = pcr
-                            continue
+                        # 同步重置锚点 (与 tstd.c 逻辑完全一致)
+                        win_start_pcr = pcr
+                        win_start_v_bytes = total_v_bytes
+                        win_start_ts_bytes = total_ts_bytes
+                        pcr_count = 0
 
-                        r1 = win_1s.get_rate()
-                        r100 = win_100ms.get_rate()
+    if not window_rates_video:
+        print("0 0 0 0 0")
+        return
 
-                        if r100 > 0:
-                            min_dip = min(min_dip, r100)
+    v_rates = np.array(window_rates_video)
+    ts_rates = np.array(window_rates_ts)
 
-                        # --- Professional Fluctuation Analysis (After 8s Steady-State) ---
-                        if pcr / PCR_CLOCK > 8.0:
-                            # Use actual measured mean as baseline for stability check
-                            steady_samples = [s for i, s in enumerate(all_steady_samples) if i > 5]
-                            ref_mean = np.mean(steady_samples) if steady_samples else args.target
-                            fluctuation = abs(r1 - ref_mean) / ref_mean
+    mean_v = np.mean(v_rates)
+    max_v = np.max(v_rates)
+    min_v = np.min(v_rates)
+    std_v = np.std(v_rates)
 
-                            # P1: Filter End-of-Stream noise. If rate plummets below 20% of mean, it's EOF, not a jitter.
-                            if fluctuation > 0.04 and r1 > (ref_mean * 0.2):
-                                if not args.simple:
-                                    print(f"[ALERT] {pcr/PCR_CLOCK:7.2f}s | Fluctuation={fluctuation*100:.2f}% | Rate={r1:8.2f}k (Mean={ref_mean:8.2f}k)")
-
-                        if pcr / PCR_CLOCK > 5.0 and r1 > 10:
-                            all_steady_samples.append(r1)
-
-                        sec = int(pcr / PCR_CLOCK)
-                        if sec > last_sec:
-                            if not args.simple:
-                                status = "OK"
-                                if r1 < 10: status = "!!! STALL !!!"
-                                elif min_dip < args.target * 0.6: status = "!!! DIP !!!"
-                                elif r1 < args.target * 0.9: status = "! LOW !"
-                                print(f"{sec:7d}s | {r1:15.2f} | {min_dip:12.2f} | {status}")
-
-                            min_dip = 9999.0
-                            last_sec = sec
-
-                last_pcr = pcr
+    # 我们用视频的平滑度评分
+    score = std_v * 3.0 + abs(mean_v - args.target)
 
     if args.simple:
-        if not all_steady_samples:
-            print("0.00 0.00 0.00 0.00 0.00")
-        else:
-            mean = np.mean(all_steady_samples)
-            mx = np.max(all_steady_samples)
-            mn = np.min(all_steady_samples)
-            std = np.std(all_steady_samples)
-            score = (mx - mn) + 2.0 * std
-            print(f"{mean:.2f} {mx:.2f} {mn:.2f} {std:.2f} {score:.2f}")
+        # 对齐 master_audit.sh 的期望输出格式
+        print(f"{mean_v:.2f} {max_v:.2f} {min_v:.2f} {std_v:.2f} {score:.2f}")
+    else:
+        print(f"--- T-STD Shadow Audit (PCR-Window: {pcr_win_size}) ---")
+        print(f"Video PID : 0x{v_pid:04x}")
+        print(f"Video Rate: Mean:{mean_v:7.2f} Max:{max_v:7.2f} Min:{min_v:7.2f} Delta:{max_v-min_v:7.2f} kbps")
+        print(f"TS Total  : Mean:{np.mean(ts_rates):7.2f} Max:{np.max(ts_rates):7.2f} Min:{np.min(ts_rates):7.2f} kbps")
+        print(f"StdDev(V) : {std_v:7.2f} kbps")
 
 if __name__ == "__main__":
     main()
