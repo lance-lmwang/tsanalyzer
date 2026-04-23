@@ -68,6 +68,9 @@ run_stage "CHAOS_AUDIT" "./scripts/ffmpeg_tstd/tstd_chaos_audit.sh"
 # --- STAGE 5: Edge Case Resilience Audit (Startup/Burst/Drain) ---
 run_stage "EDGE_CASES" "./scripts/ffmpeg_tstd/tstd_edge_cases.sh"
 
+# --- STAGE 6: Legacy vs T-STD Comparative Advantage Audit ---
+run_stage "LEGACY_COMPARE" "./scripts/ffmpeg_tstd/tstd_legacy_compare_audit.sh"
+
 # --- Final Summary ---
 echo "=========================================================="
 if [ $GLOBAL_SUCCESS -eq 1 ]; then
