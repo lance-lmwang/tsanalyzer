@@ -50,6 +50,21 @@ run_stage "TRUTH_CHECK" "./scripts/ffmpeg_tstd/tstd_physical_audit.sh"
 export DUR=60
 run_stage "UDP_STABILITY" "./scripts/ffmpeg_tstd/tstd_udp_stability.sh"
 
+# --- STAGE 4.5: PSI Interval Compliance Audit ---
+run_stage "PSI_COMPLIANCE" "./scripts/ffmpeg_tstd/tstd_psi_audit.sh"
+
+# --- STAGE 4.6: Deep Timeline Jump Audit ---
+run_stage "JUMP_RECOVERY" "./scripts/ffmpeg_tstd/tstd_jump_audit.sh"
+
+# --- STAGE 4.7: A/V Boundary & Continuity Audit ---
+run_stage "BOUNDARY_AUDIT" "python3 ./scripts/ffmpeg_tstd/tstd_audit_v2.py ./output/jump_audit_test.ts"
+
+# --- STAGE 4.8: Audio-Only Resilience Audit ---
+run_stage "AUDIO_ONLY" "./scripts/ffmpeg_tstd/tstd_audio_only_audit.sh"
+
+# --- STAGE 4.9: Chaos Jitter Resilience Audit ---
+run_stage "CHAOS_AUDIT" "./scripts/ffmpeg_tstd/tstd_chaos_audit.sh"
+
 # --- STAGE 5: Edge Case Resilience Audit (Startup/Burst/Drain) ---
 run_stage "EDGE_CASES" "./scripts/ffmpeg_tstd/tstd_edge_cases.sh"
 
