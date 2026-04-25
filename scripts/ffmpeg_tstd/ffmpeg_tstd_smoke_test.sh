@@ -450,6 +450,24 @@ for entry in "${MATRIX[@]}"; do
                 fi
             fi        done
 
+        # --- Phase 13: Bandwidth Saturation Guard Audit ---
+        echo ""
+        echo "================================================"
+        echo "   PHASE 13: Bandwidth Saturation Guard Audit"
+        echo "================================================"
+        SAT_RUNNER="${SCRIPT_DIR}/test_tstd_bandwidth_saturation.sh"
+        if [ -f "$SAT_RUNNER" ]; then
+            chmod +x "$SAT_RUNNER"
+            $SAT_RUNNER
+            RET=$?
+            if [ $RET -ne 0 ]; then
+                echo "[ERROR] Bandwidth Saturation Audit FAILED!"
+                GLOBAL_FAIL=1
+            fi
+        else
+            echo "[WARN] Saturation runner not found, skipping Phase 13."
+        fi
+
         echo ""
 echo "------------------------------------------------"
 if [ $GLOBAL_FAIL -eq 0 ]; then echo -e "\033[32mSTATUS: ALL REGRESSION PHASES PASSED (GOLDEN)\033[0m"; else echo -e "\033[31mSTATUS: REGRESSION TEST FAILED. REVIEW WARNINGS/ERRORS ABOVE.\033[0m"; fi

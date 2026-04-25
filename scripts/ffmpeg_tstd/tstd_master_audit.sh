@@ -75,7 +75,7 @@ run_audit() {
 
     if [ ! -f "$dst" ]; then return; fi
 
-    local audit=$(python3 "$AUDITOR" "$dst" --vid 0x21 --target "$vbr_val" --simple)
+    local audit=$(python3 "$AUDITOR" "$dst" --vid 0x21 --target "$vbr_val" --skip 5 --simple)
     read mean max min std score <<< $audit
 
     # Calculate Delta (Bitrate Fluctuation)

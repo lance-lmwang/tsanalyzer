@@ -1,7 +1,11 @@
 #!/bin/bash
 
 # 配置路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TSANALYZER_DIR="$(cd "$SCRIPT_DIR/../tsanalyzer/scripts/ffmpeg_tstd" && pwd)"
+
 FFMPEG="./ffdeps_img/ffmpeg/bin/ffmpeg"
+FFPROBE="./ffdeps_img/ffmpeg/bin/ffprobe"
 SAMPLE_DIR="../sample"
 OUTPUT_DIR="output"
 mkdir -p $OUTPUT_DIR
@@ -13,16 +17,24 @@ run_test() {
     BV=$3
     MUX=$4
     PCR=$5
-    shift 5
-    EXTRA_ARGS=$@
+    VBV_OVERRIDE=$6
 
-    MUXDELAY=${MUXDELAY:-0.9}
+    # 智能参数解析：检查第6个参数是否为数字覆盖
+    if [[ "$VBV_OVERRIDE" =~ ^[0-9]+$ ]]; then
+        VBV_BUF=$VBV_OVERRIDE
+        shift 6
+    else
+        MUXDELAY=0.9
+        VBV_BUF=$(awk "BEGIN {printf \"%d\", ${BV%k} * $MUXDELAY}")
+        shift 5
+    fi
+    EXTRA_ARGS="$@"
 
-    # 动态计算 VBV Buffer 大小 (基于 muxdelay)，防止编码器产生超过物理水池上限的突发
-    VBV_BUF=$(awk "BEGIN {printf \"%d\", ${BV%k} * $MUXDELAY}")
+    MUXDELAY=0.9
+
 
     echo "========================================================="
-    echo " RUNNING TEST CASE: $NAME (Industrial Enhanced V2)"
+    echo " RUNNING TEST CASE: $NAME"
     echo " Input: $FILE, Video: $BV, Mux: $MUX, Muxdelay: ${MUXDELAY}s, VBV Buffer: ${VBV_BUF}k, PCR: ${PCR}ms"
     echo "========================================================="
 
@@ -51,12 +63,12 @@ run_test() {
         -f mpegts "$OUT_TS" > "$LOG_FILE" 2>&1
 
     sync
-    echo "Test finished. Analyzing V2 Performance..."
+    echo "Test finished. Analyzing Result..."
 
     OUT_IMG="${OUT_TS%.ts}.jpg"
     DATA_FILE="${OUT_TS%.ts}.tmp"
 
-    echo "--- 30-PCR Window Stats (TSA Aligned) ---"
+    echo "--- 30-PCR Window Bitrate Stats ---"
     # 提取 In 码率, Out 码率, Pkt 和 V-Dly 进行统计和绘图
     grep "\[T-STD SEC\]" "$LOG_FILE" | sed -n 's/.*In:[[:space:]]*\([0-9]*\)k.*Out:[[:space:]]*\([0-9]*\)k.*Pkt:[[:space:]]*\([0-9]*\).*V-Dly:[[:space:]]*\([0-9]*\)ms.*/\1 \2 \3 \4/p' > "$DATA_FILE.raw"
 
@@ -84,8 +96,8 @@ EOF
         echo "Bitrate JPG saved to $OUT_IMG"
         rm "$DATA_FILE"
 
-        # 计算极值和平均值
-        tail -n +5 "$DATA_FILE.raw" | \
+        # 计算极值和平均值 (Skip first 5 samples/seconds to ignore startup artifacts)
+        tail -n +6 "$DATA_FILE.raw" | \
         awk '{
             in_bps=$1; out=$2; pkt=$3; vdly=$4;
             if(min_p==""){min_p=max_p=pkt; min_o=max_o=out; max_v=vdly};
@@ -104,7 +116,10 @@ EOF
         }'
 
         # 高阶输入突发特征分析 (Advanced Burst Analysis)
-        python3 ../tsanalyzer/scripts/ffmpeg_tstd/tsa_shapability_analyzer.py "$LOG_FILE" "$MUX" "$MUXDELAY"
+        python3 "$TSANALYZER_DIR/tsa_shapability_analyzer.py" "$LOG_FILE" "$MUX" "$MUXDELAY"
+
+        # 执行物理层时钟合规性审计 (PCR vs DTS Violation Detection)
+        "$TSANALYZER_DIR/offline_clock_audit.sh" "$OUT_TS"
 
         rm "$DATA_FILE.raw"
     else
@@ -117,10 +132,12 @@ case "$1" in
     sd)    run_test "sd" "SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts" "600k" "1100k" 35 -flags +ilme+ildct ;;
     720p)  run_test "720p" "HD720p_4Mbps.ts" "1300k" "1700k" 35 ;;
     1080i) run_test "1080i" "hd-2026.3.13-10.20~10.25.ts" "1500k" "2300k" 35 -flags +ilme+ildct ;;
+    1080p_high) run_test "1080p_high" "SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts" "5500k" "6000k" 35 5500 ;;
     all)
         $0 sd
         $0 720p
         $0 1080i
+        $0 1080p_high
         ;;
     *)
         echo "Usage: $0 {sd|720p|1080i|all}"
