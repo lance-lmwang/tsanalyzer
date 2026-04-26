@@ -198,7 +198,7 @@ cmd="$ffm -y -i '$src' \
       -f mpegts \
       -muxrate $muxrate -muxdelay 1.0 \
       -pcr_period 30 -pat_period 0.2 -sdt_period 1.0 \
-      -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+      -mpegts_tstd_mode 1 -tstd_params "debug=2" \
       '$dst' \
       > $log_file 2>&1"
 
@@ -277,7 +277,7 @@ $ffm -y -hide_banner -i /tmp/v.ts -itsoffset -0.7 -i /tmp/a.ts -c copy -map 0:v 
 echo "[*] Analyzing engine recovery behavior..."
 $ffm -y -hide_banner -i "${OUT_DIR}/dirty_src.ts" -c:v libwz264 -b:v 600k -preset fast \
       -wz264-params "keyint=25:vbv-maxrate=600:vbv-bufsize=600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-      -f mpegts -muxrate 1000k -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 "$REPRO_TS" > "$REPRO_LOG" 2>&1
+      -f mpegts -muxrate 1000k -mpegts_tstd_mode 1 -tstd_params "debug=2" "$REPRO_TS" > "$REPRO_LOG" 2>&1
 
 if grep -q "DRIVE FUSE" "$REPRO_LOG"; then
     echo -e "    \033[31m[FAIL] Clock drift exceeded safety limits (DRIVE FUSE triggered).\033[0m"
@@ -296,7 +296,7 @@ WRAP_TS="${OUT_DIR}/tstd_wrap_test.ts"
 $ffm -y -hide_banner -f lavfi -i "testsrc=size=160x120:rate=25" -t 10 \
     -output_ts_offset 8589934500 \
     -c:v libwz264 -b:v 200k -preset fast \
-    -f mpegts -muxrate 500k -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+    -f mpegts -muxrate 500k -mpegts_tstd_mode 1 -tstd_params "debug=2" \
     "$WRAP_TS" > "$WRAP_LOG" 2>&1
 
 if grep -q "STC JUMP" "$WRAP_LOG"; then
@@ -372,7 +372,7 @@ for entry in "${MATRIX[@]}"; do
               -c:v libwz264 -b:v $v_br -preset fast \
               -wz264-params "keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
               -c:a aac -b:a 128k \
-              -muxdelay 0.9 -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+              -muxdelay 0.9 -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
               "$dst_sync" > "$CUR_LOG" 2>&1
         # Audio PID is 0x22 when start_pid is 0x21
         MAX_A_TOK=$(grep "PID:0x0022" "$CUR_LOG" | tail -n 50 | grep "TOK:" | awk -F'TOK:' '{print $2}' | awk -F' ' '{print $1}' | sort -nr | head -n 1)
@@ -457,7 +457,7 @@ for entry in "${MATRIX[@]}"; do
         $ffm -y -hide_banner -copyts -i "$COPYTS_SRC" -t 30 \
               -c:v libwz264 -b:v 1600k -preset ultrafast \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate 2000k -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+              -f mpegts -muxrate 2000k -mpegts_tstd_mode 1 -tstd_params "debug=2" \
               "$COPYTS_TS" > "$COPYTS_LOG" 2>&1
 
         actual=$($ffp -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$COPYTS_TS")
@@ -557,7 +557,7 @@ for entry in "${MATRIX[@]}"; do
             $ffm -hide_banner -y -i "/home/lmwang/dev/cae/sample/input.mp4" -t 40 \
                 -c:v libwz264 -b:v "${vbr}k" -preset fast \
                 -wz264-params "keyint=50:vbv-maxrate=${vbr}:vbv-bufsize=${bufsize_val}:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-                -c:a aac -b:a 128k -f mpegts -muxrate "${mux}k" -muxdelay 0.9 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                -c:a aac -b:a 128k -f mpegts -muxrate "${mux}k" -muxdelay 0.9 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
                 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 \
                 "$dst_m" > "$log_m" 2>&1
 
@@ -606,7 +606,7 @@ for entry in "${MATRIX[@]}"; do
             $ffm -y -hide_banner -copyts -i "$JACO_SRC" -t 30 \
                   -c:v libwz264 -b:v 1600k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-                  -muxdelay 0.9 -f mpegts -muxrate 2200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -muxdelay 0.9 -f mpegts -muxrate 2200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
                   "${OUT_DIR}/jaco_test.ts" > "$JACO_LOG" 2>&1
 
             # Assertion: The engine MUST handle the offset correctly
@@ -635,7 +635,7 @@ for entry in "${MATRIX[@]}"; do
                   -c:v libwz264 -b:v 800k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=800:vbv-bufsize=800:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
                   -c:a aac -b:a 128k \
-                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
                   "${OUT_DIR}/offline_baseline.ts" > "${OUT_DIR}/offline_baseline.log" 2>&1
 
             audit_off=$(python3 "$AUDITOR_PY" "${OUT_DIR}/offline_baseline.ts" --vid 0x21 --target 800 --skip 10.0 --simple 2>/dev/null)
@@ -646,7 +646,7 @@ for entry in "${MATRIX[@]}"; do
                   -c:v libwz264 -b:v 800k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=800:vbv-bufsize=800:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
                   -c:a aac -b:a 128k \
-                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
                   "${OUT_DIR}/re_test.ts" > "${OUT_DIR}/re_test.log" 2>&1
 
             audit_re=$(python3 "$AUDITOR_PY" "${OUT_DIR}/re_test.ts" --vid 0x21 --target 800 --skip 10.0 --simple 2>/dev/null)
@@ -686,7 +686,7 @@ for entry in "${MATRIX[@]}"; do
         $ffm -y -hide_banner -i "$STUTTER_SRC_1" -t 30 \
               -filter_complex "[0:v]fps=fps=25,setpts=PTS+0.0005*sin(N)[v]" \
               -map "[v]" -c:v libwz264 -b:v 800k -preset fast \
-              -f mpegts -muxrate 1200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+              -f mpegts -muxrate 1200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
               "${OUT_DIR}/chaos.ts" > "$CHAOS_LOG" 2>&1
 
         if grep -q "DRIVE FUSE" "$CHAOS_LOG"; then

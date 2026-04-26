@@ -46,7 +46,7 @@ nohup $FFMPEG_BIN -hide_banner -y -stream_loop -1 -thread_queue_size 512 -rw_tim
     -map 0:a -c:a:0 copy -map "0:d?" -c:d copy -pes_payload_size 0 -threads 2 -pix_fmt yuv420p -color_range tv \
     -b:v ${TARGET_VBR}k -flush_packets 0 -muxrate ${TARGET_MUX}k -inputbw 0 -oheadbw 25 \
     -maxbw 0 -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
-    -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+    -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
     -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
     -f mpegts "udp://127.0.0.1:$UDP_PORT?bitrate=1200000&pkt_size=1316" > "$FFM_LOG" 2>&1 &
 FFM_PID=$!

@@ -21,7 +21,7 @@ export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
 $FFMPEG_BIN -y -hide_banner -i "$SRC" -t 30 \
       -c:v libwz264 -b:v "${VBR}k" -preset fast -wz264-params "keyint=25:vbv-maxrate=$VBR:vbv-bufsize=$VBR:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
       -c:a aac -b:a 128k \
-      -f mpegts -muxrate $MUX -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+      -f mpegts -muxrate $MUX -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
       "$TS_OUT" > "$LOG_OUT" 2>&1
 
 echo ""

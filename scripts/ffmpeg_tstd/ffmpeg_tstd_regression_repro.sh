@@ -44,7 +44,7 @@ run_mode() {
     if [ $mode -eq 0 ]; then
         cmd="$ffm $BASE_PARAMS -f mpegts '$dst'"
     else
-        cmd="$ffm $BASE_PARAMS -mpegts_tstd_mode $mode -mpegts_tstd_debug 0 -f mpegts '$dst'"
+        cmd="$ffm $BASE_PARAMS -mpegts_tstd_mode $mode -tstd_params "debug=0" -f mpegts '$dst'"
     fi
 
     #eval $cmd > "$log" 2>&1

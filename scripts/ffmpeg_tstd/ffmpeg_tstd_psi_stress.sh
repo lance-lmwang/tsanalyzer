@@ -14,7 +14,7 @@ $FFMPEG -y -i "$SRC" -t 30 \
     -f mpegts -muxrate 1600000 \
     -mpegts_flags +pat_pmt_at_frames \
     -pcr_period 20 -pat_period 0.1 -sdt_period 0.2 \
-    -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+    -mpegts_tstd_mode 1 -tstd_params "debug=2" \
     "$DST" > "$LOG" 2>&1
 
 echo "[*] Compliance Audit..."

@@ -28,7 +28,7 @@ OPTS=(
     -wz264-params "keyint=50:min-keyint=50:aq-mode=2:aq-weight=0.4:aq-strength=1.0:aq-smooth=1.0:psy-rd=0.3:psy-rd-roi=0.4:qcomp=0.65:rc-lookahead=10:pbratio=1.1:vbv-maxrate=600:vbv-bufsize=600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0"
     -map 0:a -threads 2 -pix_fmt yuv420p -color_range tv -b:v 600k -flush_packets 0 -muxrate 1200k
     -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25
-    -mpegts_start_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 -max_muxing_queue_size 4096 -max_interleave_delta 0
+    -mpegts_start_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=1" -max_muxing_queue_size 4096 -max_interleave_delta 0
 )
 
 echo "[1/3] Startup: Timeline Anchoring..."

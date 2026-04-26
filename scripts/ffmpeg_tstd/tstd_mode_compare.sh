@@ -27,7 +27,7 @@ run_mode() {
          -c:v libwz264 -b:v $v_br -preset ultrafast \
          -wz264-params "keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1" \
          -c:a copy \
-         -f mpegts -muxrate $muxrate -mpegts_tstd_mode $mode -mpegts_tstd_debug 2 \
+         -f mpegts -muxrate $muxrate -mpegts_tstd_mode $mode -tstd_params "debug=2" \
          "$dst" > "$log" 2>&1
 
     if [ $? -eq 0 ]; then
