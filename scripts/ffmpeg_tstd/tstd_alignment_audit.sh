@@ -32,9 +32,9 @@ check_metric() {
 # We assume logs follow the pattern: tstd_<name>_md0.9.v2.log
 EXTRACT_CMD="grep 'Bitrate Stats' | sed -n 's/.*Delta: \([0-9]*\)k.*/\1/p'"
 
-CUR_SD=$(tail -n 50 output/tstd_sd_md0.9.v2.log | eval $EXTRACT_CMD)
-CUR_720P=$(tail -n 50 output/tstd_720p_md0.9.v2.log | eval $EXTRACT_CMD)
-CUR_1080I=$(tail -n 50 output/tstd_1080i_md0.9.v2.log | eval $EXTRACT_CMD)
+CUR_SD=$(cat output/tstd_sd_md0.9.v2.log | eval $EXTRACT_CMD)
+CUR_720P=$(cat output/tstd_720p_md0.9.v2.log | eval $EXTRACT_CMD)
+CUR_1080I=$(cat output/tstd_1080i_md0.9.v2.log | eval $EXTRACT_CMD)
 
 echo "=========================================================="
 echo "   T-STD PERFORMANCE ALIGNMENT REPORT"

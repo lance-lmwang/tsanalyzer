@@ -3,7 +3,9 @@
 # 用法: ./offline_clock_audit.sh <TS_FILE>
 
 TS_FILE=$1
-FFPROBE="./ffdeps_img/ffmpeg/bin/ffprobe"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FFPROBE="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffprobe"
 
 if [ ! -f "$TS_FILE" ]; then
     echo "Error: File $TS_FILE not found."

@@ -35,41 +35,41 @@ run_stage() {
 }
 
 # --- STAGE 1: Automated Regression Suite (Phases 1-13) ---
-run_stage "CI_REGRESSION" "./scripts/ffmpeg_tstd/tstd_regression_suite.sh $@"
+run_stage "CI_REGRESSION" "$SCRIPT_DIR/tstd_regression_suite.sh $@"
 
 # --- STAGE 2: Physical Matrix Audit (600k-1300k, Long-run) ---
 # Using DUR=60 for a quick full-spectrum verify; use DUR=600 for deep stress
 export DUR=60
-run_stage "MATRIX_AUDIT" "./scripts/ffmpeg_tstd/tstd_master_audit.sh 1"
+run_stage "MATRIX_AUDIT" "$SCRIPT_DIR/tstd_master_audit.sh 1"
 
 # --- STAGE 3: Physical Truth Alignment ---
-run_stage "TRUTH_CHECK" "./scripts/ffmpeg_tstd/tstd_physical_audit.sh"
+run_stage "TRUTH_CHECK" "$SCRIPT_DIR/tstd_physical_audit.sh"
 
 # --- STAGE 4: Real-time UDP Stress & TSDuck Audit ---
 # Note: Performs real-time -re pushing to loopback and captures for PCR analysis
 export DUR=60
-run_stage "UDP_STABILITY" "./scripts/ffmpeg_tstd/tstd_udp_stability.sh"
+run_stage "UDP_STABILITY" "$SCRIPT_DIR/tstd_udp_stability.sh"
 
 # --- STAGE 4.5: PSI Interval Compliance Audit ---
-run_stage "PSI_COMPLIANCE" "./scripts/ffmpeg_tstd/tstd_psi_audit.sh"
+run_stage "PSI_COMPLIANCE" "$SCRIPT_DIR/tstd_psi_audit.sh"
 
 # --- STAGE 4.6: Deep Timeline Jump Audit ---
-run_stage "JUMP_RECOVERY" "./scripts/ffmpeg_tstd/tstd_jump_audit.sh"
+run_stage "JUMP_RECOVERY" "$SCRIPT_DIR/tstd_jump_audit.sh"
 
 # --- STAGE 4.7: A/V Boundary & Continuity Audit ---
-run_stage "BOUNDARY_AUDIT" "python3 ./scripts/ffmpeg_tstd/tstd_audit_v2.py ./output/jump_audit_test.ts"
+run_stage "BOUNDARY_AUDIT" "python3 $SCRIPT_DIR/tstd_audit_v2.py $ROOT_DIR/output/jump_audit_test.ts"
 
 # --- STAGE 4.8: Audio-Only Resilience Audit ---
-run_stage "AUDIO_ONLY" "./scripts/ffmpeg_tstd/tstd_audio_only_audit.sh"
+run_stage "AUDIO_ONLY" "$SCRIPT_DIR/tstd_audio_only_audit.sh"
 
 # --- STAGE 4.9: Chaos Jitter Resilience Audit ---
-run_stage "CHAOS_AUDIT" "./scripts/ffmpeg_tstd/tstd_chaos_audit.sh"
+run_stage "CHAOS_AUDIT" "$SCRIPT_DIR/tstd_chaos_audit.sh"
 
 # --- STAGE 5: Edge Case Resilience Audit (Startup/Burst/Drain) ---
-run_stage "EDGE_CASES" "./scripts/ffmpeg_tstd/tstd_edge_cases.sh"
+run_stage "EDGE_CASES" "$SCRIPT_DIR/tstd_edge_cases.sh"
 
 # --- STAGE 6: Legacy vs T-STD Comparative Advantage Audit ---
-run_stage "LEGACY_COMPARE" "./scripts/ffmpeg_tstd/tstd_legacy_compare_audit.sh"
+run_stage "LEGACY_COMPARE" "$SCRIPT_DIR/tstd_legacy_compare_audit.sh"
 
 # --- Final Summary ---
 echo "=========================================================="

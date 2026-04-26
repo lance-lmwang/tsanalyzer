@@ -2,13 +2,14 @@
 
 # 配置路径
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TSANALYZER_DIR="$(cd "$SCRIPT_DIR/../tsanalyzer/scripts/ffmpeg_tstd" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 
-FFMPEG="./ffdeps_img/ffmpeg/bin/ffmpeg"
-FFPROBE="./ffdeps_img/ffmpeg/bin/ffprobe"
-SAMPLE_DIR="../sample"
-OUTPUT_DIR="output"
-mkdir -p $OUTPUT_DIR
+FFMPEG="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
+FFPROBE="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
+SAMPLE_DIR="${ROOT_DIR}/../sample"
+OUTPUT_DIR="${ROOT_DIR}/output"
+mkdir -p "$OUTPUT_DIR"
 
 # 测试矩阵执行函数
 run_test() {
@@ -115,10 +116,10 @@ EOF
         }'
 
         # 高阶输入突发特征分析 (Advanced Burst Analysis)
-        python3 "$TSANALYZER_DIR/tsa_shapability_analyzer.py" "$LOG_FILE" "$MUX" "$MUXDELAY"
+        python3 "$SCRIPT_DIR/tsa_shapability_analyzer.py" "$LOG_FILE" "$MUX" "$MUXDELAY"
 
         # 执行物理层时钟合规性审计 (PCR vs DTS Violation Detection)
-        "$TSANALYZER_DIR/offline_clock_audit.sh" "$OUT_TS"
+        "$SCRIPT_DIR/offline_clock_audit.sh" "$OUT_TS"
 
         rm "$DATA_FILE.raw"
     else
@@ -131,7 +132,7 @@ case "$1" in
     sd)    run_test "sd" "SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts" "600k" "1100k" 35 -flags +ilme+ildct ;;
     720p)  run_test "720p" "HD720p_4Mbps.ts" "1300k" "1700k" 35 ;;
     1080i) run_test "1080i" "hd-2026.3.13-10.20~10.25.ts" "1500k" "2300k" 35 -flags +ilme+ildct ;;
-    1080p_high) run_test "1080p_high" "SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts" "5500k" "6000k" 35 5500 ;;
+    1080p_high) run_test "1080p_high" "news.ts" "5500k" "6000k" 35 ;;
     all)
         $0 sd
         $0 720p
