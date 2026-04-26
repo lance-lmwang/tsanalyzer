@@ -4,58 +4,54 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FFMPEG="/home/lmwang/dev/cae/ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
-SAMPLE="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
-AUDITOR="${SCRIPT_DIR}/tsa_shapability_analyzer.py"
+FFMPEG="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
+SAMPLE="${ROOT_DIR}/../sample/af2_srt_src.ts"
+AUDITOR="${SCRIPT_DIR}/ts_expert_auditor.py"
 
 LEGACY_TS="${ROOT_DIR}/output/compare_legacy.ts"
 TSTD_TS="${ROOT_DIR}/output/compare_tstd.ts"
 
-MUXRATE=2000k
+MUXRATE=2000
 DUR=30
 
-echo "[*] Generating test streams (30s at 2000kbps)..."
-$FFMPEG -y -hide_banner -t $DUR -i "$SAMPLE" -c copy -muxrate $MUXRATE -mpegts_tstd_mode 0 "$LEGACY_TS" > /dev/null 2>&1
-$FFMPEG -y -hide_banner -t $DUR -i "$SAMPLE" -c copy -muxrate $MUXRATE -mpegts_tstd_mode 1 "$TSTD_TS" > /dev/null 2>&1
+mkdir -p "${ROOT_DIR}/output"
+
+export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+
+echo "[*] Generating test streams (30s at ${MUXRATE}kbps)..."
+$FFMPEG -y -hide_banner -t $DUR -i "$SAMPLE" -c copy -muxrate ${MUXRATE}k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 0 "$LEGACY_TS" > /dev/null 2>&1
+$FFMPEG -y -hide_banner -t $DUR -i "$SAMPLE" -c copy -muxrate ${MUXRATE}k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 "$TSTD_TS" > /dev/null 2>&1
 
 echo ""
 echo "=========================================================="
 echo "   T-STD ARCHITECTURE ADVANTAGE REPORT"
 echo "=========================================================="
 
-analyze_stats() {
-    local file=$1
-    local name=$2
-    echo ">>> $name Metrics:"
-
-    if command -v tsanalyze &> /dev/null; then
-        # Use more robust parsing for TSDuck output
-        TS_OUT=$(tsanalyze "$file")
-        VIDEO_RATE=$(echo "$TS_OUT" | grep "AVC video" | awk '{print $4}' | tr -d ',')
-        NULL_RATE=$(echo "$TS_OUT" | grep "Stuffing" | awk '{print $4}' | tr -d ',')
-        echo "    - Video Payload Bitrate : $VIDEO_RATE bps"
-        echo "    - Stuffing (NULL) Rate  : $NULL_RATE bps"
-    fi
-}
-
-analyze_stats "$LEGACY_TS" "LEGACY (Mode 0)"
-echo "----------------------------------------------------------"
-analyze_stats "$TSTD_TS" "T-STD (V7 Gold)"
-echo "----------------------------------------------------------"
-
 if [ -f "$AUDITOR" ]; then
     echo "[*] Deep Bitrate Stability Comparison (TSA SCORE):"
-    python3 "$AUDITOR" "$LEGACY_TS" 2000 > /tmp/legacy.score 2>&1
-    python3 "$AUDITOR" "$TSTD_TS" 2000 > /tmp/tstd.score 2>&1
+    python3 "$AUDITOR" "$LEGACY_TS" --vid 0x21 --target $MUXRATE --skip 5.0 > /tmp/legacy_expert.log 2>&1
+    python3 "$AUDITOR" "$TSTD_TS" --vid 0x21 --target $MUXRATE --skip 5.0 > /tmp/tstd_expert.log 2>&1
 
-    LEGACY_SCORE=$(grep "SCORE" /tmp/legacy.score | tail -n 1 | sed 's/.*: //')
-    TSTD_SCORE=$(grep "SCORE" /tmp/tstd.score | tail -n 1 | sed 's/.*: //')
+    # Extract StdDev as the Stability SCORE (Lower is better)
+    LEGACY_SCORE=$(grep "StdDev(V)" /tmp/legacy_expert.log | awk '{print $3}')
+    TSTD_SCORE=$(grep "StdDev(V)" /tmp/tstd_expert.log | awk '{print $3}')
 
-    echo "  - Legacy Stability SCORE : $LEGACY_SCORE"
-    echo "  - T-STD Stability SCORE  : $TSTD_SCORE"
+    # Also extract Delta
+    LEGACY_DELTA=$(grep "Video Rate:" /tmp/legacy_expert.log | awk '{for(i=1;i<=NF;i++) if($i=="Delta:") print $(i+1)}')
+    TSTD_DELTA=$(grep "Video Rate:" /tmp/tstd_expert.log | awk '{for(i=1;i<=NF;i++) if($i=="Delta:") print $(i+1)}')
 
-    # Calculate improvement (Simplified diff for display)
+    echo ">>> LEGACY (Mode 0) Metrics:"
+    echo "    - Video Jitter (Delta) : $LEGACY_DELTA kbps"
+    echo "    - Stability SCORE (SD) : $LEGACY_SCORE"
+    echo "----------------------------------------------------------"
+    echo ">>> T-STD (V7 Gold) Metrics:"
+    echo "    - Video Jitter (Delta) : $TSTD_DELTA kbps"
+    echo "    - Stability SCORE (SD) : $TSTD_SCORE"
+    echo "----------------------------------------------------------"
+
     echo "  - RESULT: T-STD achieved significantly higher physical layer smoothness."
+else
+    echo "[ERROR] ts_expert_auditor.py not found!"
 fi
 
 echo "=========================================================="
