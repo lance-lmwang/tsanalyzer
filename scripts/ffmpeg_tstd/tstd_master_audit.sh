@@ -24,10 +24,10 @@ elif [[ "$1" =~ ^[0-9]+$ ]]; then
     VBR_TARGET="${2:-800}"
     MUX_TARGET="${3:-1200}"
     DUR="${4:-180}"
-    SRC="/home/lmwang/dev/cae/sample/knet_sd_03.ts"
+    SRC="/home/lmwang/dev/cae/sample/SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts"
 else
     # Mode C: No valid args, use defaults
-    SRC="/home/lmwang/dev/cae/sample/knet_sd_03.ts"
+    SRC="/home/lmwang/dev/cae/sample/SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts"
     VBR_TARGET="800"
     MUX_TARGET="1200"
     DUR="180"
@@ -55,10 +55,10 @@ run_mux() {
     $ffm -hide_banner -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
         -i "$SRC" -t "$DUR" \
         -metadata comment=wzcaetrans \
-        -filter_complex "[0:v]fps=fps=50[fg_0_fps];[fg_0_fps]wzaipreopt=enhtype=WZ_FaceMask_MNN:expandRatio=0.1:speedLvlFace=1,wzoptimize=autoenh=0:ynslvl=0:uvnslvl=0:uvenh=0:sharptype=3:yenh=1.6:thrnum=2[fg_0_custom]" \
-        -map "[fg_0_custom]" -c:v:0 libwz264 -g:v:0 50 -force_key_frames:v:0 "expr:if(mod(n,50),0,1)" \
-        -preset:v:0 fast -wz264-params:v:0 "keyint=50:min-keyint=50:aq-mode=2:aq-weight=0.4:aq-strength=1.0:aq-smooth=1.0:psy-rd=0.3:psy-rd-roi=0.4:qcomp=0.65:rc-lookahead=10:pbratio=1.1:vbv-maxrate=${vbr_val}:vbv-bufsize=${vbr_val}:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-        -map 0:a -c:a:0 copy -map "0:d?" -c:d copy -pes_payload_size 0 -threads 2 -pix_fmt yuv420p -color_range tv \
+        -filter_complex "[0:v]fps=fps=25[fg_0_fps];[fg_0_fps]wzaipreopt=enhtype=WZ_FaceMask_MNN:expandRatio=0.1:speedLvlFace=1,wzoptimize=autoenh=0:ynslvl=0:uvnslvl=0:uvenh=0:sharptype=3:yenh=1.6:thrnum=2[fg_0_custom]" \
+        -map "[fg_0_custom]" -c:v:0 libwz264 -g:v:0 25 -force_key_frames:v:0 "expr:if(mod(n,25),0,1)" \
+        -preset:v:0 fast -wz264-params:v:0 "keyint=25:min-keyint=25:aq-mode=2:aq-weight=0.4:aq-strength=1.0:aq-smooth=1.0:psy-rd=0.3:psy-rd-roi=0.4:qcomp=0.65:rc-lookahead=10:pbratio=1.1:vbv-maxrate=${vbr_val}:vbv-bufsize=${vbr_val}:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
+        -map 0:a -c:a:0 copy -map "0:d?" -c:d copy -threads 2 -pix_fmt yuv420p -color_range tv \
         -b:v "${vbr_val}k" -flush_packets 0 -muxrate "${mux_val}k" -inputbw 0 -oheadbw 25 \
         -maxbw 0 -latency 1200000 -muxdelay 1.2 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
         -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode "$mode" -tstd_params "debug=2" \

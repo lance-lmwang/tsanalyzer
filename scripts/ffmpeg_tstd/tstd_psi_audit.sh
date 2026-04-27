@@ -21,7 +21,8 @@ if [ ! -f "$SAMPLE" ]; then
 fi
 
 echo "[*] Generating 15s test stream for PSI interval audit..."
-$FFMPEG -y -hide_banner -t 15 -i "$SAMPLE" -c copy -muxrate 1700k -mpegts_tstd_mode 1 "$OUT_TS" > /dev/null 2>&1
+$FFMPEG -y -hide_banner -t 15 -i "$SAMPLE" -c copy -muxrate 1700k \
+        -pat_period 0.2 -sdt_period 0.25 -mpegts_tstd_mode 1 "$OUT_TS" > /dev/null 2>&1
 
 if [ ! -f "$OUT_TS" ]; then
     echo "[FAIL] Failed to generate test stream."
@@ -36,9 +37,11 @@ fi
 echo "[*] Running TSDuck tsanalyze on output stream..."
 TSANALYZE_OUT=$(tsanalyze "$OUT_TS" 2>/dev/null)
 
-PAT_MAX=$(echo "$TSANALYZE_OUT" | grep -A 4 "0x00 (0, PAT)" | grep "Max repet.:" | awk '{print $4}')
-PMT_MAX=$(echo "$TSANALYZE_OUT" | grep -A 4 "PMT)" | grep "Max repet.:" | tail -n 1 | awk '{print $4}')
-SDT_MAX=$(echo "$TSANALYZE_OUT" | grep -A 4 "0x42 (66, SDT Actual)" | grep "Max repet.:" | awk '{print $4}')
+# Robust Numeric Extraction using Colon Delimiter and Digit Filtering
+PAT_MAX=$(echo "$TSANALYZE_OUT" | grep -A 10 "PID: 0x0000 (0)" | grep "Max repet.:" | awk -F: '{print $2}' | tr -dc '0-9')
+PMT_MAX=$(echo "$TSANALYZE_OUT" | grep -A 10 "PID: 0x1000 (4096)" | grep "Max repet.:" | awk -F: '{print $2}' | tr -dc '0-9')
+SDT_MAX=$(echo "$TSANALYZE_OUT" | grep -A 10 "PID: 0x0011 (17)" | grep "Max repet.:" | awk -F: '{print $2}' | tr -dc '0-9')
+
 
 FAIL=0
 
