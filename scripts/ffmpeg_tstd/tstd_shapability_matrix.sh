@@ -132,7 +132,7 @@ case "$1" in
     sd)    run_test "sd" "SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts" "600k" "1100k" 35 -flags +ilme+ildct ;;
     720p)  run_test "720p" "HD720p_4Mbps.ts" "1300k" "1700k" 35 ;;
     1080i) run_test "1080i" "hd-2026.3.13-10.20~10.25.ts" "1500k" "2300k" 35 -flags +ilme+ildct ;;
-    1080p_high) run_test "1080p_high" "hd-2026.3.13-10.20~10.25.ts" "4000k" "4500k" 35 2400 ;;
+    1080p_high) run_test "1080p_high" "hd-2026.3.13-10.20~10.25.ts" "4000k" "4800k" 35 2400 ;;
     all)
         $0 sd
         $0 720p
