@@ -8,7 +8,7 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 FFMPEG="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 FFPROBE="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
 SAMPLE_DIR="${ROOT_DIR}/../sample"
-OUTPUT_DIR="${ROOT_DIR}/output_golden"
+OUTPUT_DIR="${ROOT_DIR}/output_golden_3b97"
 mkdir -p "$OUTPUT_DIR"
 
 # 测试矩阵执行函数

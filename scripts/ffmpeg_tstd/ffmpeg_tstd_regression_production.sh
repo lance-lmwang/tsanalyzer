@@ -48,7 +48,7 @@ run_benchmark() {
     echo -n "[*] Testing Mode $mode ($name)... "
     local cmd="$ffm $BASE_PARAMS"
     [ "$mode" -gt 0 ] && cmd="$cmd -mpegts_tstd_mode $mode"
-    [ "$mode" -eq 1 ] && cmd="$cmd -tstd_params "debug=2""
+    [ "$mode" -eq 1 ] && cmd="$cmd -mpegts_tstd_debug 2"
     cmd="$cmd -f mpegts '$dst'"
 
     eval $cmd > "$log" 2>&1

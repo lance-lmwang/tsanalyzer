@@ -61,7 +61,7 @@ run_mux() {
         -map 0:a -c:a:0 copy -map "0:d?" -c:d copy -pes_payload_size 0 -threads 2 -pix_fmt yuv420p -color_range tv \
         -b:v "${vbr_val}k" -flush_packets 0 -muxrate "${mux_val}k" -inputbw 0 -oheadbw 25 \
         -maxbw 0 -latency 1200000 -muxdelay 1.2 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
-        -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode "$mode" -tstd_params "debug=2" \
+        -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode "$mode" -mpegts_tstd_debug 2 \
         -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
         -f mpegts "$dst" > "$tstd_log" 2>&1
 }

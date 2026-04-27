@@ -19,6 +19,9 @@ CAPTURE_LOG="${OUT_DIR}/udp_live_stress.log"
 
 export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
 
+# 局部清理逻辑：确保后台 ffmpeg 被杀死
+trap 'kill $FFM_PID 2>/dev/null; exit 1' SIGINT SIGTERM
+
 echo "=========================================================="
 echo "   T-STD UDP STABILITY & TSDUCK AUDIT"
 echo "=========================================================="
@@ -34,7 +37,7 @@ $FFMPEG_BIN -hide_banner -y -v trace -thread_queue_size 128 -rw_timeout 30000000
       -wz264-params "keyint=25:vbv-maxrate=600:vbv-bufsize=600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
       -c:a aac -b:a 128k \
       -f mpegts -muxrate 1100k -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
-      -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
+      -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
       "udp://127.0.0.1:$UDP_PORT?pkt_size=1316" > "$CAPTURE_LOG" 2>&1 &
 FFM_PID=$!
 

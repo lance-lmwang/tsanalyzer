@@ -24,7 +24,7 @@ fi
 # Run for 30s to ensure delay builds up past the 1500ms threshold
 $ffm -y -hide_banner -i "$src" -t 30 \
       -c:v libwz264 -b:v 3000k -preset ultrafast \
-      -f mpegts -muxrate 2500k -mpegts_tstd_mode 1 -tstd_params "debug=2" \
+      -f mpegts -muxrate 2500k -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
       "${OUT_DIR}/saturation_test.ts" > "$SAT_LOG" 2>&1
 
 echo "[*] Analyzing log: $SAT_LOG"

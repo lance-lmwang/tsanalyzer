@@ -26,7 +26,7 @@ base_params="-hide_banner -v error -re -y -thread_queue_size 128 -rw_timeout 300
       -maxbw 0 -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
       -mpegts_start_pid 0x21 -max_muxing_queue_size 4096 -max_interleave_delta 3000000"
 
-cmd_tstd="$ffm $base_params -mpegts_tstd_mode 1 -tstd_params "debug=2" -f mpegts '$dst' > $log_file 2>&1"
+cmd_tstd="$ffm $base_params -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 -f mpegts '$dst' > $log_file 2>&1"
 echo "run: $cmd_tstd"
 eval $cmd_tstd
 

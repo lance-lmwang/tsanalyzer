@@ -83,7 +83,7 @@ cmd="$ffm -y -i '$src' \
       -f mpegts \
       -muxrate $muxrate -muxdelay 1.0 \
       -pcr_period 30 -pat_period 0.2 -sdt_period 1.0 \
-      -mpegts_tstd_mode 1 -tstd_params "debug=2" \
+      -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
       '$dst' \
       > $log_file 2>&1"
 
@@ -239,7 +239,7 @@ for entry in "${MATRIX[@]}"; do
         $ffm -y -hide_banner -i "$src" -t 60 \
               -c:v libwz264 -b:v $v_br -preset ultrafast -wz264-params bframes=0:keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1:aud=1 \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
+              -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
               "$dst_sync" > "$CUR_LOG" 2>&1
 
         # Audio PID is 0x22 when start_pid is 0x21
@@ -325,7 +325,7 @@ for entry in "${MATRIX[@]}"; do
         $ffm -y -hide_banner -copyts -i "$COPYTS_SRC" -t 30 \
               -c:v libwz264 -b:v 1600k -preset ultrafast \
               -c:a aac -b:a 128k \
-              -f mpegts -muxrate 2000k -mpegts_tstd_mode 1 -tstd_params "debug=2" \
+              -f mpegts -muxrate 2000k -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
               "$COPYTS_TS" > "$COPYTS_LOG" 2>&1
 
         actual=$($ffp -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$COPYTS_TS")
@@ -425,7 +425,7 @@ for entry in "${MATRIX[@]}"; do
             $ffm -hide_banner -y -i "/home/lmwang/dev/cae/sample/input.mp4" -t 40 \
                 -c:v libwz264 -b:v "${vbr}k" -preset fast \
                 -wz264-params "keyint=50:vbv-maxrate=${vbr}:vbv-bufsize=${bufsize_val}:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-                -c:a aac -b:a 128k -f mpegts -muxrate "${mux}k" -muxdelay 0.9 -mpegts_tstd_mode 1 -tstd_params "debug=2" \
+                -c:a aac -b:a 128k -f mpegts -muxrate "${mux}k" -muxdelay 0.9 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
                 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 \
                 "$dst_m" > "$log_m" 2>&1
 

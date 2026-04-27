@@ -9,6 +9,9 @@ mkdir -p "$LOG_DIR"
 
 export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
 
+# 确保在脚本退出时恢复终端状态 (解决打字没有回显的问题)
+trap "stty echo" EXIT
+
 echo "=========================================================="
 echo "   T-STD FULL VALIDATION HARNESS (Industrial Grade)"
 echo "=========================================================="
@@ -82,3 +85,35 @@ echo "Finished at: $(date)"
 echo "=========================================================="
 
 [ $GLOBAL_SUCCESS -eq 1 ] || exit 1
+
+# --- Stage 18: Shapability Matrix & 84k Delta Audit (Hard Requirement) ---
+echo ""
+echo ">>> STAGE: SHAPABILITY_MATRIX_AUDIT (Limit: 84k)"
+echo "----------------------------------------------------------"
+MATRIX_SCRIPT="${SCRIPT_DIR}/tstd_shapability_matrix.sh"
+if [ -f "$MATRIX_SCRIPT" ]; then
+    echo "[*] Running industrial shapability matrix..."
+    $MATRIX_SCRIPT all > "${LOG_DIR}/shapability_audit.log" 2>&1
+
+    # 提取所有 Bitrate Stats 行中的 Delta 值进行判定
+    # 格式示例: Bitrate Stats : Min: 638k, Max: 686k, Delta: 48k, ...
+    DELTAS=$(grep "Bitrate Stats" "${LOG_DIR}/shapability_audit.log" | awk -F'Delta: ' '{print $2}' | awk -F'k' '{print $1}')
+
+    FAIL_COUNT=0
+    for d in $DELTAS; do
+        if [ "$d" -ge 84 ]; then
+            echo -e "\033[31m[FAIL] Bitrate Delta ${d}k exceeds hard limit (84k)!\033[0m"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+        fi
+    done
+
+    if [ $FAIL_COUNT -eq 0 ]; then
+        echo -e "\033[32m[PASS] All matrix templates meet the 84k smoothing requirement.\033[0m"
+        grep "Bitrate Stats" "${LOG_DIR}/shapability_audit.log" | sed 's/^/    - /'
+    else
+        echo -e "\033[31m[FAIL] Shapability Matrix Audit failed with $FAIL_COUNT violations.\033[0m"
+        GLOBAL_FAIL=1
+    fi
+else
+    echo "[WARN] tstd_shapability_matrix.sh not found, skipping Stage 18."
+fi

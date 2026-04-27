@@ -23,7 +23,7 @@ def analyze_bitrate(args):
                 data.append(kbps)
 
     if not data:
-        print(f"[ERROR] No packet emission data found in {args.log}. Did you use -tstd_params "debug=1" or 2?")
+        print(f"[ERROR] No packet emission data found in {args.log}. Did you use -mpegts_tstd_debug 1 or 2?")
         return
 
     # Create Series

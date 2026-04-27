@@ -8,7 +8,7 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 FFMPEG="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 FFPROBE="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
 SAMPLE_DIR="${ROOT_DIR}/../sample"
-OUTPUT_DIR="${ROOT_DIR}/output"
+OUTPUT_DIR="${ROOT_DIR}/output_release"
 mkdir -p "$OUTPUT_DIR"
 
 # 测试矩阵执行函数
@@ -49,7 +49,7 @@ run_test() {
     OUT_TS="$OUTPUT_DIR/tstd_${NAME}_md${MUXDELAY}.v2.ts"
 
     # 执行转码 (Industrial V2 settings)
-    $FFMPEG -y -hide_banner -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
+    $FFMPEG -re -y -hide_banner -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
         -i "$INPUT_PATH" \
         -metadata comment=wzcaetrans \
         -filter_complex "[0:v]fps=fps=25 [fg_0_fps];[fg_0_fps]wzaipreopt=enhtype=WZ_FaceMask_MNN:expandRatio=0.1:speedLvlFace=1,wzoptimize=autoenh=0:ynslvl=0:uvnslvl=0:uvenh=0:sharptype=3:yenh=1.6:thrnum=4[fg_0_custom]" \
@@ -58,7 +58,7 @@ run_test() {
         -map 0:a -c:a:0 copy $EXTRA_ARGS \
         -threads 4 -pix_fmt yuv420p -color_range tv -b:v $BV \
         -flush_packets 0 -muxrate $MUX -muxdelay $MUXDELAY -pcr_period $PCR \
-        -pat_period 0.2 -sdt_period 0.25 -mpegts_start_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 1 \
+        -pat_period 0.2 -sdt_period 0.25 -mpegts_start_pid 0x21 -mpegts_tstd_mode 1 \
         -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
         -f mpegts "$OUT_TS" > "$LOG_FILE" 2>&1
 
@@ -67,18 +67,14 @@ run_test() {
 
     OUT_IMG="${OUT_TS%.ts}.jpg"
     DATA_FILE="${OUT_TS%.ts}.tmp"
-    RAW_FILE="${DATA_FILE}.raw"
-
-    # Ensure cleanup on exit
-    trap "rm -f $DATA_FILE $RAW_FILE" EXIT
 
     echo "--- 30-PCR Window Bitrate Stats ---"
     # 提取 In 码率, Out 码率, Pkt 和 V-Dly 进行统计和绘图
-    grep "\[T-STD SEC\]" "$LOG_FILE" | sed -n 's/.*In:[[:space:]]*\([0-9]*\)k.*Out:[[:space:]]*\([0-9]*\)k.*Pkt:[[:space:]]*\([0-9]*\).*V-Dly:[[:space:]]*\([0-9]*\)ms.*/\1 \2 \3 \4/p' > "$RAW_FILE"
+    grep "\[T-STD SEC\]" "$LOG_FILE" | sed -n 's/.*In:[[:space:]]*\([0-9]*\)k.*Out:[[:space:]]*\([0-9]*\)k.*Pkt:[[:space:]]*\([0-9]*\).*V-Dly:[[:space:]]*\([0-9]*\)ms.*/\1 \2 \3 \4/p' > "$DATA_FILE.raw"
 
-    if [ -s "$RAW_FILE" ]; then
+    if [ -s "$DATA_FILE.raw" ]; then
         # 生成绘图数据 (X: Sample Index, Y1: Out Bitrate, Y2: In Bitrate)
-        awk '{print NR-1, $2, $1}' "$RAW_FILE" > "$DATA_FILE"
+        awk '{print NR-1, $2, $1}' "$DATA_FILE.raw" > "$DATA_FILE"
 
         # 调用 gnuplot 生成 JPG 图表
         gnuplot << EOF
@@ -98,10 +94,10 @@ plot "$DATA_FILE" using 1:2 with lines title "Output (Paced)" lw 2 lt 1 lc rgb "
      "$DATA_FILE" using 1:3 with lines title "Input (Raw)" lw 1 lt 2 lc rgb "red"
 EOF
         echo "Bitrate JPG saved to $OUT_IMG"
-        rm -f "$DATA_FILE"
+        rm "$DATA_FILE"
 
         # 计算极值和平均值 (Skip first 5 samples/seconds to ignore startup artifacts)
-        tail -n +6 "$RAW_FILE" | \
+        tail -n +6 "$DATA_FILE.raw" | \
         awk '{
             in_bps=$1; out=$2; pkt=$3; vdly=$4;
             if(min_p==""){min_p=max_p=pkt; min_o=max_o=out; max_v=vdly};
@@ -119,13 +115,13 @@ EOF
             }
         }'
 
-        # 高阶输入突发特征 analysis
+        # 高阶输入突发特征分析 (Advanced Burst Analysis)
         python3 "$SCRIPT_DIR/tsa_shapability_analyzer.py" "$LOG_FILE" "$MUX" "$MUXDELAY"
 
         # 执行物理层时钟合规性审计 (PCR vs DTS Violation Detection)
         "$SCRIPT_DIR/offline_clock_audit.sh" "$OUT_TS"
 
-        rm -f "$RAW_FILE"
+        rm "$DATA_FILE.raw"
     else
         echo "Result: No window data found in log."
     fi
@@ -141,6 +137,7 @@ case "$1" in
         $0 sd
         $0 720p
         $0 1080i
+        $0 1080p_high
         ;;
     *)
         echo "Usage: $0 {sd|720p|1080i|all}"

@@ -26,7 +26,7 @@ $ffm -hide_banner -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discar
     -map 0:a -c:a:0 copy -map '0:d?' -c:d copy -pes_payload_size 0 -threads 2 -pix_fmt yuv420p -color_range tv \
     -b:v 600k -flush_packets 0 -muxrate 1100k -inputbw 0 -oheadbw 25 \
     -maxbw 0 -latency 1000000 -muxdelay 0.9 -pcr_period 30 -pat_period 0.2 -sdt_period 0.25 \
-    -mpegts_start_pid 0x21 -mpegts_tstd_mode 1 -tstd_params "debug=2" -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
+    -mpegts_start_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 -max_muxing_queue_size 4096 -max_interleave_delta 30000000 \
     -f mpegts "$dst" > "$log" 2>&1
 
 # 2. 外部衡量 (Audit)
