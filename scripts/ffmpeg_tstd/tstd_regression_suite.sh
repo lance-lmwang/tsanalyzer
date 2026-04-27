@@ -355,7 +355,7 @@ STUTTER_SRC_2="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
 MATRIX=(
     "800k 1200k Production_Legacy_SD"
     "1600k 2000k Standard_Profile"
-    "3600k 4000k High_Bitrate_Stress"
+    "3600k 4500k High_Bitrate_Stress"
 )
 
 for entry in "${MATRIX[@]}"; do

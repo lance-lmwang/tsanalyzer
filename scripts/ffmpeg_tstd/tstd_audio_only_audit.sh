@@ -23,7 +23,7 @@ fi
 
 # Verify bitrate stability using TSDuck if available
 if command -v tsanalyze &> /dev/null; then
-    MAX_SDT=$(tsanalyze "$OUT_TS" | grep -A 4 "0x42 (66, SDT Actual)" | grep "Max repet.:" | awk '{print $4}')
+    MAX_SDT=$(tsanalyze "$OUT_TS" | grep -A 10 "PID: 0x0011 (17)" | grep "Max repet.:" | awk -F: '{print $2}' | tr -dc '0-9')
     echo "[*] SDT Max Interval in Audio-only: ${MAX_SDT}ms"
     if [ "$MAX_SDT" -gt 2000 ]; then
         echo "[FAIL] SDT interval violation in audio-only mode."
