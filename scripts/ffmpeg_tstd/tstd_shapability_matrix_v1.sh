@@ -8,7 +8,7 @@ FFMPEG_ROOT="$(cd "$ROOT_DIR/../ffmpeg.wz.master" && pwd)"
 FFMPEG="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffmpeg"
 FFPROBE="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
 SAMPLE_DIR="${ROOT_DIR}/../sample"
-OUTPUT_DIR="${ROOT_DIR}/output"
+OUTPUT_DIR="${ROOT_DIR}/output_golden"
 mkdir -p "$OUTPUT_DIR"
 
 # 测试矩阵执行函数
@@ -45,8 +45,8 @@ run_test() {
         return
     fi
 
-    LOG_FILE="$OUTPUT_DIR/tstd_${NAME}_md${MUXDELAY}.v2.log"
-    OUT_TS="$OUTPUT_DIR/tstd_${NAME}_md${MUXDELAY}.v2.ts"
+    LOG_FILE="$OUTPUT_DIR/tstd_${NAME}_md${MUXDELAY}_v1_debug.log"
+    OUT_TS="$OUTPUT_DIR/tstd_${NAME}_md${MUXDELAY}_v1_debug.ts"
 
     # 执行转码 (Industrial V2 settings)
     $FFMPEG -y -hide_banner -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
