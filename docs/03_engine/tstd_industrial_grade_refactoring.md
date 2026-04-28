@@ -48,6 +48,13 @@ The `effective_refill_rate_bps` calculation now passes through a 3-stage industr
 *   The engine dynamically learns the native frame interval of the stream during normal (Jitter) operation.
 *   When a Soft Jump occurs, the timeline is smoothed using the dynamically learned native step, maintaining perfect pacing regardless of the codec or framerate.
 
+## 8. Parameterization of Delay Ratios (Eliminating Magic Numbers)
+**Problem:** The scheduling algorithm relied on multiple hardcoded `delay_ratio` thresholds (e.g., 1600, 1200, 900, 600, 400, 200, 100). These "magic numbers" made the pacing behavior opaque, forming a "sacred numbers graveyard" that would be dangerous and difficult to tune or maintain in the future.
+**Solution:**
+*   Abstracted all hardcoded delay ratios into documented macros within `tstd_internal.h`.
+*   Each threshold now carries explicit physical and semantic meaning (e.g., `TSTD_RATIO_TARGET` = 60%, `TSTD_RATIO_OVER_WARN` = 120%, `TSTD_RATIO_DANGER_LOW` = 10%).
+*   This parameterization ensures that the system's pacing corridors and emergency thresholds are transparent, configurable, and safe for long-term industrial maintenance.
+
 ---
 *Date: 2026-04-28*
 *Scope: ffmpeg.wz.master / tsanalyzer integration*
