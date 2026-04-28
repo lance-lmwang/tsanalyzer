@@ -1,5 +1,6 @@
 #!/bin/bash
 # 离线 PCR/DTS 闭合审计工具 (Single-Pass Performance Version)
+# [INTERNAL DEPENDENCY] Integration point for shapability_matrix.sh.
 # 用法: ./offline_clock_audit.sh <TS_FILE>
 
 TS_FILE=$1
@@ -17,7 +18,7 @@ echo "[*] Auditing Clock Compliance for: $TS_FILE"
 # 1. 提取全流的 DTS (90kHz) 和 PCR (27MHz 原始值)
 # 我们只关注视频 PID (通常是 0x21)
 # -show_entries packet=dts,pcr 只有在包包含 PCR 时才输出 pcr 字段
-$FFPROBE -v error -select_streams v:0 -show_entries packet=dts,pcr -of csv=p=0 "$TS_FILE" > clock_trace.tmp
+$FFPROBE -v error -select_streams v -show_entries packet=dts,pcr -of csv=p=0 "$TS_FILE" > clock_trace.tmp
 
 # 2. 使用 awk 进行时序追踪
 # 逻辑：保存最近见到的 PCR，与当前 DTS 对比

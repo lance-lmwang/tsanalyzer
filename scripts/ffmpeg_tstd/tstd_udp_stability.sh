@@ -11,13 +11,13 @@ FFMPEG_BIN="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
 FFPROBE_BIN="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffprobe"
 AUDITOR_PY="${SCRIPT_DIR}/ts_expert_auditor.py"
 
-SRC="${1:-/home/lmwang/dev/cae/sample/knet_sd_03.ts}"
+SRC="${1:-${ROOT_DIR}/../sample/knet_sd_03.ts}"
 UDP_PORT="12345"
 TEST_DUR="${DUR:-180}"
 CAPTURE_TS="${OUT_DIR}/udp_live_stress.ts"
 CAPTURE_LOG="${OUT_DIR}/udp_live_stress.log"
 
-export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+export WZ_LICENSE_KEY="${ROOT_DIR}/../wz_license.key"
 
 # 局部清理逻辑：确保后台 ffmpeg 被杀死
 trap 'kill $FFM_PID 2>/dev/null; exit 1' SIGINT SIGTERM

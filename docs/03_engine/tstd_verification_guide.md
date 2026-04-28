@@ -23,6 +23,12 @@ You must test across SD, 720p, and 1080i to ensure no regressions.
 ./tstd_shapability_matrix.sh all
 ```
 
+### Step 2.1: Professional Extension Audit
+Verify Dolby Vision, SCTE-35, and Timed ID3 compliance.
+```bash
+./tstd_professional_audit.sh
+```
+
 ### Step 3: Model Analysis (The "Physical Audit")
 For each resolution, run the analyzer to check the **Safety Margin**.
 ```bash

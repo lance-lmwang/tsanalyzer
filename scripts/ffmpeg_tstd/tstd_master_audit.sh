@@ -24,10 +24,10 @@ elif [[ "$1" =~ ^[0-9]+$ ]]; then
     VBR_TARGET="${2:-800}"
     MUX_TARGET="${3:-1200}"
     DUR="${4:-180}"
-    SRC="/home/lmwang/dev/cae/sample/SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts"
+    SRC="${ROOT_DIR}/../sample/SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts"
 else
     # Mode C: No valid args, use defaults
-    SRC="/home/lmwang/dev/cae/sample/SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts"
+    SRC="${ROOT_DIR}/../sample/SRT_PUSH_AURORA-ZBX_KNET_SD-s6rmgxr_20260312-16.18.04.ts"
     VBR_TARGET="800"
     MUX_TARGET="1200"
     DUR="180"
@@ -50,7 +50,7 @@ run_mux() {
     local tstd_log="${dst}.log"
 
     # Production License Activation
-    export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+    export WZ_LICENSE_KEY="${ROOT_DIR}/../wz_license.key"
 
     $ffm -hide_banner -y -thread_queue_size 128 -rw_timeout 30000000 -fflags +discardcorrupt \
         -i "$SRC" -t "$DUR" \

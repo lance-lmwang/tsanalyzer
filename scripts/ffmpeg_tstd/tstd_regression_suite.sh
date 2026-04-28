@@ -2,6 +2,7 @@
 # T-STD Long-Term Stability & Metrology Test Script
 # Purpose: Drive the purified V3 T-STD engine with carrier-grade parameters.
 
+VIDEO_PID=${VIDEO_PID:-0x21}
 # Robust ROOT_DIR detection: Resolve 2 levels up from the script's directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -78,7 +79,7 @@ audit_physical_latency() {
 
     # Fast Probe: Just look at the first 500 packets to find the first PCR of PID 0x21
     local first_dts=$($ffp -v error -read_intervals "%+1" -select_streams v:0 -show_packets -show_entries packet=dts -of default=noprint_wrappers=1:nokey=1 "$ts_file" | head -n 1)
-    local first_pcr=$($ffp -v error -read_intervals "%+5" -show_packets -show_entries packet=pcr,pid -of default=noprint_wrappers=1:nokey=1 "$ts_file" | grep "0x21" | awk -F'|' '{print $1}' | grep -v "N/A" | head -n 1)
+    local first_pcr=$($ffp -v error -read_intervals "%+5" -show_packets -show_entries packet=pcr,pid -of default=noprint_wrappers=1:nokey=1 "$ts_file" | grep "${VIDEO_PID}" | awk -F'|' '{print $1}' | grep -v "N/A" | head -n 1)
 
     if [ -z "$first_dts" ] || [ -z "$first_pcr" ]; then
         # Fallback for different PIDs
@@ -116,10 +117,10 @@ ffp="${FFMPEG_ROOT}/ffdeps_img/ffmpeg/bin/ffprobe"
 AUDITOR_PY="${SCRIPT_DIR}/ts_expert_auditor.py"
 
 # Production License Activation
-export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+export WZ_LICENSE_KEY="${ROOT_DIR}/../wz_license.key"
 
-src="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
-src="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+src="${ROOT_DIR}/../sample/af2_srt_src.ts"
+src="${ROOT_DIR}/../sample/af2_srt_src.ts"
 prog_id=1
 bitrate="1600k"
 bitrate_kb=1600
@@ -221,7 +222,7 @@ if [ $? -eq 0 ]; then
 
     # --- Step 3: Industrial Telemetry Audit (Modern V6 Engine) ---
     echo "[*] Launching Deep Telemetry Engine (V6 Master Spec)..."
-    TELEMETRY_PY="${SCRIPT_DIR}/tstd_telemetry_analyzer.py"
+    TELEMETRY_PY="${SCRIPT_DIR}/ts_telemetry_analyzer.py"
     if [ -f "$TELEMETRY_PY" ]; then
         RET=0; # python3 "$TELEMETRY_PY" "$log_file"
         RET=$?
@@ -348,8 +349,8 @@ echo ""
 echo "================================================"
 echo "   PHASE 6: Audio Synchrony Matrix Test"
 echo "================================================"
-STUTTER_SRC_1="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
-STUTTER_SRC_2="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+STUTTER_SRC_1="${ROOT_DIR}/../sample/af2_srt_src.ts"
+STUTTER_SRC_2="${ROOT_DIR}/../sample/af2_srt_src.ts"
 
 # Define Test Matrix: "vbitrate muxrate name"
 MATRIX=(
@@ -373,7 +374,7 @@ for entry in "${MATRIX[@]}"; do
           -c:v libwz264 -b:v $v_br -preset fast \
           -wz264-params "keyint=25:vbv-maxrate=$v_br_num:vbv-bufsize=$v_br_num:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
           -c:a aac -b:a 128k \
-          -muxdelay 0.9 -f mpegts -muxrate $m_br -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+          -muxdelay 0.9 -f mpegts -muxrate $m_br -mpegts_start_pid ${VIDEO_PID} -mpegts_pcr_pid ${VIDEO_PID} -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
           "$dst_sync" > "$CUR_LOG" 2>&1
 
     # Audio PID is 0x22 when start_pid is 0x21
@@ -414,45 +415,42 @@ for entry in "${MATRIX[@]}"; do
 done
 
 # --- Phase 7: Deep Physical Bitstream Audit (Frame-by-Frame) ---
-        echo ""
-        echo "================================================"
-        echo "   PHASE 7: Deep Physical Bitstream Audit"
-        echo "================================================"
-        FINAL_TS="${OUT_DIR}/tstd_smoke.ts"
-        if [ -f "$FINAL_TS" ]; then
-        echo "[*] Auditing micro-bursts in $FINAL_TS (40ms Frame Window)..."
-        # Extract packet positions for the first 100 video frames
-        # Each frame delta should be around (Target_Bitrate / 8 / 25fps) / 188 bytes
-        # For 1600k, that is approx 42 packets per frame.
-        $FFMPEG_ROOT/ffdeps_img/ffmpeg/bin/ffprobe -v error -select_streams v:0 -show_packets -show_entries packet=pos "$FINAL_TS" | grep "pos=" | awk -F'=' '{print $2}' > "${OUT_DIR}/pos.tmp"
+echo ""
+echo "================================================"
+echo "   PHASE 7: Deep Physical Bitstream Audit"
+echo "================================================"
+FINAL_TS="${OUT_DIR}/tstd_smoke.ts"
+if [ -f "$FINAL_TS" ]; then
+    echo "[*] Auditing micro-bursts in $FINAL_TS (40ms Frame Window)..."
+    # Extract packet positions for the first 100 video frames
+    # Each frame delta should be around (Target_Bitrate / 8 / 25fps) / 188 bytes
+    $ffp -v error -select_streams v:0 -show_packets -show_entries packet=pos "$FINAL_TS" | grep "pos=" | awk -F'=' '{print $2}' > "${OUT_DIR}/pos.tmp"
 
-        # Calculate delta between consecutive frames
-        MAX_BURST=$(awk 'NR>1 {delta=($1-prev)/188; if(delta>max) max=delta} {prev=$1} END {print max}' "${OUT_DIR}/pos.tmp")
-        AVG_BURST=$(awk 'NR>1 {delta=($1-prev)/188; sum+=delta; count++} {prev=$1} END {if(count>0) print sum/count; else print 0}' "${OUT_DIR}/pos.tmp")
+    # Calculate delta between consecutive packets to find max burst
+    MAX_BURST=$(awk 'NR>1 {delta=($1-prev)/188; if(delta>max) max=delta} {prev=$1} END {print max}' "${OUT_DIR}/pos.tmp")
+    AVG_BURST=$(awk 'NR>1 {delta=($1-prev)/188; sum+=delta; count++} {prev=$1} END {if(count>0) print sum/count; else print 0}' "${OUT_DIR}/pos.tmp")
 
-        echo "[*] Physical Analysis Results:"
-        echo "    - Average packets per frame: $AVG_BURST"
-        echo "    - Maximum burst detected: $MAX_BURST packets"
+    echo "[*] Physical Analysis Results:"
+    echo "    - Average packets per frame: $AVG_BURST"
+    echo "    - Maximum burst detected: $MAX_BURST packets"
 
-        # Threshold: A 1s VBV can produce a ~150KB I-frame, which physically spans ~800 packets
-        # on the TS timeline before the next P/B frame starts. We allow up to 1000.
-        if (( $(echo "$MAX_BURST > 1000" | bc -l) )); then
-            echo -e "    \033[31m[FAIL] Physical Micro-burst detected! Peak ($MAX_BURST) exceeds safety limits.\033[0m"
-            GLOBAL_FAIL=1
-        else
-            echo -e "    \033[32m[PASS] Physical stream distribution is sane.\033[0m"
-        fi
-        rm -f "${OUT_DIR}/pos.tmp"
-        else
-        echo "[WARN] Final TS not found, skipping Phase 7."
-        fi
-
+    # Threshold: A 1s VBV can produce a ~150KB I-frame, spanning ~800 packets. Limit: 1000.
+    if (( $(echo "$MAX_BURST > 1000" | bc -l) )); then
+        echo -e "    \033[31m[FAIL] Physical Micro-burst detected! Peak ($MAX_BURST) exceeds safety limits.\033[0m"
+        GLOBAL_FAIL=1
+    else
+        echo -e "    \033[32m[PASS] Physical stream distribution is sane.\033[0m"
+    fi
+    rm -f "${OUT_DIR}/pos.tmp"
+else
+    echo "[WARN] Final TS not found, skipping Phase 7."
+fi
         # --- Phase 8: Non-zero Start Timeline Regression (-copyts) ---
         echo ""
         echo "================================================"
         echo "   PHASE 8: Non-zero Start Timeline (-copyts)"
         echo "================================================"
-        COPYTS_SRC="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+        COPYTS_SRC="${ROOT_DIR}/../sample/af2_srt_src.ts"
         if [ -f "$COPYTS_SRC" ]; then
         echo "[*] Testing -copyts with source starting at ~9s..."
         COPYTS_LOG="${OUT_DIR}/tstd_copyts_test.log"
@@ -558,11 +556,11 @@ done
 
             bufsize_val=$(echo "$vbr * $ratio" | bc | cut -f 1 -d '.')
 
-            $ffm -hide_banner -y -i "/home/lmwang/dev/cae/sample/input.mp4" -t 40 \
+            $ffm -hide_banner -y -i "${ROOT_DIR}/../sample/input.mp4" -t 40 \
                 -c:v libwz264 -b:v "${vbr}k" -preset fast \
                 -wz264-params "keyint=50:vbv-maxrate=${vbr}:vbv-bufsize=${bufsize_val}:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
                 -c:a aac -b:a 128k -f mpegts -muxrate "${mux}k" -muxdelay 0.9 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
-                -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 \
+                -mpegts_start_pid ${VIDEO_PID} -mpegts_pcr_pid ${VIDEO_PID} \
                 "$dst_m" > "$log_m" 2>&1
 
             if [ -f "$AUDITOR_PY" ]; then
@@ -603,14 +601,14 @@ done
         echo "   PHASE 13: Jaco Reverse Jump (-copyts + DVM)"
         echo "================================================"
         # Using specific sample for timeline jump/non-zero start validation
-        JACO_SRC="/home/lmwang/dev/cae/sample/Al-Taawoun_2_cut_400M.ts"
+        JACO_SRC="${ROOT_DIR}/../sample/Al-Taawoun_2_cut_400M.ts"
         if [ -f "$JACO_SRC" ]; then
             echo "[*] Testing Voter System with -copyts on $JACO_SRC..."
             JACO_LOG="${OUT_DIR}/jaco_voter_test.log"
             $ffm -y -hide_banner -copyts -i "$JACO_SRC" -t 30 \
                   -c:v libwz264 -b:v 1600k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=1600:vbv-bufsize=1600:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
-                  -muxdelay 0.9 -f mpegts -muxrate 2200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -muxdelay 0.9 -f mpegts -muxrate 2200k -mpegts_start_pid ${VIDEO_PID} -mpegts_pcr_pid ${VIDEO_PID} -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
                   "${OUT_DIR}/jaco_test.ts" > "$JACO_LOG" 2>&1
 
             # Assertion: The engine MUST handle the offset correctly
@@ -639,7 +637,7 @@ done
                   -c:v libwz264 -b:v 800k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=800:vbv-bufsize=800:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
                   -c:a aac -b:a 128k \
-                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid ${VIDEO_PID} -mpegts_pcr_pid ${VIDEO_PID} -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
                   "${OUT_DIR}/offline_baseline.ts" > "${OUT_DIR}/offline_baseline.log" 2>&1
 
             audit_off=$(python3 "$AUDITOR_PY" "${OUT_DIR}/offline_baseline.ts" --vid 0x21 --target 800 --skip 10.0 --simple 2>/dev/null)
@@ -650,7 +648,7 @@ done
                   -c:v libwz264 -b:v 800k -preset fast \
                   -wz264-params "keyint=25:vbv-maxrate=800:vbv-bufsize=800:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
                   -c:a aac -b:a 128k \
-                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+                  -f mpegts -muxrate 1200k -muxdelay 0.9 -mpegts_start_pid ${VIDEO_PID} -mpegts_pcr_pid ${VIDEO_PID} -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
                   "${OUT_DIR}/re_test.ts" > "${OUT_DIR}/re_test.log" 2>&1
 
             audit_re=$(python3 "$AUDITOR_PY" "${OUT_DIR}/re_test.ts" --vid 0x21 --target 800 --skip 10.0 --simple 2>/dev/null)
@@ -690,7 +688,7 @@ done
         $ffm -y -hide_banner -i "$STUTTER_SRC_1" -t 30 \
               -filter_complex "[0:v]fps=fps=25,setpts=PTS+0.0005*sin(N)[v]" \
               -map "[v]" -c:v libwz264 -b:v 800k -preset fast \
-              -f mpegts -muxrate 1200k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
+              -f mpegts -muxrate 1200k -mpegts_start_pid ${VIDEO_PID} -mpegts_pcr_pid ${VIDEO_PID} -mpegts_tstd_mode 1 -mpegts_tstd_debug 2 \
               "${OUT_DIR}/chaos.ts" > "$CHAOS_LOG" 2>&1
 
         if grep -q "DRIVE FUSE" "$CHAOS_LOG"; then
@@ -700,8 +698,40 @@ done
             echo -e "    \033[32m[PASS] Voter system maintained timeline integrity.\033[0m"
         fi
 
+        # --- Phase 16: Modular Architecture Audit (Voter, Scheduler, Pacing) ---
         echo ""
-echo "------------------------------------------------"
+        echo "================================================"
+        echo "   PHASE 16: Modular Architecture Audit"
+        echo "================================================"
+        PROF_SCRIPT="${SCRIPT_DIR}/tstd_modular_audit.sh"
+        if [ -f "$PROF_SCRIPT" ]; then
+            chmod +x "$PROF_SCRIPT"
+            $PROF_SCRIPT
+            if [ $? -ne 0 ]; then
+                GLOBAL_FAIL=1
+            fi
+        else
+            echo "[WARN] Modular audit script not found, skipping Phase 16."
+        fi
+
+        # --- Phase 17: Physical Dynamics Audit (Expert Step-Response) ---
+        echo ""
+        echo "================================================"
+        echo "   PHASE 17: Physical Dynamics Audit"
+        echo "================================================"
+        EXPERT_SCRIPT="${SCRIPT_DIR}/tstd_expert_step_audit.sh"
+        if [ -f "$EXPERT_SCRIPT" ]; then
+            chmod +x "$EXPERT_SCRIPT"
+            $EXPERT_SCRIPT
+            if [ $? -ne 0 ]; then
+                GLOBAL_FAIL=1
+            fi
+        else
+            echo "[WARN] Expert dynamics audit script not found, skipping Phase 17."
+        fi
+
+        echo ""
+        echo "------------------------------------------------"
 if [ $GLOBAL_FAIL -eq 0 ]; then echo -e "\033[32mSTATUS: ALL REGRESSION PHASES PASSED (GOLDEN)\033[0m"; else echo -e "\033[31mSTATUS: REGRESSION TEST FAILED. REVIEW WARNINGS/ERRORS ABOVE.\033[0m"; fi
 echo "------------------------------------------------"
 echo "[*] Smoke Test finished."

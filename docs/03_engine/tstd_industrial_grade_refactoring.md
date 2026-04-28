@@ -55,6 +55,14 @@ The `effective_refill_rate_bps` calculation now passes through a 3-stage industr
 *   Each threshold now carries explicit physical and semantic meaning (e.g., `TSTD_RATIO_TARGET` = 60%, `TSTD_RATIO_OVER_WARN` = 120%, `TSTD_RATIO_DANGER_LOW` = 10%).
 *   This parameterization ensures that the system's pacing corridors and emergency thresholds are transparent, configurable, and safe for long-term industrial maintenance.
 
+## 9. Phase 5: Industrial Hard Resync & Congestion Defense
+**Problem:** Previous "Hard Resync" was a shallow reset. It only cleared the PID state but left the global timeline (`dts_offset`) untouched. This caused the new recovery IDR to arrive at a "skewed" time domain, leading to long-term PCR drift, AV sync issues, and false VBV overflows 30-60 minutes later. Additionally, "TS packet layer guessing" for keyframes led to catastrophic IDR drops.
+**Solution (Surgical Synchronization & Anchor Reconstruction):**
+*   **AU-Locked Keyframe Tracking:** Introduced `au_ingress_metadata` FIFO to synchronize the exact `is_key` status from the AU push layer to the TS packet layer. This eliminates the race condition where the engine might incorrectly drop an IDR during congestion because it didn't know the packet belonged to a new AU yet.
+*   **True Time-Domain Reconstruction:** Introduced `dts_epoch_invalid`. Upon recovery from a hard resync, the system now fully rebuilds `dts_offset` and anchors it to the current physical clock with a 20% safety slack buffer (`target_slack`). This ensures the decoder timeline is correctly and safely restarted.
+*   **Prioritized Shedding strategy:** Redesigned the shedding logic to protect high-value content. Video is now the primary sacrifice, while Audio is strictly protected until critical buffer levels (>95%). PCR and PSI remain strictly guarded.
+*   **WAIT_IDR Starvation Watchdog:** Added a 3-second watchdog timer to the `WAIT_IDR` state. If a compliant IDR isn't found within the window (e.g., due to dirty source or non-compliant stream), the system forces a recovery to prevent permanent black-screen starvation.
+
 ---
 *Date: 2026-04-28*
 *Scope: ffmpeg.wz.master / tsanalyzer integration*

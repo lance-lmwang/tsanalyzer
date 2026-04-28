@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# [INTERNAL DEPENDENCY] Required by multiple T-STD regression harnesses.
+# [CORE ENGINE] Used for physical bitrate sampling and TR 101 290 compliance.
 import sys
 import argparse
 import signal

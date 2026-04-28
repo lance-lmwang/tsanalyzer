@@ -73,6 +73,21 @@ In the initial development phase, we executed a 30-second `bug.sh` smoke test. W
 * **Root Cause:** A fixed ±2.5% pacing corridor is physically incompatible with varying buffer depths. A shallow buffer needs more "bandwidth torque" to survive.
 * **Fix:** **Delay-Adaptive Control Law.** Dynamically scaled PI Gain and Corridor limits as a function of `1.0 / muxdelay`.
 
+### Crater 13: TS-Packet Layer Keyframe Guessing (The Black-Screen Risk)
+* **Symptom:** During high congestion, the decoder would intermittently experience black screens or severe macroblocking following a drop event.
+* **Root Cause:** The TS packet layer had no direct knowledge of the AU's keyframe status. It tried to "guess" based on the PUSI flag, but in scenarios with B-frame reordering or H.264 AnnexB, the `is_current_au_key` state in the PID could be stale, delayed, or wrong. This led to the active dropping of IDR packets.
+* **Fix:** **Implemented AU-Locked Keyframe Tracking.** Used a secondary metadata FIFO to pass the exact `is_key` status from the AU layer (where it is known with 100% certainty) to the packet layer, ensuring surgical precision in dropping decisions.
+
+### Crater 14: Fake Hard Resync & Time-Domain Drift
+* **Symptom:** System appeared to recover from congestion drops, but downstream STBs reported PCR drift or AV sync errors after 30-60 minutes of operation.
+* **Root Cause:** The original "Hard Resync" only reset the stream state but didn't rebuild the global `dts_offset`. The new IDR was mapped to the old, now-skewed timeline.
+* **Fix:** **Industrial Timeline Reconstruction.** Introduced `dts_epoch_invalid`. On the first IDR after a drop, the engine now completely reconstructs the global `dts_offset` anchor, ensuring the new content is perfectly aligned with the current physical clock.
+
+### Crater 15: Audio Starvation & The "All Media Equal" Fallacy
+* **Symptom:** High video bitrate bursts would cause audio packets to be dropped first due to FIFO fullness, leading to audible "pops" or silence.
+* **Root Cause:** The shedding logic treated Audio and Video equally. In broadcast systems, Audio discontinuity is far more perceptible and damaging than dropping a few video non-keyframes.
+* **Fix:** **Prioritized Ingress Shedding.** Implemented a tiered protection model where Video (non-keyframes) is always sacrificed first, and Audio is protected until a critical 95% buffer threshold.
+
 ## III. Diagnostic & Debugging Guide
 
 To ensure future observability without polluting the production environment or causing performance regressions, we have retained key auditing hooks but configured them to the `AV_LOG_TRACE` level.

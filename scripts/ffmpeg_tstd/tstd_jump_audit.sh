@@ -6,8 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUT_TS="${ROOT_DIR}/output/jump_audit_test.ts"
 
-FFMPEG="/home/lmwang/dev/cae/ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
-SAMPLE="/home/lmwang/dev/cae/sample/202508300200_Al-Taawoun_VS_Al-Nassr_2_cut_400M.ts"
+FFMPEG="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
+SAMPLE="${ROOT_DIR}/../sample/202508300200_Al-Taawoun_VS_Al-Nassr_2_cut_400M.ts"
 
 if [ ! -f "$FFMPEG" ]; then
     echo "[FAIL] ffmpeg binary not found."

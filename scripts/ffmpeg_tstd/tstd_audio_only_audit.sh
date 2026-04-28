@@ -7,8 +7,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUT_TS="${ROOT_DIR}/output/audio_only_test.ts"
 LOG_FILE="${ROOT_DIR}/output/audio_only.log"
 
-FFMPEG="/home/lmwang/dev/cae/ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
-SAMPLE="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+FFMPEG="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
+SAMPLE="${ROOT_DIR}/../sample/af2_srt_src.ts"
 
 echo "[*] Testing Audio-Only Resilience (Target: 300kbps Muxrate)..."
 

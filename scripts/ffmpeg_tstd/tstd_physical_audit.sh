@@ -12,12 +12,12 @@ AUDITOR_PY="${SCRIPT_DIR}/ts_expert_auditor.py"
 
 VBR="600"
 MUX="1100k"
-SRC="/home/lmwang/dev/cae/sample/knet_sd_03.ts"
+SRC="${ROOT_DIR}/../sample/knet_sd_03.ts"
 TS_OUT="${OUT_DIR}/truth.ts"
 LOG_OUT="${OUT_DIR}/truth.log"
 
 echo "[*] Running 600k/1100k Stress Test..."
-export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+export WZ_LICENSE_KEY="${ROOT_DIR}/../wz_license.key"
 $FFMPEG_BIN -y -hide_banner -i "$SRC" -t 30 \
       -c:v libwz264 -b:v "${VBR}k" -preset fast -wz264-params "keyint=25:vbv-maxrate=$VBR:vbv-bufsize=$VBR:nal-hrd=cbr:force-cfr=1:aud=1:scenecut=0:b-adapt=0" \
       -c:a aac -b:a 128k \

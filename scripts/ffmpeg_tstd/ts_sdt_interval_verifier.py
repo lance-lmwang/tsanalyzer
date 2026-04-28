@@ -89,6 +89,6 @@ def analyze_tstd_compliance(ts_path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 tstd_audit_v2.py <file.ts>")
+        print("Usage: python3 ts_sdt_interval_verifier.py <file.ts>")
         sys.exit(1)
     analyze_tstd_compliance(sys.argv[1])

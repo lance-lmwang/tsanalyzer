@@ -16,7 +16,7 @@ DUR=30
 
 mkdir -p "${ROOT_DIR}/output"
 
-export WZ_LICENSE_KEY="/home/lmwang/dev/cae/wz_license.key"
+export WZ_LICENSE_KEY="${ROOT_DIR}/../wz_license.key"
 
 echo "[*] Generating test streams (30s at ${MUXRATE}kbps)..."
 $FFMPEG -y -hide_banner -t $DUR -i "$SAMPLE" -c copy -muxrate ${MUXRATE}k -mpegts_start_pid 0x21 -mpegts_pcr_pid 0x21 -mpegts_tstd_mode 0 "$LEGACY_TS" > /dev/null 2>&1

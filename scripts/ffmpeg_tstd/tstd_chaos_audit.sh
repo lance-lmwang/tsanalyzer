@@ -7,8 +7,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUT_TS="${ROOT_DIR}/output/chaos_test.ts"
 LOG_FILE="${ROOT_DIR}/output/chaos.log"
 
-FFMPEG="/home/lmwang/dev/cae/ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
-SAMPLE="/home/lmwang/dev/cae/sample/af2_srt_src.ts"
+FFMPEG="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
+SAMPLE="${ROOT_DIR}/../sample/af2_srt_src.ts"
 
 echo "[*] Testing Chaos Jitter Resilience (Random packet loss simulation)..."
 

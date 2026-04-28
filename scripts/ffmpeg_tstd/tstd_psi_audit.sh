@@ -7,8 +7,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUT_TS="${ROOT_DIR}/output/psi_audit_test.ts"
 
 # The ffmpeg binary is in the adjacent directory
-FFMPEG="/home/lmwang/dev/cae/ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
-SAMPLE="/home/lmwang/dev/cae/sample/HD720p_4Mbps.ts"
+FFMPEG="${ROOT_DIR}/../ffmpeg.wz.master/ffdeps_img/ffmpeg/bin/ffmpeg"
+SAMPLE="${ROOT_DIR}/../sample/HD720p_4Mbps.ts"
 
 if [ ! -f "$FFMPEG" ]; then
     echo "[FAIL] ffmpeg binary not found."
