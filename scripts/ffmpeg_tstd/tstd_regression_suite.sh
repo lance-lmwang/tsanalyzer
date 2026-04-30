@@ -730,6 +730,39 @@ fi
             echo "[WARN] Expert dynamics audit script not found, skipping Phase 17."
         fi
 
+        # --- Phase 18: SRT Transparency Audit (Native & SRS) ---
+        echo ""
+        echo "================================================"
+        echo "   PHASE 18: SRT Transparency Audit"
+        echo "================================================"
+        SRT_NATIVE="${SCRIPT_DIR}/tstd_srt_native_audit.sh"
+        SRT_SRS="${SCRIPT_DIR}/tstd_srt_srs_audit.sh"
+
+        if [ -f "$SRT_NATIVE" ]; then
+            chmod +x "$SRT_NATIVE"
+            echo "[*] Running Native SRT P2P Audit..."
+            $SRT_NATIVE > "${OUT_DIR}/srt_native_regression.log" 2>&1
+            if [ $? -ne 0 ]; then
+                echo -e "    \033[31m[FAIL] Native SRT Transparency Audit failed!\033[0m"
+                GLOBAL_FAIL=1
+            else
+                echo -e "    \033[32m[PASS] Native SRT Transparency verified.\033[0m"
+            fi
+        fi
+
+        if [ -f "$SRT_SRS" ]; then
+            chmod +x "$SRT_SRS"
+            echo "[*] Running SRS Relay SRT Audit..."
+            # Using shorter duration for regression (60s)
+            DUR=60 $SRT_SRS > "${OUT_DIR}/srt_srs_regression.log" 2>&1
+            if [ $? -ne 0 ]; then
+                echo -e "    \033[31m[FAIL] SRS Relay SRT Transparency Audit failed!\033[0m"
+                GLOBAL_FAIL=1
+            else
+                echo -e "    \033[32m[PASS] SRS Relay SRT Transparency verified.\033[0m"
+            fi
+        fi
+
         echo ""
         echo "------------------------------------------------"
 if [ $GLOBAL_FAIL -eq 0 ]; then echo -e "\033[32mSTATUS: ALL REGRESSION PHASES PASSED (GOLDEN)\033[0m"; else echo -e "\033[31mSTATUS: REGRESSION TEST FAILED. REVIEW WARNINGS/ERRORS ABOVE.\033[0m"; fi

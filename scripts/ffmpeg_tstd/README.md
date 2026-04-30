@@ -24,6 +24,8 @@ Targeted validation for specific physical layer components.
 *   **`tstd_shapability_matrix.sh`**: Hard-requirement audit for the **84kbps Bitrate Delta** envelope.
 
 ### 2.2 Compliance & Resilience
+*   **`tstd_srt_native_audit.sh`**: **(Bit-accurate)** Proves SRT P2P transparency. Ensures MD5 consistency before and after SRT transport.
+*   **`tstd_srt_srs_audit.sh`**: **(Relay Audit)** Verifies physical metrics (±44k) after SRS middle-box forwarding.
 *   **`tstd_psi_audit.sh`**: Verifies SI/PSI intervals (PAT/PMT/SDT) against DVB/ATSC standards using TSDuck.
 *   **`tstd_udp_stability.sh`**: Real-time loopback stress test to measure PCR jitter and network-layer pacing.
 *   **`tstd_jump_audit.sh`**: Stress tests the Voter system against massive source-level timestamp discontinuities.
