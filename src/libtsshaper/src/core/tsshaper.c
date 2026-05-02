@@ -1,269 +1,229 @@
-#include <stdarg.h>
-#include <stdio.h>
+#include "tss_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
-#include "hal.h"
-#include "internal.h"
-
-// --- Logging Implementation ---
-
-void tsshaper_set_log_callback(tsshaper_t* ctx, tss_log_cb cb, void* opaque) {
+void tss_log(tsshaper_t *ctx, tss_log_level_t level, const char *format, ...) {
     if (ctx) {
-        ctx->log_cb = cb;
-        ctx->log_opaque = opaque;
-    }
-}
-
-void tss_log_impl(tsshaper_t* ctx, tss_log_level_t level, const char* fmt, ...) {
-    if (ctx && ctx->log_cb) {
-        char buffer[1024];
         va_list args;
-        va_start(args, fmt);
-        vsnprintf(buffer, sizeof(buffer), fmt, args);
+        va_start(args, format);
+        char buf[1024];
+        vsnprintf(buf, sizeof(buf), format, args);
+        if (level <= TSS_LOG_WARN || ctx->cfg.debug_level >= 1) {
+            fprintf(stderr, "%s", buf);
+        }
+        if (ctx->cfg.log_cb) {
+            ctx->cfg.log_cb(ctx->cfg.log_opaque, level, "%s", buf);
+        }
         va_end(args);
-        ctx->log_cb(level, buffer, ctx->log_opaque);
     }
 }
-
-// --- Core Implementation ---
 
 tsshaper_t* tsshaper_create(const tsshaper_config_t* cfg) {
-    if (!cfg) return NULL;
-
-    tsshaper_t* ctx = (tsshaper_t*)calloc(1, sizeof(tsshaper_t));
+    tsshaper_t *ctx = calloc(1, sizeof(tsshaper_t));
     if (!ctx) return NULL;
-
-    ctx->total_bitrate_bps = cfg->bitrate_bps;
-    // Standard MPEG-TS Packet Interval Calculation for CBR (ISO 13818-1)
-    ctx->packet_interval_ns = (188ULL * 8 * 1000000000ULL) / cfg->bitrate_bps;
-    ctx->io_batch_size = cfg->io_batch_size > 0 ? cfg->io_batch_size : 7;
-    ctx->use_raw_clock = cfg->use_raw_clock;
-    ctx->is_offline = cfg->is_offline;
-    ctx->strict_cbr = cfg->strict_cbr;
-
-    // Initialize NULL packet (0x1FFF PID) - Broadcast Grade Template
-    memset(ctx->null_pkt, 0, TS_PACKET_SIZE);
-    ctx->null_pkt[0] = 0x47;
-    ctx->null_pkt[1] = 0x1F;
-    ctx->null_pkt[2] = 0xFF;
-    ctx->null_pkt[3] = 0x10;  // CC=0, Payload only
-    memset(ctx->null_pkt + 4, 0xFF, TS_PACKET_SIZE - 4);
-
-    // PCR Interpolation Engine Initialization
-    ctx->pcr_interval_ms = cfg->pcr_interval_ms > 0 ? cfg->pcr_interval_ms : 30;  // Broadcast 30ms default
-    ctx->master_pcr_pid = 0x1FFF;                                                 // 0x1FFF signifies none detected yet
-    ctx->last_pcr_time_ns = 0;
-
-    // Default: Initialize one program for all PIDs
-    ctx->num_programs = 1;
-    ctx->programs[0].active = true;
-    ctx->programs[0].program_id = 1;
-    ctx->programs[0].target_bitrate_bps = cfg->bitrate_bps;
-    ctx->programs[0].wfq_weight = 1.0;
-    ctx->programs[0].parent_ctx = ctx;
-
-    // Initialize Program PI for statmux weight rebalancing
-    tss_pi_init(&ctx->programs[0].pi, 0.1f, 0.01f, 0.2f, -0.2f, 1.0f, -1.0f);
-
-    // Initialize Pacer PI Controller for clock stability (Weak P, Very Weak I)
-    // Limits: +/- 10ms adjustment, 1s integral window.
-    tss_pi_init(&ctx->pacer_pi, 0.1f, 0.005f, 10.0f, -10.0f, 1000.0f, -1000.0f);
-
-    // Initialize HAL Ops and then the specific I/O backend
-    if (cfg->backend == 2) {  // TSS_BACKEND_CALLBACK
-        void hal_init_callback_backend(tsshaper_t * ctx, tss_write_cb cb, void* opaque);
-        hal_init_callback_backend(ctx, cfg->write_cb, cfg->write_opaque);
-        tss_info(ctx, "TS Shaper initialized in CALLBACK mode (AVIO compatible)");
-    } else {
-        hal_init_ops(ctx, cfg->backend);
-        if (ctx->hal_ops.io_init) {
-            ctx->hal_ops.io_init(ctx, cfg->backend_params);
-        }
-        tss_info(ctx, "TS Shaper initialized in NETWORK/FILE mode (Direct I/O)");
-    }
-
+    ctx->cfg = *cfg;
+    ctx->v_stc = TSS_NOPTS_VALUE;
+    ctx->physical_stc = TSS_NOPTS_VALUE;
+    ctx->last_refill_physical_stc = TSS_NOPTS_VALUE;
+    ctx->tel_last_1s_stc = TSS_NOPTS_VALUE;
+    ctx->stc.base = TSS_NOPTS_VALUE;
+    ctx->stc.den = cfg->mux_rate;
+    ctx->ticks_per_packet = (8LL * TSS_TS_PACKET_SIZE * TSS_SYS_CLOCK_FREQ) / cfg->mux_rate;
+    ctx->rem_per_packet   = (8LL * TSS_TS_PACKET_SIZE * TSS_SYS_CLOCK_FREQ) % cfg->mux_rate;
+    ctx->next_pat_ts = -(int64_t)(100 * 27000);
+    ctx->next_sdt_ts = -(int64_t)(500 * 27000);
     return ctx;
 }
 
 void tsshaper_destroy(tsshaper_t* ctx) {
     if (!ctx) return;
-    tsshaper_stop_pacer(ctx);
-
-    // Professional cleanup of abstracted I/O via ops
-    if (ctx->hal_ops.io_close) {
-        ctx->hal_ops.io_close(ctx);
+    for (int i = 0; i < ctx->nb_all_pids; i++) {
+        tss_pid_state_t *p = ctx->all_pids[i];
+        if (p) { tss_fifo_free(p->ts_fifo); tss_fifo_free(p->au_events); free(p); }
     }
-
-    // Free programs and per-pid queues
-    for (int i = 0; i < ctx->num_programs; i++) {
-        for (int p = 0; p < ctx->programs[i].num_pids; p++) {
-            if (ctx->programs[i].pids[p].queue) {
-                spsc_queue_free(ctx->programs[i].pids[p].queue);
-            }
-        }
-    }
+    free(ctx->all_pids);
     free(ctx);
 }
 
-int tsshaper_push(tsshaper_t* ctx, uint16_t pid, const uint8_t* pkt, tss_time_ns arrival_ts) {
-    if (!ctx || ctx->num_programs == 0) return -1;
-    program_ctx_t* prog = &ctx->programs[0];
-
-    if (tstd_check_backpressure(prog, pid)) {
-        return -1;
-    }
-
-    ts_packet_t meta_pkt;
-    memcpy(meta_pkt.data, pkt, TS_PACKET_SIZE);
-    meta_pkt.pid = pid;
-
-    if (ctx->running) {
-        meta_pkt.arrival_ns = (arrival_ts > (tss_time_ns)0) ? (uint64_t)arrival_ts : hal_get_time_ns();
+int tsshaper_add_pid(tsshaper_t* ctx, uint16_t pid, tss_pid_type_t type, uint64_t br) {
+    if (!ctx || pid >= 8192) return -1;
+    tss_pid_state_t *p = calloc(1, sizeof(tss_pid_state_t));
+    if (!p) return -1;
+    p->pid = pid; p->type = type; p->allocated_cbr_rate = br;
+    p->tb_size_bits = TSS_TB_SIZE_STANDARD * 8;
+    p->last_dts_raw = TSS_NOPTS_VALUE; p->last_update_ts = TSS_NOPTS_VALUE;
+    p->cc = 15;
+    if (type == TSS_PID_VIDEO) {
+        p->bitrate_bps = br;
+        p->rx_rate_bps = (ctx->cfg.mux_rate * 120 / 100 > 20000000) ? ctx->cfg.mux_rate * 120 / 100 : 20000000;
+        p->fifo_capacity = 4 * 1024 * 1024;
+        p->tb_size_bits = 3 * (int64_t)TSS_TS_PACKET_BITS;
+        p->base_refill_rate_bps = br * 105 / 100;
+        p->bucket_size_bits = (br * 200 / 1000);
+        p->au_events = tss_fifo_alloc(8192 * sizeof(tss_access_unit_t));
+    } else if (type == TSS_PID_AUDIO) {
+        p->bitrate_bps = br; p->base_refill_rate_bps = br * 110 / 100;
+        p->rx_rate_bps = TSS_RX_RATE_AUDIO; p->fifo_capacity = 1024 * 1024;
+        p->bucket_size_bits = 3 * (int64_t)TSS_TS_PACKET_BITS;
+        p->au_events = tss_fifo_alloc(8192 * sizeof(tss_access_unit_t));
     } else {
-        meta_pkt.arrival_ns = (arrival_ts > (tss_time_ns)0) ? (uint64_t)arrival_ts : ctx->next_packet_time_ns;
+        p->base_refill_rate_bps = 128000; p->rx_rate_bps = TSS_RX_RATE_SYS;
+        p->fifo_capacity = TSS_PSI_FIFO_SIZE; p->bucket_size_bits = TSS_TS_PACKET_BITS * 16;
     }
-
-    tstd_update_on_push(prog, &meta_pkt);
-
-    tstd_pid_ctx_t* pid_ctx = NULL;
-    for (int i = 0; i < prog->num_pids; i++) {
-        if (prog->pids[i].pid == pid) {
-            pid_ctx = &prog->pids[i];
-            break;
-        }
-    }
-
-    if (!pid_ctx || !pid_ctx->queue) {
-        return -1;
-    }
-
-    if (!spsc_queue_push(pid_ctx->queue, &meta_pkt)) {
-        return -1;
-    }
-
+    p->ts_fifo = tss_fifo_alloc(p->fifo_capacity);
+    p->tokens_bits = TSS_TS_PACKET_BITS * 2; p->pacing_tokens = TSS_PREC_SCALE;
+    ctx->all_pids = realloc(ctx->all_pids, (ctx->nb_all_pids + 1) * sizeof(tss_pid_state_t *));
+    ctx->all_pids[ctx->nb_all_pids++] = p;
+    ctx->pid_map[pid] = p;
     return 0;
 }
 
-tss_time_ns tsshaper_pull(tsshaper_t* ctx, uint8_t* out_pkt) {
-    uint64_t now_ns;
+void tsshaper_enqueue_dts(tsshaper_t* ctx, uint16_t pid_num, int64_t dts_27m, bool is_key) {
+    tss_pid_state_t *pid = ctx->pid_map[pid_num];
+    if (!ctx || !pid || dts_27m == TSS_NOPTS_VALUE) return;
+    if (ctx->v_stc == TSS_NOPTS_VALUE || (ctx->dts_epoch_invalid && is_key)) {
+        int64_t mux_delay_27m = (int64_t)ctx->cfg.mux_delay_ms * 27000;
+        ctx->stc_offset = (mux_delay_27m * 9 / 10) - (100LL * 27000);
+        ctx->stc.base = ctx->stc_offset;
+        ctx->stc.rem  = 0;
+        ctx->v_stc = ctx->stc.base;
+        ctx->physical_stc = ctx->v_stc;
+        ctx->next_slot_stc = ctx->v_stc;
+        ctx->dts_offset = dts_27m - (mux_delay_27m * 9 / 10);
+        ctx->max_dts_seen = mux_delay_27m * 9 / 10; ctx->dts_epoch_invalid = false;
+        ctx->last_refill_physical_stc = ctx->v_stc;
+        for (int i = 0; i < ctx->nb_all_pids; i++) {
+            ctx->all_pids[i]->tokens_bits = (ctx->all_pids[i]->bitrate_bps * 200) / 1000;
+        }
+    }
+    int64_t rel_dts = dts_27m - ctx->dts_offset;
+    if (pid->last_dts_raw == TSS_NOPTS_VALUE) pid->next_arrival_ts = rel_dts;
+    if (pid->au_events) {
+        tss_access_unit_t au; au.dts = rel_dts; au.is_key = is_key; au.size_bits = 0;
+        tss_fifo_write(pid->au_events, (uint8_t*)&au, sizeof(au));
+    }
+    pid->last_dts_raw = dts_27m;
+    if (rel_dts > ctx->max_dts_seen) ctx->max_dts_seen = rel_dts;
+}
 
-    if (ctx->running) {
-        now_ns = hal_get_time_ns();
-        if (ctx->next_packet_time_ns == 0) {
-            ctx->next_packet_time_ns = now_ns;
-            ctx->start_time_ns = now_ns;
+void tsshaper_enqueue_ts(tsshaper_t* ctx, uint16_t pid_num, const uint8_t* pkt) {
+    tss_pid_state_t *pid = ctx->pid_map[pid_num];
+    if (!pid) return;
+    tss_fifo_write(pid->ts_fifo, pkt, TSS_TS_PACKET_SIZE);
+    pid->fifo_accept_bytes += TSS_TS_PACKET_SIZE;
+    pid->continuous_fullness_bits += (int64_t)TSS_TS_PACKET_BITS;
+}
+
+static int tss_step_internal(tsshaper_t *ctx) {
+    uint8_t pkt[TSS_TS_PACKET_SIZE];
+    tss_pid_state_t *pid = NULL;
+    int64_t next_v_base, next_v_rem, next_physical_stc;
+    int64_t last_physical_for_leak = ctx->physical_stc;
+
+    /* 1:1 Precision Fractional STC Advance */
+    if (ctx->stc.base == TSS_NOPTS_VALUE) {
+        next_v_base = ctx->stc_offset;
+        next_v_rem  = 0;
+    } else {
+        next_v_base = ctx->stc.base + ctx->ticks_per_packet;
+        next_v_rem  = ctx->stc.rem  + ctx->rem_per_packet;
+        if (next_v_rem >= ctx->stc.den) {
+            next_v_base++;
+            next_v_rem -= ctx->stc.den;
+        }
+    }
+
+    if (ctx->physical_stc == TSS_NOPTS_VALUE) {
+        next_physical_stc = ctx->stc_offset;
+    } else {
+        next_physical_stc = ctx->physical_stc + ctx->ticks_per_packet;
+    }
+
+    if (next_physical_stc < ctx->next_slot_stc) return 0;
+
+    ctx->stc.base = next_v_base;
+    ctx->stc.rem  = next_v_rem;
+    ctx->v_stc    = ctx->stc.base;
+
+    /* 3. TB Leakage */
+    if (last_physical_for_leak != TSS_NOPTS_VALUE) {
+        int64_t delta = next_physical_stc - last_physical_for_leak;
+        for (int i = 0; i < ctx->nb_all_pids; i++) {
+            tss_pid_state_t *p = ctx->all_pids[i];
+            int64_t work_bits = (delta * p->rx_rate_bps) + p->tb_leak_remainder;
+            p->tb_leak_remainder = work_bits % TSS_SYS_CLOCK_FREQ;
+            p->tb_fullness_bits = (p->tb_fullness_bits > (work_bits / TSS_SYS_CLOCK_FREQ)) ?
+                                   p->tb_fullness_bits - (work_bits / TSS_SYS_CLOCK_FREQ) : 0;
+        }
+    }
+    pid = tss_pick_es_pid(ctx);
+    if (pid) {
+        if (tss_fifo_read(pid->ts_fifo, pkt, TSS_TS_PACKET_SIZE) == 0) {
+            if (ctx->cfg.write_cb) ctx->cfg.write_cb(ctx->cfg.write_opaque, pkt, TSS_TS_PACKET_SIZE);
+            pid->mux_output_bytes += TSS_TS_PACKET_SIZE;
+            pid->tb_fullness_bits += (int64_t)TSS_TS_PACKET_BITS;
+            pid->tokens_bits -= (int64_t)TSS_TS_PACKET_BITS;
+            pid->continuous_fullness_bits = (pid->continuous_fullness_bits > TSS_TS_PACKET_BITS) ?
+                                             pid->continuous_fullness_bits - TSS_TS_PACKET_BITS : 0;
+            pid->au_bits_acc += TSS_TS_PACKET_BITS;
+            if (pid->au_events && tss_fifo_size(pid->au_events) >= sizeof(tss_access_unit_t)) {
+                tss_access_unit_t head_au;
+                if (tss_fifo_peek(pid->au_events, (uint8_t*)&head_au, sizeof(tss_access_unit_t), 0) == 0) {
+                    if (ctx->v_stc > (head_au.dts + 27000 * 5)) {
+                         tss_fifo_drain(pid->au_events, sizeof(tss_access_unit_t)); pid->au_bits_acc = 0;
+                    }
+                }
+            }
+            ctx->last_pid = pid;
+            if (pid->type == TSS_PID_VIDEO || pid->type == TSS_PID_AUDIO) ctx->dbg_cnt_payload++; else ctx->dbg_cnt_si++;
         }
     } else {
-        if (ctx->next_packet_time_ns == 0) {
-            ctx->next_packet_time_ns = 1000000000ULL;  // 1s epoch for offline
-            ctx->start_time_ns = ctx->next_packet_time_ns;
-        }
-        now_ns = ctx->next_packet_time_ns;
+        memset(pkt, 0xff, TSS_TS_PACKET_SIZE); pkt[0] = 0x47; pkt[1] = 0x1f; pkt[2] = 0xff; pkt[3] = 0x10;
+        if (ctx->cfg.write_cb) ctx->cfg.write_cb(ctx->cfg.write_opaque, pkt, TSS_TS_PACKET_SIZE);
+        tss_account_null_packet(ctx);
     }
-
-    ctx->ideal_packet_time_ns = ctx->next_packet_time_ns;
-
-    if (ctx->master_pcr_pid != 0x1FFF && ctx->start_time_ns > 0) {
-        uint64_t elapsed_since_last_pcr_ns = ctx->ideal_packet_time_ns - ctx->last_pcr_time_ns;
-        if (ctx->last_pcr_time_ns == 0 || elapsed_since_last_pcr_ns > (ctx->pcr_interval_ms * 1000000ULL)) {
-            // Synthesize a PCR-only packet
-            memset(out_pkt, 0xFF, TS_PACKET_SIZE);
-            out_pkt[0] = 0x47;
-            out_pkt[1] = (ctx->master_pcr_pid >> 8) & 0x1F;
-            out_pkt[2] = ctx->master_pcr_pid & 0xFF;
-            out_pkt[3] = 0x20;  // Adaptation Field only, no payload, CC=0 (doesn't increment)
-            out_pkt[4] = 183;   // AF Length
-            out_pkt[5] = 0x10;  // PCR Flag set
-
-            // Calculate PCR value using 27MHz clock reconstruction
-            uint64_t elapsed_ns = ctx->ideal_packet_time_ns - ctx->start_time_ns;
-            uint64_t ticks_27m = (elapsed_ns * 27) / 1000;
-            uint64_t current_pcr_42 = ctx->start_pcr_base + ticks_27m;
-
-            uint64_t base = current_pcr_42 / 300;
-            uint32_t ext = current_pcr_42 % 300;
-
-            out_pkt[6] = (uint8_t)(base >> 25);
-            out_pkt[7] = (uint8_t)(base >> 17);
-            out_pkt[8] = (uint8_t)(base >> 9);
-            out_pkt[9] = (uint8_t)(base >> 1);
-            out_pkt[10] = (uint8_t)(((base & 0x01) << 7) | 0x7E | ((ext >> 8) & 0x01));
-            out_pkt[11] = (uint8_t)(ext & 0xFF);
-
-            ctx->last_pcr_time_ns = ctx->ideal_packet_time_ns;
-
-            // Advance to next theoretical slot
-            ctx->next_packet_time_ns += ctx->packet_interval_ns;
-            return ctx->next_packet_time_ns;
-        }
+    ctx->physical_stc = next_physical_stc; tss_refill_tokens_flywheel(ctx);
+    ctx->next_slot_stc = ctx->physical_stc + ctx->ticks_per_packet;
+    ctx->total_bytes_written += TSS_TS_PACKET_SIZE; ctx->packet_count++;
+    tss_account_metrology(ctx);
+    if (ctx->v_stc - ctx->next_pat_ts >= (int64_t)(100 * 27000)) {
+        if (ctx->cfg.si_cb) ctx->cfg.si_cb(ctx->cfg.write_opaque, 1, 0, ctx->v_stc); ctx->next_pat_ts = ctx->v_stc;
     }
-
-    // 2. Select the best packet based on ISO 13818-1 / TR 101 290 priorities
-    // and strict PID-level pacing target times.
-    ts_packet_t* pkt = interleaver_select(ctx);
-
-    if (!pkt) {
-        // Strict CBR: Always insert NULL packet if no data available OR timing not met
-        memcpy(out_pkt, ctx->null_pkt, TS_PACKET_SIZE);
-        atomic_fetch_add(&ctx->null_packets_inserted, 1);
-    } else {
-        memcpy(out_pkt, pkt->data, TS_PACKET_SIZE);
-        // Track PCR emission from the stream itself to reset the interpolator timer
-        if ((out_pkt[3] & 0x20) && out_pkt[4] > 0 && (out_pkt[5] & 0x10)) {
-            uint16_t pid = ((out_pkt[1] & 0x1F) << 8) | out_pkt[2];
-            if (pid == ctx->master_pcr_pid) {
-                ctx->last_pcr_time_ns = ctx->ideal_packet_time_ns;
-            }
-        }
+    if (ctx->v_stc - ctx->next_sdt_ts >= (int64_t)(500 * 27000)) {
+        if (ctx->cfg.si_cb) ctx->cfg.si_cb(ctx->cfg.write_opaque, 0, 1, ctx->v_stc); ctx->next_sdt_ts = ctx->v_stc;
     }
-
-    // Advance to next theoretical slot
-    ctx->next_packet_time_ns += ctx->packet_interval_ns;
-
-    return ctx->next_packet_time_ns;
+    return 1;
 }
 
-bool tsshaper_is_empty(tsshaper_t* ctx) {
-    if (!ctx) return true;
-    for (int i = 0; i < ctx->num_programs; i++) {
-        program_ctx_t* prog = &ctx->programs[i];
-        for (int p = 0; p < prog->num_pids; p++) {
-            if (prog->pids[p].queue && spsc_queue_count(prog->pids[p].queue) > 0) {
-                return false;
-            }
+void tsshaper_drive(tsshaper_t *ctx) {
+    if (!ctx || ctx->v_stc == TSS_NOPTS_VALUE || ctx->in_drive) return;
+    ctx->in_drive = true;
+    int64_t target_stc = ctx->max_dts_seen - (int64_t)ctx->cfg.mux_delay_ms * 27000;
+    if (target_stc - ctx->v_stc > TSS_SYS_CLOCK_FREQ * 3) {
+        ctx->v_stc = target_stc; ctx->stc.base = target_stc; ctx->physical_stc = target_stc; ctx->next_slot_stc = target_stc;
+    }
+    int steps = 0;
+    while (ctx->v_stc < target_stc && steps++ < TSS_MAX_DRIVE_STEPS) tss_step_internal(ctx);
+    ctx->in_drive = false;
+}
+
+void tsshaper_drain(tsshaper_t *ctx) {
+    if (!ctx || ctx->v_stc == TSS_NOPTS_VALUE) return;
+    ctx->in_drain = true;
+    int64_t start_v_stc = ctx->v_stc;
+    while (1) {
+        if (ctx->v_stc - start_v_stc > 2LL * TSS_SYS_CLOCK_FREQ) break;
+        bool has_data = false;
+        for (int i = 0; i < ctx->nb_all_pids; i++) {
+            if (tss_fifo_size(ctx->all_pids[i]->ts_fifo) >= TSS_TS_PACKET_SIZE) { has_data = true; break; }
         }
+        if (!has_data) break;
+        tss_step_internal(ctx);
     }
-    return true;
 }
 
-void tsshaper_get_stats(tsshaper_t* ctx, tsshaper_stats_t* stats) {
-    if (!ctx || !stats) return;
-    stats->current_bitrate_bps = (double)ctx->total_bitrate_bps;
-    stats->null_packets_inserted = atomic_load(&ctx->null_packets_inserted);
-    stats->buffer_fullness_pct = 0;
-    stats->pcr_jitter_ns = 0;
-    stats->continuity_errors = 0;
-}
-
-int tsshaper_set_pid_bitrate(tsshaper_t* ctx, uint16_t pid, uint64_t bitrate_bps) {
-    if (!ctx || ctx->num_programs == 0) return -1;
-    program_ctx_t* prog = &ctx->programs[0];
-
-    tstd_pid_ctx_t* pid_ctx = tstd_find_or_create_pid_ctx(prog, pid);
-    if (!pid_ctx) return -1;
-
-    pid_ctx->shaping_rate_bps = bitrate_bps;
-
-    // Recalculate burst credit limit based on new rate (50ms window)
-    double max_credit = (double)bitrate_bps * 0.05;
-    if (pid_ctx->shaping_credit_bits > max_credit) {
-        pid_ctx->shaping_credit_bits = max_credit;
-    }
-
-    // Explicitly update priority based on PID type heuristics if needed,
-    // or just assume caller knows what they are doing.
-    // For now, we trust the existing priority logic unless overridden.
-
-    return 0;
+void tsshaper_reset_timeline(tsshaper_t *ctx) {
+    if (!ctx) return;
+    ctx->v_stc = TSS_NOPTS_VALUE; ctx->physical_stc = TSS_NOPTS_VALUE; ctx->dts_epoch_invalid = true;
+    for (int i = 0; i < ctx->nb_all_pids; i++) { tss_fifo_reset(ctx->all_pids[i]->ts_fifo); ctx->all_pids[i]->last_dts_raw = TSS_NOPTS_VALUE; }
 }
