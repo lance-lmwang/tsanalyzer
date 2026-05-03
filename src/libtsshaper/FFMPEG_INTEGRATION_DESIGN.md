@@ -21,23 +21,98 @@
 
 ## 3. FFmpeg `mpegtsenc` 集成细节 (Integration Hooks)
 
-在 FFmpeg (`libavformat/mpegtsenc.c`) 侧，我们进行了深入的代码级 Hook：
+在 FFmpeg (`libavformat/mpegtsenc.c`) 侧，我们进行了深入的代码级 Hook，将原生逻辑剥离并代理给 `libtsshaper`。以下是标准的集成代码范例：
 
-1.  **上下文挂载**：在 `MpegTSWrite` 结构体中添加 `tsshaper_t *tstd_ctx`。
-2.  **初始化注入 (`mpegts_init`)**：
-    *   捕获 `mux_rate`，**关键换算**：将 FFmpeg 的 bytes/sec 乘以 8 转换为 `libtsshaper` 需要的 bps。
-    *   遍历所有 AVStream，依据 `st->codecpar->bit_rate` 调用 `tsshaper_add_pid` 注册视频、音频和数据通道的令牌桶（Token Bucket）。
-3.  **时间戳注入 (`mpegts_write_packet_internal`)**：
-    *   在写包前，拦截 DTS（Decode Time Stamp），调用 `tsshaper_enqueue_dts` 进行时间线锚定。
-4.  **物理负荷注入与驱动 (`write_packet`)**：
-    *   拦截 FFmpeg 组装好的 188 字节 TS 包，调用 `tsshaper_enqueue_ts` 入队。
-    *   紧接着调用 `tsshaper_drive` 驱动飞轮，触发内部 PI 控制器和 EDF 调度器运转。
-5.  **安全收尾 (`mpegts_write_end`)**：
-    *   调用 `tsshaper_drain`，确保缓存中的残余帧（尤其是音频等低码率流）在结束时被平滑发送，防止被粗暴截断。
+### 3.1 核心数据结构挂载
+在 `MpegTSWrite` 上下文中挂载独立库句柄：
+```c
+#include "tsshaper/tsshaper.h"
+
+typedef struct MpegTSWrite {
+    const AVClass *av_class;
+    // ... 原生字段 ...
+
+    // --- libtsshaper 集成 ---
+    tsshaper_t *tstd_ctx;
+    int tstd_mode; // 用户选项: 0=关闭, 1=开启
+} MpegTSWrite;
+```
+
+### 3.2 初始化与 PID 注册 (`mpegts_init`)
+需要特别注意速率单位的换算（bytes/sec -> bps）：
+```c
+if (ts->tstd_mode) {
+    tsshaper_config_t cfg = {0};
+    // 关键换算：FFmpeg 默认 mux_rate 单位是 bytes/sec，需要转为 bps
+    cfg.bitrate_bps = ts->mux_rate * 8;
+    cfg.pcr_interval_ms = 30; // 默认 30ms 强制 PCR
+
+    ts->tstd_ctx = tsshaper_create(&cfg);
+    if (!ts->tstd_ctx) return AVERROR(ENOMEM);
+
+    // 注册所有 Stream 到 Shaper 的 Token Bucket
+    for (int i = 0; i < s->nb_streams; i++) {
+        AVStream *st = s->streams[i];
+        MpegTSWriteStream *ts_st = st->priv_data;
+
+        tss_pid_type_t pid_type = TSS_PID_TYPE_VIDEO;
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) pid_type = TSS_PID_TYPE_AUDIO;
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_DATA)  pid_type = TSS_PID_TYPE_PSI_SI;
+
+        tsshaper_add_pid(ts->tstd_ctx, ts_st->pid, pid_type, st->codecpar->bit_rate);
+    }
+}
+```
+
+### 3.3 物理负荷拦截与驱动 (`write_packet`)
+原本直接写磁盘的代码被替换为推入 Shaper 引擎。这是实现 VBR 到 CBR 转换的核心边界：
+```c
+static void write_packet(AVFormatContext *s, const uint8_t *packet) {
+    MpegTSWrite *ts = s->priv_data;
+
+    if (ts->tstd_mode) {
+        // 1. 获取当前包的 PID
+        uint16_t pid = ((packet[1] & 0x1f) << 8) | packet[2];
+
+        // 2. 将 VBR 物理包推入独立引擎的 FIFO
+        tsshaper_push(ts->tstd_ctx, pid, packet, 0 /* 0=使用内部虚拟时钟 */);
+
+        // 3. 驱动飞轮，提取严格按时序平滑后的 CBR 数据
+        uint8_t shaped_pkt[188];
+        while (tsshaper_pull(ts->tstd_ctx, shaped_pkt) != TSS_IDLE) {
+            avio_write(s->pb, shaped_pkt, 188);
+        }
+    } else {
+        // 原生 VBR 路径 (不做任何平滑)
+        avio_write(s->pb, packet, TS_PACKET_SIZE);
+    }
+}
+```
+
+### 3.4 时间戳锚定与异常收尾
+在组装 TS 包之前拦截真实的解码时间，用于处理时间线断续；在复用器关闭时执行 `drain`：
+```c
+// 在 mpegts_write_packet_internal 中：
+if (ts->tstd_mode && is_pts) {
+    // 将 pts_27m 喂给 shaper 的 Voter 系统，防范源端时间线跳变
+    tsshaper_enqueue_dts(ts->tstd_ctx, ts_st->pid, pts_27m);
+}
+
+// 在 mpegts_write_end 中：
+if (ts->tstd_mode) {
+    uint8_t shaped_pkt[188];
+    // 强制排空引擎内部所有残余的音频/视频帧
+    tsshaper_drain(ts->tstd_ctx);
+    while (tsshaper_pull(ts->tstd_ctx, shaped_pkt) != TSS_IDLE) {
+        avio_write(s->pb, shaped_pkt, 188);
+    }
+    tsshaper_destroy(ts->tstd_ctx);
+}
+```
 
 ## 4. CI/CD 构建与测试工作流 (Standard Dev Workflow)
 
-FFmpeg 侧使用了定制的 Docker 编译脚本（`scripts_ci/docker_build.sh`），为了符合其标准设施，我们确立了以下开发与集成流程：
+FFmpeg 侧使用了定制的 Docker 编译容器，为了符合其标准设施，我们确立了以下开发与集成流程（此流程已被 `scripts/build_ffmpeg_integration.sh` 自动化）：
 
 ### 4.1 更新库产物
 在 `tsanalyzer/src/libtsshaper/` 目录完成代码修改后，编译静态库并投递到 FFmpeg 依赖树：
@@ -52,10 +127,10 @@ cp include/tsshaper/*.h /home/lmwang/dev/cae/ffmpeg.wz.master/ffdeps_img/libtssh
 1. `FFM_DEPS+=" libtsshaper"`：自动解析并添加 `-I` 和 `-L` 路径。
 2. `./configure --enable-libtsshaper`：显式开启宏保护。
 
-执行编译：
+直接使用封装好的自动化脚本触发 Docker 编译：
 ```bash
-cd /home/lmwang/dev/cae/ffmpeg.wz.master/
-./scripts_ci/docker_build.sh
+cd /home/lmwang/dev/tsanalyzer/src/libtsshaper/
+./scripts/build_ffmpeg_integration.sh
 ```
 
 ### 4.3 验证与测试
@@ -89,7 +164,7 @@ LD_LIBRARY_PATH=ffdeps_img/libtsshaper/lib ./ffdeps_img/ffmpeg/bin/ffmpeg -nostd
 ### 6.1 已完成 (Done)
 - [x] **核心架构剥离**：已完成 `tsshaper.c`, `tss_scheduler.c`, `tss_metrics.c`, `tss_fifo.c` 的纯 C 重构，完全去除了原生 FFmpeg 结构体依赖。
 - [x] **FFmpeg 挂载**：在 `feat_libtsshaper_integration` 分支的 `mpegtsenc.c` 中成功插入了库的 API。
-- [x] **CI 构建打通**：通过 `scripts_ci/docker_build.sh` 验证了 `-ltsshaper` 的静态链接，能成功编译出带 T-STD 的 `ffmpeg`。
+- [x] **CI 构建打通**：通过封装好的 `build_ffmpeg_integration.sh` 挂载 Docker 编译环境，验证了 `-ltsshaper` 的静态链接，能成功编译出带 T-STD 的 `ffmpeg`。
 - [x] **遥测输出对齐**：实现了 `tss_metrics.c`，控制台可以正常输出每秒一次的 `[T-STD SEC]` CBR 平滑度和 PCR 抖动指标。
 
 ### 6.2 亟待解决的缺陷 (Critical Bugs to Fix)

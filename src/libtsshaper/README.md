@@ -1,4 +1,48 @@
-# Engineering Design: libtsshaper (Professional TS Shaper & T-STD Engine)
+# libtsshaper: Professional T-STD Multiplexing & Pacing Engine
+
+`libtsshaper` is a standalone, industrial-grade C library providing hardware-level precision for MPEG-TS traffic shaping and T-STD compliance. It is a 1:1 functional port of the validated native FFmpeg T-STD engine, decoupled into an ABI-stable library.
+
+---
+
+## ⚡ Quick Start for Developers & Maintainers
+
+### 1. The Ground Truth (MUST ALIGN)
+Any architectural or constant changes MUST maintain 1:1 functional parity with the native reference.
+*   **Bitrate Smoothness**: Delta < 88 kbps (steady-state).
+*   **PCR Accuracy**: Jitter < 30 ns (nanosecond-precision).
+*   **Score**: `tsanalyzer` Smoothness Score < 350.
+
+### 2. Core Implementation Map
+*   **Flywheel Logic**: `src/core/tsshaper.c` (Main entry & logical clock).
+*   **EDF Scheduler**: `src/core/tss_scheduler.c` (PID selection & priority).
+*   **PI Rate Control**: `src/core/tss_pacing.c` (Token bucket & adaptive gain).
+*   **Voter System**: `src/core/tss_voter.c` (Timeline jump & wrap-around logic).
+*   **Ingest/IO**: `src/core/tss_io.c` (Packet queuing & priority shedding).
+
+### 3. Build & Integration Workflow
+The library is designed to be integrated as a proxy beneath a custom FFmpeg build.
+
+**Prerequisite: FFmpeg Branching**
+Before developing or testing changes, you MUST prepare the target FFmpeg repository (`ffmpeg.wz.master`). You must cut a new feature branch from the stable `wz-live` branch to ensure alignment with production standards:
+```bash
+cd ../ffmpeg.wz.master
+git fetch origin
+git checkout -b feat_libtsshaper_align origin/wz-live
+```
+
+**Step A: Build and Integrate** (Required after any code change)
+```bash
+# Compiles libtsshaper.a and triggers custom FFmpeg docker build
+./scripts/build_ffmpeg_integration.sh
+```
+
+**Step B: Execute Regression Suite**
+```bash
+# Runs high-intensity test phases via the integrated FFmpeg
+./scripts/tstd_regression_suite.sh --all
+```
+
+---
 
 ## 1. Executive Summary
 `libtsshaper` is a standalone, high-performance C library designed to provide hardware-level precision for MPEG-TS traffic shaping and T-STD compliance. It transforms loosely-timed VBR streams into strictly compliant CBR streams using a **discrete-event scheduling engine** in a unified 64-bit nanosecond time domain (`tss_time_ns`), ensuring PCR jitter < 30ns and 100% TR 101 290 compliance.
@@ -232,6 +276,32 @@ In the CI/CD environment (e.g., GitHub Actions), relying on wall-clock time (`cp
 To transform `libtsshaper` into a fully-fledged commercial encoder, it functions as an invisible proxy beneath FFmpeg.
 By customizing the `AVIOContext` `write_packet` callback, FFmpeg acts solely as a syntax packer (VBR), while `libtsshaper` intercepts the 188-byte chunks. The integration applies semantic hints (e.g., Video vs. PSI/SI), executes T-STD mathematical modeling, and performs the physical CBR emission, bypassing FFmpeg's built-in, soft-real-time muxer completely.
 
-## 9. Future Work
-- **Hardware Scrambling**: Integration of AVX-512 based DVB-CSA or BISS scrambling within the 192-byte SIMD pipeline to guarantee line-rate encryption.
-- **Hitless Failover**: Implementation of SMPTE 2022-7 Seamless Protection Switching at the Layer 3 emission stage for dual-path network redundancy.
+## 10. Regression Testing & Verification
+
+To ensure 1:1 functional parity with the native T-STD engine and maintain professional broadcasting SLAs, a comprehensive regression suite is provided.
+
+- **Verification Guide**: Detailed KPIs and manual audit procedures are documented in [docs/VERIFICATION_GUIDE.md](./docs/VERIFICATION_GUIDE.md).
+
+### 10.1 Automated Workflow
+
+The regression process is split into two clear steps: Integration and Testing.
+
+**Step 1: Build and Integrate**
+Compile `libtsshaper` and automatically embed it into the custom FFmpeg builder:
+```bash
+chmod +x scripts/build_ffmpeg_integration.sh
+./scripts/build_ffmpeg_integration.sh
+```
+
+**Step 2: Run the Regression Suite**
+Execute the full FFmpeg-driven regression matrix against the newly compiled engine:
+```bash
+chmod +x scripts/tstd_regression_suite.sh
+./scripts/tstd_regression_suite.sh --all
+```
+
+The suite validates:
+- **Bitrate Smoothness**: Ensuring Delta < 88kbps and Score < 350.
+- **PCR Precision**: Verifying nanosecond-level jitter compliance.
+- **Timeline Resilience**: Testing 33-bit wrap-around and discontinuity handling.
+- **Buffer Integrity**: Monitoring TB_n and VBV models for overflows.

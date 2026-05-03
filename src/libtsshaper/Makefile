@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Iinclude -Isrc/core -O0 -g -Wall -fPIC -fno-omit-frame-pointer
 LDFLAGS = -shared
 
-SRC = src/core/tsshaper.c src/core/tss_scheduler.c src/core/tss_fifo.c src/core/tss_metrics.c
+SRC = src/core/tsshaper.c src/core/tss_scheduler.c src/core/tss_fifo.c src/core/tss_metrics.c src/core/tss_pacing.c src/core/tss_io.c src/core/tss_voter.c
 OBJ = $(SRC:.c=.o)
 LIB_SO = libtsshaper.so
 LIB_A  = libtsshaper.a

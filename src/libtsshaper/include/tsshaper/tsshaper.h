@@ -56,6 +56,7 @@ typedef struct {
     uint32_t mux_delay_ms;       /**< T-STD Target Delay (default: 700ms) */
     uint32_t pcr_window_size;    /**< Metrology window in PCR counts */
     int      debug_level;
+    int      nb_streams;         /**< Number of streams in the muxer */
 
     tss_write_cb write_cb;
     void*        write_opaque;
